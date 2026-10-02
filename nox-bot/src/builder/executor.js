@@ -214,6 +214,18 @@ function channelOptions(cat, ch, { parentId, resolve, communityOn, reason }) {
   return { opts, convert };
 }
 
+/** Can @everyone (people who haven't verified yet) read this layout channel? */
+function everyoneCanRead(channelKey) {
+  for (const cat of CATEGORIES) {
+    const ch = cat.channels.find((c) => c.key === channelKey);
+    if (!ch) continue;
+    if (ch.kind === 'voice') return false;
+    const everyone = channelOverwrites(cat, ch).find((o) => o.target === '@everyone');
+    return Boolean(everyone && everyone.allow.includes('ViewChannel') && everyone.allow.includes('ReadMessageHistory'));
+  }
+  return false;
+}
+
 /** Number of progress steps (for the progress bar). */
 function plannedSteps() {
   const channels = CATEGORIES.reduce((n, c) => n + c.channels.length, 0);
@@ -447,12 +459,15 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
             const channel = guild.channels.cache.get(R.channels[key]);
             if (channel) await attempt(`Announcement channel #${channel.name}`, () => channel.setType(ChannelType.GuildAnnouncement, reason), { warn: true });
           }
-          const welcome = WELCOME_SCREEN.filter((w) => id(w.channel)).map((w) => ({ channel: id(w.channel), description: w.description, emoji: w.emoji }));
-          const ws = await attempt('Welcome screen', () => guild.editWelcomeScreen({ enabled: true, description: (config.brand.tagline ?? '').slice(0, 140), welcomeChannels: welcome }), { warn: true });
-          if (!ws) {
-            // Some servers only allow channels everyone can see – retry with verify + rules.
-            const visible = welcome.filter((w) => [id('verify'), id('rules')].includes(w.channel));
-            await attempt('Welcome screen (verify + rules)', () => guild.editWelcomeScreen({ enabled: true, description: (config.brand.tagline ?? '').slice(0, 140), welcomeChannels: visible }), { warn: true });
+          // Discord only accepts welcome channels everyone can read (before verification).
+          const readable = WELCOME_SCREEN.filter((w) => id(w.channel) && everyoneCanRead(w.channel));
+          const skipped = WELCOME_SCREEN.filter((w) => id(w.channel) && !everyoneCanRead(w.channel));
+          if (skipped.length) {
+            R.warnings.push(`Welcome screen: skipped ${skipped.map((w) => `#${w.channel}`).join(', ')} – only channels everyone can read before verifying are allowed.`);
+          }
+          if (readable.length) {
+            const welcomeChannels = readable.map((w) => ({ channel: id(w.channel), description: w.description.slice(0, 42), emoji: w.emoji }));
+            await attempt('Welcome screen', () => guild.editWelcomeScreen({ enabled: true, description: (config.brand.tagline ?? '').slice(0, 140), welcomeChannels }), { warn: true });
           }
         } else {
           R.warnings.push('Community mode could not be enabled – announcement channels were created as read-only text channels.');
@@ -615,4 +630,4 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = { buildServer, publish, sendItem, describeError, BuildAborted, mergeOverwrites, channelOverwrites, automodRules, plannedSteps, logoPath };
+module.exports = { buildServer, publish, sendItem, describeError, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath };

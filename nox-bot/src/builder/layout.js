@@ -148,13 +148,14 @@ const CATEGORIES = [
   { key: 'catClosed', name: '📁 CLOSED TICKETS', profile: 'hidden', channels: [] },
 ];
 
-/** Channels shown on the Community welcome screen (max 5). */
+/**
+ * Channels shown on the Community welcome screen (max 5, description max 42 characters).
+ * Discord only allows channels EVERYONE can read – on NØX that's #verify and #rules, because
+ * everything else unlocks after verification. Channels that aren't readable are skipped.
+ */
 const WELCOME_SCREEN = [
-  { channel: 'verify', emoji: '✅', description: 'Verify to unlock the server' },
-  { channel: 'rules', emoji: '📜', description: 'Read the rules' },
-  { channel: 'shop', emoji: '🛒', description: 'Browse our products' },
-  { channel: 'tickets', emoji: '🎫', description: 'Buy or get support' },
-  { channel: 'vouches', emoji: '⭐', description: 'See what customers say' },
+  { channel: 'verify', emoji: '✅', description: 'Verify to unlock the whole server' },
+  { channel: 'rules', emoji: '📜', description: 'Read the rules before you buy' },
 ];
 
 module.exports = { ROLES, CATEGORIES, WELCOME_SCREEN };

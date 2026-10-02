@@ -29,7 +29,9 @@ test('builds the full NØX server on a fresh server without errors', async () =>
   assert.equal(guild.name, 'NØX');
   assert.ok(guild.iconSet, 'server icon set');
   assert.ok(R.community, 'community mode enabled');
-  assert.ok(guild.welcomeScreen?.welcomeChannels.length >= 2, 'welcome screen');
+  // Welcome screen: only channels people can read before verifying, and no warning about it.
+  assert.deepEqual(guild.welcomeScreen.welcomeChannels.map((w) => w.channel), [db.channelId(guild.id, 'verify'), db.channelId(guild.id, 'rules')]);
+  assert.deepEqual(R.warnings.filter((w) => /welcome/i.test(w)), [], 'no welcome screen warnings');
   assert.equal(guild.autoModerationRules.cache.size, 6);
   // Announcement channels were converted after Community mode was enabled.
   assert.equal(byKey(guild, 'announcements').type, ChannelType.GuildAnnouncement);
@@ -216,5 +218,19 @@ test('the server icon uses the logo chosen in config.json', async () => {
     assert.ok(logoPath('does-not-exist').endsWith('logo-eclipse-nox.png'), 'unknown names fall back to the default logo');
   } finally {
     config.server.logo = prev;
+  }
+});
+
+test('welcome screen: hidden channels in the list are skipped with a clear note, never sent to Discord', async () => {
+  const { WELCOME_SCREEN } = require('../src/builder/layout');
+  WELCOME_SCREEN.push({ channel: 'shop', emoji: '🛒', description: 'Browse our products' });
+  try {
+    const { guild, R } = await build();
+    assert.deepEqual(R.errors, []);
+    assert.equal(guild.welcomeScreen.welcomeChannels.length, 2, 'only #verify and #rules');
+    assert.ok(R.warnings.some((w) => /skipped #shop/.test(w)));
+    assert.ok(!R.warnings.some((w) => /WELCOME_CHANNEL_PERMISSIONS_REQUIRED/.test(w)));
+  } finally {
+    WELCOME_SCREEN.pop();
   }
 });

@@ -856,9 +856,16 @@ class FakeGuild {
   async editWelcomeScreen(data) {
     if (!this.features.includes('COMMUNITY')) throw apiError(50101, 'community required');
     if (data.welcomeChannels.length > 5) throw apiError(50035, 'too many welcome channels');
+    // A member with no roles = what @everyone can do. Discord requires that for welcome channels.
+    const everyone = new FakeMember(this, 'probe-everyone');
     for (const w of data.welcomeChannels) {
       assertEmoji(w.emoji, 'welcome_channels');
-      if (!this.channels.cache.has(w.channel)) throw apiError(50035, 'unknown welcome channel');
+      const channel = this.channels.cache.get(w.channel);
+      if (!channel) throw apiError(50035, 'unknown welcome channel');
+      const perms = everyone.permissionsIn(channel);
+      if (!perms.has(PermissionsBitField.Flags.ViewChannel) || !perms.has(PermissionsBitField.Flags.ReadMessageHistory)) {
+        throw apiError(50035, 'Invalid Form Body\nwelcome_channels[WELCOME_CHANNEL_PERMISSIONS_REQUIRED]: Welcome channels must be readable by everyone.');
+      }
       if (w.description.length > 42) throw apiError(50035, `welcome channel description > 42: ${w.description}`);
     }
     if (data.description && data.description.length > 140) throw apiError(50035, 'welcome description too long');
