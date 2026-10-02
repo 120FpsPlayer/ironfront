@@ -175,7 +175,7 @@ test('the build can be stopped', async () => {
 });
 
 test('/build only:panels updates every card in place and keeps the posted messages tracked', async () => {
-  const { refreshContent } = require('../src/builder/reload');
+  const { refreshContent } = require('../src/builder/refresh');
   const { guild } = await build();
   const faq = byKey(guild, 'faq');
   const ids = faq.messageList.map((m) => m.id);

@@ -146,7 +146,7 @@ test('modals: verification, announcement, wipe confirmation', async () => {
 
 test('slash command definitions are valid', () => {
   const commands = require('../src/commands')();
-  assert.equal(commands.size, 13);
+  assert.equal(commands.size, 12);
   for (const [name, cmd] of commands) {
     const json = cmd.data.toJSON();
     assert.ok(json.description.length <= 100, `/${name} description`);

@@ -37,7 +37,7 @@ const client = new Client({
   ],
   partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
   rest: {
-    // Emoji uploads and channel renames have strict rate limits – fail fast instead of freezing /build or /reload for minutes.
+    // Emoji uploads and channel renames have strict rate limits – fail fast instead of freezing /build for minutes.
     rejectOnRateLimit: (data) =>
       data.timeToReset > 15_000 && (data.route.includes('/emojis') || (String(data.method).toUpperCase() === 'PATCH' && data.route.startsWith('/channels/'))),
   },

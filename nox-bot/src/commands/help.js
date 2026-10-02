@@ -44,7 +44,6 @@ module.exports = {
         name: '🛡️ Administration',
         value: [
           '`/build` – build the whole server',
-          '`/reload` – apply changes from config.json / scripts to every channel, role, card and the logo',
           '`/build only:emojis` · `/build only:panels`',
           '`/panel` – re-send a panel',
           '`/setup show` · `/setup set` · `/setup role-add`',

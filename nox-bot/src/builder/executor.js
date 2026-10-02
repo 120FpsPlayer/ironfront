@@ -27,10 +27,8 @@ require('../features/vouches');
 const path = require('node:path');
 
 const fs = require('node:fs');
-
-// Read layout.js / content.js at call time, so /reload can swap in edited versions.
-const layout = () => require('./layout');
-const content = () => require('./content');
+const { ROLES, CATEGORIES, WELCOME_SCREEN } = require('./layout');
+const { postsFor } = require('./content');
 
 /** assets/brand/logo-<name>.png (eclipse-nox, eclipse, eclipse-wordmark, night, neon) – falls back to eclipse-nox. */
 function logoPath(name) {
@@ -218,7 +216,6 @@ function channelOptions(cat, ch, { parentId, resolve, communityOn, reason }) {
 
 /** Number of progress steps (for the progress bar). */
 function plannedSteps() {
-  const { ROLES, CATEGORIES } = layout();
   const channels = CATEGORIES.reduce((n, c) => n + c.channels.length, 0);
   const posts = CATEGORIES.flatMap((c) => c.channels).filter((c) => c.post).length;
   return ROLES.length + CATEGORIES.length + channels + posts + 12;
@@ -235,7 +232,6 @@ function plannedSteps() {
  * @param {() => boolean} [p.shouldAbort]
  */
 async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = [], onProgress = () => {}, shouldAbort = () => false }) {
-  const { ROLES, CATEGORIES, WELCOME_SCREEN } = layout();
   const started = Date.now();
   const reason = `${config.brand.name} /build by ${invokerId}`;
   const wipe = mode === 'wipe';
@@ -583,12 +579,12 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
 }
 
 /**
- * Sends the banner(s), cards and live panels for one channel. Returns what was posted, so /reload
- * can later edit exactly these messages in place: [{ type: 'banner'|'card'|'panel', id, banner?, kind? }]
+ * Sends the banner(s), cards and live panels for one channel. Returns what was posted, so
+ * /build only:panels can later edit exactly these messages in place: [{ type: 'banner'|'card'|'panel', id, banner?, kind? }]
  */
 async function publish(channel, postKey) {
   const posted = [];
-  for (const item of content().postsFor(postKey, channel.guild)) {
+  for (const item of postsFor(postKey, channel.guild)) {
     posted.push(await sendItem(channel, item));
   }
   return posted.filter(Boolean);
@@ -619,19 +615,4 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = {
-  buildServer,
-  publish,
-  sendItem,
-  describeError,
-  BuildAborted,
-  mergeOverwrites,
-  channelOverwrites,
-  channelOptions,
-  overwriteResolver,
-  createRole,
-  ensureRoleOrder,
-  automodRules,
-  plannedSteps,
-  logoPath,
-};
+module.exports = { buildServer, publish, sendItem, describeError, BuildAborted, mergeOverwrites, channelOverwrites, automodRules, plannedSteps, logoPath };

@@ -39,8 +39,7 @@ const allow = (perms) => Object.fromEntries(perms.map((p) => [p, true]));
 
 const creating = new Set();
 const lastOpened = new Map();
-/** Read at call time, so /reload picks up changes to "defaults" in config.json. */
-const D = new Proxy({}, { get: (_, key) => config.defaults?.[key] });
+const D = config.defaults;
 
 panels.register('tickets', (guild, panel) => ui.panelPayload(guild, panel.style));
 const buildPanel = (guild, style) => ui.panelPayload(guild, style);

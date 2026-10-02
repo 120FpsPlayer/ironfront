@@ -143,8 +143,7 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 |---|---|---|
 | `/build` | Build the whole server (Build / Wipe & Build) | Owner, admins |
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
-| `/reload` | Apply your changes: reloads `config.json` + scripts, re-applies name & logo, recreates missing channels/roles, resets channel settings and updates every banner & card **in place** | Owner, admins |
-| `/build only:panels` | Only update the banners & cards in place (no channel/role changes) | Owner, admins |
+| `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
 | `/product add / edit / stock / remove / list` | Manage the shop – the #shop panel updates by itself | Admins, sellers |
 | `/vouch` | Leave a review (with optional screenshot) | Everyone |
 | `/giveaway start / end / reroll / list` | Giveaways | Moderators+ |
@@ -185,23 +184,12 @@ Admin commands are hidden from normal members automatically.
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
 | `panel`, `ticketTypes`, `snippets`, `defaults` | Ticket panel texts, ticket categories and their questions, canned replies, limits and auto-close |
 
-After editing, just type **`/reload`** in Discord – no restart needed. (Optional: `npm run check` validates
-`config.json` against Discord's limits first.)
-
-### 🔄 `/reload` – apply changes without restarting
-`/reload` makes the running server match your files again:
-
-1. re-reads **`config.json`**, **`src/builder/layout.js`** (roles & channels) and **`src/builder/content.js`** (all channel texts)
-2. sets the server **name and logo** again
-3. **recreates** deleted roles, categories and channels, and resets channel **names, topics and permissions** to the layout
-4. uploads missing **emojis**
-5. updates every **banner, card and panel in place** – nothing moves, and your vouches, giveaways,
-   announcements and welcome messages are never touched
-
-If a file has a mistake, `/reload` tells you where (e.g. `content.js:123`) and keeps the last working version.
-Changed any *other* `.js` file? Restart the bot once, then run `/reload`.
-
-> ⚠️ Step 3 resets channel permissions you changed by hand in Discord – change them in `layout.js` / `permissions.js` instead.
+After editing:
+```bash
+npm run check          # validates config.json against Discord's limits
+```
+then **restart the bot** and run **`/build only:panels`** – every banner and card is updated in place
+(nothing moves, and your vouches, giveaways and announcements are never touched).
 
 **Payment methods** – each entry has a `name`, `details` and an `emoji`
 (`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…). The default is PaysafeCard,
@@ -271,10 +259,9 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-46 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+42 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
-every permission, the shop → ticket → order → vouch flow, `/reload` (in-place edits, recreating channels, hot-reloading
-scripts, broken files), verification, giveaways, ratings and more.
+every permission, the shop → ticket → order → vouch flow, in-place panel updates, verification, giveaways, ratings and more.
 
 ---
 

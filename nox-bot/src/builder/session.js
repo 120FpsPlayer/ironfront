@@ -15,8 +15,9 @@ const { e, ce, COLORS, banner } = require('../lib/theme');
 const { isOwner, isAdmin } = require('../lib/permissions');
 const { ts, truncate, duration, embed } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, header, gallery, v2, channelUrl } = require('../lib/v2');
+const { ROLES, CATEGORIES } = require('./layout');
 const { buildServer } = require('./executor');
-const { refreshContent } = require('./reload');
+const { refreshContent } = require('./refresh');
 const { syncEmojis, describeEmojiResult } = require('./emojis');
 const { EMOJI_PRIORITY } = require('../lib/theme');
 
@@ -30,7 +31,6 @@ function canBuild(member) {
 }
 
 function previewCard(guild, member) {
-  const { ROLES, CATEGORIES } = require('./layout');
   const c = container(COLORS.brand);
   const file = banner('welcome');
   c.addMediaGalleryComponents(gallery(`attachment://${file.name}`));

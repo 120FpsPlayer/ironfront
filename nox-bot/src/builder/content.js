@@ -348,7 +348,7 @@ function staffHandbook(x) {
         `### ${x.E('cart')} Shop\n> \`/product add\` · \`/product edit\` · \`/product stock\` · \`/product remove\` – the ${x.ch('shop')} panel updates by itself\n` +
         `> New products and restocks are announced in ${x.ch('restocks')} automatically\n` +
         `### ${x.E('gift')} Community\n> \`/giveaway start\` · \`/giveaway end\` · \`/giveaway reroll\`\n> \`/announce\` – a styled announcement with an optional banner and ping\n` +
-        `### ${x.E('refresh')} Changing the server\n> Edit \`config.json\` (texts, payments, prices) and run \`/reload\` – every channel, card and the logo update in place\n` +
+        `### ${x.E('refresh')} Changing the texts\n> Edit \`config.json\` (texts, payments), restart the bot and run \`/build only:panels\` – every card updates in place\n` +
         `### ${x.E('warning')} Golden rules\n> Never ask for payment outside a ticket · stay polite · when unsure, ask a ${x.role('manager', 'Manager')}`,
     ),
   );

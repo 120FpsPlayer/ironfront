@@ -19,11 +19,6 @@ const COLORS = {
   muted: 0x2b2d31,
 };
 
-config.onReload((c) => {
-  COLORS.brand = c.brand.colorInt;
-  COLORS.info = c.brand.colorInt;
-});
-
 /** Unicode fallbacks for every custom emoji – used until /build uploads the NØX emojis (or if one is deleted). */
 const FALLBACK = {
   arrow_right: '➡️', basket: '🧺', battery: '🔋', bell: '🔔', blik: '📱', brush: '🖌️', calculator: '🧮', calendar: '📅',
