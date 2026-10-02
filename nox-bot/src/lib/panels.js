@@ -62,6 +62,39 @@ function schedule(guild, kind) {
   timers.set(key, timer);
 }
 
+/**
+ * "Sticky" panel: re-sends the panel as the newest message of the channel and deletes the old
+ * copy, so it's always the first thing people see (used after every new vouch).
+ * Calls are queued per channel, so two vouches at the same moment never leave two panels.
+ */
+const bumpQueues = new Map();
+function bump(guild, kind, channelId) {
+  const key = `${guild.id}:${channelId}:${kind}`;
+  const next = (bumpQueues.get(key) ?? Promise.resolve())
+    .then(() => doBump(guild, kind, channelId))
+    .catch((err) => console.warn(`[panel] Failed to move the ${kind} panel down:`, err.message));
+  bumpQueues.set(key, next);
+  next.finally(() => {
+    if (bumpQueues.get(key) === next) bumpQueues.delete(key);
+  });
+  return next;
+}
+
+async function doBump(guild, kind, channelId) {
+  const channel = guild.channels.cache.get(channelId);
+  if (!channel) return;
+  for (const panel of db.panels(guild.id, kind).filter((p) => p.channelId === channelId)) {
+    const payload = await render(kind, guild, panel);
+    delete payload.files;
+    const fresh = await channel.send(payload);
+    db.removePanel(guild.id, panel.messageId);
+    db.addPanel(guild.id, { ...panel, messageId: fresh.id });
+    db.replacePostId(guild.id, panel.messageId, fresh.id);
+    const old = await channel.messages.fetch(panel.messageId).catch(() => null);
+    if (old) await old.delete().catch(() => null);
+  }
+}
+
 /** Send a new live panel to a channel and remember it. */
 async function send(channel, kind, extra = {}) {
   const payload = await render(kind, channel.guild, extra);
@@ -70,4 +103,4 @@ async function send(channel, kind, extra = {}) {
   return message;
 }
 
-module.exports = { register, render, refresh, refreshAll, schedule, send };
+module.exports = { register, render, refresh, refreshAll, schedule, send, bump };

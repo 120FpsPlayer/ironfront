@@ -19,6 +19,11 @@ const COLORS = {
   muted: 0x2b2d31,
 };
 
+config.onReload((c) => {
+  COLORS.brand = c.brand.colorInt;
+  COLORS.info = c.brand.colorInt;
+});
+
 /** Unicode fallbacks for every custom emoji – used until /build uploads the NØX emojis (or if one is deleted). */
 const FALLBACK = {
   arrow_right: '➡️', basket: '🧺', battery: '🔋', bell: '🔔', blik: '📱', brush: '🖌️', calculator: '🧮', calendar: '📅',
@@ -38,9 +43,9 @@ const FALLBACK = {
  */
 const EMOJI_PRIORITY = [
   'nox', 'check', 'x', 'cart', 'shield', 'ticket', 'star', 'gift', 'diamond', 'crown', 'warning', 'info', 'question',
-  'box', 'sparkles', 'card', 'paypal', 'crypto', 'paysafecard', 'wallet', 'blik', 'bell', 'rocket', 'trophy', 'chat',
+  'box', 'sparkles', 'card', 'crypto', 'paysafecard', 'paypal', 'coin', 'currency_eur', 'wallet', 'bell', 'rocket', 'trophy', 'chat',
   'group', 'person', 'mail', 'clock', 'lock_locked', 'lock_unlocked', 'heart', 'flame', 'moon', 'medal', 'pencil',
-  'gear', 'hash', 'pin', 'refresh', 'search', 'thumbs_up', 'thumbs_down', 'arrow_right', 'coin', 'currency_eur',
+  'gear', 'hash', 'pin', 'refresh', 'search', 'thumbs_up', 'thumbs_down', 'arrow_right', 'blik',
   'currency_usd', 'currency_gbp', 'currency_pln', 'basket', 'calendar', 'camera', 'download', 'upload', 'folder',
   'home', 'key', 'music', 'phone', 'share', 'star_outline', 'sun', 'target', 'battery', 'brush', 'calculator', 'cloud',
 ];

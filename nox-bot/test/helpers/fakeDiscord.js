@@ -281,11 +281,17 @@ class FakeMessage {
   }
 
   async edit(body) {
+    if (this.deleted) throw apiError(10008, 'Unknown Message');
     const merged = { ...body };
     if (merged.files === undefined && this.files.length && !('attachments' in body)) merged.files = this.files;
     if (((this.flags & MessageFlags.IsComponentsV2) !== 0) && merged.flags === undefined) merged.flags = this.flags;
+    if ((this.flags & MessageFlags.IsComponentsV2) !== 0 && ((merged.flags ?? 0) & MessageFlags.IsComponentsV2) === 0) {
+      throw apiError(50035, 'cannot remove the Components V2 flag from a message');
+    }
     validateMessage(merged);
     this.body = merged;
+    this.files = merged.files ?? [];
+    this.attachments = new Collection(this.files.map((f, i) => [String(i), { url: `https://cdn.discordapp.com/attachments/${this.channel.id}/${this.id}/${f.name}`, name: f.name, size: 1000, contentType: 'image/png' }]));
     if (merged.components) this.components = merged.components.map(toJSON);
     if (merged.embeds) this.embeds = merged.embeds.map(toJSON);
     this.edits = (this.edits ?? 0) + 1;
@@ -371,6 +377,12 @@ class FakeChannel {
           return m;
         }
         const limit = arg?.limit ?? 50;
+        if (arg?.after !== undefined) {
+          // Discord returns the oldest messages after this ID.
+          const after = BigInt(arg.after);
+          const older = channel.messageList.filter((m) => BigInt(m.id) > after).slice(0, limit);
+          return new Collection(older.reverse().map((m) => [m.id, m]));
+        }
         let all = [...channel.messageList].reverse();
         if (arg?.before) {
           const idx = all.findIndex((m) => m.id === arg.before);
@@ -439,6 +451,43 @@ class FakeChannel {
 
   async setParent(id) {
     this.parentId = id;
+    return this;
+  }
+
+  async edit(data) {
+    if (data.name !== undefined) {
+      if (!data.name || data.name.length > 100) throw apiError(50035, 'channel name');
+      if (data.name !== this.name) this.renames += 1;
+      this.name = data.name;
+    }
+    if (data.parent !== undefined) {
+      const parent = this.guild.channels.cache.get(data.parent);
+      if (!parent || parent.type !== ChannelType.GuildCategory) throw apiError(50035, 'invalid parent');
+      this.parentId = data.parent;
+    }
+    if (data.topic !== undefined) {
+      if (data.topic.length > 1024) throw apiError(50035, 'topic too long');
+      this.topic = data.topic;
+    }
+    if (data.rateLimitPerUser !== undefined) this.rateLimitPerUser = data.rateLimitPerUser;
+    if (data.userLimit !== undefined) this.userLimit = data.userLimit;
+    if (data.permissionOverwrites) {
+      for (const o of data.permissionOverwrites) {
+        const known = o.id === this.guild.id || this.guild.roles.cache.has(o.id) || this.guild.members.cache.has(o.id);
+        if (!known) throw apiError(50035, `unknown overwrite target ${o.id}`);
+      }
+      this.overwriteList.splice(
+        0,
+        this.overwriteList.length,
+        ...data.permissionOverwrites.map((o) => ({
+          id: o.id,
+          type: o.type ?? OverwriteType.Role,
+          allow: new PermissionsBitField(o.allow ?? 0n).bitfield,
+          deny: new PermissionsBitField(o.deny ?? 0n).bitfield,
+        })),
+      );
+    }
+    this.edits = (this.edits ?? 0) + 1;
     return this;
   }
 
@@ -741,6 +790,22 @@ class FakeGuild {
 
   get verificationLevel() {
     return this.settings.verificationLevel ?? 0;
+  }
+
+  get systemChannelId() {
+    return this.settings.systemChannel ?? null;
+  }
+
+  get afkChannelId() {
+    return this.settings.afkChannel ?? null;
+  }
+
+  get rulesChannelId() {
+    return this.features.includes('COMMUNITY') ? this.settings.rulesChannel ?? null : null;
+  }
+
+  get publicUpdatesChannelId() {
+    return this.features.includes('COMMUNITY') ? this.settings.publicUpdatesChannel ?? null : null;
   }
 
   get memberCount() {

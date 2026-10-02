@@ -15,8 +15,8 @@ const { e, ce, COLORS, banner } = require('../lib/theme');
 const { isOwner, isAdmin } = require('../lib/permissions');
 const { ts, truncate, duration, embed } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, header, gallery, v2, channelUrl } = require('../lib/v2');
-const { ROLES, CATEGORIES } = require('./layout');
-const { buildServer, repostAll } = require('./executor');
+const { buildServer } = require('./executor');
+const { refreshContent } = require('./reload');
 const { syncEmojis, describeEmojiResult } = require('./emojis');
 const { EMOJI_PRIORITY } = require('../lib/theme');
 
@@ -30,6 +30,7 @@ function canBuild(member) {
 }
 
 function previewCard(guild, member) {
+  const { ROLES, CATEGORIES } = require('./layout');
   const c = container(COLORS.brand);
   const file = banner('welcome');
   c.addMediaGalleryComponents(gallery(`attachment://${file.name}`));
@@ -178,8 +179,10 @@ async function runRepost(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   running.set(interaction.guild.id, { abort: false });
   try {
-    const res = await repostAll(interaction.guild);
-    const desc = `Re-posted **${res.messages}** messages in **${res.channels}** channels.` + (res.errors.length ? `\n\n⚠️ ${res.errors.slice(0, 5).join('\n')}` : '');
+    const res = await refreshContent(interaction.guild);
+    const desc =
+      `Updated **${res.edited}** messages in place${res.sent ? ` and re-sent **${res.sent}** missing ones` : ''} in **${res.channels}** channels.` +
+      (res.errors.length ? `\n\n⚠️ ${res.errors.slice(0, 5).join('\n')}` : '');
     return interaction.editReply({ embeds: [embed(res.errors.length ? COLORS.warning : COLORS.success).setTitle('🔄 Panels refreshed').setDescription(desc)] });
   } finally {
     running.delete(interaction.guild.id);

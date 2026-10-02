@@ -17,9 +17,7 @@ const panels = require('../lib/panels');
 const { COLORS, banner, hasBanner, ASSETS } = require('../lib/theme');
 const { embed } = require('../lib/utils');
 const { SUPPORT_KEYS } = require('../lib/permissions');
-const { ROLES, CATEGORIES, WELCOME_SCREEN } = require('./layout');
 const { STAFF_PERMISSIONS, GROUPS, toBits, profile } = require('./permissions');
-const { postsFor } = require('./content');
 const { syncEmojis, describeEmojiResult } = require('./emojis');
 const stats = require('../features/stats');
 // Live panels the build posts – loading these modules registers their renderers.
@@ -29,6 +27,10 @@ require('../features/vouches');
 const path = require('node:path');
 
 const fs = require('node:fs');
+
+// Read layout.js / content.js at call time, so /reload can swap in edited versions.
+const layout = () => require('./layout');
+const content = () => require('./content');
 
 /** assets/brand/logo-<name>.png (eclipse-nox, eclipse, eclipse-wordmark, night, neon) – falls back to eclipse-nox. */
 function logoPath(name) {
@@ -159,8 +161,64 @@ const SINGLE_TRIGGERS = new Set([
   AutoModerationRuleTriggerType.MemberProfile,
 ]);
 
+/** Options for creating one layout role. */
+function roleOptions(role, { roleIcons = false, reason } = {}) {
+  return {
+    name: roleIcons && role.icon ? role.name.replace(/^\S+\s+/, '') : role.name,
+    colors: { primaryColor: role.color || 0 },
+    hoist: Boolean(role.hoist),
+    mentionable: false,
+    permissions: toBits(STAFF_PERMISSIONS[role.perms] ?? []),
+    reason,
+  };
+}
+
+async function createRole(guild, role, { roleIcons, reason }) {
+  const base = roleOptions(role, { roleIcons, reason });
+  if (roleIcons && role.icon) {
+    try {
+      return await guild.roles.create({ ...base, unicodeEmoji: role.icon });
+    } catch {
+      // the icon is only decoration – create the role without it
+    }
+  }
+  return guild.roles.create(base);
+}
+
+/** Turns layout overwrites ('@everyone', role keys) into Discord overwrites with real IDs. */
+function overwriteResolver(guild, roleIds) {
+  const boosterRoleId = guild.roles.premiumSubscriberRole?.id ?? null;
+  return (list) =>
+    list
+      .map((o) => {
+        let id = null;
+        if (o.target === '@everyone') id = guild.id;
+        else if (o.target === '@booster') id = boosterRoleId;
+        else id = roleIds[o.target];
+        if (!id) return null;
+        return { id, type: OverwriteType.Role, allow: toBits(o.allow), deny: toBits(o.deny) };
+      })
+      .filter(Boolean);
+}
+
+/** Options for creating (or re-syncing) one layout channel. */
+function channelOptions(cat, ch, { parentId, resolve, communityOn, reason }) {
+  let type = ch.kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
+  const convert = ch.kind === 'announcement' && !communityOn;
+  if (ch.kind === 'announcement' && communityOn) type = ChannelType.GuildAnnouncement;
+  const opts = { name: ch.name, type, parent: parentId, permissionOverwrites: resolve(channelOverwrites(cat, ch)), reason };
+  if (type !== ChannelType.GuildVoice) {
+    if (ch.topic) opts.topic = ch.topic;
+    if (ch.slowmode && type === ChannelType.GuildText) opts.rateLimitPerUser = ch.slowmode;
+  } else if (ch.userLimit) {
+    opts.userLimit = ch.userLimit;
+  }
+  return { opts, convert };
+}
+
 /** Number of progress steps (for the progress bar). */
 function plannedSteps() {
+  const { ROLES, CATEGORIES } = layout();
   const channels = CATEGORIES.reduce((n, c) => n + c.channels.length, 0);
   const posts = CATEGORIES.flatMap((c) => c.channels).filter((c) => c.post).length;
   return ROLES.length + CATEGORIES.length + channels + posts + 12;
@@ -177,6 +235,7 @@ function plannedSteps() {
  * @param {() => boolean} [p.shouldAbort]
  */
 async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = [], onProgress = () => {}, shouldAbort = () => false }) {
+  const { ROLES, CATEGORIES, WELCOME_SCREEN } = layout();
   const started = Date.now();
   const reason = `${config.brand.name} /build by ${invokerId}`;
   const wipe = mode === 'wipe';
@@ -187,6 +246,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     categories: {},
     created: { roles: 0, categories: 0, channels: 0, messages: 0, automod: 0, emojis: 0 },
     deleted: { channels: 0, roles: 0, automod: 0 },
+    posts: {},
     warnings: [],
     errors: [],
     phases: [],
@@ -285,25 +345,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     startPhase('Creating roles');
     const roleIcons = S.rolesWithIcons !== false && guild.features.includes('ROLE_ICONS');
     for (const role of ROLES) {
-      const name = roleIcons && role.icon ? role.name.replace(/^\S+\s+/, '') : role.name;
-      const base = {
-        name,
-        colors: { primaryColor: role.color || 0 },
-        hoist: Boolean(role.hoist),
-        mentionable: false,
-        permissions: toBits(STAFF_PERMISSIONS[role.perms] ?? []),
-        reason,
-      };
-      const created = await attempt(`Role "${role.name}"`, async () => {
-        if (roleIcons && role.icon) {
-          try {
-            return await guild.roles.create({ ...base, unicodeEmoji: role.icon });
-          } catch {
-            // the icon is only decoration – create the role without it
-          }
-        }
-        return guild.roles.create(base);
-      });
+      const created = await attempt(`Role "${role.name}"`, () => createRole(guild, role, { roleIcons, reason }));
       if (created) {
         R.roles[role.key] = created.id;
         R.created.roles += 1;
@@ -329,18 +371,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
 
     // ───────────── Categories & channels ─────────────
     startPhase('Creating channels');
-    const boosterRoleId = guild.roles.premiumSubscriberRole?.id ?? null;
-    const resolve = (list) =>
-      list
-        .map((o) => {
-          let id = null;
-          if (o.target === '@everyone') id = guild.id;
-          else if (o.target === '@booster') id = boosterRoleId;
-          else id = R.roles[o.target];
-          if (!id) return null;
-          return { id, type: OverwriteType.Role, allow: toBits(o.allow), deny: toBits(o.deny) };
-        })
-        .filter(Boolean);
+    const resolve = overwriteResolver(guild, R.roles);
 
     const toConvert = [];
     for (const cat of CATEGORIES) {
@@ -353,18 +384,8 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       R.created.categories += 1;
 
       for (const ch of cat.channels) {
-        let type = ch.kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
-        if (ch.kind === 'announcement') {
-          if (communityOn) type = ChannelType.GuildAnnouncement;
-          else toConvert.push(ch.key);
-        }
-        const opts = { name: ch.name, type, parent: category.id, permissionOverwrites: resolve(channelOverwrites(cat, ch)), reason };
-        if (type !== ChannelType.GuildVoice) {
-          if (ch.topic) opts.topic = ch.topic;
-          if (ch.slowmode && type === ChannelType.GuildText) opts.rateLimitPerUser = ch.slowmode;
-        } else if (ch.userLimit) {
-          opts.userLimit = ch.userLimit;
-        }
+        const { opts, convert } = channelOptions(cat, ch, { parentId: category.id, resolve, communityOn, reason });
+        if (convert) toConvert.push(ch.key);
         const channel = await attempt(`Channel ${ch.name}`, () => guild.channels.create(opts));
         if (channel) {
           R.channels[ch.key] = channel.id;
@@ -470,10 +491,14 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
         const channel = guild.channels.cache.get(R.channels[ch.key]);
         if (!channel) continue;
         const sent = await attempt(`Messages in #${channel.name}`, () => publish(channel, ch.post));
-        if (sent) R.created.messages += sent;
+        if (sent) {
+          R.created.messages += sent.length;
+          R.posts[ch.key] = sent;
+        }
         tick(`#${channel.name}`);
       }
     }
+    saveBuild({ posts: { ...R.posts } });
 
     // ───────────── AutoMod ─────────────
     startPhase('AutoMod');
@@ -557,49 +582,31 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
   return R;
 }
 
-/** Sends the banner(s), cards and live panels for one channel. Returns the number of messages. */
+/**
+ * Sends the banner(s), cards and live panels for one channel. Returns what was posted, so /reload
+ * can later edit exactly these messages in place: [{ type: 'banner'|'card'|'panel', id, banner?, kind? }]
+ */
 async function publish(channel, postKey) {
-  let count = 0;
-  for (const item of postsFor(postKey, channel.guild)) {
-    if (item.banner) {
-      if (!hasBanner(item.banner)) continue;
-      await channel.send({ files: [banner(item.banner)] });
-    } else if (item.panel) {
-      await panels.send(channel, item.panel, item.extra ?? {});
-    } else if (item.payload) {
-      await channel.send(item.payload);
-    }
-    count += 1;
+  const posted = [];
+  for (const item of content().postsFor(postKey, channel.guild)) {
+    posted.push(await sendItem(channel, item));
   }
-  return count;
+  return posted.filter(Boolean);
 }
 
-/** Re-posts the content of every built channel (deletes the bot's old messages there first). */
-async function repostAll(guild, { onProgress = () => {} } = {}) {
-  const result = { channels: 0, messages: 0, errors: [] };
-  const build = db.build(guild.id);
-  if (!build) throw new Error('This server was not built with /build yet.');
-  const g = db.guild(guild.id);
-  for (const cat of CATEGORIES) {
-    for (const ch of cat.channels) {
-      if (!ch.post) continue;
-      const channel = guild.channels.cache.get(build.channels?.[ch.key] ?? '');
-      if (!channel?.isTextBased?.()) continue;
-      try {
-        const old = await channel.messages.fetch({ limit: 50 });
-        const mine = [...old.values()].filter((m) => m.author?.id === guild.members.me.id);
-        for (const m of mine) await m.delete().catch(() => null);
-        g.panels = g.panels.filter((p) => p.channelId !== channel.id);
-        db.save();
-        result.messages += await publish(channel, ch.post);
-        result.channels += 1;
-      } catch (err) {
-        result.errors.push(`#${channel.name}: ${describeError(err)}`);
-      }
-      onProgress(channel.name);
-    }
+/** Sends one content item and describes it. */
+async function sendItem(channel, item) {
+  if (item.banner) {
+    if (!hasBanner(item.banner)) return null;
+    const msg = await channel.send({ files: [banner(item.banner)] });
+    return { type: 'banner', id: msg.id, banner: item.banner };
   }
-  return result;
+  if (item.panel) {
+    const msg = await panels.send(channel, item.panel, item.extra ?? {});
+    return { type: 'panel', id: msg.id, kind: item.panel };
+  }
+  const msg = await channel.send(item.payload);
+  return { type: 'card', id: msg.id };
 }
 
 async function ensureRoleOrder(guild, ids) {
@@ -612,4 +619,19 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = { buildServer, repostAll, publish, describeError, BuildAborted, mergeOverwrites, channelOverwrites, automodRules, plannedSteps, logoPath };
+module.exports = {
+  buildServer,
+  publish,
+  sendItem,
+  describeError,
+  BuildAborted,
+  mergeOverwrites,
+  channelOverwrites,
+  channelOptions,
+  overwriteResolver,
+  createRole,
+  ensureRoleOrder,
+  automodRules,
+  plannedSteps,
+  logoPath,
+};

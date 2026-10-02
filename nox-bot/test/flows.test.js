@@ -108,7 +108,7 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   const ticket = db.tickets((t) => t.ownerId === buyer.id)[0];
   assert.equal(ticket.typeId, 'order');
   assert.deepEqual(ticket.answers.map((a) => a.label), ['Product', 'Quantity', 'Payment method', 'Notes']);
-  assert.match(ticket.answers[2].value, /PayPal/);
+  assert.match(ticket.answers[2].value, /PaysafeCard/);
   const ticketChannel = guild.channels.cache.get(ticket.channelId);
   assert.equal(ticketChannel.parentId, db.settings(guild.id).categoryId);
   // Only the buyer, staff for orders (incl. sellers) and the bot can see it
@@ -129,9 +129,16 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   assert.equal(open.state.modals[0].custom_id, 'vouch:submit');
   const vouch = await run({ guild, member: buyer, kind: 'modal', customId: 'vouch:submit', selects: { rating: ['5'], product: [product.id] }, fields: { review: 'Super fast delivery, works perfectly!', product_other: '' } });
   assert.match(textOf(lastResponse(vouch)), /Thank you for your vouch/);
-  const posted = ch(guild, 'vouches').messageList.at(-1);
+  const vouchChannel = ch(guild, 'vouches');
+  const posted = vouchChannel.messageList.at(-2);
   assert.match(textOf(posted.body), /Vouch #1/);
   assert.match(textOf(posted.body), /Nitro Boost 1 Month/);
+  // The "Leave a vouch" panel jumped below the new vouch – it's always the newest message.
+  const sticky = vouchChannel.messageList.at(-1);
+  assert.ok(customIds(sticky.body).includes('vouch:open'));
+  assert.equal(db.panels(guild.id, 'vouches')[0].messageId, sticky.id);
+  assert.equal(db.build(guild.id).posts.vouches.find((p) => p.type === 'panel').id, sticky.id);
+  assert.equal(vouchChannel.messageList.filter((m) => customIds(m.body).includes('vouch:open')).length, 1, 'only one panel');
 
   // Cooldown: a second vouch right away is refused
   const again = await run({ guild, member: buyer, kind: 'button', customId: 'vouch:open' });

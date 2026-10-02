@@ -37,21 +37,21 @@
   },
 
   "shop": {
+    "currency": "€",
+    "currencyPosition": "after",
     "deliveryTime": "Usually within 5–30 minutes",
     "supportHours": "Every day, 10:00–22:00 (UTC)",
     "refundPolicy": "Refunds are only possible if we can't deliver your product. Once delivery has started, all sales are final.",
     "loyalAfterOrders": 5,
     "paymentMethods": [
-      { "name": "PayPal", "emoji": "paypal", "details": "Friends & Family" },
-      { "name": "Credit / Debit Card", "emoji": "card", "details": "Visa, Mastercard, Apple Pay" },
-      { "name": "Crypto", "emoji": "crypto", "details": "BTC, ETH, LTC, USDT" },
-      { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Code sent in your ticket" },
-      { "name": "Bank Transfer", "emoji": "wallet", "details": "EU (SEPA) transfers" },
-      { "name": "BLIK", "emoji": "blik", "details": "Instant – Poland only" }
+      { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Send the PIN code only inside your ticket" },
+      { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)" },
+      { "name": "PayPal", "emoji": "paypal", "details": "Only to the PayPal address given in your ticket" }
     ]
   },
 
   "vouches": {
+    "stickyPanel": true,
     "cooldownHours": 6,
     "requireCustomerRole": false,
     "minLength": 10
@@ -93,7 +93,7 @@
       "questions": [
         { "id": "product", "label": "What would you like to buy?", "style": "short", "placeholder": "Product name (and variant)", "required": true, "maxLength": 100 },
         { "id": "quantity", "label": "Quantity", "style": "short", "placeholder": "1", "required": false, "maxLength": 10 },
-        { "id": "payment", "label": "Payment method", "style": "short", "placeholder": "PayPal, Card, Crypto, PaysafeCard…", "required": true, "maxLength": 60 },
+        { "id": "payment", "label": "Payment method", "style": "short", "placeholder": "PaysafeCard, Crypto (BTC / ETH) or PayPal", "required": true, "maxLength": 60 },
         { "id": "notes", "label": "Anything else we should know?", "style": "paragraph", "required": false, "maxLength": 500 }
       ]
     },

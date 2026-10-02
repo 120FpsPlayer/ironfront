@@ -16,6 +16,10 @@ const PRIORITIES = {
   urgent: { label: 'Urgent', emoji: '🔴', color: 0xed4245 },
 };
 
+config.onReload(() => {
+  PRIORITIES.normal.color = COLORS.brand;
+});
+
 function embed(color = COLORS.brand) {
   const e = new EmbedBuilder().setColor(color).setTimestamp();
   if (config.brand.footer) e.setFooter({ text: config.brand.footer });

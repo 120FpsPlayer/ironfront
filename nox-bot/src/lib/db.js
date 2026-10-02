@@ -146,6 +146,15 @@ module.exports = {
     guild(guildId).build = build;
     save();
   },
+  /** When a tracked /build message is re-sent (e.g. the sticky vouch panel), point to the new copy. */
+  replacePostId(guildId, oldId, newId) {
+    const posts = guild(guildId).build?.posts;
+    if (!posts) return;
+    for (const list of Object.values(posts)) {
+      for (const entry of list) if (entry.id === oldId) entry.id = newId;
+    }
+    save();
+  },
   roleId: (guildId, key) => guild(guildId).build?.roles?.[key] ?? null,
   channelId: (guildId, key) => guild(guildId).build?.channels?.[key] ?? null,
   emojiIds: (guildId) => guild(guildId).emojis,

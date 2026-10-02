@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { ChannelType, PermissionFlagsBits: P } = require('discord.js');
 const { FakeGuild } = require('./helpers/fakeDiscord');
-const { buildServer, repostAll } = require('../src/builder/executor');
+const { buildServer } = require('../src/builder/executor');
 const { ROLES, CATEGORIES } = require('../src/builder/layout');
 const { EMOJI_PRIORITY } = require('../src/lib/theme');
 
@@ -174,12 +174,18 @@ test('the build can be stopped', async () => {
   assert.ok(R.created.channels < ALL_CHANNELS.length);
 });
 
-test('repost re-publishes all banners and panels without duplicates', async () => {
+test('/build only:panels updates every card in place and keeps the posted messages tracked', async () => {
+  const { refreshContent } = require('../src/builder/reload');
   const { guild } = await build();
-  const before = byKey(guild, 'faq').messageList.length;
-  const res = await repostAll(guild);
+  const faq = byKey(guild, 'faq');
+  const ids = faq.messageList.map((m) => m.id);
+  const tracked = db.build(guild.id).posts;
+  assert.deepEqual(tracked.faq.map((p) => p.type), ['banner', 'card']);
+  assert.deepEqual(tracked.faq.map((p) => p.id), ids);
+  const res = await refreshContent(guild);
   assert.deepEqual(res.errors, []);
-  assert.equal(byKey(guild, 'faq').messageList.length, before);
+  assert.equal(res.sent, 0, 'nothing re-sent');
+  assert.deepEqual(faq.messageList.map((m) => m.id), ids, 'same messages, edited in place');
   assert.equal(db.panels(guild.id).length, 4);
 });
 

@@ -24,6 +24,8 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 
 ### 🛒 Selling
 - **Live shop panel** in #shop – add products with `/product add`, they appear instantly with a **Buy** button.
+  Prices typed as plain numbers get the currency automatically (`20` → **20€**).
+- **Payments:** PaysafeCard, Crypto (BTC, ETH) and PayPal – edit them in `config.json`.
 - **Buy → order form → private ticket.** The form asks for quantity and lets the buyer **pick a payment method from a list**.
 - **Order completed** (one click in the ticket menu) → the buyer gets the **Customer** role automatically, after 5 orders **Loyal Customer**, and is asked for a vouch.
 - **Restock pings** – new products and restocks are announced in #restocks and ping the Restocks role.
@@ -31,6 +33,8 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 
 ### ⭐ Vouches
 - **Leave a vouch** button with a star-rating form, or `/vouch` with an optional screenshot.
+- The vouch panel is **sticky**: after every new vouch it jumps to the bottom of #vouches, so the
+  **Leave a vouch** button is always the first thing people see (`"stickyPanel": false` turns this off).
 - Live counter with the average rating and a rating breakdown, plus a cooldown against spam.
 
 ### 🎫 Tickets (full ticket system)
@@ -94,8 +98,9 @@ create `.env` there, set the **startup file to `index.js`** and press Start. Dep
 
 ### 5. Start selling
 ```
-/product add name:Nitro 1 Month price:€6.99 description:Instant delivery, full warranty. emoji:💎
+/product add name:GTA V price:20 description:Instant delivery, full warranty. emoji:💎
 ```
+The price shows as **20€** in the shop.
 Give your team their roles (Manager, Support, Seller…) and you're good to go.
 
 ---
@@ -138,7 +143,8 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 |---|---|---|
 | `/build` | Build the whole server (Build / Wipe & Build) | Owner, admins |
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
-| `/build only:panels` | Re-post all banners & cards (after editing `config.json`) | Owner, admins |
+| `/reload` | Apply your changes: reloads `config.json` + scripts, re-applies name & logo, recreates missing channels/roles, resets channel settings and updates every banner & card **in place** | Owner, admins |
+| `/build only:panels` | Only update the banners & cards in place (no channel/role changes) | Owner, admins |
 | `/product add / edit / stock / remove / list` | Manage the shop – the #shop panel updates by itself | Admins, sellers |
 | `/vouch` | Leave a review (with optional screenshot) | Everyone |
 | `/giveaway start / end / reroll / list` | Giveaways | Moderators+ |
@@ -175,18 +181,34 @@ Admin commands are hidden from normal members automatically.
 | `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
-| `shop` | Delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
-| `vouches` | Cooldown, "customers only", minimum review length |
+| `shop` | Currency, delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
+| `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
 | `panel`, `ticketTypes`, `snippets`, `defaults` | Ticket panel texts, ticket categories and their questions, canned replies, limits and auto-close |
 
-After editing:
-```bash
-npm run check          # validates config.json against Discord's limits
-```
-then restart the bot and run **`/build only:panels`** to re-post the cards with your new texts.
+After editing, just type **`/reload`** in Discord – no restart needed. (Optional: `npm run check` validates
+`config.json` against Discord's limits first.)
+
+### 🔄 `/reload` – apply changes without restarting
+`/reload` makes the running server match your files again:
+
+1. re-reads **`config.json`**, **`src/builder/layout.js`** (roles & channels) and **`src/builder/content.js`** (all channel texts)
+2. sets the server **name and logo** again
+3. **recreates** deleted roles, categories and channels, and resets channel **names, topics and permissions** to the layout
+4. uploads missing **emojis**
+5. updates every **banner, card and panel in place** – nothing moves, and your vouches, giveaways,
+   announcements and welcome messages are never touched
+
+If a file has a mistake, `/reload` tells you where (e.g. `content.js:123`) and keeps the last working version.
+Changed any *other* `.js` file? Restart the bot once, then run `/reload`.
+
+> ⚠️ Step 3 resets channel permissions you changed by hand in Discord – change them in `layout.js` / `permissions.js` instead.
 
 **Payment methods** – each entry has a `name`, `details` and an `emoji`
-(`paypal`, `card`, `crypto`, `paysafecard`, `wallet`, `blik`, `coin`, `currency_eur`, `currency_usd`, `currency_gbp`…).
+(`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…). The default is PaysafeCard,
+Crypto (BTC, ETH) and PayPal.
+
+**Currency** – `shop.currency` (default `€`) and `shop.currencyPosition` (`after` → `20€`, `before` → `€20`).
+Only plain-number prices get it; `from 5€` or `$10` are shown exactly as you typed them.
 
 ### The logo
 There are five logos in `assets/brand/` (1024 × 1024) – pick one with `"logo"` in the `server` section of `config.json`:
@@ -249,9 +271,10 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-36 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+46 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
-every permission, the shop → ticket → order → vouch flow, verification, giveaways, ratings and more.
+every permission, the shop → ticket → order → vouch flow, `/reload` (in-place edits, recreating channels, hot-reloading
+scripts, broken files), verification, giveaways, ratings and more.
 
 ---
 

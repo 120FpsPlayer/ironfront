@@ -246,14 +246,13 @@ function payments(x) {
     text(methods.length ? methods.map((m) => `### ${x.E(m.emoji ?? 'wallet')} ${m.name}\n-# ${m.details ?? ''}`).join('\n') : 'Payment methods will be listed here soon.'),
   );
   c.addSeparatorComponents(divider());
-  c.addTextDisplayComponents(
-    text(
-      `${x.E('warning')} **Stay safe**\n` +
-        '> Only pay to the details a seller gives you **inside your ticket**.\n' +
-        '> We never ask for payment in DMs, and we never ask for your passwords.\n' +
-        '> Chargebacks and disputes result in a permanent ban.',
-    ),
-  );
+  const has = (re) => methods.some((m) => re.test(`${m.name} ${m.emoji ?? ''}`));
+  const tips = ['> Only pay to the details a seller gives you **inside your ticket** – never in DMs. We never ask for passwords.'];
+  if (has(/crypto|btc|eth|bitcoin|ethereum/i)) tips.push("> **Crypto:** send the exact amount on the right network and double-check the address – crypto payments can't be reversed.");
+  if (has(/paysafe/i)) tips.push('> **PaysafeCard:** only share your PIN inside your ticket – a seller confirms it before delivery.');
+  if (has(/paypal/i)) tips.push('> **PayPal:** only pay to the PayPal address a seller gives you in your ticket.');
+  tips.push('> Fraud attempts or payment disputes result in a permanent ban.');
+  c.addTextDisplayComponents(text(`${x.E('warning')} **Stay safe**\n${tips.join('\n')}`));
   c.addActionRowComponents(buttons(btn('ticket:open:order', 'Place an order', ce(x.guild, 'cart'), ButtonStyle.Primary), x.link('howToBuy', 'How to buy', 'info')));
   return card(c);
 }
@@ -349,6 +348,7 @@ function staffHandbook(x) {
         `### ${x.E('cart')} Shop\n> \`/product add\` · \`/product edit\` · \`/product stock\` · \`/product remove\` – the ${x.ch('shop')} panel updates by itself\n` +
         `> New products and restocks are announced in ${x.ch('restocks')} automatically\n` +
         `### ${x.E('gift')} Community\n> \`/giveaway start\` · \`/giveaway end\` · \`/giveaway reroll\`\n> \`/announce\` – a styled announcement with an optional banner and ping\n` +
+        `### ${x.E('refresh')} Changing the server\n> Edit \`config.json\` (texts, payments, prices) and run \`/reload\` – every channel, card and the logo update in place\n` +
         `### ${x.E('warning')} Golden rules\n> Never ask for payment outside a ticket · stay polite · when unsure, ask a ${x.role('manager', 'Manager')}`,
     ),
   );

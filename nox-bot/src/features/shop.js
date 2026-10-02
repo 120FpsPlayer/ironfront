@@ -26,6 +26,18 @@ const STOCK = {
 
 const products = (guildId) => db.guild(guildId).products;
 
+/**
+ * Prices are typed freely ("20", "19.99", "from 5€"). Plain numbers get the shop currency
+ * from config.json (20 → 20€); anything else is shown exactly as typed.
+ */
+const PLAIN_NUMBER = /^(?:\d{1,3}(?:[ .,]\d{3})+|\d+)(?:[.,]\d{1,2})?$/;
+function formatPrice(raw) {
+  const price = String(raw ?? '').trim();
+  const currency = config.shop.currency;
+  if (!currency || !PLAIN_NUMBER.test(price)) return price;
+  return config.shop.currencyPosition === 'before' ? `${currency}${price}` : `${price}${currency}`;
+}
+
 /** Unicode emoji (incl. ZWJ sequences) or a custom <:name:id> emoji. */
 const CUSTOM_EMOJI = /^<a?:\w{2,32}:\d{17,20}>$/;
 const UNICODE_EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]️?⃣)(?:️|‍|\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator})*$/u;
@@ -79,7 +91,7 @@ function shopPanel(guild) {
   } else if (list.length <= 8) {
     for (const p of list) {
       const stock = STOCK[p.stock] ?? STOCK.in;
-      const body = `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${p.price}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}`;
+      const body = `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${formatPrice(p.price)}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}`;
       const buy = p.stock === 'out'
         ? btn(`shop:buy:${p.id}`, 'Sold out', ce(guild, 'x'), ButtonStyle.Secondary).setDisabled(true)
         : btn(`shop:buy:${p.id}`, 'Buy', ce(guild, 'cart'), ButtonStyle.Primary);
@@ -90,7 +102,7 @@ function shopPanel(guild) {
     const lines = [];
     for (const p of list) {
       const stock = STOCK[p.stock] ?? STOCK.in;
-      const line = `**${productEmoji(guild, p)} ${p.name}** — ${p.price} · ${stock.dot} ${stock.label}\n-# ${truncate(p.description, 90)}`;
+      const line = `**${productEmoji(guild, p)} ${p.name}** — **${formatPrice(p.price)}** · ${stock.dot} ${stock.label}\n-# ${truncate(p.description, 90)}`;
       if (budget - line.length < 0) break;
       budget -= line.length;
       lines.push(line);
@@ -104,7 +116,7 @@ function shopPanel(guild) {
           new StringSelectMenuBuilder()
             .setCustomId('shop:select')
             .setPlaceholder('🛒 Choose a product to buy…')
-            .addOptions(buyable.map((p) => ({ label: truncate(p.name, 100), value: p.id, description: truncate(`${p.price} · ${p.description}`, 100), emoji: ce(guild, 'cart') }))),
+            .addOptions(buyable.map((p) => ({ label: truncate(p.name, 100), value: p.id, description: truncate(`${formatPrice(p.price)} · ${p.description}`, 100), emoji: ce(guild, 'cart') }))),
         ),
       );
     }
@@ -192,7 +204,7 @@ async function announceProduct(guild, p, kind = 'new') {
   const roleId = db.roleId(guild.id, 'pingRestocks');
   const c = container(kind === 'new' ? COLORS.brand : COLORS.success);
   const title = kind === 'new' ? `${e(guild, 'sparkles')} New product` : `${e(guild, 'box')} Back in stock`;
-  c.addTextDisplayComponents(text(`## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${p.price}`));
+  c.addTextDisplayComponents(text(`## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${formatPrice(p.price)}`));
   c.addActionRowComponents(row(btn(`shop:buy:${p.id}`, 'Buy now', ce(guild, 'cart'), ButtonStyle.Primary)));
   if (roleId) c.addTextDisplayComponents(text(`-# 🔔 <@&${roleId}>`));
   return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] } }));
@@ -202,7 +214,7 @@ async function announceProduct(guild, p, kind = 'new') {
 
 function orderModal(product, guild = null) {
   const modal = new ModalBuilder().setCustomId(`shop:order:${product.id}`).setTitle(truncate(`🛒 ${product.name}`, 45));
-  modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${product.price}\n-# ${truncate(product.description, 300)}`));
+  modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${formatPrice(product.price)}\n-# ${truncate(product.description, 300)}`));
   modal.addLabelComponents(
     new LabelBuilder()
       .setLabel('Quantity')
@@ -266,7 +278,7 @@ async function submitOrder(interaction, productId) {
     // text fallback already read
   }
   const answers = [
-    { label: 'Product', value: `${product.name} — ${product.price}` },
+    { label: 'Product', value: `${product.name} — ${formatPrice(product.price)}` },
     { label: 'Quantity', value: field('quantity') || '1' },
     { label: 'Payment method', value: payment || '—' },
   ];
@@ -291,12 +303,13 @@ function autocomplete(interaction) {
     products(interaction.guild.id)
       .filter((p) => !q || p.name.toLowerCase().includes(q))
       .slice(0, 25)
-      .map((p) => ({ name: truncate(`${p.name} · ${p.price} · ${STOCK[p.stock]?.label ?? ''}`, 100), value: p.id })),
+      .map((p) => ({ name: truncate(`${p.name} · ${formatPrice(p.price)} · ${STOCK[p.stock]?.label ?? ''}`, 100), value: p.id })),
   );
 }
 
 module.exports = {
   STOCK,
+  formatPrice,
   parseEmoji,
   products,
   findProduct,

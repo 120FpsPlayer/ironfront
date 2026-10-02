@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
+const CONFIG_PATH = process.env.NOX_CONFIG_PATH || path.join(__dirname, '..', '..', 'config.json');
 
 function load() {
   let raw;
@@ -64,7 +64,24 @@ function load() {
 }
 
 const config = load();
+const reloadHooks = [];
 
 config.getType = (id) => config.ticketTypes.find((t) => t.id === id) ?? null;
+
+/**
+ * Re-reads config.json while the bot is running (/reload). The same object is updated, so every
+ * module sees the new values. If the file is invalid, an error is thrown and nothing changes.
+ */
+config.reload = () => {
+  const fresh = load();
+  for (const key of Object.keys(config)) if (typeof config[key] !== 'function') delete config[key];
+  Object.assign(config, fresh);
+  for (const hook of reloadHooks) hook(config);
+  return config;
+};
+
+/** Run something after every reload (e.g. update cached colors). */
+config.onReload = (hook) => reloadHooks.push(hook);
+Object.defineProperty(config, 'path', { value: CONFIG_PATH, enumerable: false });
 
 module.exports = config;

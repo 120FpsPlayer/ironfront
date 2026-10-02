@@ -174,6 +174,8 @@ async function postVouch(guild, member, { rating, product, review, image = null 
   g.vouches.push({ n, userId: member.id, rating: r, product: truncate(product || '', 100), review: truncate(clean, 500), at: Date.now(), messageId: message.id });
   g.vouchCooldowns[member.id] = Date.now();
   db.save();
+  // Keep the "Leave a vouch" panel as the newest message, so it's always the first thing people see.
+  if (config.vouches.stickyPanel !== false) await panels.bump(guild, 'vouches', message.channelId ?? message.channel?.id);
   panels.schedule(guild, 'vouches');
   panels.schedule(guild, 'shop');
   return { n, message };

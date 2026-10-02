@@ -22,7 +22,7 @@ module.exports = {
         .setName('add')
         .setDescription('Add a product to the shop')
         .addStringOption((o) => o.setName('name').setDescription('Product name').setRequired(true).setMaxLength(80))
-        .addStringOption((o) => o.setName('price').setDescription('Price, e.g. €9.99 or "from $5"').setRequired(true).setMaxLength(40))
+        .addStringOption((o) => o.setName('price').setDescription('Price – a plain number like 20 or 9.99 is shown as 20€ / 9.99€').setRequired(true).setMaxLength(40))
         .addStringOption((o) => o.setName('description').setDescription('Short description').setRequired(true).setMaxLength(400))
         .addStringOption((o) => o.setName('emoji').setDescription('Emoji shown next to the name (optional)').setMaxLength(64))
         .addStringOption((o) => o.setName('stock').setDescription('Stock status (default: in stock)').addChoices(...STOCK_CHOICES))
@@ -74,7 +74,7 @@ module.exports = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await shop.announceProduct(guild, product, 'new').catch(() => null);
       }
-      return reply(interaction, `Added **${product.name}** (${product.price}) to the shop. The shop panel updates in a few seconds.`);
+      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop. The shop panel updates in a few seconds.`);
     }
 
     if (sub === 'edit') {
@@ -102,7 +102,7 @@ module.exports = {
     }
 
     const list = shop.products(guild.id);
-    const lines = list.map((p) => `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${p.price}\n-# ${truncate(p.description, 90)}`);
+    const lines = list.map((p) => `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.formatPrice(p.price)}\n-# ${truncate(p.description, 90)}`);
     return reply(interaction, {
       embeds: [embed(COLORS.brand).setTitle(`🛒 Products (${list.length})`).setDescription(truncate(lines.join('\n') || 'No products yet – add one with `/product add`.', 4000))],
     });
