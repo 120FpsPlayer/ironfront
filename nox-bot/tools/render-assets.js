@@ -285,25 +285,7 @@ function emojiHtml(spec) {
   return page(`<div class="tile"><div class="gloss"></div></div><div class="g" ${shift}>${glyph}</div>${extras.join('')}`, css, { width: 128, height: 128 });
 }
 
-// ───────────── Brand (server icon + server banner) ─────────────
-
-function iconHtml(size) {
-  const css = `
-.ic{position:relative;width:${size}px;height:${size}px;overflow:hidden;background:
-  radial-gradient(circle at 32% 26%, #7c3aed 0%, #4c1d95 30%, #1e0b38 62%, #0a0512 100%)}
-.ring{position:absolute;inset:${size * 0.06}px;border-radius:50%;border:${size * 0.006}px solid rgba(233,213,255,.25)}
-.moon{position:absolute;left:${size * 0.16}px;top:${size * 0.1}px;width:${size * 0.5}px;height:${size * 0.5}px;opacity:.95;
-  filter:drop-shadow(0 0 ${size * 0.04}px rgba(${THEME.glow},.95)) drop-shadow(0 0 ${size * 0.1}px rgba(${THEME.glowDeep},.8))}
-.moon svg{width:100%;height:100%}
-.txt{position:absolute;left:0;right:0;top:${size * 0.4}px;text-align:center;font-weight:900;font-size:${size * 0.3}px;letter-spacing:.02em;line-height:1;
-  background:linear-gradient(180deg,#fff 0%,#f3e8ff 55%,#d8b4fe 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 ${size * 0.015}px ${size * 0.02}px rgba(10,0,25,.75)) drop-shadow(0 0 ${size * 0.03}px rgba(${THEME.glow},.55))}`;
-  const s = size / 512;
-  const body = `${iconGradient}<div class="ic"><div class="ring"></div><div class="moon">${svg('solid/moon', { fill: 'url(#ig)' })}</div>
-  ${sparkle(360 * s, 92 * s, 30 * s, 0.9)}${sparkle(405 * s, 150 * s, 14 * s, 0.7)}${sparkle(110 * s, 380 * s, 16 * s, 0.5, '#d8b4fe')}
-  <div class="txt">${THEME.brand}</div></div>`;
-  return page(body, css, { width: size, height: size });
-}
+// ───────────── Server banner ─────────────
 
 function serverBannerHtml() {
   const css = `
@@ -323,6 +305,123 @@ function serverBannerHtml() {
   <div class="vig"></div><div class="wrap"><div class="row"><div class="moon">${svg('solid/moon', { fill: 'url(#ig)' })}</div><div class="t">${THEME.brand}</div></div>
   <div class="sub">PREMIUM · TRUSTED · FAST</div></div></div>`;
   return page(body, css, { width: 960, height: 540 });
+}
+
+// ───────────── Logos (1024 × 1024, vector) ─────────────
+
+/** Deterministic "random" star field, so re-renders look identical. */
+function stars(count, size, seed, { minR = 1, maxR = 3, margin = 0, color = '#ffffff' } = {}) {
+  let s = seed;
+  const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+  let out = '';
+  for (let i = 0; i < count; i += 1) {
+    const x = margin + rnd() * (size - 2 * margin);
+    const y = margin + rnd() * (size - 2 * margin);
+    const r = minR + rnd() * (maxR - minR);
+    out += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="${color}" opacity="${(0.25 + rnd() * 0.6).toFixed(2)}"/>`;
+  }
+  return out;
+}
+
+const svgSparkle = (x, y, size, opacity = 1, fill = '#fff') =>
+  `<path transform="translate(${x - size / 2} ${y - size / 2}) scale(${size / 100})" d="${SPARKLE}" fill="${fill}" opacity="${opacity}"/>`;
+
+const LOGO_DEFS = `
+  <linearGradient id="lav" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fbf5ff"/><stop offset=".35" stop-color="#d9aaff"/><stop offset=".7" stop-color="#a855f7"/><stop offset="1" stop-color="#6d28d9"/>
+  </linearGradient>
+  <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f3e8ff"/><stop offset="1" stop-color="#cfb2f5"/>
+  </linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="28"/></filter>
+  <filter id="glowSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0a0018" flood-opacity=".75"/></filter>`;
+
+/**
+ * Concept A – "Eclipse Ø": the Ø of NØX drawn as a solar eclipse – a glowing ring with a
+ * dark core, the diagonal stroke and a diamond-ring flare. Reads well even at 32 px.
+ */
+function logoEclipseSvg({ wordmark = false } = {}) {
+  const cy = wordmark ? 420 : 512;
+  const r = wordmark ? 200 : 245;
+  const w = wordmark ? 46 : 54;
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const d = r + w * 0.7;
+  const a = rad(-56);
+  const s1 = { x1: 512 - Math.cos(a) * d, y1: cy - Math.sin(a) * d, x2: 512 + Math.cos(a) * d, y2: cy + Math.sin(a) * d };
+  const fx = 512 + Math.cos(rad(-128)) * r;
+  const fy = cy + Math.sin(rad(-128)) * r;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>${LOGO_DEFS}
+    <radialGradient id="bgA" cx=".5" cy="${cy / 1024}" r=".72">
+      <stop offset="0" stop-color="#2b0f52"/><stop offset=".45" stop-color="#150828"/><stop offset="1" stop-color="#06030b"/>
+    </radialGradient>
+    <radialGradient id="core" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#0a0512"/><stop offset=".78" stop-color="#110720"/><stop offset=".94" stop-color="#2a0f50"/><stop offset="1" stop-color="#5b21b6"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bgA)"/>
+  ${stars(90, 1024, 7, { minR: 1, maxR: 2.6, margin: 30 })}
+  <circle cx="512" cy="${cy}" r="${r + 50}" fill="#8b3dff" opacity=".5" filter="url(#glowSoft)"/>
+  <circle cx="512" cy="${cy}" r="${r}" fill="none" stroke="#c98bff" stroke-width="${w * 1.5}" opacity=".6" filter="url(#glow)"/>
+  <circle cx="512" cy="${cy}" r="${r - w / 2 + 1}" fill="url(#core)"/>
+  <circle cx="512" cy="${cy}" r="${r}" fill="none" stroke="url(#lav)" stroke-width="${w}"/>
+  <line x1="${s1.x1}" y1="${s1.y1}" x2="${s1.x2}" y2="${s1.y2}" stroke="#0a0512" stroke-width="${w * 1.2}" stroke-linecap="round"/>
+  <line x1="${s1.x1}" y1="${s1.y1}" x2="${s1.x2}" y2="${s1.y2}" stroke="url(#lav)" stroke-width="${w * 0.66}" stroke-linecap="round"/>
+  <circle cx="${fx}" cy="${fy}" r="46" fill="#fff" opacity=".6" filter="url(#glow)"/>
+  ${svgSparkle(fx, fy, 130, 1)}
+  ${svgSparkle(790, 235, 40, 0.75)}${svgSparkle(250, 820, 30, 0.5, '#d8b4fe')}
+  ${wordmark ? `<text x="512" y="895" text-anchor="middle" font-family="Montserrat" font-weight="900" font-size="190" letter-spacing="14" fill="url(#silver)" filter="url(#shadow)">${THEME.brand}</text>` : ''}
+</svg>`;
+}
+
+/** Concept B – "Night": a big glowing crescent moon behind the NØX wordmark. */
+function logoMoonSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>${LOGO_DEFS}
+    <radialGradient id="bgB" cx=".35" cy=".3" r=".85">
+      <stop offset="0" stop-color="#6d28d9"/><stop offset=".35" stop-color="#3b0f75"/><stop offset=".7" stop-color="#170830"/><stop offset="1" stop-color="#07030d"/>
+    </radialGradient>
+    <mask id="crescent"><rect width="1024" height="1024" fill="#000"/><circle cx="470" cy="360" r="270" fill="#fff"/><circle cx="600" cy="268" r="240" fill="#000"/></mask>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bgB)"/>
+  ${stars(110, 1024, 21, { minR: 1, maxR: 2.8, margin: 20 })}
+  <g mask="url(#crescent)"><rect width="1024" height="1024" fill="#b06bff" filter="url(#glow)" opacity=".9"/></g>
+  <g mask="url(#crescent)"><rect width="1024" height="1024" fill="url(#lav)"/></g>
+  ${svgSparkle(760, 210, 70, 1)}${svgSparkle(845, 300, 30, 0.75)}${svgSparkle(220, 790, 34, 0.55, '#d8b4fe')}
+  <text x="512" y="770" text-anchor="middle" font-family="Montserrat" font-weight="900" font-size="300" letter-spacing="8" fill="url(#silver)" filter="url(#shadow)">${THEME.brand}</text>
+</svg>`;
+}
+
+/** Concept C – "Neon": a vivid purple gradient tile with a bold white wordmark – pops in the server list. */
+function logoGradientSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>${LOGO_DEFS}
+    <linearGradient id="bgC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e2b8ff"/><stop offset=".3" stop-color="#b266ff"/><stop offset=".65" stop-color="#7c3aed"/><stop offset="1" stop-color="#3b0764"/>
+    </linearGradient>
+    <radialGradient id="shine" cx=".25" cy=".15" r=".6"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <mask id="cres2"><rect width="1024" height="1024" fill="#000"/><circle cx="512" cy="300" r="105" fill="#fff"/><circle cx="560" cy="262" r="92" fill="#000"/></mask>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bgC)"/>
+  <rect width="1024" height="1024" fill="url(#shine)"/>
+  ${stars(40, 1024, 5, { minR: 1.5, maxR: 3.5, margin: 40 })}
+  <g mask="url(#cres2)"><rect width="1024" height="1024" fill="#fff"/></g>
+  ${svgSparkle(640, 230, 50, 1)}
+  <text x="512" y="700" text-anchor="middle" font-family="Montserrat" font-weight="900" font-size="300" letter-spacing="6" fill="#ffffff" filter="url(#shadow)">${THEME.brand}</text>
+</svg>`;
+}
+
+const LOGOS = {
+  eclipse: () => logoEclipseSvg(),
+  'eclipse-wordmark': () => logoEclipseSvg({ wordmark: true }),
+  night: () => logoMoonSvg(),
+  neon: () => logoGradientSvg(),
+};
+
+function logoHtml(name, size = 1024) {
+  const css = `svg{display:block;width:${size}px;height:${size}px}`;
+  return page(LOGOS[name](), css, { width: size, height: size });
 }
 
 // ───────────── Render ─────────────
@@ -376,9 +475,12 @@ async function main() {
     }
   }
   if (!only || only === 'brand') {
-    await render(iconHtml(512), path.join(OUT, 'brand', 'icon.png'), { width: 512, height: 512 });
+    for (const name of Object.keys(LOGOS)) {
+      await render(logoHtml(name), path.join(OUT, 'brand', `logo-${name}.png`), { width: 1024, height: 1024 });
+      process.stdout.write(`logo ${name}\n`);
+    }
     await render(serverBannerHtml(), path.join(OUT, 'brand', 'server-banner.png'), { width: 960, height: 540 });
-    process.stdout.write('brand icon + server banner\n');
+    process.stdout.write('server banner\n');
   }
   await browser.close();
 }
@@ -390,4 +492,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { BANNERS, EMOJIS, bannerHtml, emojiHtml, iconHtml, serverBannerHtml };
+module.exports = { BANNERS, EMOJIS, LOGOS, bannerHtml, emojiHtml, serverBannerHtml, logoHtml };

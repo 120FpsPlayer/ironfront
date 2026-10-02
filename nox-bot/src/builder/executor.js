@@ -28,6 +28,14 @@ require('../features/shop');
 require('../features/vouches');
 const path = require('node:path');
 
+const fs = require('node:fs');
+
+/** assets/brand/logo-<name>.png (eclipse, eclipse-wordmark, night, neon) – falls back to the eclipse logo. */
+function logoPath(name) {
+  const file = path.join(ASSETS, 'brand', `logo-${String(name || 'eclipse').replace(/[^a-z-]/gi, '')}.png`);
+  return fs.existsSync(file) ? file : path.join(ASSETS, 'brand', 'logo-eclipse.png');
+}
+
 class BuildAborted extends Error {
   constructor() {
     super('The build was stopped.');
@@ -393,7 +401,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     }
     await attempt('Server settings', () => guild.edit(settings));
     if (S.setIcon !== false) {
-      await attempt('Server icon', () => guild.setIcon(path.join(ASSETS, 'brand', 'icon.png'), reason), { warn: true });
+      await attempt('Server icon', () => guild.setIcon(logoPath(S.logo), reason), { warn: true });
     }
     if (S.setBanner !== false && guild.features.includes('BANNER')) {
       await attempt('Server banner', () => guild.setBanner(path.join(ASSETS, 'brand', 'server-banner.png'), reason), { warn: true });
@@ -604,4 +612,4 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = { buildServer, repostAll, publish, describeError, BuildAborted, mergeOverwrites, channelOverwrites, automodRules, plannedSteps };
+module.exports = { buildServer, repostAll, publish, describeError, BuildAborted, mergeOverwrites, channelOverwrites, automodRules, plannedSteps, logoPath };

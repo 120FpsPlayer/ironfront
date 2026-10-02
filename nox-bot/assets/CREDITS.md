@@ -11,5 +11,5 @@ All images in this folder were rendered for NØX by `tools/render-assets.js` (`n
 |---|---|
 | `banners/` | 1080 × 400 channel banners (posted at the top of each channel by `/build`) |
 | `emojis/` | 128 × 128 custom emojis (uploaded as `:nox_<name>:` by `/build`) |
-| `brand/icon.png` | 512 × 512 server icon – also a good bot avatar |
+| `brand/logo-*.png` | 1024 × 1024 logos: `eclipse` (default server icon), `eclipse-wordmark`, `night`, `neon` – also great as the bot's avatar |
 | `brand/server-banner.png` | 960 × 540 server banner (needs Boost level 2) |

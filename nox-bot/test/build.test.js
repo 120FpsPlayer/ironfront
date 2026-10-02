@@ -196,3 +196,19 @@ test('without Community mode the build still works (announcement channels stay t
     config.server.community = prev;
   }
 });
+
+test('the server icon uses the logo chosen in config.json', async () => {
+  const config = require('../src/lib/config');
+  const { logoPath } = require('../src/builder/executor');
+  const prev = config.server.logo;
+  try {
+    for (const name of ['eclipse', 'eclipse-wordmark', 'night', 'neon']) {
+      config.server.logo = name;
+      const { guild } = await build();
+      assert.ok(guild.iconSet.endsWith(`logo-${name}.png`), name);
+    }
+    assert.ok(logoPath('does-not-exist').endsWith('logo-eclipse.png'), 'unknown names fall back to eclipse');
+  } finally {
+    config.server.logo = prev;
+  }
+});

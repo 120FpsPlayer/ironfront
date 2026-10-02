@@ -11,6 +11,7 @@
   "server": {
     "rename": true,
     "setIcon": true,
+    "logo": "eclipse",
     "setBanner": true,
     "community": true,
     "verificationLevel": 2,
