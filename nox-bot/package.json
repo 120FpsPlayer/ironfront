@@ -1,0 +1,24 @@
+{
+  "name": "nox-bot",
+  "version": "1.0.0",
+  "description": "NØX – all-in-one Discord bot: one-command server builder (/build), verification, shop catalog, tickets, vouches, giveaways and more.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/build.test.js test/flows.test.js test/payloads.test.js",
+    "check": "node scripts/check.js",
+    "render-assets": "node tools/render-assets.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.27.0"
+  },
+  "devDependencies": {
+    "@fontsource/montserrat": "^5.2.5",
+    "@fortawesome/fontawesome-free": "^7.0.0"
+  }
+}
