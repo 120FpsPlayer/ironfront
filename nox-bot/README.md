@@ -61,7 +61,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 3. Still on the **Bot** tab, under *Privileged Gateway Intents* turn **ON**:
    - ✅ **Server Members Intent** (welcome messages, logs, giving roles)
    - ✅ **Message Content Intent** (transcripts, logs, leaderboard)
-4. *Optional:* upload `assets/brand/logo-eclipse.png` as the bot's avatar.
+4. *Optional:* upload `assets/brand/logo-eclipse-nox.png` as the bot's avatar.
 
 ### 2. Configure
 1. Copy **`.env.example`** to **`.env`**.
@@ -172,7 +172,7 @@ Admin commands are hidden from normal members automatically.
 | Section | What you can change |
 |---|---|
 | `brand` | Name, color, footer, tagline and the "About us" text |
-| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout |
+| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
 | `shop` | Delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
@@ -189,11 +189,11 @@ then restart the bot and run **`/build only:panels`** to re-post the cards with 
 (`paypal`, `card`, `crypto`, `paysafecard`, `wallet`, `blik`, `coin`, `currency_eur`, `currency_usd`, `currency_gbp`…).
 
 ### The logo
-There are four logos in `assets/brand/` (1024 × 1024) – pick one with `"logo"` in the `server` section of `config.json`:
+There are five logos in `assets/brand/` (1024 × 1024) – pick one with `"logo"` in the `server` section of `config.json`:
 
-| `eclipse` (default) | `eclipse-wordmark` | `night` | `neon` |
-|---|---|---|---|
-| The Ø as a glowing eclipse – sharpest at small sizes | Eclipse + NØX name | Crescent moon behind NØX | Bright purple tile, pops in the server list |
+| `eclipse-nox` (default) | `eclipse` | `eclipse-wordmark` | `night` | `neon` |
+|---|---|---|---|---|
+| NØX across a glowing eclipse | The Ø as an eclipse – no text | Eclipse + NØX name below | Crescent moon behind NØX | Bright purple tile, pops in the server list |
 
 Already built? Just upload the logo yourself in Server Settings → Overview, or run `/build` on a fresh server.
 

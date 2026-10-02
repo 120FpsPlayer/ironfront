@@ -30,10 +30,10 @@ const path = require('node:path');
 
 const fs = require('node:fs');
 
-/** assets/brand/logo-<name>.png (eclipse, eclipse-wordmark, night, neon) – falls back to the eclipse logo. */
+/** assets/brand/logo-<name>.png (eclipse-nox, eclipse, eclipse-wordmark, night, neon) – falls back to eclipse-nox. */
 function logoPath(name) {
-  const file = path.join(ASSETS, 'brand', `logo-${String(name || 'eclipse').replace(/[^a-z-]/gi, '')}.png`);
-  return fs.existsSync(file) ? file : path.join(ASSETS, 'brand', 'logo-eclipse.png');
+  const file = path.join(ASSETS, 'brand', `logo-${String(name || 'eclipse-nox').replace(/[^a-z-]/gi, '')}.png`);
+  return fs.existsSync(file) ? file : path.join(ASSETS, 'brand', 'logo-eclipse-nox.png');
 }
 
 class BuildAborted extends Error {

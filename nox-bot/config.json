@@ -11,7 +11,7 @@
   "server": {
     "rename": true,
     "setIcon": true,
-    "logo": "eclipse",
+    "logo": "eclipse-nox",
     "setBanner": true,
     "community": true,
     "verificationLevel": 2,

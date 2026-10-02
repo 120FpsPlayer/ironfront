@@ -412,7 +412,54 @@ function logoGradientSvg() {
 </svg>`;
 }
 
+/**
+ * Concept A+ – "Eclipse NØX": the eclipse as a glowing halo with the NØX name across it.
+ * The Ø of the name sits in the dark core; a dark cut-out outline keeps the letters
+ * readable where they cross the bright ring.
+ */
+function logoEclipseNoxSvg() {
+  const cx = 512;
+  const cy = 500;
+  const r = 300;
+  const w = 46;
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const fx = cx + Math.cos(rad(-132)) * r;
+  const fy = cy + Math.sin(rad(-132)) * r;
+  const fontSize = 258;
+  const baseline = cy + fontSize * 0.355; // centres the capitals on the eclipse
+  const word = (attrs) =>
+    `<text x="${cx}" y="${baseline}" text-anchor="middle" font-family="Montserrat" font-weight="900" font-size="${fontSize}" letter-spacing="6" ${attrs}>${THEME.brand}</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>${LOGO_DEFS}
+    <radialGradient id="bgN" cx=".5" cy="${cy / 1024}" r=".75">
+      <stop offset="0" stop-color="#2e1057"/><stop offset=".42" stop-color="#160829"/><stop offset="1" stop-color="#06030b"/>
+    </radialGradient>
+    <radialGradient id="coreN" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#0d0618"/><stop offset=".72" stop-color="#140924"/><stop offset=".93" stop-color="#341266"/><stop offset="1" stop-color="#6d28d9"/>
+    </radialGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#f6efff"/><stop offset="1" stop-color="#d4b8fa"/>
+    </linearGradient>
+    <filter id="textGlow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="22"/></filter>
+    <filter id="textShadow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bgN)"/>
+  ${stars(95, 1024, 11, { minR: 1, maxR: 2.6, margin: 30 })}
+  <circle cx="${cx}" cy="${cy}" r="${r + 60}" fill="#8b3dff" opacity=".45" filter="url(#glowSoft)"/>
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#c98bff" stroke-width="${w * 1.6}" opacity=".6" filter="url(#glow)"/>
+  <circle cx="${cx}" cy="${cy}" r="${r - w / 2 + 1}" fill="url(#coreN)"/>
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="url(#lav)" stroke-width="${w}"/>
+  <circle cx="${fx}" cy="${fy}" r="48" fill="#fff" opacity=".6" filter="url(#glow)"/>
+  ${svgSparkle(fx, fy, 140, 1)}
+  ${svgSparkle(822, 205, 40, 0.75)}${svgSparkle(205, 845, 30, 0.5, '#d8b4fe')}${svgSparkle(860, 820, 22, 0.45)}
+  ${word('fill="#a855f7" opacity=".9" filter="url(#textGlow)"')}
+  ${word('fill="#05020a" opacity=".7" filter="url(#textShadow)" transform="translate(0 16)"')}
+  ${word('fill="url(#word)" stroke="#0b0514" stroke-width="15" stroke-linejoin="round" paint-order="stroke"')}
+</svg>`;
+}
+
 const LOGOS = {
+  'eclipse-nox': () => logoEclipseNoxSvg(),
   eclipse: () => logoEclipseSvg(),
   'eclipse-wordmark': () => logoEclipseSvg({ wordmark: true }),
   night: () => logoMoonSvg(),
