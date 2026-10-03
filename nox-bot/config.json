@@ -19,7 +19,10 @@
     "afkTimeoutSeconds": 900,
     "locale": "en-US",
     "createInvite": true,
-    "rolesWithIcons": true
+    "rolesWithIcons": true,
+    "channelStyle": "{emoji}┃{name}",
+    "categoryStyle": "〔 {name} 〕",
+    "smallCaps": true
   },
 
   "emojis": {
@@ -79,7 +82,7 @@
     "to": "22:00"
   },
 
-  "channelNameFormat": "{prio}{prefix}-{number}",
+  "channelNameFormat": "{prio}{emoji}┃{prefix}-{number}",
 
   "ticketTypes": [
     {

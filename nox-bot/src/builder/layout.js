@@ -3,9 +3,11 @@
 /**
  * The NØX server layout. /build creates exactly this – edit it to change the server.
  *
- * Roles are listed top → bottom. Channels:
+ * Roles are listed top → bottom. Categories and channels use plain names ("🛒 SHOP", "📦 how-to-buy");
+ * the style (〔 🛒 SHOP 〕, 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ) comes from config.json → server.categoryStyle / channelStyle / smallCaps.
+ * Channels:
  *   key      – internal name (used by the bot to find the channel later)
- *   name     – channel name (text channels are lowercase, Discord turns spaces into dashes)
+ *   name     – emoji + name (text channels: lowercase with dashes, no spaces)
  *   kind     – text | announcement | voice
  *   profile  – who can see / write (see builder/permissions.js)
  *   posters  – extra role keys allowed to write in read-only channels
@@ -53,100 +55,100 @@ const CATEGORIES = [
   },
   {
     key: 'catWelcome',
-    name: '✦ WELCOME ✦',
+    name: '👋 WELCOME',
     profile: 'public',
     channels: [
-      text('verify', '✅┃verify', { profile: 'verify', topic: 'Verify here to unlock the whole server.', post: 'verify' }),
-      text('rules', '📜┃rules', { profile: 'rules', topic: 'Server rules – read them before you buy or chat.', post: 'rules' }),
+      text('verify', '✅ verify', { profile: 'verify', topic: 'Verify here to unlock the whole server.', post: 'verify' }),
+      text('rules', '📜 rules', { profile: 'rules', topic: 'Server rules – read them before you buy or chat.', post: 'rules' }),
       // Readable before verifying (like #rules) – otherwise the ping in a newcomer's welcome card never reaches them.
-      text('welcome', '👋┃welcome', { profile: 'rules', topic: 'Say hi to our newest members 💜', post: 'welcome' }),
-      text('information', '📌┃information', { profile: 'readonly', topic: 'About us, channels, team and contact.', post: 'information' }),
-      news('announcements', '📢┃announcements', { topic: 'Official news and updates.', post: 'announcements' }),
-      text('giveaways', '🎉┃giveaways', { profile: 'readonly', topic: 'Giveaways – click Enter to join!', post: 'giveaways' }),
-      text('roles', '🎭┃roles', { profile: 'readonly', topic: 'Server roles and notification roles.', post: 'roles' }),
-      text('partners', '🤝┃partners', { profile: 'readonly', topic: 'Our official partners.', post: 'partners' }),
+      text('welcome', '👋 welcome', { profile: 'rules', topic: 'Say hi to our newest members 💜', post: 'welcome' }),
+      text('information', '📌 information', { profile: 'readonly', topic: 'About us, channels, team and contact.', post: 'information' }),
+      news('announcements', '📢 announcements', { topic: 'Official news and updates.', post: 'announcements' }),
+      text('giveaways', '🎉 giveaways', { profile: 'readonly', topic: 'Giveaways – click Enter to join!', post: 'giveaways' }),
+      text('roles', '🎭 roles', { profile: 'readonly', topic: 'Server roles and notification roles.', post: 'roles' }),
+      text('partners', '🤝 partners', { profile: 'readonly', topic: 'Our official partners.', post: 'partners' }),
     ],
   },
   {
     key: 'catShop',
-    name: '✦ SHOP ✦',
+    name: '🛒 SHOP',
     profile: 'public',
     channels: [
-      text('shop', '🛒┃shop', { profile: 'readonly', topic: 'Our products – click Buy to order.', post: 'shop' }),
-      text('howToBuy', '📦┃how-to-buy', { profile: 'readonly', topic: 'How ordering works, step by step.', post: 'howToBuy' }),
-      text('payments', '💳┃payments', { profile: 'readonly', topic: 'Accepted payment methods.', post: 'payments' }),
-      news('restocks', '✨┃restocks', { posters: ['seller'], topic: 'New products and restocks.', post: 'restocks' }),
-      text('vouches', '⭐┃vouches', { profile: 'botsOnly', topic: 'Customer reviews – leave yours with the button or /vouch.', post: 'vouches' }),
+      text('shop', '🛒 shop', { profile: 'readonly', topic: 'Our products – click Buy to order.', post: 'shop' }),
+      text('howToBuy', '📦 how-to-buy', { profile: 'readonly', topic: 'How ordering works, step by step.', post: 'howToBuy' }),
+      text('payments', '💳 payments', { profile: 'readonly', topic: 'Accepted payment methods.', post: 'payments' }),
+      news('restocks', '✨ restocks', { posters: ['seller'], topic: 'New products and restocks.', post: 'restocks' }),
+      text('vouches', '⭐ vouches', { profile: 'botsOnly', topic: 'Customer reviews – leave yours with the button or /vouch.', post: 'vouches' }),
     ],
   },
   {
     key: 'catSupport',
-    name: '✦ SUPPORT ✦',
+    name: '🎧 SUPPORT',
     profile: 'public',
     channels: [
-      text('tickets', '🎫┃tickets', { profile: 'readonly', topic: 'Open a ticket – purchases, support, rewards and more.', post: 'tickets' }),
-      text('faq', '❓┃faq', { profile: 'readonly', topic: 'Frequently asked questions.', post: 'faq' }),
+      text('tickets', '🎫 tickets', { profile: 'readonly', topic: 'Open a ticket – purchases, support, rewards and more.', post: 'tickets' }),
+      text('faq', '❓ faq', { profile: 'readonly', topic: 'Frequently asked questions.', post: 'faq' }),
     ],
   },
   {
     key: 'catCommunity',
-    name: '✦ COMMUNITY ✦',
+    name: '💬 COMMUNITY',
     profile: 'public',
     channels: [
-      text('chat', '💬┃chat', { topic: 'General chat – keep it friendly and in English.', slowmode: 3 }),
-      text('media', '📸┃media', { profile: 'media', topic: 'Screenshots, clips and pictures. Keep it SFW.', post: 'media', slowmode: 10 }),
-      text('memes', '😂┃memes', { profile: 'media', topic: 'Memes only. Keep it SFW.', post: 'memes', slowmode: 10 }),
-      text('commands', '🤖┃commands', { topic: 'Use bot commands here.', post: 'commands' }),
-      text('leaderboard', '🏆┃leaderboard', { profile: 'readonly', topic: 'The most active members.', post: 'leaderboard' }),
-      text('boosters', '🚀┃boosters', { profile: 'readonly', topic: 'Thank you for boosting!', post: 'boosters' }),
+      text('chat', '💬 chat', { topic: 'General chat – keep it friendly and in English.', slowmode: 3 }),
+      text('media', '📸 media', { profile: 'media', topic: 'Screenshots, clips and pictures. Keep it SFW.', post: 'media', slowmode: 10 }),
+      text('memes', '😂 memes', { profile: 'media', topic: 'Memes only. Keep it SFW.', post: 'memes', slowmode: 10 }),
+      text('commands', '🤖 commands', { topic: 'Use bot commands here.', post: 'commands' }),
+      text('leaderboard', '🏆 leaderboard', { profile: 'readonly', topic: 'The most active members.', post: 'leaderboard' }),
+      text('boosters', '🚀 boosters', { profile: 'readonly', topic: 'Thank you for boosting!', post: 'boosters' }),
     ],
   },
   {
     key: 'catVip',
-    name: '✦ VIP LOUNGE ✦',
+    name: '💎 VIP LOUNGE',
     profile: 'vip',
     channels: [
-      text('vipChat', '💎┃vip-chat', { profile: 'vip', topic: 'Exclusive chat for VIPs, partners, loyal customers and boosters.', post: 'vip' }),
-      voice('vipVoice', '💎┃VIP Lounge', { profile: 'vip' }),
+      text('vipChat', '💎 vip-chat', { profile: 'vip', topic: 'Exclusive chat for VIPs, partners, loyal customers and boosters.', post: 'vip' }),
+      voice('vipVoice', '💎 VIP Lounge', { profile: 'vip' }),
     ],
   },
   {
     key: 'catVoice',
-    name: '✦ VOICE ✦',
+    name: '🔊 VOICE',
     profile: 'public',
     channels: [
-      voice('lounge', '🔊┃Lounge'),
-      voice('gaming', '🎮┃Gaming'),
-      voice('music', '🎵┃Music'),
-      voice('duo', '👥┃Duo', { userLimit: 2 }),
-      voice('afk', '💤┃AFK', { profile: 'afk' }),
+      voice('lounge', '🔊 Lounge'),
+      voice('gaming', '🎮 Gaming'),
+      voice('music', '🎵 Music'),
+      voice('duo', '👥 Duo', { userLimit: 2 }),
+      voice('afk', '💤 AFK', { profile: 'afk' }),
     ],
   },
   {
     key: 'catStaff',
-    name: '✦ STAFF ✦',
+    name: '🛡️ STAFF',
     profile: 'staff',
     channels: [
-      text('staffChat', '🛡️┃staff-chat', { profile: 'staff', topic: 'Team chat.', post: 'staff' }),
-      text('staffCommands', '⚙️┃staff-commands', { profile: 'staff', topic: 'Staff bot commands.' }),
-      text('discordUpdates', '📣┃discord-updates', { profile: 'admins', topic: 'Updates from Discord for server admins.' }),
-      voice('staffVoice', '🛡️┃Staff Room', { profile: 'staff' }),
+      text('staffChat', '🛡️ staff-chat', { profile: 'staff', topic: 'Team chat.', post: 'staff' }),
+      text('staffCommands', '⚙️ staff-commands', { profile: 'staff', topic: 'Staff bot commands.' }),
+      text('discordUpdates', '📣 discord-updates', { profile: 'admins', topic: 'Updates from Discord for server admins.' }),
+      voice('staffVoice', '🛡️ Staff Room', { profile: 'staff' }),
     ],
   },
   {
     key: 'catLogs',
-    name: '✦ LOGS ✦',
+    name: '📁 LOGS',
     profile: 'logs',
     channels: [
-      text('ticketLogs', '📁┃ticket-logs', { profile: 'staffLogs' }),
-      text('transcripts', '📄┃transcripts', { profile: 'staffLogs' }),
-      text('verifyLogs', '✅┃verify-logs', { profile: 'logs' }),
-      text('serverLogs', '🗂️┃server-logs', { profile: 'logs' }),
-      text('automodLogs', '🤖┃automod-logs', { profile: 'logs' }),
+      text('ticketLogs', '📁 ticket-logs', { profile: 'staffLogs' }),
+      text('transcripts', '📄 transcripts', { profile: 'staffLogs' }),
+      text('verifyLogs', '✅ verify-logs', { profile: 'logs' }),
+      text('serverLogs', '🗂️ server-logs', { profile: 'logs' }),
+      text('automodLogs', '🤖 automod-logs', { profile: 'logs' }),
     ],
   },
   { key: 'catTickets', name: '🎫 TICKETS', profile: 'hidden', channels: [] },
-  { key: 'catClosed', name: '📁 CLOSED TICKETS', profile: 'hidden', channels: [] },
+  { key: 'catClosed', name: '🗃️ CLOSED TICKETS', profile: 'hidden', channels: [] },
 ];
 
 /**

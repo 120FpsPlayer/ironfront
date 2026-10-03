@@ -16,6 +16,7 @@ module.exports = {
         .addChoices(
           { name: '😀 Emojis – upload the missing custom emojis', value: 'emojis' },
           { name: '🔄 Panels – update all banners & cards (after editing config.json)', value: 'panels' },
+          { name: '🎨 Names – rename channels & categories to the current style', value: 'names' },
         ),
     ),
 

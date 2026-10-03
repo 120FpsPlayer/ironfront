@@ -44,7 +44,7 @@ module.exports = {
         name: '🛡️ Administration',
         value: [
           '`/build` – build the whole server',
-          '`/build only:emojis` · `/build only:panels`',
+          '`/build only:emojis` · `/build only:panels` · `/build only:names`',
           '`/panel` – re-send a panel',
           '`/setup show` · `/setup set` · `/setup role-add`',
         ].join('\n'),

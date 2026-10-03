@@ -233,7 +233,8 @@ footer{text-align:center;color:#949ba4;font-size:12px;padding:20px;border-top:1p
 </body></html>`;
 
   const attachment = new AttachmentBuilder(Buffer.from(html, 'utf8'), {
-    name: `transcript-${channel.name.replace(/[^\w-]/g, '')}.html`,
+    // From the ticket, not the channel name – styled names (🛒┃ᴏʀᴅᴇʀ-0001) have no ASCII letters left.
+    name: `transcript-${String(type?.channelPrefix ?? 'ticket').replace(/[^\w-]/g, '') || 'ticket'}-${String(ticket.number ?? 0).padStart(4, '0')}.html`,
   });
   return { attachment, messageCount: messages.length, participants };
 }

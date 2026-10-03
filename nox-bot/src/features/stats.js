@@ -6,6 +6,7 @@ const panels = require('../lib/panels');
 const { e, COLORS } = require('../lib/theme');
 const { ts } = require('../lib/utils');
 const { container, text, divider, header, v2 } = require('../lib/v2');
+const { channelName } = require('../builder/style');
 
 /**
  * Server stats: locked voice channels showing the member and vouch count, plus an
@@ -18,8 +19,8 @@ const weekKey = (t = Date.now()) => Math.floor((t + 3 * 86_400_000) / WEEK);
 const weekEnds = (key) => (key + 1) * WEEK - 3 * 86_400_000;
 
 const STAT_NAMES = {
-  statMembers: (n) => `👥 Members: ${n.toLocaleString('en-US')}`,
-  statVouches: (n) => `⭐ Vouches: ${n.toLocaleString('en-US')}`,
+  statMembers: (n) => channelName(`👥 Members: ${n.toLocaleString('en-US')}`),
+  statVouches: (n) => channelName(`⭐ Vouches: ${n.toLocaleString('en-US')}`),
 };
 
 function trackMessage(message) {
@@ -62,19 +63,23 @@ function leaderboardPanel(guild) {
 
 panels.register('leaderboard', (guild) => leaderboardPanel(guild));
 
+/** The names the stat channels should have right now. */
+const statNames = (guild) => ({
+  statMembers: STAT_NAMES.statMembers(guild.memberCount ?? 0),
+  statVouches: STAT_NAMES.statVouches(db.guild(guild.id).vouches.length),
+});
+
 async function updateStatChannels(client) {
   for (const guildId of db.allGuildIds()) {
     const guild = client.guilds.cache.get(guildId);
     if (!guild) continue;
-    const values = { statMembers: guild.memberCount ?? 0, statVouches: db.guild(guildId).vouches.length };
-    for (const [key, value] of Object.entries(values)) {
+    for (const [key, name] of Object.entries(statNames(guild))) {
       const channel = guild.channels.cache.get(db.channelId(guildId, key) ?? '');
       if (!channel) continue;
-      const name = STAT_NAMES[key](value);
       // Discord allows 2 renames per 10 minutes per channel – this runs every 10 minutes at most.
       if (channel.name !== name) await channel.setName(name, 'Stats update').catch(() => null);
     }
   }
 }
 
-module.exports = { weekKey, STAT_NAMES, trackMessage, leaderboardPanel, updateStatChannels, top };
+module.exports = { weekKey, STAT_NAMES, statNames, trackMessage, leaderboardPanel, updateStatChannels, top };

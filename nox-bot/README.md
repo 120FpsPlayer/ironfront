@@ -108,20 +108,20 @@ Give your team their roles (Manager, Support, Seller…) and you're good to go.
 ## 🗺️ What /build creates
 
 ```
-📊 SERVER STATS      👥 Members: 123 · ⭐ Vouches: 45                        (everyone can see, nobody can join)
-✦ WELCOME ✦          ✅┃verify · 📜┃rules · 👋┃welcome · 📌┃information · 📢┃announcements
-                     🎉┃giveaways · 🎭┃roles · 🤝┃partners
-✦ SHOP ✦             🛒┃shop · 📦┃how-to-buy · 💳┃payments · ✨┃restocks · ⭐┃vouches
-✦ SUPPORT ✦          🎫┃tickets · ❓┃faq
-✦ COMMUNITY ✦        💬┃chat · 📸┃media · 😂┃memes · 🤖┃commands · 🏆┃leaderboard · 🚀┃boosters
-✦ VIP LOUNGE ✦       💎┃vip-chat · 💎┃VIP Lounge                            (VIP, partners, loyal customers, boosters, staff)
-✦ VOICE ✦            🔊┃Lounge · 🎮┃Gaming · 🎵┃Music · 👥┃Duo · 💤┃AFK
-✦ STAFF ✦            🛡️┃staff-chat · ⚙️┃staff-commands · 📣┃discord-updates · 🛡️┃Staff Room
-✦ LOGS ✦             📁┃ticket-logs · 📄┃transcripts · ✅┃verify-logs · 🗂️┃server-logs · 🤖┃automod-logs
-🎫 TICKETS / 📁 CLOSED TICKETS                                                 (ticket channels go here)
+〔 📊 SERVER STATS 〕    👥┃ᴍᴇᴍʙᴇʀꜱ: 123 · ⭐┃ᴠᴏᴜᴄʜᴇꜱ: 45                     (everyone can see, nobody can join)
+〔 👋 WELCOME 〕         ✅┃ᴠᴇʀɪꜰʏ · 📜┃ʀᴜʟᴇꜱ · 👋┃ᴡᴇʟᴄᴏᴍᴇ · 📌┃ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ · 📢┃ᴀɴɴᴏᴜɴᴄᴇᴍᴇɴᴛꜱ
+                        🎉┃ɢɪᴠᴇᴀᴡᴀʏꜱ · 🎭┃ʀᴏʟᴇꜱ · 🤝┃ᴘᴀʀᴛɴᴇʀꜱ
+〔 🛒 SHOP 〕            🛒┃ꜱʜᴏᴘ · 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ · 💳┃ᴘᴀʏᴍᴇɴᴛꜱ · ✨┃ʀᴇꜱᴛᴏᴄᴋꜱ · ⭐┃ᴠᴏᴜᴄʜᴇꜱ
+〔 🎧 SUPPORT 〕         🎫┃ᴛɪᴄᴋᴇᴛꜱ · ❓┃ꜰᴀǫ
+〔 💬 COMMUNITY 〕       💬┃ᴄʜᴀᴛ · 📸┃ᴍᴇᴅɪᴀ · 😂┃ᴍᴇᴍᴇꜱ · 🤖┃ᴄᴏᴍᴍᴀɴᴅꜱ · 🏆┃ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ · 🚀┃ʙᴏᴏꜱᴛᴇʀꜱ
+〔 💎 VIP LOUNGE 〕      💎┃ᴠɪᴘ-ᴄʜᴀᴛ · 💎┃ᴠɪᴘ ʟᴏᴜɴɢᴇ                  (VIP, partners, loyal customers, boosters, staff)
+〔 🔊 VOICE 〕           🔊┃ʟᴏᴜɴɢᴇ · 🎮┃ɢᴀᴍɪɴɢ · 🎵┃ᴍᴜꜱɪᴄ · 👥┃ᴅᴜᴏ · 💤┃ᴀꜰᴋ
+〔 🛡️ STAFF 〕           🛡️┃ꜱᴛᴀꜰꜰ-ᴄʜᴀᴛ · ⚙️┃ꜱᴛᴀꜰꜰ-ᴄᴏᴍᴍᴀɴᴅꜱ · 📣┃ᴅɪꜱᴄᴏʀᴅ-ᴜᴘᴅᴀᴛᴇꜱ · 🛡️┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ
+〔 📁 LOGS 〕            📁┃ᴛɪᴄᴋᴇᴛ-ʟᴏɢꜱ · 📄┃ᴛʀᴀɴꜱᴄʀɪᴘᴛꜱ · ✅┃ᴠᴇʀɪꜰʏ-ʟᴏɢꜱ · 🗂️┃ꜱᴇʀᴠᴇʀ-ʟᴏɢꜱ · 🤖┃ᴀᴜᴛᴏᴍᴏᴅ-ʟᴏɢꜱ
+〔 🎫 TICKETS 〕 / 〔 🗃️ CLOSED TICKETS 〕                        (ticket channels go here: 🛒┃ᴏʀᴅᴇʀ-0001)
 ```
-Discord allows 50 channels per category: when 🎫 TICKETS is full the bot opens **🎫 TICKETS 2** (3, …),
-and 📁 CLOSED TICKETS keeps the newest 49 closed tickets (older ones are deleted – their transcripts stay in #transcripts).
+Discord allows 50 channels per category: when 〔 🎫 TICKETS 〕 is full the bot opens **〔 🎫 TICKETS 2 〕** (3, …),
+and 〔 🗃️ CLOSED TICKETS 〕 keeps the newest 49 closed tickets (older ones are deleted – their transcripts stay in #transcripts).
 Want different channels or roles? Edit `src/builder/layout.js` – it's one readable list.
 
 **Who sees what**
@@ -146,6 +146,7 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | `/build` | Build the whole server (Build / Wipe & Build) | Owner, admins |
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
 | `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
+| `/build only:names` | Rename all channels & categories to the name style from `config.json` (e.g. after an update) – nothing else changes | Owner, admins |
 | `/product add / edit / stock / remove / list` | Manage the shop – the #shop panel updates by itself | Admins, sellers |
 | `/vouch` | Leave a review (with optional screenshot) | Everyone |
 | `/giveaway start / end / reroll / list` | Giveaways | Moderators+ |
@@ -179,7 +180,7 @@ Admin commands are hidden from normal members automatically.
 | Section | What you can change |
 |---|---|
 | `brand` | Name, color, footer, tagline and the "About us" text |
-| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`) |
+| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`), **name style** (see below) |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
 | `shop` | Currency, delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
@@ -196,6 +197,11 @@ then **restart the bot** and run **`/build only:panels`** – every banner and c
 **Payment methods** – each entry has a `name`, `details` and an `emoji`
 (`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…). The default is PaysafeCard,
 Crypto (BTC, ETH) and PayPal.
+
+**Name style** – `server.channelStyle` (default `{emoji}┃{name}`), `server.categoryStyle` (default `〔 {name} 〕`)
+and `server.smallCaps` (`true` → `📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ`, `false` → `📦┃how-to-buy`). Ticket channels follow `channelNameFormat`
+(default `{prio}{emoji}┃{prefix}-{number}` → `🛒┃ᴏʀᴅᴇʀ-0001`). The names themselves are in `src/builder/layout.js`.
+After changing the style, restart the bot and run **`/build only:names`**.
 
 **Currency** – `shop.currency` (default `€`) and `shop.currencyPosition` (`after` → `20€`, `before` → `€20`).
 Only plain-number prices get it; `from 5€` or `$10` are shown exactly as you typed them.

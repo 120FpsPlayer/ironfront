@@ -17,6 +17,7 @@ const panels = require('../lib/panels');
 const ui = require('./ui');
 const { createTranscript } = require('./transcript');
 const { openDeniedReason } = require('../lib/permissions');
+const { numberedCategoryName } = require('../builder/style');
 const {
   UserError,
   COLORS,
@@ -45,7 +46,7 @@ const childCount = (guild, categoryId) => guild.channels.cache.filter((c) => c.p
 
 /**
  * A category with room for one more ticket. Discord allows 50 channels per category, so when
- * the open-tickets category is full an overflow category ("🎫 TICKETS 2") is created next to it.
+ * the open-tickets category is full an overflow category ("〔 🎫 TICKETS 2 〕") is created next to it.
  */
 async function openCategoryWithRoom(guild) {
   const settings = db.settings(guild.id);
@@ -57,7 +58,7 @@ async function openCategoryWithRoom(guild) {
   }
   const overflow = await guild.channels
     .create({
-      name: `${base.name} ${ids.length + 1}`.slice(0, 100),
+      name: numberedCategoryName(base.name, ids.length + 1),
       type: ChannelType.GuildCategory,
       permissionOverwrites: [...base.permissionOverwrites.cache.values()].map((o) => ({ id: o.id, type: o.type, allow: o.allow.bitfield, deny: o.deny.bitfield })),
       reason: 'Ticket category is full (50 channels) – overflow category',
@@ -582,6 +583,7 @@ async function renameTicket(channel, name) {
   requireOpen(channel);
   const result = await safeRename(channel, name);
   if (!result.ok) throw new UserError(`Discord only allows renaming a channel twice per 10 minutes. Try again in ~${result.wait} min.`);
+  db.updateTicket(channel.id, { customName: true }); // /build only:names leaves it alone
 }
 
 async function pingStaff(channel, member) {

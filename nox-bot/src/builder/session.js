@@ -19,6 +19,8 @@ const { ROLES, CATEGORIES } = require('./layout');
 const { buildServer } = require('./executor');
 const { refreshContent } = require('./refresh');
 const { syncEmojis, describeEmojiResult } = require('./emojis');
+const { restyleNames } = require('./rename');
+const style = require('./style');
 const { EMOJI_PRIORITY } = require('../lib/theme');
 
 /** One build per server at a time. */
@@ -58,7 +60,7 @@ function previewCard(guild, member) {
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
     text(
-      CATEGORIES.map((cat) => `**${cat.name}**\n-# ${cat.channels.map((ch) => ch.name).join(' · ') || 'ticket channels appear here'}`).join('\n'),
+      CATEGORIES.map((cat) => `**${style.categoryName(cat.name)}**\n-# ${cat.channels.map((ch) => style.channelName(ch.name)).join(' · ') || 'ticket channels appear here'}`).join('\n'),
     ),
   );
   c.addSeparatorComponents(divider());
@@ -158,6 +160,7 @@ async function start(interaction) {
   const only = interaction.options.getString('only');
   if (only === 'emojis') return runEmojis(interaction);
   if (only === 'panels') return runRepost(interaction);
+  if (only === 'names') return runNames(interaction);
   return interaction.reply(previewCard(guild, member));
 }
 
@@ -184,6 +187,31 @@ async function runRepost(interaction) {
       `Updated **${res.edited}** messages in place${res.sent ? ` and re-sent **${res.sent}** missing ones` : ''} in **${res.channels}** channels.` +
       (res.errors.length ? `\n\n⚠️ ${res.errors.slice(0, 5).join('\n')}` : '');
     return interaction.editReply({ embeds: [embed(res.errors.length ? COLORS.warning : COLORS.success).setTitle('🔄 Panels refreshed').setDescription(desc)] });
+  } finally {
+    running.delete(interaction.guild.id);
+  }
+}
+
+async function runNames(interaction) {
+  if (!db.build(interaction.guild.id)) {
+    return interaction.reply({ embeds: [embed(COLORS.warning).setDescription('This server has not been built yet – run `/build` first.')], flags: MessageFlags.Ephemeral });
+  }
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  running.set(interaction.guild.id, { abort: false });
+  let last = 0;
+  try {
+    const res = await restyleNames(interaction.guild, {
+      onProgress: (done, total) => {
+        if (Date.now() - last < 2500 || done === total) return;
+        last = Date.now();
+        interaction.editReply({ embeds: [embed(COLORS.brand).setDescription(`🎨 Renaming… **${done}/${total}**`)] }).catch(() => null);
+      },
+    });
+    const lines = [`Renamed **${res.renamed}** channels and categories${res.unchanged ? ` · **${res.unchanged}** already had the right name` : ''}.`];
+    if (res.later.length) lines.push(`⏳ **${res.later.length}** hit Discord's limit (2 renames per 10 minutes) – run \`/build only:names\` again in 10 minutes.`);
+    if (res.errors.length) lines.push(`⚠️ ${res.errors.slice(0, 5).join('\n')}`);
+    const ok = !res.later.length && !res.errors.length;
+    return interaction.editReply({ embeds: [embed(ok ? COLORS.success : COLORS.warning).setTitle('🎨 Channel names updated').setDescription(lines.join('\n\n'))] });
   } finally {
     running.delete(interaction.guild.id);
   }

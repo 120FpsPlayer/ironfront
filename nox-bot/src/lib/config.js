@@ -57,6 +57,14 @@ function load() {
   raw.channelNameFormat ??= '{prio}{prefix}-{number}';
   raw.defaults ??= {};
   raw.server ??= {};
+  raw.server.channelStyle ??= '{emoji}┃{name}';
+  raw.server.categoryStyle ??= '〔 {name} 〕';
+  raw.server.smallCaps ??= true;
+  for (const key of ['channelStyle', 'categoryStyle']) {
+    if (typeof raw.server[key] !== 'string' || !raw.server[key].includes('{name}')) {
+      throw new Error(`config.json: "server.${key}" must contain {name} (e.g. "${key === 'channelStyle' ? '{emoji}┃{name}' : '〔 {name} 〕'}").`);
+    }
+  }
   raw.emojis ??= {};
   raw.emojis.prefix ??= 'nox_';
   raw.verification ??= { captcha: true, minAccountAgeDays: 0 };

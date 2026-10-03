@@ -301,7 +301,7 @@ test('stats: member + vouch counters and the activity leaderboard', async () => 
   const board = stats.leaderboardPanel(guild);
   assert.match(textOf(board), new RegExp(`<@${m.id}> – \\*\\*3\\*\\* messages`));
   await stats.updateStatChannels(guild.client);
-  assert.equal(ch(guild, 'statMembers').name, `👥 Members: ${guild.memberCount}`);
+  assert.equal(ch(guild, 'statMembers').name, `👥┃ᴍᴇᴍʙᴇʀꜱ: ${guild.memberCount}`);
 });
 
 // ───────────── /build control panel ─────────────

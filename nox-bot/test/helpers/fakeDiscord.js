@@ -44,6 +44,9 @@ function assertEmoji(emoji, where) {
   if (RGI && !RGI.test(name)) throw apiError(50035, `${where}.emoji[COMPONENT_INVALID_EMOJI]: ${JSON.stringify(name)}`);
 }
 
+/** Discord stores text channel names lowercase with dashes instead of spaces (voice and categories keep theirs). */
+const discordName = (name, type) => ([ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(type) ? String(name).toLowerCase().replace(/\s+/g, '-') : name);
+
 const toJSON = (c) => (c && typeof c.toJSON === 'function' ? c.toJSON() : c);
 
 // ───────────── Component validation ─────────────
@@ -352,7 +355,7 @@ class FakeChannel {
     this.guild = guild;
     this.client = guild.client;
     this.id = nextId();
-    this.name = data.name;
+    this.name = discordName(data.name, data.type ?? ChannelType.GuildText);
     this.type = data.type ?? ChannelType.GuildText;
     this.topic = data.topic ?? null;
     this.parentId = data.parent ?? null;
@@ -478,7 +481,7 @@ class FakeChannel {
     if (!name || name.length > 100) throw apiError(50035, 'channel name');
     this.assertRenameAllowed();
     this.renames += 1;
-    this.name = name;
+    this.name = discordName(name, this.type);
     return this;
   }
 
@@ -512,7 +515,7 @@ class FakeChannel {
         this.assertRenameAllowed();
         this.renames += 1;
       }
-      this.name = data.name;
+      this.name = discordName(data.name, this.type);
     }
     if (data.parent !== undefined) {
       const parent = this.guild.channels.cache.get(data.parent);

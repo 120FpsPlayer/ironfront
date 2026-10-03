@@ -30,6 +30,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { ROLES, CATEGORIES, WELCOME_SCREEN } = require('./layout');
 const { postsFor } = require('./content');
+const style = require('./style');
 
 /** assets/brand/logo-<name>.png (eclipse-nox, eclipse, eclipse-wordmark, night, neon) – falls back to eclipse-nox. */
 function logoPath(name) {
@@ -217,7 +218,7 @@ function channelOptions(cat, ch, { parentId, resolve, communityOn, reason }) {
   let type = ch.kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
   const convert = ch.kind === 'announcement' && !communityOn;
   if (ch.kind === 'announcement' && communityOn) type = ChannelType.GuildAnnouncement;
-  const opts = { name: ch.name, type, parent: parentId, permissionOverwrites: resolve(channelOverwrites(cat, ch)), reason };
+  const opts = { name: style.channelName(ch.name), type, parent: parentId, permissionOverwrites: resolve(channelOverwrites(cat, ch)), reason };
   if (type !== ChannelType.GuildVoice) {
     if (ch.topic) opts.topic = ch.topic;
     if (ch.slowmode && type === ChannelType.GuildText) opts.rateLimitPerUser = ch.slowmode;
@@ -396,10 +397,11 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
 
     const toConvert = [];
     for (const cat of CATEGORIES) {
-      const category = await attempt(`Category ${cat.name}`, () =>
-        guild.channels.create({ name: cat.name, type: ChannelType.GuildCategory, permissionOverwrites: resolve(profile(cat.profile)), reason }),
+      const categoryName = style.categoryName(cat.name);
+      const category = await attempt(`Category ${categoryName}`, () =>
+        guild.channels.create({ name: categoryName, type: ChannelType.GuildCategory, permissionOverwrites: resolve(profile(cat.profile)), reason }),
       );
-      tick(`Category ${cat.name}`);
+      tick(`Category ${categoryName}`);
       if (!category) continue;
       R.categories[cat.key] = category.id;
       R.created.categories += 1;
@@ -407,12 +409,12 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       for (const ch of cat.channels) {
         const { opts, convert } = channelOptions(cat, ch, { parentId: category.id, resolve, communityOn, reason });
         if (convert) toConvert.push(ch.key);
-        const channel = await attempt(`Channel ${ch.name}`, () => guild.channels.create(opts));
+        const channel = await attempt(`Channel ${opts.name}`, () => guild.channels.create(opts));
         if (channel) {
           R.channels[ch.key] = channel.id;
           R.created.channels += 1;
         }
-        tick(`#${ch.name}`);
+        tick(`#${opts.name}`);
       }
     }
     saveBuild();

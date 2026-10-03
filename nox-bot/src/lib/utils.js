@@ -2,6 +2,7 @@
 
 const { EmbedBuilder, MessageFlags, RateLimitError } = require('discord.js');
 const { rateLimitMinutes } = require('./ratelimit');
+const { smallCaps } = require('../builder/style');
 const config = require('./config');
 const db = require('./db');
 const perms = require('./permissions');
@@ -86,16 +87,16 @@ function slug(text, max = 20) {
 
 const pad = (n) => String(n).padStart(4, '0');
 
+/** Ticket channel name from config.json → channelNameFormat, in the server's style (small caps). */
 function channelName(ticket, type) {
   const prio = ticket.priority && ticket.priority !== 'normal' ? PRIORITIES[ticket.priority].emoji : '';
-  return (
-    config.channelNameFormat
-      .replace('{prio}', prio)
-      .replace('{prefix}', type?.channelPrefix ?? 'ticket')
-      .replace('{number}', pad(ticket.number))
-      .replace('{user}', slug(ticket.ownerName ?? 'user', 16))
-      .slice(0, 100) || `ticket-${pad(ticket.number)}`
-  );
+  const name = config.channelNameFormat
+    .replace('{prio}', prio)
+    .replace('{emoji}', type?.emoji ?? '🎫')
+    .replace('{prefix}', type?.channelPrefix ?? 'ticket')
+    .replace('{number}', pad(ticket.number))
+    .replace('{user}', slug(ticket.ownerName ?? 'user', 16));
+  return ((config.server.smallCaps === false ? name : smallCaps(name)).slice(0, 100) || `ticket-${pad(ticket.number)}`);
 }
 
 function workingStatus(now = new Date()) {
