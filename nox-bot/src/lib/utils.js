@@ -4,6 +4,7 @@ const { EmbedBuilder, MessageFlags, RateLimitError } = require('discord.js');
 const { rateLimitMinutes } = require('./ratelimit');
 const { smallCaps } = require('../builder/style');
 const config = require('./config');
+const { inHours, nextOpening, whenText, hoursText } = require('./hours');
 const db = require('./db');
 const perms = require('./permissions');
 const { COLORS } = require('./theme');
@@ -99,32 +100,15 @@ function channelName(ticket, type) {
   return ((config.server.smallCaps === false ? name : smallCaps(name)).slice(0, 100) || `ticket-${pad(ticket.number)}`);
 }
 
+/** Inside config.json → workingHours right now? The automatic schedule – features/shopstatus.js adds /shop open | closed. */
 function workingStatus(now = new Date()) {
   const wh = config.workingHours;
   if (!wh?.enabled) return { open: true, text: null };
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: wh.timezone ?? 'UTC',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(now)
-      .map((p) => [p.type, p.value]),
-  );
-  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
-  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
-  const toMin = (s) => Number(s.split(':')[0]) * 60 + Number(s.split(':')[1] ?? 0);
-  const from = toMin(wh.from ?? '00:00');
-  const to = toMin(wh.to ?? '23:59');
-  const inHours = from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to;
-  const open = (wh.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(day) && inHours;
+  const open = inHours(wh, now);
+  const next = open ? null : nextOpening(wh, now);
   return {
     open,
-    text: open
-      ? `🟢 Support is online now (${wh.from}–${wh.to} ${wh.timezone ?? 'UTC'})`
-      : `🌙 We're outside support hours (${wh.from}–${wh.to} ${wh.timezone ?? 'UTC'}) – we'll reply as soon as we can`,
+    text: open ? `🟢 Open now · ${config.shop.supportHours ?? hoursText(wh)}` : `🔴 Closed right now${next ? ` – we open ${whenText(wh, next, now)}` : ''}`,
   };
 }
 

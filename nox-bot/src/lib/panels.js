@@ -21,6 +21,12 @@ function render(kind, guild, panel = {}) {
   return fn(guild, panel);
 }
 
+/**
+ * A renderer returns the whole message, so an edit replaces the files too: images (e.g. product pictures shown
+ * with attachment://) are uploaded again and files that are no longer used are removed.
+ */
+const forEdit = (payload) => ({ ...payload, files: payload.files ?? [], attachments: [] });
+
 async function refresh(guild, kind = null) {
   for (const panel of db.panels(guild.id, kind)) {
     const panelKind = panel.kind ?? 'tickets';
@@ -36,8 +42,7 @@ async function refresh(guild, kind = null) {
       continue;
     }
     if (!message) continue;
-    const payload = await render(panelKind, guild, panel);
-    delete payload.files;
+    const payload = forEdit(await render(panelKind, guild, panel));
     await message.edit(payload).catch((err) => console.warn(`[panel] Failed to refresh the ${panelKind} panel in #${channel.name}:`, err.message));
   }
 }
@@ -84,9 +89,7 @@ async function doBump(guild, kind, channelId) {
   const channel = guild.channels.cache.get(channelId);
   if (!channel) return;
   for (const panel of db.panels(guild.id, kind).filter((p) => p.channelId === channelId)) {
-    const payload = await render(kind, guild, panel);
-    delete payload.files;
-    const fresh = await channel.send(payload);
+    const fresh = await channel.send(await render(kind, guild, panel));
     db.removePanel(guild.id, panel.messageId);
     db.addPanel(guild.id, { ...panel, messageId: fresh.id });
     db.replacePostId(guild.id, panel.messageId, fresh.id);
@@ -103,4 +106,4 @@ async function send(channel, kind, extra = {}) {
   return message;
 }
 
-module.exports = { register, render, refresh, refreshAll, schedule, send, bump };
+module.exports = { register, render, forEdit, refresh, refreshAll, schedule, send, bump };

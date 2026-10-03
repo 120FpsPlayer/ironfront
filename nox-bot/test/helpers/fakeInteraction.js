@@ -9,7 +9,7 @@ const { validateMessage, validateModal } = require('./fakeDiscord');
  *
  * kind: 'command' | 'button' | 'select' | 'userselect' | 'modal' | 'autocomplete'
  */
-function createInteraction({ guild, member, kind = 'button', customId, values, fields = {}, selects = {}, options = {}, subcommand = null, commandName, channel, message = null, focused = '' }) {
+function createInteraction({ guild, member, kind = 'button', customId, values, fields = {}, selects = {}, options = {}, subcommand = null, commandName, channel, message = null, focused = '', focusedOption = null }) {
   const state = { replies: [], updates: [], edits: [], modals: [], followUps: [], responded: null };
   const record = (bucket) => async (payload) => {
     if (typeof payload === 'string') payload = { content: payload };
@@ -64,7 +64,7 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
       getRole: (n) => options[n] ?? null,
       getUser: (n) => options[n] ?? null,
       getAttachment: (n) => options[n] ?? null,
-      getFocused: () => focused,
+      getFocused: (full) => (full ? { name: focusedOption, value: focused } : focused),
     },
     reply: record('replies'),
     update: record('updates'),

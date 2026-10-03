@@ -66,9 +66,7 @@ async function syncPosts(channel, postKey, tracked, res) {
     } else {
       const existing = db.panels(guild.id).find((p) => p.messageId === msg.id);
       const panel = { ...(existing ?? {}), ...(item.extra ?? {}), kind: item.panel, channelId: channel.id, messageId: msg.id };
-      const payload = await panels.render(item.panel, guild, panel);
-      delete payload.files;
-      await msg.edit(payload);
+      await msg.edit(panels.forEdit(await panels.render(item.panel, guild, panel)));
       db.addPanel(guild.id, panel);
       res.edited += 1;
       out.push({ type, id: msg.id, kind: item.panel });
