@@ -11,7 +11,7 @@ const { isShopManager } = require('../lib/permissions');
 const MODE_LABEL = { auto: '🕒 Automatic', open: '🟢 Open (set by hand)', closed: '🔴 Closed (set by hand)' };
 
 /** Status card shown after every /shop subcommand. */
-function statusEmbed(guild, { title, res = null, now = new Date() }) {
+function statusEmbed(guild, { title, res = null, now = shopstatus.clock.now() }) {
   const m = shopstatus.mode(guild.id);
   const open = shopstatus.isOpen(guild.id, now);
   const next = shopstatus.nextChange(guild.id, now);
@@ -37,10 +37,11 @@ function statusEmbed(guild, { title, res = null, now = new Date() }) {
     .setDescription(`${lines.join('\n')}\n\n${notes.join('\n')}`);
 }
 
-const TITLES = {
-  open: '🟢 The shop is open',
-  closed: '🔴 The shop is closed',
-  auto: '🕒 Opening hours are automatic again',
+/** Subcommand → mode and the title of the answer. */
+const ACTIONS = {
+  open: { mode: 'open', title: '🟢 The shop is open' },
+  close: { mode: 'closed', title: '🔴 The shop is closed' },
+  auto: { mode: 'auto', title: '🕒 Opening hours are automatic again' },
 };
 
 module.exports = {
@@ -49,7 +50,7 @@ module.exports = {
     .setDescription('Open or close the shop – shown in the status channel, shop and ticket panels')
     .setContexts(InteractionContextType.Guild)
     .addSubcommand((s) => s.setName('open').setDescription('Open the shop now, outside the opening hours too (until /shop auto)'))
-    .addSubcommand((s) => s.setName('closed').setDescription('Close the shop now, during the opening hours too (until /shop auto)'))
+    .addSubcommand((s) => s.setName('close').setDescription('Close the shop now, during the opening hours too (until /shop auto)'))
     .addSubcommand((s) => s.setName('auto').setDescription('Follow the opening hours again (config.json → workingHours)'))
     .addSubcommand((s) => s.setName('status').setDescription('Is the shop open, the opening hours and the next change')),
 
@@ -59,8 +60,10 @@ module.exports = {
     const sub = interaction.options.getSubcommand();
     if (sub === 'status') return reply(interaction, { embeds: [statusEmbed(guild, { title: '🛒 Shop status' })] });
 
+    const action = ACTIONS[sub];
+    if (!action) return replyError(interaction, 'Unknown option.');
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const res = await shopstatus.setMode(guild, sub, { by: interaction.user.id });
-    return reply(interaction, { embeds: [statusEmbed(guild, { title: TITLES[sub], res })] });
+    const res = await shopstatus.setMode(guild, action.mode, { by: interaction.user.id });
+    return reply(interaction, { embeds: [statusEmbed(guild, { title: action.title, res })] });
   },
 };

@@ -3,8 +3,8 @@
 /**
  * Shop open / closed.
  *   auto    follows config.json → workingHours (open 10:00–20:00 every day, Europe/Warsaw)
- *   open    set by hand with /shop open    ┐ stays until /shop auto
- *   closed  set by hand with /shop closed  ┘
+ *   open    set by hand with /shop open   ┐ stays until /shop auto
+ *   closed  set by hand with /shop close  ┘
  * Shown as the locked voice channel "🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ" / "🔴┃ꜱʜᴏᴘ ᴄʟᴏꜱᴇᴅ" at the top of the server, in the shop panel,
  * the ticket panel and in new tickets. A timer checks every minute: the channel is renamed only when its name
  * has to change (Discord allows 2 renames per 10 minutes) and the panels are refreshed when the state flips.
@@ -20,13 +20,16 @@ const { channelName, sameChannelName } = require('../builder/style');
 
 const MODES = ['auto', 'open', 'closed'];
 
+/** Where "now" comes from – tests set clock.now to check the opening and closing times. */
+const clock = { now: () => new Date() };
+
 /** 'auto' (follows workingHours) | 'open' | 'closed' (set by hand). */
 function mode(guildId) {
   const m = guildId ? db.guild(guildId).shopStatus.mode : null;
   return MODES.includes(m) ? m : 'auto';
 }
 
-function isOpen(guildId, now = new Date()) {
+function isOpen(guildId, now = clock.now()) {
   const m = mode(guildId);
   if (m !== 'auto') return m === 'open';
   return hours.inHours(config.workingHours, now);
@@ -36,7 +39,7 @@ function isOpen(guildId, now = new Date()) {
 const hoursText = () => config.shop.supportHours || hours.hoursText(config.workingHours);
 
 /** When the shop opens / closes by itself next (null when that doesn't happen – e.g. set by hand). */
-function nextChange(guildId, now = new Date()) {
+function nextChange(guildId, now = clock.now()) {
   if (mode(guildId) !== 'auto') return null;
   const wh = config.workingHours;
   return isOpen(guildId, now) ? hours.nextClosing(wh, now) : hours.nextOpening(wh, now);
@@ -49,7 +52,7 @@ const whenText = (at, now) => `${hours.whenText(config.workingHours, at, now)} (
  * The open / closed line (null when there's nothing to say: no working hours and nothing set by hand).
  * place: 'shop' (shop panel) · 'support' (ticket panel) · 'ticket' (the first card of a new ticket)
  */
-function statusLine(guildId, place = 'shop', now = new Date()) {
+function statusLine(guildId, place = 'shop', now = clock.now()) {
   if (mode(guildId) === 'auto' && !config.workingHours?.enabled) return null;
   if (isOpen(guildId, now)) {
     const lead = { support: '🟢 **Support is online now**', ticket: "🟢 **We're open**" }[place] ?? '🟢 **Open now**';
@@ -62,14 +65,14 @@ function statusLine(guildId, place = 'shop', now = new Date()) {
   return `🔴 **Closed right now** – ${back}. You can still order; a seller replies when we open.`;
 }
 
-/** Name of the status channel right now (null when the feature is off). */
-function statusChannelName(guildId, now = new Date()) {
+/** Name of the status channel right now (null when the feature is off). Emoji variation selectors are dropped. */
+function statusChannelName(guildId, now = clock.now()) {
   if (!config.shopStatus.enabled) return null;
-  return channelName(isOpen(guildId, now) ? config.shopStatus.openName : config.shopStatus.closedName);
+  return channelName(isOpen(guildId, now) ? config.shopStatus.openName : config.shopStatus.closedName).replace(/\uFE0F/g, '');
 }
 
 /** Renames the status channel – only when the name is different. → { renamed, wait (minutes, rate limit) } */
-async function renameChannel(guild, now = new Date()) {
+async function renameChannel(guild, now = clock.now()) {
   const name = statusChannelName(guild.id, now);
   const channel = guild.channels.cache.get(db.channelId(guild.id, 'statShop') ?? '');
   if (!name || !channel || sameChannelName(channel.name, name)) return { renamed: false, wait: 0 };
@@ -82,7 +85,7 @@ async function refreshPanels(guild) {
 }
 
 /** Brings one server up to date: status channel name, and the panels when the state flipped. */
-async function sync(guild, now = new Date()) {
+async function sync(guild, now = clock.now()) {
   const state = db.guild(guild.id).shopStatus;
   const open = isOpen(guild.id, now);
   const flipped = state.open !== open;
@@ -94,18 +97,19 @@ async function sync(guild, now = new Date()) {
   return { open, flipped, ...(await renameChannel(guild, now)) };
 }
 
-async function tick(client, now = new Date()) {
+async function tick(client, now = clock.now()) {
   for (const guildId of db.allGuildIds()) {
     const guild = client.guilds.cache.get(guildId);
     if (guild) await sync(guild, now).catch((err) => console.warn(`[shop status] ${guild.name}:`, err.message));
   }
 }
 
-/** /shop open | closed | auto – sets the mode, renames the channel and refreshes the panels right away. */
-async function setMode(guild, newMode, { by = null, now = new Date() } = {}) {
+/** /shop open | close | auto – sets the mode, renames the channel and refreshes the panels right away. */
+async function setMode(guild, newMode, { by = null, now = clock.now() } = {}) {
   if (!MODES.includes(newMode)) throw new UserError('Unknown mode – use open, closed or auto.');
   const state = db.guild(guild.id).shopStatus;
-  Object.assign(state, { mode: newMode, open: isOpen(guild.id, now), setBy: by, setAt: now.getTime() });
+  Object.assign(state, { mode: newMode, setBy: by, setAt: now.getTime() });
+  state.open = isOpen(guild.id, now); // after the new mode is in place
   db.save();
   await refreshPanels(guild);
   let rename;
@@ -117,6 +121,7 @@ async function setMode(guild, newMode, { by = null, now = new Date() } = {}) {
   return { mode: newMode, open: state.open, next: nextChange(guild.id, now), ...rename };
 }
 
-hooks.every('shopStatus', 60_000, (client) => tick(client), 20_000);
+// First run before the stat channels update (20 s), so they find the status channel already named right.
+hooks.every('shopStatus', 60_000, (client) => tick(client), 15_000);
 
-module.exports = { MODES, mode, isOpen, hoursText, nextChange, whenText, statusLine, statusChannelName, renameChannel, sync, tick, setMode };
+module.exports = { MODES, clock, mode, isOpen, hoursText, nextChange, whenText, statusLine, statusChannelName, renameChannel, sync, tick, setMode };

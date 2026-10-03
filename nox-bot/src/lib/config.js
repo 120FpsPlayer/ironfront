@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { hoursText } = require('./hours');
+const hours = require('./hours');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
@@ -55,6 +55,8 @@ function load() {
   raw.panel ??= {};
   raw.panel.rules ??= [];
   raw.workingHours ??= { enabled: false };
+  const hoursProblem = hours.problem(raw.workingHours);
+  if (hoursProblem) throw new Error(`config.json: "workingHours": ${hoursProblem}.`);
   raw.channelNameFormat ??= '{prio}{prefix}-{number}';
   raw.defaults ??= {};
   raw.server ??= {};
@@ -73,7 +75,7 @@ function load() {
   raw.shop ??= {};
   raw.shop.paymentMethods ??= [];
   // Written from workingHours, so the panels and the info cards always show the same hours (set it to override).
-  raw.shop.supportHours ??= hoursText(raw.workingHours);
+  raw.shop.supportHours ??= hours.hoursText(raw.workingHours);
   raw.vouches ??= {};
   raw.orders = { receipts: true, proofs: true, vouchReminderHours: 24, ...raw.orders };
   raw.promos = { enabled: true, ...raw.promos };

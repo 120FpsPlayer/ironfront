@@ -3,6 +3,7 @@
 const { SlashCommandBuilder, InteractionContextType, MessageFlags } = require('discord.js');
 const db = require('../lib/db');
 const images = require('../lib/productImages');
+const restock = require('../features/restock');
 const shop = require('../features/shop');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, replyError, truncate } = require('../lib/utils');
@@ -24,6 +25,19 @@ async function readImage(interaction) {
   images.check(attachment);
   if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   return images.download(attachment);
+}
+
+/** After a restock: announce it in #restocks and say who got a DM (features/restock.js) → " Restock announced 📦 · 🔔 …" or ''. */
+async function restockNotes(guild, product, { restocked, announce }) {
+  if (!restocked) return '';
+  const notes = [];
+  if (announce && (await shop.announceProduct(guild, product, 'restock').catch(() => null))) notes.push('Restock announced 📦');
+  const dms = restock.takeResult(guild.id, product.id);
+  if (dms?.waiting) {
+    const people = `${dms.waiting} ${dms.waiting === 1 ? 'person' : 'people'} waiting`;
+    notes.push(dms.sent === dms.waiting ? `🔔 DM sent to the ${people}` : `🔔 DM sent to ${dms.sent} of the ${people} (the others don't accept DMs)`);
+  }
+  return notes.length ? ` ${notes.join(' · ')}` : '';
 }
 
 /** /product list – grouped by category. */
@@ -70,7 +84,8 @@ module.exports = {
         .addStringOption((o) => o.setName('emoji').setDescription('New emoji').setMaxLength(64))
         .addStringOption((o) => categoryOption(o, 'New category – or "none" to remove it'))
         .addAttachmentOption((o) => imageOption(o, 'New product image – PNG, JPG, WEBP or GIF, up to 1 MB'))
-        .addBooleanOption((o) => o.setName('remove_image').setDescription('Remove the product image')),
+        .addBooleanOption((o) => o.setName('remove_image').setDescription('Remove the product image'))
+        .addStringOption((o) => o.setName('stock').setDescription('New stock status').addChoices(...STOCK_CHOICES)),
     )
     .addSubcommand((s) =>
       s
@@ -116,32 +131,30 @@ module.exports = {
     }
 
     if (sub === 'edit') {
+      const target = shop.findProduct(guild.id, o.getString('product'));
+      if (!target) return replyError(interaction, 'There is no such product. Pick one from the suggestions.');
       const image = await readImage(interaction);
       if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const p = await shop.editProduct(guild, o.getString('product'), {
+      const wasOut = target.stock === 'out';
+      const p = await shop.editProduct(guild, target.id, {
         name: o.getString('name'),
         price: o.getString('price'),
         description: o.getString('description'),
         emoji: o.getString('emoji'),
         category: o.getString('category'),
+        stock: o.getString('stock'),
         image,
         removeImage: o.getBoolean('remove_image') ?? false,
       });
-      return reply(interaction, `Updated **${p.name}**${p.category ? ` (category: **${p.category}**)` : ''}. The shop panel updates in a few seconds.`);
+      const notes = await restockNotes(guild, p, { restocked: wasOut && p.stock !== 'out', announce: true });
+      return reply(interaction, `Updated **${p.name}**${p.category ? ` (category: **${p.category}**)` : ''}. The shop panel updates in a few seconds.${notes}`);
     }
 
     if (sub === 'stock') {
-      const target = shop.findProduct(guild.id, o.getString('product'));
-      const waiting = target ? db.guild(guild.id).notify[target.id]?.length ?? 0 : 0;
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { product, restocked } = await shop.setStock(guild, o.getString('product'), o.getString('status'));
-      const notes = [];
-      if (restocked && (o.getBoolean('announce') ?? true)) {
-        await shop.announceProduct(guild, product, 'restock').catch(() => null);
-        notes.push('Restock announced 📦');
-      }
-      if (restocked && waiting) notes.push(`🔔 ${waiting} ${waiting === 1 ? 'person' : 'people'} waiting got a DM`);
-      return reply(interaction, `**${product.name}** is now **${shop.STOCK[product.stock].label.toLowerCase()}**.${notes.length ? ` ${notes.join(' · ')}` : ''}`);
+      const notes = await restockNotes(guild, product, { restocked, announce: o.getBoolean('announce') ?? true });
+      return reply(interaction, `**${product.name}** is now **${shop.STOCK[product.stock].label.toLowerCase()}**.${notes}`);
     }
 
     if (sub === 'remove') {

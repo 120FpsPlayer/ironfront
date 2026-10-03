@@ -4,7 +4,6 @@ const { EmbedBuilder, MessageFlags, RateLimitError } = require('discord.js');
 const { rateLimitMinutes } = require('./ratelimit');
 const { smallCaps } = require('../builder/style');
 const config = require('./config');
-const { inHours, nextOpening, whenText, hoursText } = require('./hours');
 const db = require('./db');
 const perms = require('./permissions');
 const { COLORS } = require('./theme');
@@ -100,16 +99,14 @@ function channelName(ticket, type) {
   return ((config.server.smallCaps === false ? name : smallCaps(name)).slice(0, 100) || `ticket-${pad(ticket.number)}`);
 }
 
-/** Inside config.json → workingHours right now? The automatic schedule – features/shopstatus.js adds /shop open | closed. */
-function workingStatus(now = new Date()) {
-  const wh = config.workingHours;
-  if (!wh?.enabled) return { open: true, text: null };
-  const open = inHours(wh, now);
-  const next = open ? null : nextOpening(wh, now);
-  return {
-    open,
-    text: open ? `🟢 Open now · ${config.shop.supportHours ?? hoursText(wh)}` : `🔴 Closed right now${next ? ` – we open ${whenText(wh, next, now)}` : ''}`,
-  };
+/**
+ * Is the shop open right now? → { open, text } (text: null without working hours or a manual override).
+ * Follows config.json → workingHours; with a guildId, /shop open | close wins (features/shopstatus.js).
+ * place: 'support' (ticket panel) · 'ticket' (a new ticket) · 'shop' (shop panel) – see shopstatus.statusLine.
+ */
+function workingStatus(now, guildId = null, place = 'support') {
+  const shopstatus = require('../features/shopstatus'); // here, because shopstatus needs this file
+  return { open: shopstatus.isOpen(guildId, now), text: shopstatus.statusLine(guildId, place, now) };
 }
 
 function avgResponseTime(guildId) {

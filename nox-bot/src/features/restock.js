@@ -63,7 +63,7 @@ function restockDm(guild, product) {
   const c = container(COLORS.success);
   header(
     c,
-    `## 🔔 Back in stock!\n${shop.productEmoji(guild, product)} **${product.name}** is available again at **${config.brand.name}**.\n` +
+    `## 🔔 Back in stock!\n${shop.productEmoji(guild, product)} **${product.name}** is back in stock at **${config.brand.name}**.\n` +
       `**Price:** ${shop.formatPrice(product.price)}\n-# Restocks can sell out fast – be quick!`,
     image?.url ?? guild.iconURL?.({ size: 256 }),
   );
@@ -73,11 +73,16 @@ function restockDm(guild, product) {
   return v2(c, { files: image ? [image.file] : [] });
 }
 
-/** DMs everyone waiting for the product, once, and clears its list → number of DMs delivered. */
+// The last restock DMs per product, so /product can report them: `${guildId}:${productId}` → { sent, waiting }
+const results = new Map();
+
+/** DMs everyone waiting for the product, once, and clears its list → { sent, waiting }. */
 async function notifyRestock({ guild, product }) {
+  const key = `${guild.id}:${product.id}`;
   const g = db.guild(guild.id);
   const ids = [...new Set(g.notify[product.id] ?? [])];
-  if (!ids.length) return 0;
+  results.set(key, { sent: 0, waiting: ids.length });
+  if (!ids.length) return results.get(key);
   delete g.notify[product.id]; // cleared first – a DM is never sent twice, even if one fails
   db.save();
   let sent = 0;
@@ -86,8 +91,18 @@ async function notifyRestock({ guild, product }) {
     const ok = user ? await user.send(restockDm(guild, product)).then(() => true, () => false) : false;
     if (ok) sent += 1;
   }
+  const result = { sent, waiting: ids.length };
+  results.set(key, result);
   console.log(`[restock] ${product.name}: notified ${sent}/${ids.length} ${ids.length === 1 ? 'person' : 'people'} by DM`);
-  return sent;
+  return result;
+}
+
+/** The DMs of the last restock of a product (read once) → { sent, waiting } | null. */
+function takeResult(guildId, productId) {
+  const key = `${guildId}:${productId}`;
+  const result = results.get(key) ?? null;
+  results.delete(key);
+  return result;
 }
 
 hooks.on('productRestocked', notifyRestock);
@@ -95,4 +110,4 @@ hooks.route('restock', {
   button: (interaction, action, [productId]) => (action === 'notify' ? onNotifyButton(interaction, productId) : null),
 });
 
-module.exports = { MAX_WAITING, waiting, toggle, restockDm, notifyRestock };
+module.exports = { MAX_WAITING, waiting, toggle, restockDm, notifyRestock, takeResult };

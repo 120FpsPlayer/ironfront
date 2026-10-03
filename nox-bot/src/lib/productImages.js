@@ -17,7 +17,7 @@ const TYPES = 'PNG, JPG, WEBP or GIF';
 
 const dir = () => path.join(db.dataDir, 'products');
 const safeId = (id) => /^[\w-]{1,64}$/.test(String(id ?? ''));
-const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+const mb = (bytes) => `${(Math.ceil((bytes / 1024 / 1024) * 10) / 10).toFixed(1)} MB`; // rounded up: never "1.0 MB" when too big
 
 /** The real file type from the first bytes – the name or content type of an upload can lie. */
 function sniff(buf) {
@@ -44,9 +44,13 @@ function check(attachment) {
 async function download(attachment) {
   if (!attachment?.url) return null;
   check(attachment);
-  const res = await fetch(attachment.url).catch(() => null);
+  const res = await fetch(attachment.url, { signal: globalThis.AbortSignal?.timeout?.(20_000) }).catch(() => null);
   if (!res?.ok) throw new UserError('I could not download that image – please try again.');
-  const buffer = Buffer.from(await res.arrayBuffer());
+  const length = Number(res.headers?.get?.('content-length'));
+  if (length > MAX_BYTES) throw new UserError(`That image is ${mb(length)} – product images can be up to **1 MB**.`);
+  const body = await res.arrayBuffer().catch(() => null);
+  if (!body) throw new UserError('I could not download that image – please try again.');
+  const buffer = Buffer.from(body);
   if (buffer.length > MAX_BYTES) throw new UserError(`That image is ${mb(buffer.length)} – product images can be up to **1 MB**.`);
   const ext = sniff(buffer);
   if (!ext) throw new UserError(`That file is not a real ${TYPES} image.`);

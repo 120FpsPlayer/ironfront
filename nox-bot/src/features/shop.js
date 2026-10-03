@@ -169,7 +169,7 @@ function groupSummary(group) {
 // ───────────── Product cards ─────────────
 
 const CARD_LIMIT = 8; // more products → compact list with a menu
-const UPLOAD_LIMIT = 8 * 1024 * 1024; // images per message (Discord allows 10 MB)
+const UPLOAD_LIMIT = 8 * 1024 * 1024; // images per message (Discord allows 10 files and 10 MB)
 
 function cardText(guild, p) {
   const stock = STOCK[p.stock] ?? STOCK.in;
@@ -190,8 +190,8 @@ function addCard(c, guild, p, image = null) {
   return c.addActionRowComponents(row(cardButton(guild, p)));
 }
 
-/** Images of these products that fit into one message → Map(productId → attachment). */
-function pickImages(list, max = Infinity) {
+/** Images of these products that fit into one message (10 files, 8 MB) → Map(productId → attachment). */
+function pickImages(list, max = 10) {
   const picked = new Map();
   let bytes = 0;
   for (const p of list) {
@@ -257,7 +257,8 @@ function addList(c, guild, list) {
       shown += 1;
     }
   }
-  if (shown < list.length) lines.push(`-# …and ${list.length - shown} more – ${titled ? 'open a category' : 'pick from the list'} below.`);
+  const how = titled ? 'open a category below to buy (sold out? get a DM when it is back)' : 'pick a product below to order it';
+  lines.push(shown < list.length ? `-# …and ${list.length - shown} more – ${how}.` : `-# ${how[0].toUpperCase()}${how.slice(1)}.`);
   c.addTextDisplayComponents(text(lines.join('\n')));
   c.addActionRowComponents(row(titled ? categoryMenu(guild, gs) : productMenu(guild, list)));
 }
@@ -288,7 +289,7 @@ function productMenu(guild, list) {
 
 // ───────────── Catalog panel ─────────────
 
-function panelPayload(guild, list, { cards = false, pictures = new Map(), now = new Date() } = {}) {
+function panelPayload(guild, list, { cards = false, pictures = new Map(), now } = {}) {
   const c = container(COLORS.brand);
   const status = shopstatus.statusLine(guild.id, 'shop', now);
   const intro =
@@ -336,10 +337,10 @@ function panelPayload(guild, list, { cards = false, pictures = new Map(), now = 
  * Up to 8 products: cards with Buy buttons under category headers, with as many product images as
  * Discord's limits allow. More products: a compact list per category and a menu.
  */
-function shopPanel(guild, { now = new Date() } = {}) {
+function shopPanel(guild, { now } = {}) {
   const list = products(guild.id);
   if (list.length && list.length <= CARD_LIMIT) {
-    for (let n = list.length; n >= 0; n -= 1) {
+    for (let n = Math.min(list.length, 10); n >= 0; n -= 1) {
       const payload = panelPayload(guild, list, { cards: true, pictures: pickImages(list, n), now });
       if (fits(payload)) return payload;
     }
@@ -458,11 +459,12 @@ async function announceProduct(guild, p, kind = 'new') {
   return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] }, files: image ? [image.file] : [] }));
 }
 
-/** The product an order ticket is about: ticket.productId, or a form answer with its name ("GTA V — 20€"). */
+/** The product an order ticket is about: ticket.order.productId, or the product answer ("GTA V — 20€" / "GTA V"). */
 function ticketProduct(guildId, ticket) {
   if (!guildId || !ticket) return null;
-  if (ticket.productId) return findProduct(guildId, ticket.productId);
-  const names = (ticket.answers ?? []).map((a) => String(a.value ?? '').split(' — ')[0].trim().toLowerCase());
+  const id = ticket.order?.productId;
+  if (id) return products(guildId).find((p) => p.id === id) ?? null;
+  const names = (ticket.answers ?? []).filter((a) => /product|buy/i.test(a.label ?? '')).map((a) => String(a.value ?? '').split(' — ')[0].trim().toLowerCase());
   return products(guildId).find((p) => names.includes(p.name.toLowerCase())) ?? null;
 }
 

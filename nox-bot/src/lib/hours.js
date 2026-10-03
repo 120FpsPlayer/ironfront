@@ -128,4 +128,21 @@ function hoursText(wh) {
   return `${daysText(wh.days)} ${wh.from ?? '00:00'}–${wh.to ?? '24:00'} (${zoneLabel(wh.timezone)})`;
 }
 
-module.exports = { zoned, toMinutes, inHours, nextOpening, nextClosing, whenText, zoneLabel, daysText, hoursText };
+/** What is wrong with a workingHours section (null when it is fine) – checked when config.json is loaded. */
+function problem(wh) {
+  if (!wh?.enabled) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: wh.timezone ?? 'UTC' });
+  } catch {
+    return `"timezone" must be a time zone like "Europe/Warsaw" (got ${JSON.stringify(wh.timezone)})`;
+  }
+  for (const key of ['from', 'to']) {
+    if (wh[key] !== undefined && !/^([01]?\d|2[0-3]):[0-5]\d$|^24:00$/.test(String(wh[key]))) return `"${key}" must be a time like "10:00" (got ${JSON.stringify(wh[key])})`;
+  }
+  if (wh.days !== undefined && (!Array.isArray(wh.days) || !wh.days.length || wh.days.some((d) => !ALL_DAYS.includes(d)))) {
+    return '"days" must list days from 0 (Sunday) to 6 (Saturday), e.g. [1, 2, 3, 4, 5, 6, 0]';
+  }
+  return null;
+}
+
+module.exports = { zoned, toMinutes, inHours, nextOpening, nextClosing, whenText, zoneLabel, daysText, hoursText, problem };
