@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { ButtonStyle, LabelBuilder, MessageFlags, ModalBuilder, TextDisplayBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const hooks = require('../lib/hooks');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
@@ -101,6 +102,7 @@ async function grant(interaction, role) {
   await interaction.reply({ ...v2(c), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
   // Log after replying – Discord needs an answer within 3 seconds.
   await log(interaction, { ok: true });
+  await hooks.emit('verified', interaction.member);
 }
 
 async function handleButton(interaction) {
