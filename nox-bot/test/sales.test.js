@@ -119,6 +119,43 @@ test('days stay calendar days when the clocks change (25-hour and 23-hour days)'
   assert.equal(sales.dateKey(at('2026-02-28T23:30:00Z')), '2026-03-01', 'already 1 March in Warsaw');
 });
 
+test('a day whose midnight is skipped starts when the clocks change; repeated / skipped times are resolved forward', () => {
+  // America/Santiago: on 6 Sep 2026 the clocks jump from 00:00 (−04:00) to 01:00 (−03:00) – there is no midnight
+  withTimezone('America/Santiago', () => {
+    const noon = at('2026-09-06T12:00:00-03:00');
+    assert.equal(sales.dayStart(noon), at('2026-09-06T01:00:00-03:00'), 'not 23:00 of the day before');
+    assert.equal(sales.dateKey(sales.dayStart(noon)), '2026-09-06');
+    const today = sales.periodRange('today', noon);
+    assert.deepEqual([today.from, today.prev.from], [at('2026-09-06T01:00:00-03:00'), at('2026-09-05T00:00:00-04:00')]);
+    const week = sales.periodRange('7d', noon);
+    assert.equal(week.from, at('2026-08-31T00:00:00-04:00'), 'the other days still start at their own midnight');
+    assert.deepEqual(week.prev, { from: at('2026-08-24T00:00:00-04:00'), to: at('2026-08-30T12:00:00-04:00') + 1 });
+    const next = sales.periodRange('7d', at('2026-09-10T12:00:00-03:00'));
+    assert.equal(next.prev.to, at('2026-09-03T12:00:00-04:00') + 1);
+    const report = sales.weekRange(at('2026-09-07T10:00:00-03:00'));
+    assert.deepEqual([report.from, report.to], [at('2026-08-31T00:00:00-04:00'), at('2026-09-07T00:00:00-03:00')]);
+    assert.equal(sales.weekRange(at('2026-09-13T10:00:00-03:00')).prev.to, at('2026-09-06T01:00:00-03:00'));
+  });
+  // Europe/Warsaw: 02:30 happens twice on 25 Oct (→ the first one) and not at all on 29 Mar (→ 03:30)
+  assert.equal(sales.zonedTime({ year: 2026, month: 10, day: 25, hour: 2, minute: 30 }), at('2026-10-25T02:30:00+02:00'));
+  assert.equal(sales.zonedTime({ year: 2026, month: 3, day: 29, hour: 2, minute: 30 }), at('2026-03-29T03:30:00+02:00'));
+  assert.equal(sales.zonedTime({ year: 2026, month: 7, day: 1, hour: 10 }), at('2026-07-01T10:00:00+02:00'));
+});
+
+test('payment methods: an exact name wins over a shorter name inside it ("PaysafeCard" is not "Card")', async () => {
+  const guild = await newGuild();
+  const now = at('2026-10-03T18:00:00+02:00');
+  const before = config.shop.paymentMethods;
+  config.shop.paymentMethods = [{ name: 'Card' }, { name: 'PaysafeCard' }, { name: 'Crypto' }];
+  try {
+    for (const method of ['PaysafeCard', 'paysafecard pin', 'Card', 'card (visa)', 'crypto']) addSale(guild, now - 60_000, { method });
+    const s = sales.summarize(guild.id, sales.periodRange('today', now));
+    assert.deepEqual(s.methods.map((m) => [m.name, m.orders]), [['Card', 2], ['PaysafeCard', 2], ['Crypto', 1]]);
+  } finally {
+    config.shop.paymentMethods = before;
+  }
+});
+
 test('a sale at 23:59 local time belongs to that day – in the shop time zone, not in UTC', async () => {
   const guild = await newGuild();
   addSale(guild, at('2026-10-02T23:59:59+02:00'), { amount: 10 }); // 21:59 UTC

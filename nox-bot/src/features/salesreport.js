@@ -75,16 +75,23 @@ function offset(ms, tz) {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
 }
 
-/** The moment a wall-clock time happens in a time zone. Days may overflow (day 0 = last day of the month before). */
+/**
+ * The moment a wall-clock time happens in a time zone. Days may overflow (day 0 = last day of the month before).
+ * A time that happens twice (clocks go back) → the first one. A time that doesn't exist (clocks go forward) →
+ * shifted forward by the jump, so a day whose midnight is skipped (e.g. America/Santiago) starts when the clocks change.
+ */
 function zonedTime({ year, month, day, hour = 0, minute = 0, second = 0 }, tz = timezone()) {
   const wall = Date.UTC(year, month - 1, day, hour, minute, second);
-  return wall - offset(wall - offset(wall, tz), tz);
+  const exists = (ms) => offset(ms, tz) === wall - ms;
+  const before = wall - offset(wall - DAY, tz); // with the offset in effect before a clock change
+  const after = wall - offset(wall + DAY, tz); // … and after it
+  return exists(before) || !exists(after) ? before : after;
 }
 
-/** Local midnight of the day a moment falls on. */
-function dayStart(ms, tz = timezone()) {
+/** Local midnight of the day a moment falls on – or of the day `n` days later (n < 0: earlier). */
+function dayStart(ms, tz = timezone(), n = 0) {
   const p = localParts(ms, tz);
-  return zonedTime({ year: p.year, month: p.month, day: p.day }, tz);
+  return zonedTime({ year: p.year, month: p.month, day: p.day + n }, tz);
 }
 
 /** The same wall-clock time n days later (or earlier) – a day has 23 or 25 hours when the clocks change. */
@@ -129,23 +136,21 @@ function periodRange(period, now = Date.now(), tz = timezone()) {
   const key = PERIODS[period] ? period : '7d';
   const def = PERIODS[key];
   if (!def.days) return { key, label: def.label, from: 0, to: now + 1, prev: null, tz };
-  const from = addDays(dayStart(now, tz), -(def.days - 1), tz);
   return {
     key,
     label: def.label,
     before: def.before,
-    from,
+    from: dayStart(now, tz, -(def.days - 1)),
     to: now + 1,
-    prev: { from: addDays(from, -def.days, tz), to: addDays(now, -def.days, tz) + 1 },
+    prev: { from: dayStart(now, tz, -(2 * def.days - 1)), to: addDays(now, -def.days, tz) + 1 },
     tz,
   };
 }
 
 /** The weekly report: the 7 full days before the day of `at`, compared with the 7 days before those. */
 function weekRange(at, tz = timezone()) {
-  const to = dayStart(at, tz);
-  const from = addDays(to, -7, tz);
-  return { key: 'week', label: 'Last week', before: 'the week before', from, to, prev: { from: addDays(to, -14, tz), to: from }, tz };
+  const from = dayStart(at, tz, -7);
+  return { key: 'week', label: 'Last week', before: 'the week before', from, to: dayStart(at, tz), prev: { from: dayStart(at, tz, -14), to: from }, tz };
 }
 
 // ───────────── Numbers ─────────────
@@ -154,11 +159,18 @@ const isAmount = (n) => typeof n === 'number' && Number.isFinite(n);
 const round = (n) => Math.round(n * 100) / 100;
 const completedAt = (s) => s.completedAt ?? s.createdAt ?? 0;
 
-/** A payment method as configured ("PaysafeCard"); free-text answers that match none are "Other". */
+/**
+ * A payment method as configured ("PaysafeCard"); free-text answers that match none are "Other".
+ * An exact name wins, then the longest name inside the answer – so "PaysafeCard" is never counted as "Card".
+ */
 function methodName(sale) {
   const raw = String(sale.method ?? '').trim().toLowerCase();
   if (!raw) return 'Not given';
-  return config.shop.paymentMethods.find((m) => raw.includes(String(m.name).toLowerCase()))?.name ?? 'Other';
+  const names = config.shop.paymentMethods.map((m) => String(m.name ?? '')).filter(Boolean);
+  const exact = names.find((name) => name.toLowerCase() === raw);
+  if (exact) return exact;
+  const inside = names.filter((name) => raw.includes(name.toLowerCase())).sort((a, b) => b.length - a.length);
+  return inside[0] ?? 'Other';
 }
 
 /** Groups sales: [{ key, name, orders, known, revenue }] – highest revenue first, then most orders. */

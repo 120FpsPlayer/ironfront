@@ -125,12 +125,14 @@ function persist() {
 async function backupNow(guild, { now = Date.now(), by = null } = {}) {
   const stats = db.guild(guild.id).stats;
   const before = stats.backup ?? null;
+  const mine = { lastAt: now, by };
   const release = () => {
+    if (stats.backup !== mine) return; // another backup (e.g. /backup) finished in the meantime – keep it
     if (before) stats.backup = before;
     else delete stats.backup;
     db.save();
   };
-  stats.backup = { lastAt: now, by };
+  stats.backup = mine;
   persist();
   let b;
   try {
@@ -140,7 +142,7 @@ async function backupNow(guild, { now = Date.now(), by = null } = {}) {
     throw err;
   }
   const tooBig = b.size > LIMITS.maxBytes;
-  Object.assign(stats.backup, { file: b.name, size: b.size, tooBig });
+  Object.assign(mine, { file: b.name, size: b.size, tooBig });
   db.save();
   const payload = tooBig ? { embeds: [tooBigEmbed(guild, b)] } : { embeds: [backupEmbed(guild, b, { by })], files: [new AttachmentBuilder(b.gz, { name: b.name })] };
   const channelId = db.channelId(guild.id, 'backups');

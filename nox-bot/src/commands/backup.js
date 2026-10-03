@@ -1,6 +1,6 @@
 'use strict';
 
-const { SlashCommandBuilder, InteractionContextType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, InteractionContextType, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const db = require('../lib/db');
 const backups = require('../features/backups');
 const { COLORS } = require('../lib/theme');
@@ -10,7 +10,8 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('backup')
     .setDescription("Back up this server's bot data now – posted in #backups (admins)")
-    .setContexts(InteractionContextType.Guild),
+    .setContexts(InteractionContextType.Guild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild), // hidden from members, like /panel
 
   async execute(interaction) {
     if (!isAdmin(interaction.member)) return replyError(interaction, 'Only administrators can make backups.');

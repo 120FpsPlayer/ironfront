@@ -185,9 +185,48 @@ test('"Add note" button on a profile → form → the note is saved and the prof
   assert.equal(modal.components[0].component.max_length, 500);
 
   const submit = await run({ member: support, kind: 'modal', customId: `customer:note:${buyer.id}`, fields: { text: 'Asked for a refund, solved.' }, message: { id: 'profile' } });
-  assert.equal(submit.state.updates.length, 1, 'the profile card is updated in place');
-  assert.match(textOf(submit.state.updates[0]), /Staff notes \(1\)[\s\S]*Asked for a refund, solved\./);
+  assert.deepEqual([submit.state.replies.length, submit.state.edits.length], [0, 1], 'the profile card is updated in place');
+  assert.match(textOf(submit.state.edits[0]), /Staff notes \(1\)[\s\S]*Asked for a refund, solved\./);
   assert.equal(customers.notesOf(guild.id, buyer.id)[0].by, support.id);
+});
+
+test('"Add note" answers in time: the form opens without an API call, the saved form is acknowledged before fetching', async () => {
+  const support = member(guild, ['member', 'support']);
+  const buyer = member(guild);
+  const calls = [];
+  const users = guild.client.users;
+  const realUsers = users.fetch;
+  const realMembers = guild.members.fetch;
+  let current = null;
+  users.fetch = async (id) => {
+    calls.push(['user', current?.deferred ?? false]);
+    return realUsers.call(users, id);
+  };
+  guild.members.fetch = async (arg) => {
+    calls.push(['member', current?.deferred ?? false]);
+    return realMembers.call(guild.members, arg);
+  };
+  try {
+    current = createInteraction({ guild, member: support, kind: 'button', customId: `customer:note:${buyer.id}` });
+    await handle(current, commands);
+    assert.equal(current.state.modals.length, 1);
+    assert.equal(current.state.modals[0].title, `Note about user${buyer.id}`, 'the name comes from the cache');
+    assert.deepEqual(calls, [], 'no API call before the form (it must open within 3 seconds)');
+
+    // A customer who left: fetching them is a slow API call (404), so the form is acknowledged first
+    const ghost = uid();
+    guild.unknownMembers = new Set([ghost]);
+    current = createInteraction({ guild, member: support, kind: 'modal', customId: `customer:note:${ghost}`, fields: { text: 'Left after a refund.' }, message: { id: 'profile' } });
+    await handle(current, commands);
+    assert.ok(calls.length > 0 && calls.every(([, deferred]) => deferred), 'deferred before fetching');
+    const card = textOf(lastResponse(current));
+    assert.match(card, /\*\*Member since:\*\* not on the server/);
+    assert.match(card, /Left after a refund\./);
+  } finally {
+    users.fetch = realUsers;
+    guild.members.fetch = realMembers;
+    guild.unknownMembers = null;
+  }
 });
 
 test('profile of someone who left, with odd invite data, and with many long notes stays within limits', async () => {

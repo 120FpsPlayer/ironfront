@@ -9,7 +9,7 @@
  *   customer:note:<userId>     "Add note" button → form → the note is saved and the profile refreshed
  */
 
-const { ButtonStyle, LabelBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { ButtonStyle, LabelBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const hooks = require('../lib/hooks');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
@@ -225,10 +225,11 @@ function requireStaff(interaction) {
   if (!isStaff(interaction.member)) throw new UserError('Customer profiles and notes are only available to staff members.');
 }
 
-async function openNoteForm(interaction, [userId]) {
+/** The form has to be the first answer within 3 seconds – so the name comes from the cache, never from the API. */
+function openNoteForm(interaction, [userId]) {
   requireStaff(interaction);
   if (!isId(userId)) throw new UserError('This button is broken – open the profile again with `/customer view`.');
-  const user = await interaction.client.users.fetch(userId).catch(() => null);
+  const user = interaction.client.users.cache?.get(userId) ?? interaction.guild.members.cache?.get(userId)?.user;
   return interaction.showModal(noteModal(userId, user?.username ?? 'customer'));
 }
 
@@ -236,11 +237,13 @@ async function submitNoteForm(interaction, [userId]) {
   requireStaff(interaction);
   if (!isId(userId)) throw new UserError('This form is broken – open the profile again with `/customer view`.');
   addNote(interaction.guild.id, userId, { by: interaction.user.id, text: interaction.fields.getTextInputValue('text') });
+  // Answer first: fetching someone who left the server is a slow API call.
+  const fromMessage = interaction.isFromMessage();
+  await (fromMessage ? interaction.deferUpdate() : interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const user = await interaction.client.users.fetch(userId).catch(() => ({ id: userId }));
   const member = await interaction.guild.members.fetch(userId).catch(() => null);
   const card = profileCard(interaction.guild, user, member);
-  if (interaction.isFromMessage()) return interaction.update(card);
-  return reply(interaction, card);
+  return fromMessage ? interaction.editReply(card) : reply(interaction, card);
 }
 
 hooks.route('customer', {

@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
+const { setImmediate: tick } = require('node:timers/promises');
 const { FakeGuild } = require('./helpers/fakeDiscord');
 const { createInteraction, lastResponse, textOf } = require('./helpers/fakeInteraction');
 const { buildServer } = require('../src/builder/executor');
@@ -169,7 +170,46 @@ test('backup: a post that fails is retried at the next check; servers without #b
   assert.equal(db.guild(bare.id).stats.backup, undefined);
 });
 
+test('backup: a failed automatic post never undoes a /backup that was posted in the meantime', async () => {
+  const guild = await newGuild();
+  const channel = backupChannel(guild);
+  const realSend = channel.send;
+  let unblock;
+  const blocked = new Promise((resolve) => {
+    unblock = resolve;
+  });
+  let sends = 0;
+  channel.send = async function send(body) {
+    sends += 1;
+    if (sends === 1) {
+      await blocked;
+      throw Object.assign(new Error('Missing Permissions'), { code: 50013 });
+    }
+    return realSend.call(this, body);
+  };
+  const warn = console.warn;
+  console.warn = () => null;
+  try {
+    const t0 = at('2026-10-06T12:00:00+02:00');
+    const auto = backups.backupNow(guild, { now: t0 }); // its post hangs, then fails
+    while (!sends) await tick(); // the gzip runs in the background
+    const admin = member(guild, ['admin']);
+    const manual = await backups.backupNow(guild, { now: t0 + 60_000, by: admin.id });
+    assert.ok(manual.message);
+    unblock();
+    assert.equal((await auto).message, null);
+    assert.equal(db.guild(guild.id).stats.backup.lastAt, t0 + 60_000, 'the /backup is still the latest backup');
+    assert.equal(db.guild(guild.id).stats.backup.by, admin.id);
+    assert.equal(backups.isDue(guild.id, t0 + 2 * HOUR), false, 'so no extra automatic backup');
+  } finally {
+    channel.send = realSend;
+    console.warn = warn;
+  }
+});
+
 test('/backup: admins only – posts in #backups now and counts as the latest backup', async () => {
+  const { PermissionFlagsBits } = require('discord.js');
+  assert.equal(commands.get('backup').data.toJSON().default_member_permissions, String(PermissionFlagsBits.ManageGuild), 'hidden from members, like /panel');
   const guild = await newGuild();
   fill(guild, 'cmd');
   const channel = backupChannel(guild);
