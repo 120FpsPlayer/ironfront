@@ -80,9 +80,10 @@ function checkCanVouch(member) {
   if (!db.channelId(member.guild.id, 'vouches')) throw new UserError('The vouches channel is not set up yet. Ask an admin to run `/build`.');
 }
 
-function vouchModal(guild) {
+/** customId / productId: used by the vouch request in DMs (src/features/orders.js) – productId preselects the product. */
+function vouchModal(guild, { customId = 'vouch:submit', productId = null } = {}) {
   const products = db.guild(guild.id).products;
-  const modal = new ModalBuilder().setCustomId('vouch:submit').setTitle(`${config.brand.name} · Leave a vouch`.slice(0, 45));
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(`${config.brand.name} · Leave a vouch`.slice(0, 45));
   modal.addLabelComponents(
     new LabelBuilder()
       .setLabel('Your rating')
@@ -102,7 +103,7 @@ function vouchModal(guild) {
             .setCustomId('product')
             .setPlaceholder('Choose a product…')
             .addOptions([
-              ...products.slice(0, 24).map((p) => ({ label: truncate(p.name, 100), value: p.id })),
+              ...products.slice(0, 24).map((p) => ({ label: truncate(p.name, 100), value: p.id, default: p.id === productId })),
               { label: 'Something else', value: '__other', emoji: '✨' },
             ]),
         ),
@@ -183,8 +184,8 @@ async function postVouch(guild, member, { rating, product, review, image = null 
   return { n, message };
 }
 
-async function submitModal(interaction) {
-  const guild = interaction.guild;
+/** guild / member are passed in for forms sent from DMs (interaction.guild is null there). */
+async function submitModal(interaction, guild = interaction.guild, member = interaction.member) {
   const read = (id) => {
     try {
       return interaction.fields.getTextInputValue(id)?.trim() ?? '';
@@ -208,7 +209,7 @@ async function submitModal(interaction) {
   }
   if (!product) throw new UserError('Please tell us which product you bought.');
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { n, message } = await postVouch(guild, interaction.member, { rating, product, review: read('review') });
+  const { n, message } = await postVouch(guild, member, { rating, product, review: read('review') });
   return thanks(interaction, n, message);
 }
 

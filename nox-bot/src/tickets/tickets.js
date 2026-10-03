@@ -13,7 +13,9 @@ const {
 } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
+const hooks = require('../lib/hooks');
 const panels = require('../lib/panels');
+const promos = require('../features/promos');
 const ui = require('./ui');
 const { createTranscript } = require('./transcript');
 const { openDeniedReason } = require('../lib/permissions');
@@ -32,6 +34,7 @@ const {
   pad,
   ts,
   sendLog,
+  money,
 } = require('../lib/utils');
 
 const OWNER_PERMS = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles', 'EmbedLinks', 'AddReactions'];
@@ -632,19 +635,81 @@ async function sendSnippet(channel, snippet, staff) {
   db.updateTicket(channel.id, patch);
 }
 
-/**
- * Staff marks a purchase as delivered: the author gets the Customer role (and Loyal Customer
- * after enough orders) and a card asking for a vouch.
- */
-async function completeOrder(channel, staff) {
+/** The open, not yet completed purchase ticket in this channel (or a UserError). */
+function requireCompletable(channel) {
   const ticket = requireOpen(channel);
   if (ticket.typeId !== 'order') throw new UserError('Only purchase tickets can be marked as completed.');
   if (ticket.completedAt) throw new UserError('This order is already marked as completed.');
+  return ticket;
+}
+
+/** The "Complete order" form (amount paid) for this ticket. */
+const completeForm = (channel) => ui.completeOrderModal(requireCompletable(channel));
+
+/** Product, quantity and payment method of an order – from the shop order form, or the Purchase ticket form. */
+function orderDetails(ticket) {
+  if (ticket.order) return ticket.order;
+  const type = config.getType(ticket.typeId);
+  const answer = (id, ...labels) => {
+    const q = type?.questions.find((x) => x.id === id);
+    return ticket.answers?.find((a) => a.label === q?.label || labels.includes(a.label))?.value?.trim() || null;
+  };
+  const quantity = Number(answer('quantity', 'Quantity'));
+  return {
+    productId: null,
+    product: answer('product', 'Product'),
+    quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
+    method: answer('payment', 'Payment method'),
+    promo: null,
+    discount: 0,
+    total: null,
+  };
+}
+
+function nextSaleId(guildId) {
+  const ids = new Set(db.sales(guildId).map((s) => s.id));
+  let n = ids.size + 1;
+  while (ids.has(`S-${pad(n)}`)) n += 1;
+  return `S-${pad(n)}`;
+}
+
+/**
+ * Staff marks a purchase as delivered: records the sale, redeems the promo code, gives the author the
+ * Customer role (and Loyal Customer after enough orders) and posts a card asking for a vouch.
+ *
+ * amount  – what the customer actually paid: a number, null (unknown) or undefined (= the order total, if known)
+ * respond – answers the interaction ({ orders, loyal, sale }); the orderCompleted hook (receipt, proof,
+ *           vouch reminder…) runs after it, so the staff member gets an answer first.
+ */
+async function completeOrder(channel, staff, { amount, respond } = {}) {
+  const ticket = requireCompletable(channel);
+  const order = orderDetails(ticket);
+  const paid = amount === undefined ? order.total ?? null : amount;
+  if (paid != null && !(Number.isFinite(paid) && paid >= 0)) throw new UserError('The amount paid must be a number of 0 or more (e.g. 19.99).');
   const guild = channel.guild;
   const g = db.guild(guild.id);
   g.orders[ticket.ownerId] = (g.orders[ticket.ownerId] ?? 0) + 1;
   const orders = g.orders[ticket.ownerId];
-  db.updateTicket(channel.id, { completedAt: Date.now(), completedBy: staff.id, lastMessageBy: 'staff', lastActivity: Date.now() });
+  const now = Date.now();
+  const sale = db.addSale(guild.id, {
+    id: nextSaleId(guild.id),
+    ticketNumber: ticket.number,
+    channelId: channel.id,
+    userId: ticket.ownerId,
+    sellerId: staff.id,
+    productId: order.productId ?? null,
+    product: order.product ?? null,
+    quantity: order.quantity ?? 1,
+    amount: paid == null ? null : Math.round(paid * 100) / 100,
+    currency: config.shop.currency ?? '€',
+    method: order.method ?? null,
+    promo: order.promo ?? null,
+    discount: order.discount ?? 0,
+    createdAt: ticket.createdAt,
+    completedAt: now,
+  });
+  if (sale.promo) promos.redeem(guild.id, sale.promo, ticket.ownerId, sale.id);
+  db.updateTicket(channel.id, { completedAt: now, completedBy: staff.id, saleId: sale.id, lastMessageBy: 'staff', lastActivity: now });
 
   const member = await guild.members.fetch(ticket.ownerId).catch(() => null);
   const customerRole = db.roleId(guild.id, 'customer');
@@ -658,17 +723,26 @@ async function completeOrder(channel, staff) {
     }
   }
   await refreshControlMessage(channel, ticket);
-  await channel.send(ui.orderCompletedCard(guild, ticket, staff.id, { loyal, orders }));
+  await channel.send(ui.orderCompletedCard(guild, ticket, staff.id, { loyal, orders, sale }));
   await sendLog(guild, {
     embeds: [
       logEmbed(COLORS.success, '✅ Order completed', staff.user ?? staff).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
         { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
         { name: 'Orders so far', value: String(orders), inline: true },
+        { name: 'Sale', value: `\`${sale.id}\``, inline: true },
+        { name: 'Amount paid', value: money(sale.amount), inline: true },
+        { name: 'Promo code', value: sale.promo ? `${sale.promo} (−${money(sale.discount)})` : '—', inline: true },
       ),
     ],
   });
-  return { orders, loyal };
+  const result = { orders, loyal, sale };
+  try {
+    if (respond) await respond(result);
+  } finally {
+    await hooks.emit('orderCompleted', { guild, ticket: db.getTicket(channel.id), member, staff, sale });
+  }
+  return result;
 }
 
 function requireOpen(channel) {
@@ -757,6 +831,9 @@ module.exports = {
   pingStaff,
   stillNeedHelp,
   sendSnippet,
+  requireCompletable,
+  completeForm,
+  orderDetails,
   completeOrder,
   archiveTranscript,
   saveRating,

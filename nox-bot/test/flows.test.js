@@ -107,7 +107,7 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   assert.match(textOf(lastResponse(submit)), /Order started/);
   const ticket = db.tickets((t) => t.ownerId === buyer.id)[0];
   assert.equal(ticket.typeId, 'order');
-  assert.deepEqual(ticket.answers.map((a) => a.label), ['Product', 'Quantity', 'Payment method', 'Notes']);
+  assert.deepEqual(ticket.answers.map((a) => a.label), ['Product', 'Quantity', 'Payment method', 'Notes', 'Price']);
   assert.match(ticket.answers[2].value, /PaysafeCard/);
   const ticketChannel = guild.channels.cache.get(ticket.channelId);
   assert.equal(ticketChannel.parentId, db.settings(guild.id).categoryId);
@@ -117,8 +117,10 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   assert.ok(ticketChannel.permissionsFor(seller).has(P.ViewChannel));
   assert.ok(!ticketChannel.permissionsFor(member(guild)).has(P.ViewChannel));
 
-  // Staff marks the order as completed from the ⚙️ menu
-  const done = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel: ticketChannel });
+  // Staff marks the order as completed from the ⚙️ menu and confirms the amount paid
+  const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel: ticketChannel });
+  assert.equal(pick.state.modals[0].custom_id, 'order:complete');
+  const done = await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '13.98' }, channel: ticketChannel });
   assert.match(textOf(lastResponse(done)), /Order completed/);
   assert.ok(buyer.roles.cache.has(role(guild, 'customer')));
   const completedCard = ticketChannel.messageList.at(-1);
@@ -391,7 +393,7 @@ test('staff commands: /ticket info + complete, /stats, /setup show, /product lis
   const notStaff = await run({ guild, member: buyer, kind: 'command', commandName: 'ticket', subcommand: 'complete', channel });
   assert.match(textOf(lastResponse(notStaff)), /only available to staff/);
   const complete = await run({ guild, member: seller, kind: 'command', commandName: 'ticket', subcommand: 'complete', channel });
-  assert.match(textOf(lastResponse(complete)), /Order marked as completed/);
+  assert.match(textOf(lastResponse(complete)), /Order completed/);
   for (const [commandName, subcommand] of [['stats', null], ['setup', 'show'], ['product', 'list'], ['giveaway', 'list']]) {
     const i = await run({ guild, member: owner, kind: 'command', commandName, subcommand });
     assert.ok(lastResponse(i), `/${commandName} ${subcommand ?? ''} replied`);

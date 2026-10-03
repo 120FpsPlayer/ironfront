@@ -3,14 +3,19 @@
 const {
   ButtonBuilder,
   ButtonStyle,
+  LabelBuilder,
+  ModalBuilder,
   SectionBuilder,
   StringSelectMenuBuilder,
+  TextDisplayBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   UserSelectMenuBuilder,
 } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
-const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime } = require('../lib/utils');
+const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money } = require('../lib/utils');
 const { SPACER, text, divider, btn, linkBtn, row, section, container, header, v2, notice } = require('../lib/v2');
 
 /** Custom NØX emoji for a ticket type (falls back to the Unicode emoji from config.json). */
@@ -151,7 +156,7 @@ function manageSelect(ticket, guild) {
       label: 'Order completed',
       value: 'complete',
       emoji: guild ? ce(guild, 'check') : '✅',
-      description: 'Gives the Customer role and asks for a vouch',
+      description: 'Confirm the amount paid – records the sale, gives the Customer role',
     });
   }
   for (const [value, p] of Object.entries(PRIORITIES)) {
@@ -227,7 +232,7 @@ function inactivityWarning(ticket, closeAt) {
 }
 
 /** Shown in the ticket after staff marks an order as completed. */
-function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1 } = {}) {
+function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1, sale = null } = {}) {
   const c = container(COLORS.success);
   c.addTextDisplayComponents(
     text(
@@ -237,9 +242,40 @@ function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1 
         `${e(guild, 'star')} **Happy with your order?** A quick vouch helps us a lot – click the button below.`,
     ),
   );
-  c.addTextDisplayComponents(text(`-# Delivered by <@${staffId}> · ${ts(Date.now(), 'f')}`));
+  const receipt = sale ? `Receipt \`${sale.id}\`${sale.amount != null ? ` · Paid ${money(sale.amount)}` : ''} · ` : '';
+  c.addTextDisplayComponents(text(`-# ${receipt}Delivered by <@${staffId}> · ${ts(Date.now(), 'f')}`));
   c.addActionRowComponents(row(btn('vouch:open', 'Leave a vouch', ce(guild, 'star'), ButtonStyle.Success)));
   return v2(c, { mentions: { users: [ticket.ownerId] } });
+}
+
+/** "Order completed" form for staff: confirms the amount the customer actually paid. */
+function completeOrderModal(ticket) {
+  const o = ticket.order;
+  const summary = o
+    ? `**${o.product}** × ${o.quantity}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
+      (o.total != null ? `Total to pay: **${money(o.total)}**` : 'The price was not a fixed number – enter what the customer paid.')
+    : 'Custom order – enter what the customer paid.';
+  const input = new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(12).setPlaceholder('e.g. 19.99 – leave empty if unknown');
+  if (o?.total != null) input.setValue(Number.isInteger(o.total) ? String(o.total) : o.total.toFixed(2));
+  return new ModalBuilder()
+    .setCustomId('order:complete')
+    .setTitle(`✅ Complete order #${pad(ticket.number)}`)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${summary}\n-# Records the sale and gives the customer the Customer role${config.orders.receipts ? ' and a receipt by DM' : ''}.`))
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(`Amount paid (${config.shop.currency ?? '€'})`.slice(0, 45))
+        .setDescription('What the customer actually paid. Leave empty if you don\'t know.')
+        .setTextInputComponent(input),
+    );
+}
+
+/** The staff member's confirmation after completing an order. */
+function orderCompletedReply({ orders, loyal, sale }) {
+  const paid = sale.amount != null ? ` – ${money(sale.amount)} paid` : '';
+  return (
+    `Order completed – sale \`${sale.id}\` recorded${paid}${sale.promo ? ` (code ${sale.promo})` : ''}. ` +
+    `The customer now has ${orders} ${orders === 1 ? 'order' : 'orders'}${loyal ? ' and is a Loyal Customer 💜' : ''}.`
+  );
 }
 
 module.exports = {
@@ -251,5 +287,7 @@ module.exports = {
   closeRequestCard,
   inactivityWarning,
   orderCompletedCard,
+  completeOrderModal,
+  orderCompletedReply,
   notice,
 };

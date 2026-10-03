@@ -227,6 +227,9 @@ async function announceProduct(guild, p, kind = 'new') {
 
 // ───────────── Buying ─────────────
 
+const promos = require('./promos');
+const { parseAmount, money } = require('../lib/utils');
+
 function orderModal(product, guild = null) {
   const modal = new ModalBuilder().setCustomId(`shop:order:${product.id}`).setTitle(truncate(`🛒 ${product.name}`, 45));
   modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${formatPrice(product.price)}\n-# ${truncate(product.description, 300)}`));
@@ -260,7 +263,54 @@ function orderModal(product, guild = null) {
       .setLabel('Anything else we should know?')
       .setTextInputComponent(new TextInputBuilder().setCustomId('notes').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
   );
+  if (config.promos.enabled !== false) {
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel('Promo code')
+        .setDescription('Optional – got a discount code? Enter it here.')
+        .setTextInputComponent(new TextInputBuilder().setCustomId('promo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(24).setPlaceholder('e.g. NOX10')),
+    );
+  }
   return modal;
+}
+
+/** "2" → 2; anything that isn't a whole number from 1 to 999 is refused. */
+function parseQuantity(raw) {
+  const s = String(raw ?? '').trim() || '1';
+  const n = /^\d{1,6}$/.test(s) ? Number(s) : NaN;
+  if (!(n >= 1 && n <= 999)) throw new UserError('The quantity must be a whole number from **1** to **999** (e.g. `1` or `3`).');
+  return n;
+}
+
+/**
+ * Price maths for an order: unit price × quantity, then the promo code.
+ * An invalid code never blocks the order – it is reported as "not applied: <reason>".
+ */
+function priceOrder(guildId, userId, product, quantity, rawCode) {
+  const round = (n) => Math.round(n * 100) / 100;
+  const unitPrice = parseAmount(product.price);
+  const subtotal = unitPrice == null ? null : round(unitPrice * quantity);
+  const code = rawCode ? promos.normalize(rawCode) : null;
+  if (!code) return { unitPrice, subtotal, total: subtotal, discount: 0, code: null, promo: null, error: null };
+  const completedOrders = db.guild(guildId).orders[userId] ?? 0;
+  const { promo, error } = promos.check(guildId, code, userId, { completedOrders, reserved: promos.reservedBy(guildId, code) });
+  const { total, discount } = promos.apply(promo, subtotal);
+  return { unitPrice, subtotal, total, discount, code, promo, error };
+}
+
+/** The "Price" answer shown in the ticket: subtotal, discount and total (when the price is a number) and the promo result. */
+function priceAnswers(p, quantity) {
+  let promoNote = null;
+  if (p.error) promoNote = `${p.code} – not applied: ${p.error}`;
+  else if (p.promo && p.subtotal == null) promoNote = `${p.code} – ${promos.label(p.promo)}, the seller applies it to the final price`;
+  if (p.subtotal == null) return promoNote ? [{ label: 'Promo code', value: promoNote }] : [];
+  const each = quantity > 1 ? ` (${quantity} × ${money(p.unitPrice)})` : '';
+  const lines =
+    p.discount > 0
+      ? [`Subtotal: ${money(p.subtotal)}${each}`, `Discount (${p.code} · ${promos.label(p.promo)}): −${money(p.discount)}`, `**Total to pay: ${money(p.total)}**`]
+      : [`**Total to pay: ${money(p.subtotal)}**${each}`];
+  if (promoNote) lines.push(`Promo code ${promoNote}`);
+  return [{ label: 'Price', value: lines.join('\n') }];
 }
 
 async function startOrder(interaction, productId) {
@@ -284,30 +334,54 @@ async function submitOrder(interaction, productId) {
       return '';
     }
   };
+  const quantity = parseQuantity(field('quantity'));
   let payment = field('payment_text');
+  let method = payment;
+  let methodIndex = null;
   try {
     const [index] = interaction.fields.getStringSelectValues('payment');
     const m = config.shop.paymentMethods[Number(index)];
-    if (m) payment = m.details ? `${m.name} (${m.details})` : m.name;
+    if (m) {
+      payment = m.details ? `${m.name} (${m.details})` : m.name;
+      method = m.name;
+      methodIndex = Number(index);
+    }
   } catch {
     // text fallback already read
   }
+  const price = priceOrder(interaction.guild.id, interaction.user.id, product, quantity, field('promo'));
   const answers = [
     { label: 'Product', value: `${product.name} — ${formatPrice(product.price)}` },
-    { label: 'Quantity', value: field('quantity') || '1' },
+    { label: 'Quantity', value: String(quantity) },
     { label: 'Payment method', value: payment || '—' },
   ];
   const notes = field('notes');
   if (notes) answers.push({ label: 'Notes', value: notes });
+  answers.push(...priceAnswers(price, quantity));
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const channel = await tickets.openTicket(interaction.member, config.getType('order'), answers);
+  db.updateTicket(channel.id, {
+    order: {
+      productId: product.id,
+      product: product.name,
+      unitPrice: price.unitPrice,
+      quantity,
+      method: method || null,
+      methodIndex,
+      promo: price.promo ? price.code : null,
+      discount: price.discount,
+      subtotal: price.subtotal,
+      total: price.total,
+    },
+  });
+  const lines = [`Your private order ticket is ready: ${channel}`];
+  if (price.total != null) lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${price.discount > 0 ? ` (you save ${money(price.discount)} with **${price.code}**)` : ''}`);
+  else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
+  if (price.error) lines.push(`${e(interaction.guild, 'warning')} Promo code **${price.code}** – not applied: ${price.error}`);
+  lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
   return interaction.editReply({
-    embeds: [
-      embed(COLORS.success)
-        .setTitle(`🛒 Order started – ${product.name}`)
-        .setDescription(`Your private order ticket is ready: ${channel}\nA seller will confirm the price and payment details there. **Never pay anyone in DMs.**`),
-    ],
+    embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Order started – ${product.name}`, 256)).setDescription(lines.join('\n'))],
     components: [row(linkBtn(channel.url, 'Go to my order', '🎫'))],
   });
 }
@@ -336,6 +410,8 @@ module.exports = {
   setStock,
   announceProduct,
   orderModal,
+  parseQuantity,
+  priceOrder,
   startOrder,
   submitOrder,
   autocomplete,
