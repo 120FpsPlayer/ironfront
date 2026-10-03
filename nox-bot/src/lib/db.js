@@ -100,6 +100,8 @@ function guild(guildId) {
 }
 
 module.exports = {
+  /** Folder of db.json (data/ or $NOX_DATA_DIR) – other bot files (e.g. product images) go here too. */
+  dataDir: DATA_DIR,
   load,
   flush,
   save,
