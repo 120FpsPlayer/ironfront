@@ -37,12 +37,12 @@ const FALLBACK = {
  * emojis the bot uses most come first; the rest are uploaded when there is room.
  */
 const EMOJI_PRIORITY = [
-  'nox', 'check', 'x', 'cart', 'shield', 'ticket', 'star', 'gift', 'diamond', 'crown', 'warning', 'info', 'question',
+  'nox', 'check', 'x', 'cart', 'shield', 'ticket', 'star', 'star_outline', 'gift', 'diamond', 'crown', 'warning', 'info', 'question',
   'box', 'sparkles', 'card', 'crypto', 'paysafecard', 'paypal', 'coin', 'currency_eur', 'wallet', 'bell', 'rocket', 'trophy', 'chat',
   'group', 'person', 'mail', 'clock', 'lock_locked', 'lock_unlocked', 'heart', 'flame', 'moon', 'medal', 'pencil',
   'gear', 'hash', 'pin', 'refresh', 'search', 'thumbs_up', 'thumbs_down', 'arrow_right', 'blik',
   'currency_usd', 'currency_gbp', 'currency_pln', 'basket', 'calendar', 'camera', 'download', 'upload', 'folder',
-  'home', 'key', 'music', 'phone', 'share', 'star_outline', 'sun', 'target', 'battery', 'brush', 'calculator', 'cloud',
+  'home', 'key', 'music', 'phone', 'share', 'sun', 'target', 'battery', 'brush', 'calculator', 'cloud',
 ];
 
 const guildIdOf = (guild) => (typeof guild === 'string' ? guild : guild?.id);
@@ -53,8 +53,12 @@ function emojiId(guild, name) {
   if (!gid) return null;
   const id = db.emojiIds(gid)[name];
   if (!id) return null;
-  // With a Guild object we can double-check the emoji still exists (a deleted emoji would break buttons).
-  if (typeof guild === 'object' && guild?.emojis?.cache && guild.emojis.cache.size > 0 && !guild.emojis.cache.has(id)) return null;
+  // With a Guild object we double-check the emoji still exists and can be used (lost boost slots make
+  // emojis unavailable) – a deleted or unavailable emoji in a button makes Discord reject the message.
+  if (typeof guild === 'object' && guild?.emojis?.cache) {
+    const emoji = guild.emojis.cache.get(id);
+    if (!emoji || emoji.available === false) return null;
+  }
   return id;
 }
 

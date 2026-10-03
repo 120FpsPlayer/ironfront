@@ -3,11 +3,11 @@
 const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const config = require('../lib/config');
 const { COLORS } = require('../lib/theme');
-const { embed, reply, isStaff, isAdmin } = require('../lib/utils');
+const { embed, reply, isStaff, isAdmin, truncate } = require('../lib/utils');
 const { isMod, isShopManager } = require('../lib/permissions');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('help').setDescription(`All ${config.brand.name} bot commands you can use`).setContexts(InteractionContextType.Guild),
+  data: new SlashCommandBuilder().setName('help').setDescription(truncate(`All ${config.brand.name} bot commands you can use`, 100)).setContexts(InteractionContextType.Guild),
 
   async execute(interaction) {
     const member = interaction.member;

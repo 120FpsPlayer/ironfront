@@ -58,7 +58,8 @@ const CATEGORIES = [
     channels: [
       text('verify', '✅┃verify', { profile: 'verify', topic: 'Verify here to unlock the whole server.', post: 'verify' }),
       text('rules', '📜┃rules', { profile: 'rules', topic: 'Server rules – read them before you buy or chat.', post: 'rules' }),
-      text('welcome', '👋┃welcome', { profile: 'readonly', topic: 'Say hi to our newest members 💜', post: 'welcome' }),
+      // Readable before verifying (like #rules) – otherwise the ping in a newcomer's welcome card never reaches them.
+      text('welcome', '👋┃welcome', { profile: 'rules', topic: 'Say hi to our newest members 💜', post: 'welcome' }),
       text('information', '📌┃information', { profile: 'readonly', topic: 'About us, channels, team and contact.', post: 'information' }),
       news('announcements', '📢┃announcements', { topic: 'Official news and updates.', post: 'announcements' }),
       text('giveaways', '🎉┃giveaways', { profile: 'readonly', topic: 'Giveaways – click Enter to join!', post: 'giveaways' }),

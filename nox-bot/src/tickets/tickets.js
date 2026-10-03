@@ -7,6 +7,7 @@ const {
   ChannelType,
   LabelBuilder,
   ModalBuilder,
+  OverwriteType,
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
@@ -36,6 +37,56 @@ const OWNER_PERMS = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'Attac
 const STAFF_PERMS = [...OWNER_PERMS, 'ManageMessages'];
 const BOT_PERMS = [...STAFF_PERMS, 'ManageChannels'];
 const allow = (perms) => Object.fromEntries(perms.map((p) => [p, true]));
+// Always say it's a member overwrite: after a restart discord.js doesn't know most users,
+// and without the type it refuses to set their permissions at all.
+const AS_MEMBER = { type: OverwriteType.Member };
+const CATEGORY_LIMIT = 50;
+const childCount = (guild, categoryId) => guild.channels.cache.filter((c) => c.parentId === categoryId).size;
+
+/**
+ * A category with room for one more ticket. Discord allows 50 channels per category, so when
+ * the open-tickets category is full an overflow category ("🎫 TICKETS 2") is created next to it.
+ */
+async function openCategoryWithRoom(guild) {
+  const settings = db.settings(guild.id);
+  const base = guild.channels.cache.get(settings.categoryId);
+  if (!base) return null;
+  const ids = [settings.categoryId, ...(settings.overflowCategoryIds ?? [])];
+  for (const id of ids) {
+    if (guild.channels.cache.has(id) && childCount(guild, id) < CATEGORY_LIMIT) return id;
+  }
+  const overflow = await guild.channels
+    .create({
+      name: `${base.name} ${ids.length + 1}`.slice(0, 100),
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: [...base.permissionOverwrites.cache.values()].map((o) => ({ id: o.id, type: o.type, allow: o.allow.bitfield, deny: o.deny.bitfield })),
+      reason: 'Ticket category is full (50 channels) – overflow category',
+    })
+    .catch((err) => {
+      console.error('[tickets] Could not create an overflow ticket category:', err.message);
+      return null;
+    });
+  if (!overflow) return null;
+  db.updateSettings(guild.id, { overflowCategoryIds: [...(settings.overflowCategoryIds ?? []).filter((id) => guild.channels.cache.has(id)), overflow.id] });
+  return overflow.id;
+}
+
+/** Makes room in the closed-tickets category by deleting the oldest closed tickets (their transcripts are saved). */
+async function makeRoomInClosed(guild, closedId) {
+  let excess = childCount(guild, closedId) - (CATEGORY_LIMIT - 1);
+  if (excess <= 0) return;
+  const oldest = db
+    .tickets((x) => x.guildId === guild.id && x.status === 'closed' && guild.channels.cache.get(x.channelId)?.parentId === closedId)
+    .sort((a, b) => (a.closedAt ?? 0) - (b.closedAt ?? 0));
+  for (const old of oldest) {
+    if (excess <= 0) break;
+    const ch = guild.channels.cache.get(old.channelId);
+    const ok = await ch?.delete('Closed-tickets category is full – removing the oldest closed ticket (transcript is saved)').then(() => true).catch(() => false);
+    if (!ok) continue;
+    db.updateTicket(old.channelId, { status: 'deleted', deletedAt: Date.now(), deletedBy: 'auto-cleanup' });
+    excess -= 1;
+  }
+}
 
 const creating = new Set();
 const lastOpened = new Map();
@@ -118,13 +169,15 @@ async function openTicket(member, type, answers = []) {
   try {
     const settings = db.settings(guild.id);
     const staffRoles = staffRoleIds(guild.id, type).filter((id) => guild.roles.cache.has(id));
+    const parent = await openCategoryWithRoom(guild);
+    if (!parent) throw new UserError('Our ticket system is full right now – please try again in a few minutes or contact the staff.');
     const number = db.nextTicketNumber(guild.id);
     const draft = { number, priority: 'normal', ownerName: member.user.username };
 
     const channel = await guild.channels.create({
       name: channelName(draft, type),
       type: ChannelType.GuildText,
-      parent: settings.categoryId,
+      parent,
       topic: `${type.emoji ?? '🎫'} ${type.label} · #${pad(number)} · ${member.user.tag ?? member.user.username} (${member.id})`,
       permissionOverwrites: [
         { id: guild.roles.everyone.id, deny: ['ViewChannel'] },
@@ -271,10 +324,15 @@ async function closeTicket(channel, actor, reason = null) {
   }
 
   for (const id of [ticket.ownerId, ...ticket.participants]) {
-    await channel.permissionOverwrites.edit(id, { ViewChannel: false, SendMessages: false }).catch(() => null);
+    await channel.permissionOverwrites
+      .edit(id, { ViewChannel: false, SendMessages: false }, AS_MEMBER)
+      .catch((err) => console.warn(`[tickets] Could not remove ${id} from #${channel.name}:`, err.message));
   }
   if (settings.closedCategoryId && channel.guild.channels.cache.has(settings.closedCategoryId)) {
-    await channel.setParent(settings.closedCategoryId, { lockPermissions: false }).catch(() => null);
+    await makeRoomInClosed(channel.guild, settings.closedCategoryId);
+    await channel
+      .setParent(settings.closedCategoryId, { lockPermissions: false })
+      .catch((err) => console.warn(`[tickets] Could not move #${channel.name} to the closed category:`, err.message));
   }
 
   await refreshControlMessage(channel, ticket);
@@ -333,11 +391,19 @@ async function reopenTicket(channel, actor) {
   if (ticket.status !== 'closed') throw new UserError('This ticket is not closed.');
 
   const settings = db.settings(channel.guild.id);
-  if (settings.closedCategoryId && channel.parentId !== settings.categoryId) {
-    await channel.setParent(settings.categoryId, { lockPermissions: false }).catch(() => null);
+  const openIds = [settings.categoryId, ...(settings.overflowCategoryIds ?? [])];
+  if (settings.closedCategoryId && !openIds.includes(channel.parentId)) {
+    const parent = await openCategoryWithRoom(channel.guild);
+    if (parent) {
+      await channel
+        .setParent(parent, { lockPermissions: false })
+        .catch((err) => console.warn(`[tickets] Could not move #${channel.name} back to the open category:`, err.message));
+    }
   }
   for (const id of [ticket.ownerId, ...ticket.participants]) {
-    await channel.permissionOverwrites.edit(id, allow(OWNER_PERMS)).catch(() => null);
+    await channel.permissionOverwrites
+      .edit(id, allow(OWNER_PERMS), AS_MEMBER)
+      .catch((err) => console.warn(`[tickets] Could not give ${id} access to #${channel.name}:`, err.message));
   }
   db.updateTicket(channel.id, { status: 'open', closedAt: null, closedBy: null, closeReason: null, lastActivity: Date.now(), lastMessageBy: 'staff', warned: false });
   await refreshControlMessage(channel, ticket);
@@ -440,7 +506,7 @@ async function addUsers(channel, users, actor) {
   const added = [];
   for (const user of users) {
     if (user.bot || user.id === ticket.ownerId || ticket.participants.includes(user.id)) continue;
-    await channel.permissionOverwrites.edit(user.id, allow(OWNER_PERMS));
+    await channel.permissionOverwrites.edit(user.id, allow(OWNER_PERMS), AS_MEMBER);
     ticket.participants.push(user.id);
     added.push(user.id);
   }

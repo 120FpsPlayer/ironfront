@@ -13,7 +13,7 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
   const state = { replies: [], updates: [], edits: [], modals: [], followUps: [], responded: null };
   const record = (bucket) => async (payload) => {
     if (typeof payload === 'string') payload = { content: payload };
-    validateMessage(payload);
+    validateMessage(payload, guild);
     state[bucket].push(payload);
     if (bucket === 'replies' || bucket === 'updates') interaction.replied = true;
     return { id: 'reply', ...payload };
@@ -71,7 +71,7 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
     followUp: record('followUps'),
     editReply: async (payload) => {
       if (typeof payload === 'string') payload = { content: payload };
-      validateMessage(payload);
+      validateMessage(payload, guild);
       state.edits.push(payload);
       return payload;
     },
@@ -82,7 +82,7 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
       interaction.deferred = true;
     },
     showModal: async (modal) => {
-      state.modals.push(validateModal(modal));
+      state.modals.push(validateModal(modal, guild));
       interaction.replied = true;
     },
     respond: async (choices) => {

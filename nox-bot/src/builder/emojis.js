@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { RateLimitError } = require('discord.js');
 const db = require('../lib/db');
+const panels = require('../lib/panels');
 const { ASSETS, EMOJI_PRIORITY, emojiName } = require('../lib/theme');
 
 /** Static emoji slots per boost level. */
@@ -84,4 +85,18 @@ function describeEmojiResult(r) {
   return parts.join(' · ');
 }
 
-module.exports = { SLOTS, syncEmojis, describeEmojiResult };
+/**
+ * A NØX emoji was deleted, or became (un)available after a boost change: forget deleted ones and
+ * redraw the live panels, so buttons switch to the Unicode fallback (or back to the custom emoji).
+ */
+function onEmojiChange(emoji) {
+  const guild = emoji?.guild;
+  if (!guild) return false;
+  const names = Object.entries(db.emojiIds(guild.id)).filter(([, id]) => id === emoji.id).map(([name]) => name);
+  if (!names.length) return false;
+  if (!guild.emojis.cache.has(emoji.id)) for (const name of names) db.setEmoji(guild.id, name, null);
+  for (const kind of new Set(db.panels(guild.id).map((p) => p.kind ?? 'tickets'))) panels.schedule(guild, kind);
+  return true;
+}
+
+module.exports = { SLOTS, syncEmojis, describeEmojiResult, onEmojiChange };

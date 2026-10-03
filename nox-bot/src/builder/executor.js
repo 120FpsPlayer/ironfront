@@ -8,6 +8,7 @@ const {
   ChannelType,
   GuildDefaultMessageNotifications,
   GuildSystemChannelFlags,
+  Locale,
   OverwriteType,
   PermissionFlagsBits,
 } = require('discord.js');
@@ -48,7 +49,6 @@ const API_ERRORS = {
   10011: 'the role no longer exists',
   30005: 'the server has reached the 250 role limit',
   30013: 'the server has reached the 500 channel limit',
-  30035: 'the server already has the maximum number of AutoMod rules of this type',
   50001: 'the bot has no access',
   50013: 'the bot is missing permissions',
   50024: 'not possible on this channel type',
@@ -56,6 +56,19 @@ const API_ERRORS = {
   50074: 'the channel is required by Community mode',
   50101: 'the server does not meet the requirements',
 };
+
+const LOCALES = Object.values(Locale);
+const LOCALE_ALIASES = { en: 'en-US', es: 'es-ES', sv: 'sv-SE', pt: 'pt-BR', zh: 'zh-CN', nb: 'no', nn: 'no' };
+
+/** Discord only accepts its own locale list ("pl", not "pl-PL"). Returns the closest one, or null. */
+function discordLocale(value) {
+  const wanted = String(value ?? '').trim().replace('_', '-').toLowerCase();
+  if (!wanted) return 'en-US';
+  const exact = LOCALES.find((l) => l.toLowerCase() === wanted);
+  if (exact) return exact;
+  const base = wanted.split('-')[0];
+  return LOCALE_ALIASES[base] ?? LOCALES.find((l) => l.toLowerCase() === base) ?? null;
+}
 
 function describeError(err) {
   if (!err) return 'unknown error';
@@ -451,10 +464,16 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
         if (res) communityOn = Boolean(res.features?.includes('COMMUNITY')) || guild.features.includes('COMMUNITY');
         if (communityOn) {
           await attempt(
-            'Server description and language',
-            () => guild.edit({ description: (config.brand.tagline ?? '').slice(0, 120) || null, preferredLocale: S.locale ?? 'en-US', safetyAlertsChannel: id('discordUpdates'), reason }),
+            'Server description',
+            () => guild.edit({ description: (config.brand.tagline ?? '').slice(0, 120) || null, safetyAlertsChannel: id('discordUpdates'), reason }),
             { warn: true },
           );
+          // Separate edit: a bad language value must not block the description.
+          const locale = discordLocale(S.locale) ?? 'en-US';
+          if (S.locale && locale !== S.locale) {
+            R.warnings.push(`Server language "${S.locale}" is not a Discord language – used "${locale}" instead.`);
+          }
+          await attempt('Server language', () => guild.edit({ preferredLocale: locale, reason }), { warn: true });
           for (const key of toConvert) {
             const channel = guild.channels.cache.get(R.channels[key]);
             if (channel) await attempt(`Announcement channel #${channel.name}`, () => channel.setType(ChannelType.GuildAnnouncement, reason), { warn: true });
@@ -513,7 +532,8 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
 
     // ───────────── AutoMod ─────────────
     startPhase('AutoMod');
-    const existing = wipe ? [] : [...((await guild.autoModerationRules.fetch().catch(() => null))?.values() ?? [])];
+    // Fetched again after a wipe too – rules the wipe could not delete still count against the limits.
+    const existing = [...((await guild.autoModerationRules.fetch().catch(() => null))?.values() ?? [])];
     const exempt = [...GROUPS.staff, 'bots'].map((k) => R.roles[k]).filter(Boolean);
     let keywordRules = existing.filter((r) => r.triggerType === AutoModerationRuleTriggerType.Keyword).length;
     for (const rule of automodRules(id('automodLogs'), exempt, R.roles.partner)) {
@@ -630,4 +650,4 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = { buildServer, publish, sendItem, describeError, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath };
+module.exports = { buildServer, publish, sendItem, describeError, discordLocale, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath };

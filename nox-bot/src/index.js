@@ -21,6 +21,8 @@ const welcome = require('./features/welcome');
 const stats = require('./features/stats');
 const { isStaff } = require('./lib/utils');
 const { reportRoles } = require('./lib/permissions');
+const { onEmojiChange } = require('./builder/emojis');
+const { rejectOnRateLimit } = require('./lib/ratelimit');
 require('./features/shop');
 require('./features/vouches');
 
@@ -38,8 +40,7 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
   rest: {
     // Emoji uploads and channel renames have strict rate limits – fail fast instead of freezing /build for minutes.
-    rejectOnRateLimit: (data) =>
-      data.timeToReset > 15_000 && (data.route.includes('/emojis') || (String(data.method).toUpperCase() === 'PATCH' && data.route.startsWith('/channels/'))),
+    rejectOnRateLimit,
   },
 });
 
@@ -75,6 +76,7 @@ client.once(Events.ClientReady, async (c) => {
     if (!guild.members.me?.permissions.has(PermissionFlagsBits.Administrator)) {
       console.warn(`⚠️  ${guild.name}: the bot does not have the Administrator permission – /build will not work there.`);
     }
+    await welcome.migrateWelcomeVisibility(guild).catch((err) => console.warn(`[welcome] ${guild.name}:`, err.message));
   }
 
   let presenceIndex = 0;
@@ -127,6 +129,12 @@ client.on(Events.ChannelDelete, (channel) => {
     db.updateTicket(channel.id, { status: 'deleted', deletedAt: Date.now() });
     tickets.schedulePanelRefresh(channel.guild);
   }
+});
+
+// A deleted / unavailable custom emoji in a button makes Discord reject the whole message.
+client.on(Events.GuildEmojiDelete, (emoji) => onEmojiChange(emoji));
+client.on(Events.GuildEmojiUpdate, (before, after) => {
+  if (before.available !== after.available) onEmojiChange(after);
 });
 
 client.on(Events.GuildCreate, (guild) => console.log(`➕ Added to server: ${guild.name} (${guild.id}) – run /build there to set it up.`));

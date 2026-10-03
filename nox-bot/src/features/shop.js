@@ -41,11 +41,25 @@ function formatPrice(raw) {
 /** Unicode emoji (incl. ZWJ sequences) or a custom <:name:id> emoji. */
 const CUSTOM_EMOJI = /^<a?:\w{2,32}:\d{17,20}>$/;
 const UNICODE_EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]️?⃣)(?:️|‍|\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator})*$/u;
-function parseEmoji(input) {
+function parseEmoji(input, guild = null) {
   const s = String(input ?? '').trim();
   if (!s) return null;
-  if (CUSTOM_EMOJI.test(s) || UNICODE_EMOJI.test(s)) return s;
+  if (UNICODE_EMOJI.test(s)) return s;
+  if (CUSTOM_EMOJI.test(s)) {
+    if (!customEmojiUsable(guild, s)) {
+      throw new UserError('The bot cannot use that custom emoji – it is from a server the bot is not in. Use an emoji from this server or a normal emoji (e.g. 💎).');
+    }
+    return s;
+  }
   throw new UserError('That emoji is not valid. Use a normal emoji (e.g. 💎) or a custom emoji from this server.');
+}
+
+/** A custom emoji only shows if it is in a server the bot is in and still available. */
+function customEmojiUsable(guild, raw) {
+  const cache = guild?.client?.emojis?.cache ?? guild?.emojis?.cache;
+  if (!cache) return true;
+  const emoji = cache.get(raw.match(/(\d{17,20})>$/)?.[1]);
+  return Boolean(emoji) && emoji.available !== false;
 }
 
 function vouchStats(guildId) {
@@ -66,7 +80,8 @@ function requireProduct(guildId, query) {
   return p;
 }
 
-const productEmoji = (guild, p) => p.emoji || e(guild, 'diamond');
+// A deleted custom product emoji would show as plain ":name:" text – use the default then.
+const productEmoji = (guild, p) => (p.emoji && (!p.emoji.startsWith('<') || customEmojiUsable(guild, p.emoji)) ? p.emoji : e(guild, 'diamond'));
 
 // ───────────── Catalog panel ─────────────
 
@@ -154,7 +169,7 @@ function addProduct(guild, { name, price, description, emoji, stock = 'in' }) {
     name: truncate(name.trim(), 80),
     price: truncate(price.trim(), 40),
     description: truncate(description.trim(), 400),
-    emoji: parseEmoji(emoji),
+    emoji: parseEmoji(emoji, guild),
     stock: STOCK[stock] ? stock : 'in',
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -170,7 +185,7 @@ function editProduct(guild, query, patch) {
   if (patch.name) p.name = truncate(patch.name.trim(), 80);
   if (patch.price) p.price = truncate(patch.price.trim(), 40);
   if (patch.description) p.description = truncate(patch.description.trim(), 400);
-  if (patch.emoji !== undefined && patch.emoji !== null) p.emoji = parseEmoji(patch.emoji);
+  if (patch.emoji !== undefined && patch.emoji !== null) p.emoji = parseEmoji(patch.emoji, guild);
   p.updatedAt = Date.now();
   db.save();
   refreshShop(guild);

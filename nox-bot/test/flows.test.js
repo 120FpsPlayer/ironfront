@@ -398,3 +398,61 @@ test('staff commands: /ticket info + complete, /stats, /setup show, /product lis
     assert.doesNotMatch(textOf(lastResponse(i)), /unexpected error/i);
   }
 });
+
+// ───────────── Custom emojis that disappear ─────────────
+
+test('emojis: deleted or unavailable custom emojis fall back to Unicode instead of breaking messages', async () => {
+  const panels = require('../src/lib/panels');
+  const { postsFor } = require('../src/builder/content');
+  const { CATEGORIES } = require('../src/builder/layout');
+  const { onEmojiChange } = require('../src/builder/emojis');
+  const { validateMessage } = require('./helpers/fakeDiscord');
+  const guild = await builtGuild({ premiumTier: 3 });
+  const everything = async () => {
+    for (const panel of db.panels(guild.id)) validateMessage(await panels.render(panel.kind ?? 'tickets', guild, panel), guild);
+    for (const key of CATEGORIES.flatMap((c) => c.channels).map((c) => c.post).filter(Boolean)) {
+      for (const item of postsFor(key, guild)) if (item.payload) validateMessage(item.payload, guild);
+    }
+  };
+  const emojis = [...guild.emojis.cache.values()];
+  // Boost lost: the emojis still exist but cannot be used.
+  for (const emoji of emojis) emoji.available = false;
+  await everything();
+  // Deleted (every one of them – nothing left in the cache to compare with).
+  for (const emoji of emojis) {
+    await emoji.delete();
+    assert.ok(onEmojiChange(emoji), `${emoji.name} forgotten`);
+  }
+  assert.deepEqual(db.emojiIds(guild.id), {});
+  await everything();
+});
+
+test('vouch stars stay readable without the custom star emojis', () => {
+  const { stars } = require('../src/features/vouches');
+  assert.equal(stars('no-such-guild', 3), '⭐⭐⭐☆☆');
+});
+
+test('products: custom emojis from servers the bot is not in are refused, deleted ones fall back', async () => {
+  const shop = require('../src/features/shop');
+  const panels = require('../src/lib/panels');
+  const guild = await builtGuild();
+  assert.throws(() => shop.addProduct(guild, { name: 'Nitro', price: '5', description: 'x', emoji: '<:other:123456789012345678>' }), /server the bot is not in/);
+  const own = guild.emojis.cache.first();
+  const p = shop.addProduct(guild, { name: 'Nitro', price: '5', description: 'x', emoji: `<:${own.name}:${own.id}>` });
+  assert.match(textOf(await panels.render('shop', guild)), new RegExp(own.id));
+  await own.delete();
+  const text = textOf(await panels.render('shop', guild));
+  assert.ok(!text.includes(own.id), 'deleted emoji not shown');
+  assert.match(text, /Nitro/);
+  shop.removeProduct(guild, p.id);
+});
+
+test('/blacklist list fits in one embed even with many long reasons', async () => {
+  const guild = await builtGuild();
+  const staff = member(guild, ['member', 'support']);
+  for (let i = 0; i < 60; i += 1) db.addBlacklist(guild.id, { userId: uid(), reason: 'r'.repeat(300), by: staff.id, at: Date.now() });
+  const i = await run({ guild, member: staff, kind: 'command', commandName: 'blacklist', subcommand: 'list' });
+  const description = lastResponse(i).embeds[0].toJSON().description;
+  assert.ok(description.length <= 4096, `${description.length} characters`);
+  assert.match(description, /…and \d+ more/);
+});

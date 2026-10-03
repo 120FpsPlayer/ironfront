@@ -46,6 +46,10 @@ function load() {
 
   raw.brand ??= {};
   raw.brand.name ??= 'NØX';
+  raw.brand.name = String(raw.brand.name).trim();
+  if (raw.brand.name.length < 2 || raw.brand.name.length > 100) {
+    throw new Error('config.json: "brand.name" must be 2–100 characters (Discord server name limit).');
+  }
   raw.brand.colorInt = parseInt(String(raw.brand.color ?? '#A855F7').replace('#', ''), 16) || 0xa855f7;
   raw.panel ??= {};
   raw.panel.rules ??= [];

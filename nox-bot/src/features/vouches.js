@@ -13,14 +13,16 @@ const {
 const config = require('../lib/config');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
-const { e, ce, COLORS } = require('../lib/theme');
+const { e, ce, emojiId, COLORS } = require('../lib/theme');
 const { UserError, embed, ts, truncate, sendToChannel } = require('../lib/utils');
 const { container, text, divider, btn, row, section, gallery, header, v2, linkBtn } = require('../lib/v2');
 
 const RATING_LABELS = { 5: 'Excellent', 4: 'Good', 3: 'Okay', 2: 'Poor', 1: 'Bad' };
 
+/** ⭐⭐⭐☆☆ – custom stars only when both are uploaded, so full and empty stars never look the same. */
 function stars(guild, n) {
-  return `${e(guild, 'star').repeat(n)}${e(guild, 'star_outline').repeat(5 - n)}`;
+  if (emojiId(guild, 'star') && emojiId(guild, 'star_outline')) return `${e(guild, 'star').repeat(n)}${e(guild, 'star_outline').repeat(5 - n)}`;
+  return `${'⭐'.repeat(n)}${'☆'.repeat(5 - n)}`;
 }
 
 function stats(guildId) {
@@ -217,4 +219,4 @@ function thanks(interaction, n, message) {
   });
 }
 
-module.exports = { stats, vouchPanel, vouchModal, openModal, submitModal, postVouch, fetchImage, thanks, checkCanVouch };
+module.exports = { stars, stats, vouchPanel, vouchModal, openModal, submitModal, postVouch, fetchImage, thanks, checkCanVouch };

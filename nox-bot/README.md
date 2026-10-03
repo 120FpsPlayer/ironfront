@@ -15,7 +15,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 |---|---|
 | 🎭 **20 roles** | Founder, Co-Founder, Manager, Administrator, Moderator, Support, Trial Support, Seller, VIP, Partner, Loyal Customer, Customer, Bots, Member, 3 notification roles + 3 separators – all in a purple palette with the right permissions |
 | 📁 **11 categories, 39 channels** | Server stats · Welcome · Shop · Support · Community · VIP Lounge · Voice · Staff · Logs · Tickets · Closed tickets |
-| 🔐 **Permissions done right** | New people only see **#verify** and **#rules**. Info channels are read-only, staff/log/VIP areas are private, media channels allow files, AFK is muted |
+| 🔐 **Permissions done right** | New people only see **#verify**, **#rules** and **#welcome** (read-only, so their welcome ping reaches them). Info channels are read-only, staff/log/VIP areas are private, media channels allow files, AFK is muted |
 | 🖼️ **Custom banners** | 35 purple banners (1080×400) – every info channel starts with its own banner and a styled card |
 | 😀 **Custom emojis** | 67 purple emojis (`:nox_cart:`, `:nox_check:`, `:nox_paypal:`…) – the bot uses them in all its messages |
 | 🌙 **Branding** | Renames the server to **NØX**, sets the server icon (and banner on boosted servers) |
@@ -120,6 +120,8 @@ Give your team their roles (Manager, Support, Seller…) and you're good to go.
 ✦ LOGS ✦             📁┃ticket-logs · 📄┃transcripts · ✅┃verify-logs · 🗂️┃server-logs · 🤖┃automod-logs
 🎫 TICKETS / 📁 CLOSED TICKETS                                                 (ticket channels go here)
 ```
+Discord allows 50 channels per category: when 🎫 TICKETS is full the bot opens **🎫 TICKETS 2** (3, …),
+and 📁 CLOSED TICKETS keeps the newest 49 closed tickets (older ones are deleted – their transcripts stay in #transcripts).
 Want different channels or roles? Edit `src/builder/layout.js` – it's one readable list.
 
 **Who sees what**
@@ -177,7 +179,7 @@ Admin commands are hidden from normal members automatically.
 | Section | What you can change |
 |---|---|
 | `brand` | Name, color, footer, tagline and the "About us" text |
-| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout |
+| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`) |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
 | `shop` | Currency, delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
@@ -228,6 +230,8 @@ npm i -D playwright && npm run render-assets
 | Only 50 emojis were uploaded | Servers without boosts have 50 emoji slots. Boost the server and run `/build only:emojis` |
 | "Discord limits how fast emojis can be uploaded" | Wait an hour, then run `/build only:emojis` |
 | Community mode wasn't enabled | Discord refused it for this server. Everything else still works (announcement channels are normal read-only channels). You can turn it on later under Server Settings → Enable Community |
+| A custom emoji was deleted | Nothing breaks – the bot switches to a normal emoji. Run `/build only:emojis` to upload it again |
+| "Discord only allows renaming a channel twice per 10 minutes" | That's Discord's limit – wait the minutes it says and try again |
 | Buttons say "This interaction failed" | The bot must be **online** – buttons are handled live by the bot |
 | Transcripts are empty | Turn on **Message Content Intent** |
 

@@ -1,6 +1,7 @@
 'use strict';
 
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, MessageFlags, RateLimitError } = require('discord.js');
+const { rateLimitMinutes } = require('./ratelimit');
 const config = require('./config');
 const db = require('./db');
 const perms = require('./permissions');
@@ -48,12 +49,24 @@ function canRename(channelId) {
   return 0;
 }
 
-/** Discord allows renaming a channel only twice per 10 minutes – this keeps track of that. */
+/**
+ * Discord allows renaming a channel only twice per 10 minutes – this keeps track of that.
+ * Renames the bot doesn't know about (by people, or before a restart) still hit Discord's limit:
+ * that comes back as a RateLimitError, reported as { ok: false, wait } like our own count.
+ */
 async function safeRename(channel, name) {
   const wait = canRename(channel.id);
   if (wait) return { ok: false, wait };
-  renameHistory.get(channel.id).push(Date.now());
-  await channel.setName(name);
+  const history = renameHistory.get(channel.id);
+  const at = Date.now();
+  history.push(at);
+  try {
+    await channel.setName(name);
+  } catch (err) {
+    history.splice(history.indexOf(at), 1);
+    if (err instanceof RateLimitError) return { ok: false, wait: rateLimitMinutes(err) };
+    throw err;
+  }
   return { ok: true };
 }
 

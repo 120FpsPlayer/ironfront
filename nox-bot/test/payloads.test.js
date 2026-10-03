@@ -37,17 +37,19 @@ test('every channel post stays within Discord limits', () => {
 
 test('shop panel: 0 to 50 products with maximum-length fields', async () => {
   const g = db.guild(guild.id);
+  const longest = `<:${big(32, 'e')}:${guild.emojis.cache.first().id}>`; // longest custom emoji the bot can use
   for (const count of [0, 1, 8, 9, 25, 50]) {
     g.products = Array.from({ length: count }, (_, i) => ({
       id: `p${i}`,
       name: big(80, 'N'),
       price: big(40, '9'),
       description: big(400, 'd'),
-      emoji: '<:nox_diamond:123456789012345678>',
+      emoji: longest,
       stock: ['in', 'low', 'out'][i % 3],
     }));
     const payload = await panels.render('shop', guild);
-    const r = validateMessage(payload);
+    assert.ok(count === 0 || JSON.stringify(payload).includes(longest), 'product emoji shown');
+    const r = validateMessage(payload, guild);
     assert.ok(r.total <= 40 && r.textLength <= 4000, `${count} products`);
   }
   g.products = [];

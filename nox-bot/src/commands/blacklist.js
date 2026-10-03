@@ -2,7 +2,7 @@
 
 const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const db = require('../lib/db');
-const { COLORS, embed, reply, replyError, ts, isStaff } = require('../lib/utils');
+const { COLORS, embed, reply, replyError, ts, isStaff, truncate } = require('../lib/utils');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,10 +47,17 @@ module.exports = {
       return reply(interaction, `Unblocked ${user}.`);
     }
 
+    // Newest first, as many as fit in one embed (4096 characters).
     const list = db.blacklist(guildId);
-    const lines = list
-      .slice(-30)
-      .map((b) => `• <@${b.userId}> – ${b.reason ?? 'no reason'} (by <@${b.by}>, ${ts(b.at, 'd')})`);
+    const lines = [];
+    let length = 0;
+    for (const b of [...list].reverse()) {
+      const line = `• <@${b.userId}> – ${truncate(b.reason ?? 'no reason', 100)} (by <@${b.by}>, ${ts(b.at, 'd')})`;
+      if (length + line.length + 1 > 3900) break;
+      lines.push(line);
+      length += line.length + 1;
+    }
+    if (lines.length < list.length) lines.push(`*…and ${list.length - lines.length} more*`);
     return reply(interaction, {
       embeds: [
         embed(COLORS.muted)

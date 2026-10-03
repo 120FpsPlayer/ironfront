@@ -8,7 +8,7 @@
  */
 
 const fs = require('node:fs');
-const { ChannelType, Collection, PermissionsBitField, OverwriteType, MessageFlags, RateLimitError } = require('discord.js');
+const { ChannelType, Collection, PermissionsBitField, OverwriteType, MessageFlags, RateLimitError, Locale } = require('discord.js');
 
 let seq = 100000000000000000n;
 const nextId = () => String(++seq);
@@ -26,10 +26,18 @@ try {
   RGI = null;
 }
 
+// The server a payload is being validated for (set by validateMessage / validateModal).
+let validatingFor = null;
+
 function assertEmoji(emoji, where) {
   if (!emoji) return;
   if (typeof emoji === 'object' && emoji.id) {
     if (!/^\d{17,20}$/.test(emoji.id)) throw apiError(50035, `${where}: invalid custom emoji id`);
+    // Discord rejects deleted emojis and emojis that are unavailable (e.g. after losing boosts).
+    const known = validatingFor?.emojis?.cache;
+    if (known && (!known.has(emoji.id) || known.get(emoji.id).available === false)) {
+      throw apiError(50035, `${where}.emoji.id[BUTTON_COMPONENT_INVALID_EMOJI]: Invalid emoji`);
+    }
     return;
   }
   const name = typeof emoji === 'string' ? emoji : emoji.name;
@@ -154,8 +162,17 @@ function fileNames(body) {
   return names;
 }
 
-/** Validates a message payload the way Discord would. */
-function validateMessage(body) {
+/** Validates a message payload the way Discord would (pass the guild to also check custom emojis). */
+function validateMessage(body, guild = null) {
+  validatingFor = guild;
+  try {
+    return checkMessage(body);
+  } finally {
+    validatingFor = null;
+  }
+}
+
+function checkMessage(body) {
   const files = fileNames(body);
   const v2 = ((body.flags ?? 0) & MessageFlags.IsComponentsV2) !== 0;
   if (v2) {
@@ -186,7 +203,16 @@ function validateMessage(body) {
   return { total: rows.length, textLength: 0 };
 }
 
-function validateModal(modal) {
+function validateModal(modal, guild = null) {
+  validatingFor = guild;
+  try {
+    return checkModal(modal);
+  } finally {
+    validatingFor = null;
+  }
+}
+
+function checkModal(modal) {
   const json = toJSON(modal);
   if (!json.custom_id || json.custom_id.length > 100) throw new Error(`modal custom_id: ${json.custom_id}`);
   if (!json.title || json.title.length > 45) throw new Error(`modal title: ${json.title}`);
@@ -288,7 +314,7 @@ class FakeMessage {
     if ((this.flags & MessageFlags.IsComponentsV2) !== 0 && ((merged.flags ?? 0) & MessageFlags.IsComponentsV2) === 0) {
       throw apiError(50035, 'cannot remove the Components V2 flag from a message');
     }
-    validateMessage(merged);
+    validateMessage(merged, this.guild);
     this.body = merged;
     this.files = merged.files ?? [];
     this.attachments = new Collection(this.files.map((f, i) => [String(i), { url: `https://cdn.discordapp.com/attachments/${this.channel.id}/${this.id}/${f.name}`, name: f.name, size: 1000, contentType: 'image/png' }]));
@@ -347,10 +373,16 @@ class FakeChannel {
       get cache() {
         return new Collection(list.map((o) => [o.id, { ...o, allow: new PermissionsBitField(o.allow), deny: new PermissionsBitField(o.deny) }]));
       },
-      async edit(id, perms) {
+      async edit(id, perms, options = {}) {
+        // Like discord.js: without an explicit type, the ID must be a cached role or a cached user.
+        if (typeof options.type !== 'number' && !guild.roles.cache.has(id) && !guild.isUserCached(id)) {
+          const err = new TypeError('Supplied parameter is not a User nor a Role.');
+          err.code = 'InvalidType';
+          throw err;
+        }
         let o = list.find((x) => x.id === id);
         if (!o) {
-          o = { id, type: OverwriteType.Member, allow: 0n, deny: 0n };
+          o = { id, type: options.type ?? (guild.roles.cache.has(id) ? OverwriteType.Role : OverwriteType.Member), allow: 0n, deny: 0n };
           list.push(o);
         }
         for (const [name, value] of Object.entries(perms)) {
@@ -423,7 +455,7 @@ class FakeChannel {
   async send(body) {
     if (typeof body === 'string') body = { content: body };
     if (![ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(this.type)) throw apiError(50008, 'Cannot send messages in a non-text channel');
-    validateMessage(body);
+    validateMessage(body, this.guild);
     const msg = new FakeMessage(this, body);
     this.messageList.push(msg);
     return msg;
@@ -444,12 +476,31 @@ class FakeChannel {
 
   async setName(name) {
     if (!name || name.length > 100) throw apiError(50035, 'channel name');
+    this.assertRenameAllowed();
     this.renames += 1;
     this.name = name;
     return this;
   }
 
+  /**
+   * Discord: 2 renames per channel per 10 minutes. The 429 comes with a long retry_after while the
+   * route bucket itself is fine – discord.js rejects it only if rejectOnRateLimit says so.
+   */
+  assertRenameAllowed() {
+    const now = Date.now();
+    this.renameTimes = (this.renameTimes ?? []).filter((t) => now - t < 10 * 60_000);
+    if (this.renameTimes.length >= 2) {
+      const retryAfter = 10 * 60_000 - (now - this.renameTimes[0]);
+      const data = { timeToReset: 800, limit: 5, method: 'PATCH', hash: 'x', url: `/channels/${this.id}`, route: '/channels/:id', majorParameter: this.id, global: false, retryAfter, sublimitTimeout: retryAfter, scope: 'user' };
+      const reject = this.guild.rejectOnRateLimit;
+      if (typeof reject === 'function' ? reject(data) : true) throw new RateLimitError(data);
+      throw apiError(0, `discord.js would silently wait ${Math.round(retryAfter / 1000)}s for this rename`);
+    }
+    this.renameTimes.push(now);
+  }
+
   async setParent(id) {
+    this.guild.assertCategoryRoom(id, this);
     this.parentId = id;
     return this;
   }
@@ -457,12 +508,16 @@ class FakeChannel {
   async edit(data) {
     if (data.name !== undefined) {
       if (!data.name || data.name.length > 100) throw apiError(50035, 'channel name');
-      if (data.name !== this.name) this.renames += 1;
+      if (data.name !== this.name) {
+        this.assertRenameAllowed();
+        this.renames += 1;
+      }
       this.name = data.name;
     }
     if (data.parent !== undefined) {
       const parent = this.guild.channels.cache.get(data.parent);
       if (!parent || parent.type !== ChannelType.GuildCategory) throw apiError(50035, 'invalid parent');
+      this.guild.assertCategoryRoom(data.parent, this);
       this.parentId = data.parent;
     }
     if (data.topic !== undefined) {
@@ -599,6 +654,7 @@ class FakeGuild {
     this.iconSet = null;
     this.bannerSet = null;
     this.settings = {};
+    this.rejectOnRateLimit = require('../../src/lib/ratelimit').rejectOnRateLimit; // same predicate as the bot's client
     const guild = this;
 
     const users = new Map();
@@ -671,7 +727,7 @@ class FakeGuild {
         if (data.parent) {
           const parent = this.cache.get(data.parent);
           if (!parent || parent.type !== ChannelType.GuildCategory) throw apiError(50035, 'invalid parent');
-          if (this.cache.filter((c) => c.parentId === data.parent).size >= 50) throw apiError(50035, 'category full');
+          if (this.cache.filter((c) => c.parentId === data.parent).size >= 50) throw apiError(50035, 'Invalid Form Body\nparent_id[CHANNEL_PARENT_MAX_CHANNELS]: Maximum number of channels in category reached (50)');
         }
         if (data.type === ChannelType.GuildCategory && data.parent) throw apiError(50035, 'categories cannot have a parent');
         if (data.topic && data.topic.length > 1024) throw apiError(50035, 'topic too long');
@@ -720,7 +776,7 @@ class FakeGuild {
         } else if (data.eventType !== 1 || data.actions.some((x) => x.type === 4)) {
           throw apiError(50035, 'message rules need MESSAGE_SEND');
         }
-        if ([3, 4, 5, 6].includes(data.triggerType) && [...this.cache.values()].some((r) => r.triggerType === data.triggerType)) throw apiError(30035, 'rule of this type already exists');
+        if ([3, 4, 5, 6].includes(data.triggerType) && [...this.cache.values()].some((r) => r.triggerType === data.triggerType)) throw apiError(50035, 'Invalid Form Body\ntrigger_type[AUTO_MODERATION_MAX_RULES_OF_TYPE_EXCEEDED]: Maximum number of rules of this type reached');
         const rule = { id: nextId(), name: data.name, triggerType: data.triggerType, data, delete: async () => this.cache.delete(rule.id) };
         this.cache.set(rule.id, rule);
         return rule;
@@ -744,7 +800,7 @@ class FakeGuild {
           throw err;
         }
         emojiUploads += 1;
-        const emoji = { id: nextId(), name, animated: false, delete: async () => this.cache.delete(emoji.id) };
+        const emoji = { id: nextId(), name, animated: false, available: true, guild, delete: async () => this.cache.delete(emoji.id) };
         this.cache.set(emoji.id, emoji);
         return emoji;
       },
@@ -780,6 +836,18 @@ class FakeGuild {
       const m = new FakeMember(this, nextId());
       this.members.cache.set(m.id, m);
     }
+  }
+
+  /** discord.js knows a user if it's in the member cache or the client's user cache (empty again after a restart). */
+  isUserCached(id) {
+    return this.members.cache.has(id) || this.client.users.cache.has(id);
+  }
+
+  /** A category holds at most 50 channels (CHANNEL_PARENT_MAX_CHANNELS). */
+  assertCategoryRoom(categoryId, channel) {
+    if (!categoryId || channel.parentId === categoryId) return;
+    const children = this.channels.cache.filter((c) => c.parentId === categoryId).size;
+    if (children >= 50) throw apiError(50035, 'Invalid Form Body\nparent_id[CHANNEL_PARENT_MAX_CHANNELS]: Maximum number of channels in category reached (50)');
   }
 
   /** Community servers can't delete their current rules / updates channel. */
@@ -832,6 +900,9 @@ class FakeGuild {
     if (data.description && !this.features.includes('COMMUNITY')) throw apiError(50035, 'description requires community');
     if (this.features.includes('COMMUNITY') && data.verificationLevel !== undefined && data.verificationLevel < 1) throw apiError(50101, 'community needs verification');
     if (data.afkTimeout !== undefined && ![60, 300, 900, 1800, 3600].includes(data.afkTimeout)) throw apiError(50035, 'invalid afk timeout');
+    if (data.preferredLocale !== undefined && !Object.values(Locale).includes(data.preferredLocale)) {
+      throw apiError(50035, 'Invalid Form Body\npreferred_locale[BASE_TYPE_CHOICES]: Value must be one of a valid locale.');
+    }
     for (const key of ['systemChannel', 'afkChannel', 'rulesChannel', 'publicUpdatesChannel', 'safetyAlertsChannel']) {
       if (data[key] && !this.channels.cache.has(data[key])) throw apiError(50035, `unknown ${key}`);
     }

@@ -85,7 +85,10 @@ test('permissions: unverified users only see verify + rules, members see the ser
   assert.ok(can(visitor, 'rules', P.ViewChannel));
   assert.ok(!can(visitor, 'rules', P.SendMessages));
   assert.ok(!can(visitor, 'verify', P.SendMessages));
-  for (const key of ['shop', 'chat', 'tickets', 'welcome', 'staffChat', 'serverLogs', 'vipChat']) assert.ok(!can(visitor, key, P.ViewChannel), `visitor cannot see #${key}`);
+  // #welcome is readable (their welcome card pings them there) but read-only.
+  assert.ok(can(visitor, 'welcome', P.ViewChannel) && can(visitor, 'welcome', P.ReadMessageHistory));
+  assert.ok(!can(visitor, 'welcome', P.SendMessages) && !can(member, 'welcome', P.SendMessages));
+  for (const key of ['shop', 'chat', 'tickets', 'staffChat', 'serverLogs', 'vipChat']) assert.ok(!can(visitor, key, P.ViewChannel), `visitor cannot see #${key}`);
   assert.ok(can(visitor, 'statMembers', P.ViewChannel) && !can(visitor, 'statMembers', P.Connect), 'stats are visible but locked');
 
   // Verified member
@@ -233,4 +236,80 @@ test('welcome screen: hidden channels in the list are skipped with a clear note,
   } finally {
     WELCOME_SCREEN.pop();
   }
+});
+
+test('server language: region codes become Discord languages, a bad value never blocks the description', async () => {
+  const config = require('../src/lib/config');
+  const { discordLocale } = require('../src/builder/executor');
+  assert.equal(discordLocale('pl-PL'), 'pl');
+  assert.equal(discordLocale('de_DE'), 'de');
+  assert.equal(discordLocale('en'), 'en-US');
+  assert.equal(discordLocale('sv'), 'sv-SE');
+  assert.equal(discordLocale('en-gb'), 'en-GB');
+  assert.equal(discordLocale('klingon'), null);
+  const prev = config.server.locale;
+  try {
+    config.server.locale = 'pl-PL';
+    let { guild, R } = await build();
+    assert.deepEqual(R.errors, []);
+    assert.equal(guild.settings.preferredLocale, 'pl');
+    assert.ok(R.warnings.some((w) => w.includes('"pl-PL"') && w.includes('"pl"')));
+    config.server.locale = 'klingon';
+    ({ guild, R } = await build());
+    assert.equal(guild.settings.preferredLocale, 'en-US');
+    assert.equal(guild.settings.description, config.brand.tagline.slice(0, 120), 'description still set');
+    assert.ok(!R.warnings.some((w) => /preferred_locale/.test(w)), R.warnings.join('\n'));
+  } finally {
+    config.server.locale = prev;
+  }
+});
+
+test('wipe & build: an AutoMod rule the wipe could not delete is not created a second time', async () => {
+  const guild = new FakeGuild({ community: true, existingChannels: 3 });
+  const old = [...guild.channels.cache.values()];
+  Object.assign(guild.settings, { rulesChannel: old[1].id, publicUpdatesChannel: old[2].id });
+  const stuck = await guild.autoModerationRules.create({ name: 'Locked spam', triggerType: 3, eventType: 1, actions: [{ type: 1 }] });
+  stuck.delete = async () => {
+    throw Object.assign(new Error('Missing Permissions'), { code: 50013 });
+  };
+  const R = await buildServer({ guild, mode: 'wipe', invokerId: guild.ownerId, keepChannelIds: [old[0].id] });
+  assert.deepEqual(R.errors, []);
+  assert.ok(R.warnings.some((w) => w.includes('already has a rule')), R.warnings.join('\n'));
+  assert.ok(!R.warnings.some((w) => /MAX_RULES|invalid data/.test(w)), R.warnings.join('\n'));
+});
+
+test('a long brand name in config.json never breaks the slash commands', () => {
+  const path = require('node:path');
+  const config = require('../src/lib/config');
+  const dir = path.join(__dirname, '..', 'src', 'commands');
+  const fresh = () => {
+    for (const k of Object.keys(require.cache)) if (k.startsWith(dir)) delete require.cache[k];
+  };
+  const prev = config.brand.name;
+  config.brand.name = 'N'.repeat(100);
+  try {
+    fresh();
+    const commands = require('../src/commands')();
+    for (const [name, cmd] of commands) assert.ok(cmd.data.toJSON().description.length <= 100, `/${name}`);
+  } finally {
+    config.brand.name = prev;
+    fresh();
+  }
+});
+
+test('servers built before #welcome was public get it opened once on startup', async () => {
+  const { migrateWelcomeVisibility } = require('../src/features/welcome');
+  const { guild } = await build();
+  const welcome = byKey(guild, 'welcome');
+  // The old layout: #welcome was for members only.
+  await welcome.permissionOverwrites.edit(guild.id, { ViewChannel: null, ReadMessageHistory: null });
+  const b = db.build(guild.id);
+  delete b.welcomePublic;
+  db.setBuild(guild.id, b);
+  const visitor = guild.addMember('900000000000000009', []);
+  assert.ok(!welcome.permissionsFor(visitor).has(P.ViewChannel));
+  assert.equal(await migrateWelcomeVisibility(guild), true);
+  assert.ok(welcome.permissionsFor(visitor).has(P.ViewChannel));
+  assert.ok(!welcome.permissionsFor(visitor).has(P.SendMessages), 'still read-only');
+  assert.equal(await migrateWelcomeVisibility(guild), false, 'only once');
 });

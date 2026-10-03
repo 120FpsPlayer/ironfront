@@ -1,5 +1,6 @@
 'use strict';
 
+const { PermissionFlagsBits } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
@@ -99,4 +100,26 @@ async function onMessageUpdate(before, after) {
   await sendToChannel(after.guild, channelId, { embeds: [log] });
 }
 
-module.exports = { ordinal, welcomeCard, onMemberAdd, onMemberRemove, onMessageDelete, onMessageUpdate };
+/**
+ * Servers built before #welcome was public: unverified newcomers couldn't see the channel, so the
+ * ping in their welcome card never reached them. Opens it read-only for everyone, once per server.
+ */
+async function migrateWelcomeVisibility(guild) {
+  const build = db.build(guild.id);
+  if (!build || build.welcomePublic) return false;
+  const channel = guild.channels.cache.get(build.channels?.welcome);
+  if (!channel) return false;
+  // @everyone has no server permissions (gated server), so its channel overwrite decides.
+  const open = channel.permissionOverwrites.cache.get(guild.id)?.allow.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory]);
+  if (!open) {
+    await channel.permissionOverwrites.edit(
+      guild.id,
+      { ViewChannel: true, ReadMessageHistory: true, SendMessages: false, AddReactions: false },
+      { reason: `${config.brand.name}: newcomers can see their welcome message` },
+    );
+  }
+  db.setBuild(guild.id, { ...build, welcomePublic: true });
+  return true;
+}
+
+module.exports = { ordinal, welcomeCard, onMemberAdd, onMemberRemove, onMessageDelete, onMessageUpdate, migrateWelcomeVisibility };
