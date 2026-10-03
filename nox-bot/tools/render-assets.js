@@ -73,6 +73,7 @@ const BANNERS = [
   ['products', 'PRODUCTS', 'solid/tags'],
   ['chat', 'CHAT', 'solid/comments'],
   ['reviews', 'REVIEWS', 'solid/star'],
+  ['proofs', 'PROOFS', 'solid/receipt', { badge: 'check' }],
 ];
 
 // ───────────── Emojis (128 × 128) ─────────────

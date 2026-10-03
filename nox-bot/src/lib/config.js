@@ -72,6 +72,14 @@ function load() {
   raw.shop ??= {};
   raw.shop.paymentMethods ??= [];
   raw.vouches ??= {};
+  raw.orders = { receipts: true, proofs: true, vouchReminderHours: 24, ...raw.orders };
+  raw.promos = { enabled: true, ...raw.promos };
+  raw.welcomeDiscount = { enabled: false, percent: 5, validDays: 7, ...raw.welcomeDiscount };
+  raw.invites = { enabled: false, rewards: [], ...raw.invites };
+  raw.shopStatus = { enabled: false, openName: '🟢 Shop open', closedName: '🔴 Shop closed', ...raw.shopStatus };
+  raw.security = { impersonationAlerts: true, lockdownPausesInvites: true, ...raw.security };
+  raw.backups = { enabled: false, everyHours: 24, ...raw.backups };
+  raw.salesReport = { enabled: false, weekday: 1, hour: 10, ...raw.salesReport };
   return raw;
 }
 

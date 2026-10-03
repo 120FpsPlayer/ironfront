@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node index.js",
-    "test": "node --test test/build.test.js test/flows.test.js test/payloads.test.js test/refresh.test.js test/tickets.test.js test/names.test.js",
+    "test": "node --test test/build.test.js test/flows.test.js test/payloads.test.js test/refresh.test.js test/tickets.test.js test/names.test.js test/promos.test.js test/update.test.js",
     "check": "node scripts/check.js",
     "render-assets": "node tools/render-assets.js"
   },

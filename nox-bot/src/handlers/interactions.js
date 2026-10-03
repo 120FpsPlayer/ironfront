@@ -10,6 +10,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
+const hooks = require('../lib/hooks');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
@@ -273,6 +274,16 @@ async function handleRatingSubmit(interaction, channelId, stars) {
 async function handleComponent(interaction) {
   const [scope, action, ...args] = interaction.customId.split(':');
 
+  // Features that registered themselves with hooks.route()
+  const plugin = hooks.routeFor(scope);
+  if (plugin) {
+    if (interaction.isButton() && plugin.button) return plugin.button(interaction, action, args);
+    if (interaction.isStringSelectMenu() && plugin.select) return plugin.select(interaction, action, args);
+    if (interaction.isUserSelectMenu() && plugin.userSelect) return plugin.userSelect(interaction, action, args);
+    if (interaction.isModalSubmit() && plugin.modal) return plugin.modal(interaction, action, args);
+    return null;
+  }
+
   if (interaction.isButton()) {
     switch (scope) {
       case 'ticket':
@@ -357,7 +368,7 @@ module.exports = async function handleInteraction(interaction, commands) {
     if (!interaction.inGuild() || !interaction.guild) {
       // Ticket ratings are sent by DM – those buttons and forms must work outside the server.
       const id = interaction.customId ?? '';
-      if (id.startsWith('rate:') || id.startsWith('ratemodal:')) {
+      if (id.startsWith('rate:') || id.startsWith('ratemodal:') || hooks.routeFor(id.split(':')[0])?.dm) {
         await handleComponent(interaction);
         return;
       }

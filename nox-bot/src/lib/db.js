@@ -88,6 +88,14 @@ function guild(guildId) {
   g.activity ??= { total: {}, weekKey: null, week: {} };
   g.stats ??= {};
   g.vouchCooldowns ??= {};
+  g.promos ??= []; // discount codes – see src/features/promos.js
+  g.sales ??= []; // completed orders – see SALE below
+  g.notes ??= {}; // staff notes per user: { [userId]: [{ id, by, text, at }] }
+  g.invites ??= { members: {}, inviters: {}, rewarded: {} }; // invite tracking
+  g.notify ??= {}; // "Notify me" on sold-out products: { [productId]: [userId] }
+  g.shopStatus ??= { mode: 'auto' }; // 'auto' (working hours) | 'open' | 'closed'
+  g.security ??= {}; // lockdown state, ignored impersonation alerts
+  g.reminders ??= {}; // vouch reminders: { [ticketChannelId]: { userId, dueAt, sent } }
   return g;
 }
 
@@ -163,6 +171,20 @@ module.exports = {
     if (id) g.emojis[name] = id;
     else delete g.emojis[name];
     save();
+  },
+
+  // ───────────── Sales ─────────────
+  /**
+   * SALE – one completed order:
+   * { id, ticketNumber, channelId, userId, sellerId, productId, product, quantity, amount, currency,
+   *   method, promo, discount, createdAt, completedAt }
+   * amount = total paid (number, in config.shop.currency) or null when unknown; discount = amount saved.
+   */
+  sales: (guildId) => guild(guildId).sales,
+  addSale(guildId, sale) {
+    guild(guildId).sales.push(sale);
+    save();
+    return sale;
   },
 
   // ───────────── Blacklist ─────────────

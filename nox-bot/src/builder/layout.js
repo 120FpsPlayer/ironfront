@@ -50,6 +50,7 @@ const CATEGORIES = [
     name: '📊 SERVER STATS',
     profile: 'stats',
     channels: [
+      voice('statShop', '🟢 Shop open', { profile: 'stats' }), // open / closed – see features/shopstatus.js
       voice('statMembers', '👥 Members: 0', { profile: 'stats' }),
       voice('statVouches', '⭐ Vouches: 0', { profile: 'stats' }),
     ],
@@ -80,6 +81,7 @@ const CATEGORIES = [
       text('payments', '💳 payments', { profile: 'readonly', topic: 'Accepted payment methods.', post: 'payments' }),
       news('restocks', '✨ restocks', { posters: ['seller'], topic: 'New products and restocks.', post: 'restocks' }),
       text('vouches', '⭐ vouches', { profile: 'botsOnly', topic: 'Customer reviews – leave yours with the button or /vouch.', post: 'vouches' }),
+      text('proofs', '🧾 proofs', { profile: 'botsOnly', topic: 'Every delivered order, posted automatically.', post: 'proofs' }),
     ],
   },
   {
@@ -146,6 +148,8 @@ const CATEGORIES = [
       text('verifyLogs', '✅ verify-logs', { profile: 'logs' }),
       text('serverLogs', '📋 server-logs', { profile: 'logs' }),
       text('automodLogs', '🤖 automod-logs', { profile: 'logs' }),
+      text('sales', '📈 sales', { profile: 'admins', topic: 'Weekly sales reports.' }),
+      text('backups', '💾 backups', { profile: 'admins', topic: 'Automatic backups of the bot data – keep this channel private.' }),
     ],
   },
   { key: 'catTickets', name: '🎫 TICKETS', profile: 'hidden', channels: [] },

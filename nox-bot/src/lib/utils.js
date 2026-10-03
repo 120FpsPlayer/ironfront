@@ -186,6 +186,25 @@ async function sendLog(guild, payload) {
   return sendToChannel(guild, db.settings(guild.id).logChannelId, payload);
 }
 
+/** "20", "19.99", "19,99", "1 299", "20€", "€20" → number; anything else ("from 5€", "") → null. */
+function parseAmount(raw) {
+  const s = String(raw ?? '').replace(/\s/g, '').replace(config.shop.currency ?? '€', '').replace(/[€$£]/g, '');
+  if (!/^\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?$/.test(s)) return null;
+  const decimals = /[.,]\d{1,2}$/.test(s) ? s.slice(-3).replace(/^[^.,]*/, '') : '';
+  const whole = (decimals ? s.slice(0, -decimals.length) : s).replace(/[.,]/g, '');
+  const n = Number(`${whole}${decimals.replace(',', '.')}`);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** 20 → "20€", 19.5 → "19.50€" (shop currency and position from config.json). */
+function money(n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  const v = Number(n);
+  const text = Number.isInteger(v) ? String(v) : v.toFixed(2);
+  const currency = config.shop.currency ?? '€';
+  return config.shop.currencyPosition === 'before' ? `${currency}${text}` : `${text}${currency}`;
+}
+
 const truncate = (text, max) => {
   const s = String(text ?? '');
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -216,4 +235,6 @@ module.exports = {
   sendToChannel,
   sendLog,
   truncate,
+  parseAmount,
+  money,
 };

@@ -11,5 +11,6 @@ process.env.DISCORD_TOKEN ??= 'test.token.value';
 const db = require('../../src/lib/db');
 
 db.load();
+require('../../src/features/load'); // features register their panels, hooks and buttons
 
 module.exports = { db };

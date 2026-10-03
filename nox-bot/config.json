@@ -43,7 +43,7 @@
     "currency": "€",
     "currencyPosition": "after",
     "deliveryTime": "Usually within 5–30 minutes",
-    "supportHours": "Every day, 10:00–22:00 (UTC)",
+    "supportHours": "Every day, 10:00–20:00 (Central European Time)",
     "refundPolicy": "Refunds are only possible if we can't deliver your product. Once delivery has started, all sales are final.",
     "loyalAfterOrders": 5,
     "paymentMethods": [
@@ -58,6 +58,53 @@
     "cooldownHours": 6,
     "requireCustomerRole": false,
     "minLength": 10
+  },
+
+  "orders": {
+    "receipts": true,
+    "proofs": true,
+    "vouchReminderHours": 24
+  },
+
+  "promos": {
+    "enabled": true
+  },
+
+  "welcomeDiscount": {
+    "enabled": true,
+    "percent": 5,
+    "validDays": 7
+  },
+
+  "invites": {
+    "enabled": true,
+    "rewards": [
+      { "invites": 5, "percent": 10 },
+      { "invites": 15, "percent": 15 },
+      { "invites": 30, "percent": 20 }
+    ]
+  },
+
+  "shopStatus": {
+    "enabled": true,
+    "openName": "🟢 Shop open",
+    "closedName": "🔴 Shop closed"
+  },
+
+  "security": {
+    "impersonationAlerts": true,
+    "lockdownPausesInvites": true
+  },
+
+  "backups": {
+    "enabled": true,
+    "everyHours": 24
+  },
+
+  "salesReport": {
+    "enabled": true,
+    "weekday": 1,
+    "hour": 10
   },
 
   "panel": {
@@ -76,10 +123,10 @@
 
   "workingHours": {
     "enabled": true,
-    "timezone": "UTC",
+    "timezone": "Europe/Warsaw",
     "days": [1, 2, 3, 4, 5, 6, 0],
     "from": "10:00",
-    "to": "22:00"
+    "to": "20:00"
   },
 
   "channelNameFormat": "{prio}{emoji}┃{prefix}-{number}",

@@ -652,4 +652,4 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = { buildServer, publish, sendItem, describeError, discordLocale, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath };
+module.exports = { buildServer, publish, sendItem, describeError, discordLocale, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath, createRole, overwriteResolver, channelOptions, ensureRoleOrder };

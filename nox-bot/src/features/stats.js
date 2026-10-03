@@ -64,10 +64,15 @@ function leaderboardPanel(guild) {
 panels.register('leaderboard', (guild) => leaderboardPanel(guild));
 
 /** The names the stat channels should have right now. */
-const statNames = (guild) => ({
-  statMembers: STAT_NAMES.statMembers(guild.memberCount ?? 0),
-  statVouches: STAT_NAMES.statVouches(db.guild(guild.id).vouches.length),
-});
+function statNames(guild) {
+  const names = {
+    statMembers: STAT_NAMES.statMembers(guild.memberCount ?? 0),
+    statVouches: STAT_NAMES.statVouches(db.guild(guild.id).vouches.length),
+  };
+  const shop = require('./shopstatus').statusChannelName(guild.id);
+  if (shop) names.statShop = shop;
+  return names;
+}
 
 async function updateStatChannels(client) {
   for (const guildId of db.allGuildIds()) {

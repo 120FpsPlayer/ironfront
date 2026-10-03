@@ -23,8 +23,8 @@ const { isStaff } = require('./lib/utils');
 const { reportRoles } = require('./lib/permissions');
 const { onEmojiChange } = require('./builder/emojis');
 const { rejectOnRateLimit } = require('./lib/ratelimit');
-require('./features/shop');
-require('./features/vouches');
+const hooks = require('./lib/hooks');
+require('./features/load');
 
 db.load();
 const commands = loadCommands();
@@ -36,6 +36,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildExpressions,
+    GatewayIntentBits.GuildInvites,
   ],
   partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
   rest: {
@@ -99,6 +100,8 @@ client.once(Events.ClientReady, async (c) => {
   every(10 * 60_000, () => panels.refreshAll(c, 'leaderboard'), 25_000);
   const panelMinutes = config.defaults.panelRefreshMinutes ?? 5;
   if (panelMinutes > 0) every(panelMinutes * 60_000, () => panels.refreshAll(c, 'tickets'), 15_000);
+  for (const timer of hooks.timers()) every(timer.ms, () => timer.fn(c), timer.firstDelay);
+  await hooks.emit('ready', c);
 });
 
 client.on(Events.InteractionCreate, (interaction) => handleInteraction(interaction, commands));
@@ -120,6 +123,17 @@ client.on(Events.MessageCreate, (message) => {
 
 client.on(Events.GuildMemberAdd, (member) => welcome.onMemberAdd(member).catch((err) => console.warn('[welcome]', err.message)));
 client.on(Events.GuildMemberRemove, (member) => welcome.onMemberRemove(member).catch((err) => console.warn('[leave]', err.message)));
+
+// Discord events for features (src/features/*) – see src/lib/hooks.js
+const DISCORD_EVENTS = {
+  [Events.GuildMemberAdd]: 'memberAdd',
+  [Events.GuildMemberRemove]: 'memberRemove',
+  [Events.GuildMemberUpdate]: 'memberUpdate',
+  [Events.UserUpdate]: 'userUpdate',
+  [Events.InviteCreate]: 'inviteCreate',
+  [Events.InviteDelete]: 'inviteDelete',
+};
+for (const [event, name] of Object.entries(DISCORD_EVENTS)) client.on(event, (...args) => hooks.emit(name, ...args));
 client.on(Events.MessageDelete, (message) => welcome.onMessageDelete(message).catch(() => null));
 client.on(Events.MessageUpdate, (before, after) => welcome.onMessageUpdate(before, after).catch(() => null));
 

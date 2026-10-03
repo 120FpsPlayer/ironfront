@@ -268,6 +268,18 @@ function restocksIntro(x) {
   return card(c);
 }
 
+function proofsIntro(x) {
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      `# ${x.E('check')} Order proofs\nEvery order we deliver is posted here automatically – real orders, in real time.\n` +
+        `-# No names or personal details are shown. Want to read what customers say? Check ${x.ch('vouches')}.`,
+    ),
+  );
+  c.addActionRowComponents(buttons(x.link('shop', 'Shop', 'cart'), x.link('vouches', 'Vouches', 'star')));
+  return card(c);
+}
+
 // ───────────── SUPPORT category ─────────────
 
 function faq(x) {
@@ -386,6 +398,8 @@ function postsFor(key, guild) {
       return [{ banner: 'restocks' }, restocksIntro(x)];
     case 'vouches':
       return [{ banner: 'vouches' }, { panel: 'vouches' }];
+    case 'proofs':
+      return [{ banner: 'proofs' }, proofsIntro(x)];
     case 'tickets':
       return [{ banner: 'support' }, { panel: 'tickets', extra: { style: 'buttons' } }];
     case 'faq':
