@@ -116,12 +116,12 @@ Give your team their roles (Manager, Support, Seller…) and you're good to go.
 〔 💬 COMMUNITY 〕       💬┃ᴄʜᴀᴛ · 📸┃ᴍᴇᴅɪᴀ · 😂┃ᴍᴇᴍᴇꜱ · 🤖┃ᴄᴏᴍᴍᴀɴᴅꜱ · 🏆┃ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ · 🚀┃ʙᴏᴏꜱᴛᴇʀꜱ
 〔 💎 VIP LOUNGE 〕      💎┃ᴠɪᴘ-ᴄʜᴀᴛ · 💎┃ᴠɪᴘ ʟᴏᴜɴɢᴇ                  (VIP, partners, loyal customers, boosters, staff)
 〔 🔊 VOICE 〕           🔊┃ʟᴏᴜɴɢᴇ · 🎮┃ɢᴀᴍɪɴɢ · 🎵┃ᴍᴜꜱɪᴄ · 👥┃ᴅᴜᴏ · 💤┃ᴀꜰᴋ
-〔 🛡️ STAFF 〕           🛡️┃ꜱᴛᴀꜰꜰ-ᴄʜᴀᴛ · ⚙️┃ꜱᴛᴀꜰꜰ-ᴄᴏᴍᴍᴀɴᴅꜱ · 📣┃ᴅɪꜱᴄᴏʀᴅ-ᴜᴘᴅᴀᴛᴇꜱ · 🛡️┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ
-〔 📁 LOGS 〕            📁┃ᴛɪᴄᴋᴇᴛ-ʟᴏɢꜱ · 📄┃ᴛʀᴀɴꜱᴄʀɪᴘᴛꜱ · ✅┃ᴠᴇʀɪꜰʏ-ʟᴏɢꜱ · 🗂️┃ꜱᴇʀᴠᴇʀ-ʟᴏɢꜱ · 🤖┃ᴀᴜᴛᴏᴍᴏᴅ-ʟᴏɢꜱ
-〔 🎫 TICKETS 〕 / 〔 🗃️ CLOSED TICKETS 〕                        (ticket channels go here: 🛒┃ᴏʀᴅᴇʀ-0001)
+〔 🔒 STAFF 〕           💼┃ꜱᴛᴀꜰꜰ-ᴄʜᴀᴛ · 🔧┃ꜱᴛᴀꜰꜰ-ᴄᴏᴍᴍᴀɴᴅꜱ · 📣┃ᴅɪꜱᴄᴏʀᴅ-ᴜᴘᴅᴀᴛᴇꜱ · 🔒┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ
+〔 📁 LOGS 〕            📁┃ᴛɪᴄᴋᴇᴛ-ʟᴏɢꜱ · 📄┃ᴛʀᴀɴꜱᴄʀɪᴘᴛꜱ · ✅┃ᴠᴇʀɪꜰʏ-ʟᴏɢꜱ · 📋┃ꜱᴇʀᴠᴇʀ-ʟᴏɢꜱ · 🤖┃ᴀᴜᴛᴏᴍᴏᴅ-ʟᴏɢꜱ
+〔 🎫 TICKETS 〕 / 〔 🔐 CLOSED TICKETS 〕                        (ticket channels go here: 🛒┃ᴏʀᴅᴇʀ-0001)
 ```
 Discord allows 50 channels per category: when 〔 🎫 TICKETS 〕 is full the bot opens **〔 🎫 TICKETS 2 〕** (3, …),
-and 〔 🗃️ CLOSED TICKETS 〕 keeps the newest 49 closed tickets (older ones are deleted – their transcripts stay in #transcripts).
+and 〔 🔐 CLOSED TICKETS 〕 keeps the newest 49 closed tickets (older ones are deleted – their transcripts stay in #transcripts).
 Want different channels or roles? Edit `src/builder/layout.js` – it's one readable list.
 
 **Who sees what**

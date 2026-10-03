@@ -56,4 +56,10 @@ function numberedCategoryName(name, n) {
 /** What Discord makes of a text channel name: lowercase, spaces become dashes. */
 const textChannelName = (name) => String(name).toLowerCase().replace(/\s+/g, '-');
 
-module.exports = { smallCaps, splitEmoji, channelName, categoryName, numberedCategoryName, textChannelName };
+/** Discord drops emoji variation selectors and joiners (U+FE0E, U+FE0F, U+200D) from channel names. */
+const bareName = (name) => String(name).replace(/[\uFE0E\uFE0F\u200D]/g, '');
+
+/** True when a channel already has this name, the way Discord stores it. */
+const sameChannelName = (current, wanted) => bareName(current) === bareName(wanted);
+
+module.exports = { smallCaps, splitEmoji, channelName, categoryName, numberedCategoryName, textChannelName, bareName, sameChannelName };

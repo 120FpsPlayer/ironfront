@@ -7,7 +7,8 @@
  * the style (〔 🛒 SHOP 〕, 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ) comes from config.json → server.categoryStyle / channelStyle / smallCaps.
  * Channels:
  *   key      – internal name (used by the bot to find the channel later)
- *   name     – emoji + name (text channels: lowercase with dashes, no spaces)
+ *   name     – emoji + name (text channels: lowercase with dashes, no spaces). Use emojis without the
+ *              invisible ️ variation selector (🔒 not 🛡️) – Discord drops it from channel names.
  *   kind     – text | announcement | voice
  *   profile  – who can see / write (see builder/permissions.js)
  *   posters  – extra role keys allowed to write in read-only channels
@@ -126,13 +127,13 @@ const CATEGORIES = [
   },
   {
     key: 'catStaff',
-    name: '🛡️ STAFF',
+    name: '🔒 STAFF',
     profile: 'staff',
     channels: [
-      text('staffChat', '🛡️ staff-chat', { profile: 'staff', topic: 'Team chat.', post: 'staff' }),
-      text('staffCommands', '⚙️ staff-commands', { profile: 'staff', topic: 'Staff bot commands.' }),
+      text('staffChat', '💼 staff-chat', { profile: 'staff', topic: 'Team chat.', post: 'staff' }),
+      text('staffCommands', '🔧 staff-commands', { profile: 'staff', topic: 'Staff bot commands.' }),
       text('discordUpdates', '📣 discord-updates', { profile: 'admins', topic: 'Updates from Discord for server admins.' }),
-      voice('staffVoice', '🛡️ Staff Room', { profile: 'staff' }),
+      voice('staffVoice', '🔒 Staff Room', { profile: 'staff' }),
     ],
   },
   {
@@ -143,12 +144,12 @@ const CATEGORIES = [
       text('ticketLogs', '📁 ticket-logs', { profile: 'staffLogs' }),
       text('transcripts', '📄 transcripts', { profile: 'staffLogs' }),
       text('verifyLogs', '✅ verify-logs', { profile: 'logs' }),
-      text('serverLogs', '🗂️ server-logs', { profile: 'logs' }),
+      text('serverLogs', '📋 server-logs', { profile: 'logs' }),
       text('automodLogs', '🤖 automod-logs', { profile: 'logs' }),
     ],
   },
   { key: 'catTickets', name: '🎫 TICKETS', profile: 'hidden', channels: [] },
-  { key: 'catClosed', name: '🗃️ CLOSED TICKETS', profile: 'hidden', channels: [] },
+  { key: 'catClosed', name: '🔐 CLOSED TICKETS', profile: 'hidden', channels: [] },
 ];
 
 /**

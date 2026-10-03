@@ -44,8 +44,12 @@ function assertEmoji(emoji, where) {
   if (RGI && !RGI.test(name)) throw apiError(50035, `${where}.emoji[COMPONENT_INVALID_EMOJI]: ${JSON.stringify(name)}`);
 }
 
-/** Discord stores text channel names lowercase with dashes instead of spaces (voice and categories keep theirs). */
-const discordName = (name, type) => ([ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(type) ? String(name).toLowerCase().replace(/\s+/g, '-') : name);
+/**
+ * Discord stores text channel names lowercase with dashes instead of spaces, and drops emoji variation
+ * selectors / joiners (🛡️ → 🛡). Voice channels and categories keep their names.
+ */
+const discordName = (name, type) =>
+  [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(type) ? String(name).toLowerCase().replace(/\s+/g, '-').replace(/[\uFE0E\uFE0F\u200D]/g, '') : name;
 
 const toJSON = (c) => (c && typeof c.toJSON === 'function' ? c.toJSON() : c);
 

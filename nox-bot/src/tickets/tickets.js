@@ -537,6 +537,7 @@ async function setPriority(channel, level, actor) {
   db.updateTicket(channel.id, { priority: level });
   await refreshControlMessage(channel, ticket);
   const renamed = await safeRename(channel, channelName(ticket, config.getType(ticket.typeId))).catch(() => ({ ok: false }));
+  if (renamed.ok) db.updateTicket(channel.id, { customName: false }); // the generated name is back
   const p = PRIORITIES[level];
   await channel.send(
     ui.notice(
@@ -567,6 +568,7 @@ async function moveTicket(channel, typeId, actor) {
   db.updateTicket(channel.id, { typeId: to.id });
   await refreshControlMessage(channel, ticket);
   const renamed = await safeRename(channel, channelName(ticket, to)).catch(() => ({ ok: false }));
+  if (renamed.ok) db.updateTicket(channel.id, { customName: false });
   const pings = [...newRoles].filter((id) => !oldRoles.has(id) && guild.roles.cache.has(id));
   await channel.send(
     ui.notice(

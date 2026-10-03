@@ -6,7 +6,7 @@ const panels = require('../lib/panels');
 const { e, COLORS } = require('../lib/theme');
 const { ts } = require('../lib/utils');
 const { container, text, divider, header, v2 } = require('../lib/v2');
-const { channelName } = require('../builder/style');
+const { channelName, sameChannelName } = require('../builder/style');
 
 /**
  * Server stats: locked voice channels showing the member and vouch count, plus an
@@ -77,7 +77,7 @@ async function updateStatChannels(client) {
       const channel = guild.channels.cache.get(db.channelId(guildId, key) ?? '');
       if (!channel) continue;
       // Discord allows 2 renames per 10 minutes per channel – this runs every 10 minutes at most.
-      if (channel.name !== name) await channel.setName(name, 'Stats update').catch(() => null);
+      if (!sameChannelName(channel.name, name)) await channel.setName(name, 'Stats update').catch(() => null);
     }
   }
 }

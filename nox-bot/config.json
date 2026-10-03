@@ -103,7 +103,7 @@
     {
       "id": "support",
       "label": "Support",
-      "emoji": "🛠️",
+      "emoji": "🧰",
       "icon": "question",
       "description": "Questions, order problems and technical help",
       "channelPrefix": "support",
@@ -172,7 +172,7 @@
     {
       "id": "appeal",
       "label": "Punishment Appeal",
-      "emoji": "⚖️",
+      "emoji": "🙏",
       "icon": "info",
       "description": "Appeal a mute, timeout or warning",
       "channelPrefix": "appeal",

@@ -16,6 +16,16 @@ const style = require('./style');
 
 const TEXT_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 
+/**
+ * Whether a ticket channel still has a name the bot gave it – old style ("🔴order-0001") or new
+ * ("🔴🛒┃ᴏʀᴅᴇʀ-0001"). Any ticket type's prefix counts (a move may not have renamed it yet).
+ */
+function looksGenerated(ticket, name) {
+  const number = String(ticket.number).padStart(4, '0');
+  const core = style.bareName(name).replace(/^[^\p{L}\p{N}]+/u, '');
+  return ['ticket', ...config.ticketTypes.map((x) => x.channelPrefix)].some((prefix) => core === `${prefix}-${number}` || core === style.smallCaps(`${prefix}-${number}`));
+}
+
 /** Every channel the bot manages, with the name it should have now. */
 function wantedNames(guild) {
   const build = db.build(guild.id) ?? {};
@@ -29,6 +39,12 @@ function wantedNames(guild) {
   const tickets = CATEGORIES.find((c) => c.key === 'catTickets');
   (settings.overflowCategoryIds ?? []).forEach((id, i) => list.push({ id, name: style.numberedCategoryName(style.categoryName(tickets.name), i + 2) }));
   for (const t of db.tickets((x) => x.guildId === guild.id && x.status !== 'deleted' && !x.customName)) {
+    const channel = guild.channels.cache.get(t.channelId);
+    if (channel && t.customName === undefined && !looksGenerated(t, channel.name)) {
+      // Renamed with /ticket rename before the bot remembered that – keep the name from now on.
+      db.updateTicket(t.channelId, { customName: true });
+      continue;
+    }
     list.push({ id: t.channelId, name: ticketChannelName(t, config.getType(t.typeId)) });
   }
   return list.filter((x) => x.id);
@@ -46,7 +62,7 @@ async function restyleNames(guild, { onProgress = () => {} } = {}) {
     const channel = guild.channels.cache.get(id);
     if (!channel) continue;
     const want = TEXT_TYPES.has(channel.type) ? style.textChannelName(name) : name;
-    if (channel.name === want) {
+    if (style.sameChannelName(channel.name, want)) {
       res.unchanged += 1;
       continue;
     }
@@ -62,4 +78,4 @@ async function restyleNames(guild, { onProgress = () => {} } = {}) {
   return res;
 }
 
-module.exports = { wantedNames, restyleNames };
+module.exports = { wantedNames, restyleNames, looksGenerated };
