@@ -4,6 +4,7 @@ const { SlashCommandBuilder, InteractionContextType, MessageFlags } = require('d
 const config = require('../lib/config');
 const db = require('../lib/db');
 const t = require('../tickets/tickets');
+const ui = require('../tickets/ui');
 const { env } = require('../env');
 const { PRIORITIES, embed, reply, replyError, isStaff, slug, ts, duration } = require('../lib/utils');
 
@@ -63,7 +64,12 @@ module.exports = {
         ),
     )
     .addSubcommand((s) => s.setName('request-close').setDescription('Ask the author to confirm the issue is resolved'))
-    .addSubcommand((s) => s.setName('complete').setDescription('Mark this purchase as delivered (gives the Customer role)'))
+    .addSubcommand((s) =>
+      s
+        .setName('complete')
+        .setDescription('Mark this purchase as delivered (records the sale, gives the Customer role)')
+        .addNumberOption((o) => o.setName('amount').setDescription('Amount the customer paid (default: the order total, if known)').setMinValue(0).setMaxValue(1_000_000)),
+    )
     .addSubcommand((s) => s.setName('info').setDescription('Ticket information')),
 
   async execute(interaction) {
@@ -136,8 +142,8 @@ module.exports = {
         return reply(interaction, 'Close request sent to the author.');
       case 'complete': {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const { orders, loyal } = await t.completeOrder(channel, member);
-        return reply(interaction, `Order marked as completed. The customer now has ${orders} ${orders === 1 ? 'order' : 'orders'}${loyal ? ' and got the Loyal Customer role 💜' : ''}.`);
+        const amount = interaction.options.getNumber('amount') ?? undefined;
+        return t.completeOrder(channel, member, { amount, respond: (result) => reply(interaction, ui.orderCompletedReply(result)) });
       }
       case 'rename': {
         const name = slug(interaction.options.getString('name'), 90);

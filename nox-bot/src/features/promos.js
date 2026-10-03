@@ -74,13 +74,15 @@ function remove(guildId, code) {
 
 /**
  * Why this member can't use the code right now – or null when it's fine.
- * @param {{ now?: number, completedOrders?: number }} opts
+ * reserved – owners of open orders that already use the code (not redeemed yet, but promised).
+ * @param {{ now?: number, completedOrders?: number, reserved?: string[] }} opts
  */
-function problem(promo, userId, { now = Date.now(), completedOrders = 0 } = {}) {
+function problem(promo, userId, { now = Date.now(), completedOrders = 0, reserved = [] } = {}) {
   if (!promo || !promo.active) return "This code doesn't exist.";
   if (promo.expiresAt && now > promo.expiresAt) return 'This code has expired.';
   if (promo.userId && promo.userId !== userId) return 'This code belongs to someone else.';
-  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return 'This code has been used up.';
+  if (promo.oncePerUser && reserved.includes(userId)) return "You're already using this code in another open order.";
+  if (promo.maxUses != null && promo.uses.length + reserved.length >= promo.maxUses) return 'This code has been used up.';
   if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return "You've already used this code.";
   if (promo.firstOrderOnly && completedOrders > 0) return 'This code is only valid for your first order.';
   return null;
@@ -102,6 +104,10 @@ function apply(promo, total) {
   return { total: round(total - discount), discount: round(discount) };
 }
 
+/** Owners of open (not yet completed) orders that use this code – pass as `reserved` to check(). */
+const reservedBy = (guildId, code) =>
+  db.tickets((t) => t.guildId === guildId && t.status === 'open' && !t.completedAt && t.order?.promo === normalize(code)).map((t) => t.ownerId);
+
 /** Records one use – call it when the order is completed. */
 function redeem(guildId, code, userId, saleId = null) {
   const promo = find(guildId, code);
@@ -114,4 +120,4 @@ function redeem(guildId, code, userId, saleId = null) {
 /** "10% off" / "5€ off" */
 const label = (promo) => (promo.percent != null ? `${promo.percent}% off` : `${money(promo.amount)} off`);
 
-module.exports = { DAY, normalize, list, find, create, personal, remove, problem, check, apply, redeem, label };
+module.exports = { DAY, normalize, list, find, create, personal, remove, problem, check, apply, reservedBy, redeem, label };

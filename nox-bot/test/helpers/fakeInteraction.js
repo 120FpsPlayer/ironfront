@@ -59,6 +59,7 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
       getSubcommand: () => subcommand,
       getString: (n) => options[n] ?? null,
       getInteger: (n) => options[n] ?? null,
+      getNumber: (n) => options[n] ?? null,
       getBoolean: (n) => options[n] ?? null,
       getChannel: (n) => options[n] ?? null,
       getRole: (n) => options[n] ?? null,

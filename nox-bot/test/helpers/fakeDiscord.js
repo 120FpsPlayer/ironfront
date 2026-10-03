@@ -572,6 +572,9 @@ class FakeMember {
       createdAt: new Date(createdTimestamp),
       displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/0.png',
       send: async (payload) => {
+        // Members with closed DMs (guild.closedDms) can't be messaged; DMs follow the same message rules.
+        if (guild.closedDms.has(id)) throw apiError(50007, 'Cannot send messages to this user');
+        validateMessage(typeof payload === 'string' ? { content: payload } : payload, guild);
         guild.dms.push({ to: id, payload });
         return payload;
       },
@@ -657,6 +660,7 @@ class FakeGuild {
     this.premiumTier = premiumTier;
     this.log = [];
     this.dms = [];
+    this.closedDms = new Set();
     this.welcomeScreen = null;
     this.iconSet = null;
     this.bannerSet = null;

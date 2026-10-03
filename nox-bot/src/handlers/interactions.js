@@ -193,6 +193,7 @@ async function handleManage(interaction) {
     await t.refreshControlMessage(channel, ticket);
     return replyError(interaction, 'This menu is only available to staff members.');
   }
+  if (interaction.values[0] === 'complete') return showCompleteForm(interaction, channel);
   await interaction.deferReply(ephemeral);
   const [kind, value] = interaction.values[0].split(':');
   try {
@@ -209,14 +210,20 @@ async function handleManage(interaction) {
       await t.refreshControlMessage(channel, ticket);
       return await reply(interaction, 'Close request sent to the author.');
     }
-    if (kind === 'complete') {
-      const { orders, loyal } = await t.completeOrder(channel, member);
-      return await reply(interaction, `Order completed – the customer has ${orders} ${orders === 1 ? 'order' : 'orders'}${loyal ? ' and is now a Loyal Customer 💜' : ''}.`);
-    }
     return null;
   } catch (err) {
     await t.refreshControlMessage(channel, ticket);
     throw err;
+  }
+}
+
+/** "Order completed" → a form where the seller confirms the amount paid (handled in src/features/orders.js). */
+async function showCompleteForm(interaction, channel) {
+  try {
+    await interaction.showModal(t.completeForm(channel));
+  } finally {
+    // Reset the menu, so "Order completed" can be picked again if the form is closed.
+    await t.refreshControlMessage(channel, db.getTicket(channel.id));
   }
 }
 
