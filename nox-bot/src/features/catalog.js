@@ -62,15 +62,6 @@ function view(guild, group, page = 0) {
   return listPage(guild, group, pages[index], { index, count: pages.length });
 }
 
-/** One sold-out product, so it can still be followed from the menu. */
-function productView(guild, product) {
-  const c = container(COLORS.brand);
-  const picture = shop.pickImages([product]).get(product.id);
-  shop.addCard(c, guild, product, picture);
-  c.addTextDisplayComponents(text("-# Sold out right now – click **Notify me** and I'll DM you once it's back."));
-  return v2(c, { files: picture ? [picture.file] : [] });
-}
-
 /** A menu keeps showing what was picked – put the panel back so the same option works again. */
 function resetMenu(interaction) {
   if (!interaction.message) return;
@@ -88,13 +79,10 @@ async function browse(interaction, value) {
   return interaction.editReply(view(interaction.guild, group));
 }
 
-async function pick(interaction, value) {
+/** The order form – or, for a sold-out product, its card with Notify me (shop.startOrder). */
+function pick(interaction, value) {
   if (value === 'all') return browse(interaction, value);
-  const product = shop.findProduct(interaction.guild.id, value);
-  if (!product) throw new UserError('This product is no longer available – the catalog has been updated.');
-  if (product.stock !== 'out') return shop.startOrder(interaction, product.id);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  return interaction.editReply(productView(interaction.guild, product));
+  return shop.startOrder(interaction, value);
 }
 
 async function turnPage(interaction, page, value) {
@@ -115,4 +103,4 @@ hooks.route('catalog', {
   button: (interaction, action, args) => (action === 'page' ? turnPage(interaction, args[0], args.slice(1).join(':')) : null),
 });
 
-module.exports = { groupFor, paginate, view, productView };
+module.exports = { groupFor, paginate, view };

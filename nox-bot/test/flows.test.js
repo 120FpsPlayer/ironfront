@@ -146,10 +146,12 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   const again = await run({ guild, member: buyer, kind: 'button', customId: 'vouch:open' });
   assert.match(textOf(lastResponse(again)), /already left a vouch/);
 
-  // Sold out → Buy is refused, restock is announced
+  // Sold out → Buy offers Notify me instead of the order form, restock is announced
   await run({ guild, member: owner, kind: 'command', commandName: 'product', subcommand: 'stock', options: { product: product.id, status: 'out' } });
   const soldOut = await run({ guild, member: buyer, kind: 'button', customId: `shop:buy:${product.id}` });
-  assert.match(textOf(lastResponse(soldOut)), /sold out/);
+  assert.match(textOf(lastResponse(soldOut)), /Sold out right now/);
+  assert.ok(customIds(lastResponse(soldOut)).includes(`restock:notify:${product.id}`));
+  assert.equal(soldOut.state.modals.length, 0);
   const before = ch(guild, 'restocks').messageList.length;
   await run({ guild, member: owner, kind: 'command', commandName: 'product', subcommand: 'stock', options: { product: product.id, status: 'in' } });
   assert.equal(ch(guild, 'restocks').messageList.length, before + 1);
@@ -356,6 +358,29 @@ test('/help adapts to the member, /panel re-sends panels', async () => {
   await run({ guild, member: owner, kind: 'command', commandName: 'panel', options: { type: 'verify', channel: target } });
   assert.equal(target.messageList.length, before + 2);
   assert.ok(verification.verifyPanel(guild));
+});
+
+test('/help only lists what is turned on in config.json', async () => {
+  const guild = await builtGuild();
+  const owner = guild.members.cache.get(guild.ownerId);
+  const help = async (who) => textOf(lastResponse(await run({ guild, member: who, kind: 'command', commandName: 'help' })));
+  const on = await help(member(guild));
+  assert.match(on, /`\/invites stats` · `\/invites top` – your invites and the rewards you can earn/);
+  assert.match(await help(owner), /`\/backup` – back up the bot data now \(also automatic, in #backups\)/);
+  assert.match(await help(owner), /Look-alike staff accounts are reported/);
+
+  const saved = { invites: config.invites, backups: config.backups, security: config.security };
+  Object.assign(config, { invites: { ...config.invites, enabled: false }, backups: { ...config.backups, enabled: false }, security: { ...config.security, impersonationAlerts: false } });
+  try {
+    assert.doesNotMatch(await help(member(guild)), /\/invites/, 'invite tracking is off');
+    const admin = await help(owner);
+    assert.doesNotMatch(admin, /\/invites/);
+    assert.match(admin, /`\/backup` – back up the bot data now\n/, 'no "also automatic" while automatic backups are off');
+    assert.doesNotMatch(admin, /also automatic|Look-alike/);
+    assert.match(admin, /`\/lockdown` · `\/unlock`/);
+  } finally {
+    Object.assign(config, saved);
+  }
 });
 
 test('ticket rating works from the DM (outside the server)', async () => {

@@ -193,6 +193,15 @@ function addCard(c, guild, p, image = null) {
   return c.addActionRowComponents(row(cardButton(guild, p)));
 }
 
+/** One sold-out product with its Notify me button – the answer to a menu pick or an older Buy button. */
+function soldOutView(guild, p) {
+  const c = container(COLORS.brand);
+  const picture = pickImages([p]).get(p.id);
+  addCard(c, guild, p, picture);
+  c.addTextDisplayComponents(text("-# Sold out right now – click **Notify me** and I'll DM you once it's back."));
+  return v2(c, { files: picture ? [picture.file] : [] });
+}
+
 /** Images of these products that fit into one message (10 files, 8 MB) → Map(productId → attachment). */
 function pickImages(list, max = 10) {
   const picked = new Map();
@@ -467,8 +476,14 @@ function ticketProduct(guildId, ticket) {
   if (!guildId || !ticket) return null;
   const id = ticket.order?.productId;
   if (id) return products(guildId).find((p) => p.id === id) ?? null;
-  const names = (ticket.answers ?? []).filter((a) => /product|buy/i.test(a.label ?? '')).map((a) => String(a.value ?? '').split(' — ')[0].trim().toLowerCase());
-  return products(guildId).find((p) => names.includes(p.name.toLowerCase())) ?? null;
+  const values = (ticket.answers ?? []).filter((a) => /product|buy/i.test(a.label ?? '')).map((a) => String(a.value ?? '').trim().toLowerCase());
+  // Names can contain " — " too: "Spotify — 12 months — 40€" is "Spotify — 12 months", not "Spotify" – the longest match wins.
+  let best = null;
+  for (const p of products(guildId)) {
+    const name = p.name.toLowerCase();
+    if (values.some((v) => v === name || v.startsWith(`${name} — `)) && name.length > (best?.name.length ?? 0)) best = p;
+  }
+  return best;
 }
 
 // ───────────── Buying ─────────────
@@ -563,7 +578,11 @@ async function startOrder(interaction, productId) {
   const tickets = require('../tickets/tickets');
   const product = findProduct(interaction.guild.id, productId);
   if (!product) throw new UserError('This product is no longer available – the catalog has been updated.');
-  if (product.stock === 'out') throw new UserError(`**${product.name}** is sold out right now. Grab the Restocks role in #roles to get pinged when it's back!`);
+  // Sold out since the button was posted (#restocks, an open category list) – offer Notify me, not a dead end.
+  if (product.stock === 'out') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return interaction.editReply(soldOutView(interaction.guild, product));
+  }
   const error = tickets.checkCanOpen(interaction.member);
   if (error) throw new UserError(error);
   return interaction.showModal(orderModal(product, interaction.guild));
@@ -605,22 +624,22 @@ async function submitOrder(interaction, productId) {
   if (notes) answers.push({ label: 'Notes', value: notes });
   answers.push(...priceAnswers(price, quantity));
 
+  const order = {
+    productId: product.id,
+    product: product.name,
+    unitPrice: price.unitPrice,
+    quantity,
+    method: method || null,
+    methodIndex,
+    promo: price.promo ? price.code : null,
+    discount: price.discount,
+    subtotal: price.subtotal,
+    total: price.total,
+  };
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const channel = await tickets.openTicket(interaction.member, config.getType('order'), answers);
-  db.updateTicket(channel.id, {
-    order: {
-      productId: product.id,
-      product: product.name,
-      unitPrice: price.unitPrice,
-      quantity,
-      method: method || null,
-      methodIndex,
-      promo: price.promo ? price.code : null,
-      discount: price.discount,
-      subtotal: price.subtotal,
-      total: price.total,
-    },
-  });
+  // The order is part of the new ticket, so its first card already shows this product (and its image).
+  const channel = await tickets.openTicket(interaction.member, config.getType('order'), answers, { order });
   const lines = [`Your private order ticket is ready: ${channel}`];
   if (price.total != null) lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${price.discount > 0 ? ` (you save ${money(price.discount)} with **${price.code}**)` : ''}`);
   else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
@@ -660,6 +679,7 @@ module.exports = {
   cardText,
   cardButton,
   addCard,
+  soldOutView,
   pickImages,
   measure,
   fits,

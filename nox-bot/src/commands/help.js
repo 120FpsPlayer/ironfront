@@ -2,6 +2,7 @@
 
 const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const config = require('../lib/config');
+const invites = require('../features/invites');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, isStaff, isAdmin, truncate } = require('../lib/utils');
 const { isMod, isShopManager } = require('../lib/permissions');
@@ -11,6 +12,9 @@ module.exports = {
 
   async execute(interaction) {
     const member = interaction.member;
+    // Only what is turned on in config.json.
+    const rewards = config.promos.enabled !== false && invites.levels().length > 0;
+    const inviteLine = config.invites.enabled === false ? null : `\`/invites stats\` · \`/invites top\` – your invites${rewards ? ' and the rewards you can earn' : ' and the top inviters'}`;
     const e = embed(COLORS.brand)
       .setTitle(`📖 ${config.brand.name} – help`)
       .setDescription('Buy something with the **Buy** buttons in the shop channel, get help with the **ticket panel**.')
@@ -18,10 +22,12 @@ module.exports = {
         name: '👤 Everyone',
         value: [
           '`/vouch` – leave a review after a purchase',
-          '`/invites stats` · `/invites top` – your invites and the rewards you can earn',
+          inviteLine,
           '`/ticket info` · `/ticket close` – inside your ticket',
           '🔔 **Call support** – a button in your ticket if you have been waiting a while',
-        ].join('\n'),
+        ]
+          .filter(Boolean)
+          .join('\n'),
       });
     if (isStaff(member)) {
       e.addFields({
@@ -48,7 +54,10 @@ module.exports = {
     }
     if (isMod(member)) {
       e.addFields({ name: '🎉 Community', value: '`/giveaway start` · `/giveaway end` · `/giveaway reroll` · `/giveaway list`\n`/announce` – styled announcement with banner & ping' });
-      e.addFields({ name: '🚨 Security', value: '`/lockdown` · `/unlock` – lock the server during a raid\nLook-alike staff accounts are reported in #automod-logs automatically' });
+      e.addFields({
+        name: '🚨 Security',
+        value: `\`/lockdown\` · \`/unlock\` – lock the server during a raid${config.security.impersonationAlerts ? '\nLook-alike staff accounts are reported in #automod-logs automatically' : ''}`,
+      });
     }
     if (isAdmin(member)) {
       e.addFields({
@@ -57,7 +66,7 @@ module.exports = {
           '`/build` – build the whole server',
           '`/build only:update` – after a bot update: new channels & roles, names, panels',
           '`/build only:emojis` · `/build only:panels` · `/build only:names`',
-          '`/backup` – back up the bot data now (also automatic, in #backups)',
+          `\`/backup\` – back up the bot data now${config.backups.enabled ? ' (also automatic, in #backups)' : ''}`,
           '`/panel` – re-send a panel',
           '`/setup show` · `/setup set` · `/setup role-add`',
         ].join('\n'),
