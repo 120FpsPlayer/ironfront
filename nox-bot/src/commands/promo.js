@@ -18,16 +18,20 @@ function status(p, now = Date.now()) {
 }
 
 const DOT = { active: '🟢', expired: '⌛', 'used up': '🔴', inactive: '⚫' };
-const uses = (p) => `${p.uses.length}/${p.maxUses ?? '∞'} uses`;
+/** "1/3 uses", plus the open orders holding the code: "0/1 uses · 1 held by an open order". */
+const uses = (p, held = 0) =>
+  `${p.uses.length}/${p.maxUses ?? '∞'} uses${held ? ` · ${held === 1 ? '1 held by an open order' : `${held} held by open orders`}` : ''}`;
+/** Open orders hold every remaining use – new orders can't use the code until one of them is cancelled. */
+const fullyHeld = (p, held) => p.maxUses != null && held > 0 && p.uses.length < p.maxUses && p.uses.length + held >= p.maxUses;
 const expiry = (p) => (p.expiresAt ? `${Date.now() > p.expiresAt ? 'expired' : 'expires'} ${ts(p.expiresAt, 'R')}` : 'no expiry');
 
-function line(p) {
+function line(p, held = 0) {
   const s = status(p);
   const flags = [];
   if (p.firstOrderOnly) flags.push('first order only');
   if (!p.oncePerUser) flags.push('reusable');
   const owner = p.userId ? ` · 👤 personal: <@${p.userId}>${p.reason ? ` (${p.reason})` : ''}` : '';
-  return `${DOT[s]} \`${p.code}\` · **${promos.label(p)}** · ${uses(p)} · ${expiry(p)}${flags.length ? ` · ${flags.join(', ')}` : ''}${owner}`;
+  return `${DOT[s]} \`${p.code}\` · **${promos.label(p)}** · ${uses(p, held)} · ${expiry(p)}${flags.length ? ` · ${flags.join(', ')}` : ''}${owner}`;
 }
 
 /** Public codes first, then personal ones – active before expired / used up, newest first. */
@@ -43,7 +47,7 @@ function listEmbed(guildId) {
   const lines = [];
   let budget = MAX_LIST;
   for (const p of list) {
-    const l = line(p);
+    const l = line(p, promos.reservedBy(guildId, p.code).length);
     if (budget - l.length - 1 < 0) break;
     budget -= l.length + 1;
     lines.push(l);
@@ -59,30 +63,37 @@ function listEmbed(guildId) {
     );
 }
 
-/** Discount, status, uses, expiry and rules of a code as embed fields. */
-function detailFields(p) {
+/** Discount, status, uses, expiry and rules of a code as embed fields. held – open orders holding it. */
+function detailFields(p, held = 0) {
   const s = status(p);
   return [
     { name: 'Discount', value: promos.label(p), inline: true },
-    { name: 'Status', value: `${DOT[s]} ${s}`, inline: true },
-    { name: 'Uses', value: uses(p), inline: true },
+    { name: 'Status', value: `${DOT[s]} ${s}${s === 'active' && fullyHeld(p, held) ? ' – all remaining uses are held by open orders' : ''}`, inline: true },
+    { name: 'Uses', value: uses(p, held), inline: true },
     { name: 'Expires', value: p.expiresAt ? `${ts(p.expiresAt, 'f')} (${ts(p.expiresAt, 'R')})` : 'Never', inline: true },
     { name: 'Once per member', value: p.oncePerUser ? 'Yes' : 'No', inline: true },
     { name: 'First order only', value: p.firstOrderOnly ? 'Yes' : 'No', inline: true },
   ];
 }
 
-function infoEmbed(p) {
+function infoEmbed(guildId, p) {
   const recent = p.uses
     .slice(-10)
     .reverse()
     .map((u) => `<@${u.userId}>${u.saleId ? ` · \`${u.saleId}\`` : ''} · ${ts(u.at, 'R')}`);
+  const held = promos.reservedBy(guildId, p.code).length;
   const e = embed(status(p) === 'active' ? COLORS.success : COLORS.muted)
     .setTitle(`🏷️ ${p.code}`)
-    .addFields(detailFields(p));
+    .addFields(detailFields(p, held));
   if (p.userId) e.addFields({ name: 'Personal code', value: `👤 <@${p.userId}>${p.reason ? ` · ${p.reason}` : ''}`, inline: true });
   e.addFields({ name: 'Created', value: `${ts(p.createdAt, 'R')}${p.createdBy ? ` by <@${p.createdBy}>` : ' automatically'}`, inline: true });
   e.addFields({ name: `Recent uses (${p.uses.length})`, value: truncate(recent.join('\n') || 'Not used yet.', 1024) });
+  const holding = promos.openOrdersWith(guildId, p.code);
+  if (holding.length) {
+    const lines = holding.slice(0, 15).map((t) => `<#${t.channelId}> · <@${t.ownerId}>`);
+    if (holding.length > lines.length) lines.push(`…and ${holding.length - lines.length} more`);
+    e.addFields({ name: `Held by open orders (${holding.length})`, value: truncate(`${lines.join('\n')}\n-# Counted as used until the order is completed or closed.`, 1024) });
+  }
   return e;
 }
 
@@ -170,7 +181,7 @@ module.exports = {
     const p = promos.find(guild.id, code);
     if (!p) throw new UserError(`There is no promo code **${truncate(code, 24)}**. Pick one from the suggestions.`);
 
-    if (sub === 'info') return reply(interaction, { embeds: [infoEmbed(p)] });
+    if (sub === 'info') return reply(interaction, { embeds: [infoEmbed(guild.id, p)] });
 
     promos.remove(guild.id, p.code);
     await reply(interaction, `Deleted the promo code **${p.code}** (${promos.label(p)}, ${uses(p)}). It can't be used anymore – open orders that already use it keep their discount.`);

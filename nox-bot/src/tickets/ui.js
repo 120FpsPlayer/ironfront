@@ -258,12 +258,15 @@ function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1,
 }
 
 /** "Order completed" form for staff: confirms the amount the customer actually paid. */
-function completeOrderModal(ticket) {
+function completeOrderModal(ticket, { promoWarning = null } = {}) {
   const o = ticket.order;
-  const summary = o
+  let summary = o
     ? `**${o.product}** × ${o.quantity}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
       (o.total != null ? `Total to pay: **${money(o.total)}**` : 'The price was not a fixed number – enter what the customer paid.')
     : 'Custom order – enter what the customer paid.';
+  if (o?.promo && promoWarning) {
+    summary += `\n⚠️ **Code ${o.promo} is over its limit** – ${promoWarning}. ${o.total != null ? 'The total above still includes its discount' : 'Its discount is still on this order'} – enter what the customer actually paid.`;
+  }
   const input = new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(12).setPlaceholder('e.g. 19.99 – leave empty if unknown');
   if (o?.total != null) input.setValue(Number.isInteger(o.total) ? String(o.total) : o.total.toFixed(2));
   return new ModalBuilder()
@@ -279,11 +282,13 @@ function completeOrderModal(ticket) {
 }
 
 /** The staff member's confirmation after completing an order. */
-function orderCompletedReply({ orders, loyal, sale }) {
+function orderCompletedReply({ orders, loyal, sale, promoWarning = null }) {
   const paid = sale.amount != null ? ` – ${money(sale.amount)} paid` : '';
+  const discount = sale.discount > 0 ? `its −${money(sale.discount)} discount` : 'the code';
   return (
     `Order completed – sale \`${sale.id}\` recorded${paid}${sale.promo ? ` (code ${sale.promo})` : ''}. ` +
-    `The customer now has ${orders} ${orders === 1 ? 'order' : 'orders'}${loyal ? ' and is a Loyal Customer 💜' : ''}.`
+    `The customer now has ${orders} ${orders === 1 ? 'order' : 'orders'}${loyal ? ' and is a Loyal Customer 💜' : ''}.` +
+    (sale.promo && promoWarning ? `\n⚠️ Code ${sale.promo} was over its limit (${promoWarning}) – ${discount} is still recorded on this sale.` : '')
   );
 }
 

@@ -538,8 +538,11 @@ function priceOrder(guildId, userId, product, quantity, rawCode) {
   const subtotal = unitPrice == null ? null : round(unitPrice * quantity);
   const code = rawCode ? promos.normalize(rawCode) : null;
   if (!code) return { unitPrice, subtotal, total: subtotal, discount: 0, code: null, promo: null, error: null };
-  const completedOrders = db.guild(guildId).orders[userId] ?? 0;
-  const { promo, error } = promos.check(guildId, code, userId, { completedOrders, reserved: promos.reservedBy(guildId, code) });
+  const { promo, error } = promos.check(guildId, code, userId, {
+    completedOrders: db.guild(guildId).orders[userId] ?? 0,
+    openOrders: promos.openOrdersOf(guildId, userId),
+    reserved: promos.reservedBy(guildId, code),
+  });
   const { total, discount } = promos.apply(promo, subtotal);
   return { unitPrice, subtotal, total, discount, code, promo, error };
 }
@@ -557,6 +560,32 @@ function priceAnswers(p, quantity) {
       : [`**Total to pay: ${money(p.subtotal)}**${each}`];
   if (promoNote) lines.push(`Promo code ${promoNote}`);
   return [{ label: 'Price', value: lines.join('\n') }];
+}
+
+/**
+ * A closed order gave its promo code back. Reopening it takes the code again only if the member could
+ * still use it now – otherwise the discount is dropped. Returns null when nothing changes, or
+ * { code, error, order, answers } – the order and the form answers without the discount.
+ * Call it right before the ticket is marked open again, with no await in between.
+ */
+function recheckOrderPromo(guildId, ticket) {
+  const order = ticket.order;
+  if (!order?.promo || ticket.completedAt) return null;
+  const { error } = promos.check(guildId, order.promo, ticket.ownerId, {
+    completedOrders: db.guild(guildId).orders[ticket.ownerId] ?? 0,
+    openOrders: promos.openOrdersOf(guildId, ticket.ownerId, { except: ticket.channelId }),
+    reserved: promos.reservedBy(guildId, order.promo, { except: ticket.channelId }),
+  });
+  if (!error) return null;
+  const subtotal = order.subtotal ?? null;
+  const price = { unitPrice: order.unitPrice ?? null, subtotal, total: subtotal, discount: 0, code: order.promo, promo: null, error };
+  const answers = (ticket.answers ?? []).filter((a) => a.label !== 'Price' && a.label !== 'Promo code');
+  return {
+    code: order.promo,
+    error,
+    order: { ...order, promo: null, discount: 0, total: subtotal },
+    answers: [...answers, ...priceAnswers(price, order.quantity ?? 1)],
+  };
 }
 
 async function startOrder(interaction, productId) {
@@ -605,22 +634,30 @@ async function submitOrder(interaction, productId) {
   if (notes) answers.push({ label: 'Notes', value: notes });
   answers.push(...priceAnswers(price, quantity));
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const channel = await tickets.openTicket(interaction.member, config.getType('order'), answers);
-  db.updateTicket(channel.id, {
-    order: {
-      productId: product.id,
-      product: product.name,
-      unitPrice: price.unitPrice,
-      quantity,
-      method: method || null,
-      methodIndex,
-      promo: price.promo ? price.code : null,
-      discount: price.discount,
-      subtotal: price.subtotal,
-      total: price.total,
-    },
-  });
+  // From here on this order holds its code (and counts as an open order of this member) – opening the
+  // ticket takes several Discord calls, and a buyer submitting at the same time must not get the same use.
+  const release = promos.hold(interaction.guild.id, interaction.user.id, price.promo ? price.code : null);
+  let channel;
+  try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    channel = await tickets.openTicket(interaction.member, config.getType('order'), answers);
+    db.updateTicket(channel.id, {
+      order: {
+        productId: product.id,
+        product: product.name,
+        unitPrice: price.unitPrice,
+        quantity,
+        method: method || null,
+        methodIndex,
+        promo: price.promo ? price.code : null,
+        discount: price.discount,
+        subtotal: price.subtotal,
+        total: price.total,
+      },
+    });
+  } finally {
+    release(); // the saved order holds the code now (or opening the ticket failed)
+  }
   const lines = [`Your private order ticket is ready: ${channel}`];
   if (price.total != null) lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${price.discount > 0 ? ` (you save ${money(price.discount)} with **${price.code}**)` : ''}`);
   else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
@@ -674,6 +711,8 @@ module.exports = {
   orderModal,
   parseQuantity,
   priceOrder,
+  priceAnswers,
+  recheckOrderPromo,
   startOrder,
   submitOrder,
   autocomplete,

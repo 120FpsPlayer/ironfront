@@ -160,7 +160,7 @@ test('codes in open orders are reserved: once-per-member and max uses count open
   const a = await order(guild, member(guild), product, { promo: 'SINGLE' });
   assert.equal(a.ticket.order.promo, 'SINGLE');
   const b = await order(guild, member(guild), product, { promo: 'SINGLE' });
-  assert.match(answer(b.ticket, 'Price'), /not applied: This code has been used up\./);
+  assert.match(answer(b.ticket, 'Price'), /not applied: All remaining uses of this code are held by other open orders right now/);
 });
 
 test('prices that are not a number: no totals, a valid code is passed on to the seller', async () => {

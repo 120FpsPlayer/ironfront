@@ -409,18 +409,36 @@ async function reopenTicket(channel, actor) {
       .edit(id, allow(OWNER_PERMS), AS_MEMBER)
       .catch((err) => console.warn(`[tickets] Could not give ${id} access to #${channel.name}:`, err.message));
   }
-  db.updateTicket(channel.id, { status: 'open', closedAt: null, closedBy: null, closeReason: null, lastActivity: Date.now(), lastMessageBy: 'staff', warned: false });
+  // Closing released the order's promo code – take it again only if it's still free (checked and saved
+  // together, so no other order can take it in between).
+  const dropped = require('../features/shop').recheckOrderPromo(channel.guild.id, ticket);
+  db.updateTicket(channel.id, {
+    status: 'open',
+    closedAt: null,
+    closedBy: null,
+    closeReason: null,
+    lastActivity: Date.now(),
+    lastMessageBy: 'staff',
+    warned: false,
+    ...(dropped && { order: dropped.order, answers: dropped.answers }),
+  });
   await refreshControlMessage(channel, ticket);
   schedulePanelRefresh(channel.guild);
 
-  await channel.send(
-    ui.notice(COLORS.success, `## 🔓 Ticket reopened\n<@${ticket.ownerId}>, <@${actor.id}> has reopened your ticket.`, { mentions: { users: [ticket.ownerId] } }),
-  );
+  let text = `## 🔓 Ticket reopened\n<@${ticket.ownerId}>, <@${actor.id}> has reopened your ticket.`;
+  if (dropped) {
+    text +=
+      `\n### ⚠️ Promo code **${dropped.code}** no longer applies\n` +
+      `The code was released while this ticket was closed, and it can't be used for this order anymore: ${dropped.error}\n` +
+      (dropped.order.total != null ? `Total to pay now: **${money(dropped.order.total)}**` : 'The seller confirms the final price without the discount.');
+  }
+  await channel.send(ui.notice(dropped ? COLORS.warning : COLORS.success, text, { mentions: { users: [ticket.ownerId] } }));
   await sendLog(channel.guild, {
     embeds: [
       logEmbed(COLORS.success, '🔓 Ticket reopened', actor.user ?? actor).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
         { name: 'By', value: `<@${actor.id}>`, inline: true },
+        ...(dropped ? [{ name: 'Promo code', value: `${dropped.code} removed – ${dropped.error}`.slice(0, 1024) }] : []),
       ),
     ],
   });
@@ -643,8 +661,18 @@ function requireCompletable(channel) {
   return ticket;
 }
 
+/** Which limit the order's promo code goes over if it is redeemed now (see promos.overLimit) – or null. */
+function promoOverLimit(guildId, ticket) {
+  const code = ticket.order?.promo;
+  if (!code) return null;
+  return promos.overLimit(promos.find(guildId, code), ticket.ownerId, { completedOrders: db.guild(guildId).orders[ticket.ownerId] ?? 0 });
+}
+
 /** The "Complete order" form (amount paid) for this ticket. */
-const completeForm = (channel) => ui.completeOrderModal(requireCompletable(channel));
+function completeForm(channel) {
+  const ticket = requireCompletable(channel);
+  return ui.completeOrderModal(ticket, { promoWarning: promoOverLimit(channel.guild.id, ticket) });
+}
 
 /** Product, quantity and payment method of an order – from the shop order form, or the Purchase ticket form. */
 function orderDetails(ticket) {
@@ -688,6 +716,9 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
   if (paid != null && !(Number.isFinite(paid) && paid >= 0)) throw new UserError('The amount paid must be a number of 0 or more (e.g. 19.99).');
   const guild = channel.guild;
   const g = db.guild(guild.id);
+  // Backstop: the code's limits are checked when the order is placed and when it's reopened. If it went
+  // over one anyway, the sale keeps the discount it was sold with, but the seller is told.
+  const promoWarning = promoOverLimit(guild.id, ticket);
   g.orders[ticket.ownerId] = (g.orders[ticket.ownerId] ?? 0) + 1;
   const orders = g.orders[ticket.ownerId];
   const now = Date.now();
@@ -732,11 +763,11 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
         { name: 'Orders so far', value: String(orders), inline: true },
         { name: 'Sale', value: `\`${sale.id}\``, inline: true },
         { name: 'Amount paid', value: money(sale.amount), inline: true },
-        { name: 'Promo code', value: sale.promo ? `${sale.promo} (−${money(sale.discount)})` : '—', inline: true },
+        { name: 'Promo code', value: sale.promo ? `${sale.promo} (−${money(sale.discount)})${promoWarning ? `\n⚠️ over its limit: ${promoWarning}` : ''}` : '—', inline: true },
       ),
     ],
   });
-  const result = { orders, loyal, sale };
+  const result = { orders, loyal, sale, promoWarning };
   try {
     if (respond) await respond(result);
   } finally {

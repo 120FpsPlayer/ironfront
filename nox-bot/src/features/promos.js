@@ -10,6 +10,10 @@
  *   percent / amount – exactly one is set (10 → 10% off, or 5 → 5€ off)
  *   userId           – personal code: only this member can use it
  *   uses             – recorded when the order is completed (redeem), not when it is placed
+ *
+ * Until then an open order HOLDS its code: the hold counts towards max uses, once per member and
+ * first order only (reservedBy / openOrdersOf). A closed order gives its code back – reopening it takes
+ * the code again only if it's still free (shop.recheckOrderPromo).
  */
 
 const crypto = require('node:crypto');
@@ -74,17 +78,35 @@ function remove(guildId, code) {
 
 /**
  * Why this member can't use the code right now – or null when it's fine.
- * reserved – owners of open orders that already use the code (not redeemed yet, but promised).
- * @param {{ now?: number, completedOrders?: number, reserved?: string[] }} opts
+ * reserved   – owners of open orders that already use the code (not redeemed yet, but promised).
+ * openOrders – how many other open (not completed) orders this member has – first-order codes need 0.
+ * @param {{ now?: number, completedOrders?: number, openOrders?: number, reserved?: string[] }} opts
  */
-function problem(promo, userId, { now = Date.now(), completedOrders = 0, reserved = [] } = {}) {
+function problem(promo, userId, { now = Date.now(), completedOrders = 0, openOrders = 0, reserved = [] } = {}) {
   if (!promo || !promo.active) return "This code doesn't exist.";
   if (promo.expiresAt && now > promo.expiresAt) return 'This code has expired.';
   if (promo.userId && promo.userId !== userId) return 'This code belongs to someone else.';
   if (promo.oncePerUser && reserved.includes(userId)) return "You're already using this code in another open order.";
-  if (promo.maxUses != null && promo.uses.length + reserved.length >= promo.maxUses) return 'This code has been used up.';
+  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return 'This code has been used up.';
   if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return "You've already used this code.";
+  if (promo.maxUses != null && promo.uses.length + reserved.length >= promo.maxUses) {
+    return 'All remaining uses of this code are held by other open orders right now – it only becomes available again if one of them is cancelled.';
+  }
   if (promo.firstOrderOnly && completedOrders > 0) return 'This code is only valid for your first order.';
+  if (promo.firstOrderOnly && openOrders > 0) return 'This code is only valid for your first order – you already have another open order.';
+  return null;
+}
+
+/**
+ * Completing an order: which limit redeeming its code now goes over – or null when it's fine.
+ * Only the limits an order that was valid when it was placed can break later. A code that was deleted
+ * or has expired since keeps its discount for orders placed in time.
+ */
+function overLimit(promo, userId, { completedOrders = 0 } = {}) {
+  if (!promo) return null;
+  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return `already used up (${promo.uses.length}/${promo.maxUses} uses)`;
+  if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return 'the customer already used it on an earlier order';
+  if (promo.firstOrderOnly && completedOrders > 0) return "it's for first orders only, and the customer already had a completed order";
   return null;
 }
 
@@ -104,9 +126,42 @@ function apply(promo, total) {
   return { total: round(total - discount), discount: round(discount) };
 }
 
-/** Owners of open (not yet completed) orders that use this code – pass as `reserved` to check(). */
-const reservedBy = (guildId, code) =>
-  db.tickets((t) => t.guildId === guildId && t.status === 'open' && !t.completedAt && t.order?.promo === normalize(code)).map((t) => t.ownerId);
+// Orders being placed right now: priced, but their ticket isn't saved yet (opening it takes several
+// Discord calls). They hold their code like open orders do, so two buyers who submit at the same time
+// can't both get the last use of a code.
+const placing = new Set();
+
+/**
+ * Marks an order as being placed – call it right after pricing it, before the first await. Call the
+ * returned release() as soon as the ticket has stored its order (or opening it failed).
+ */
+function hold(guildId, userId, code = null) {
+  const entry = { guildId, userId, code: code ? normalize(code) : null };
+  placing.add(entry);
+  return () => placing.delete(entry);
+}
+
+const placingNow = (guildId, match) => [...placing].filter((h) => h.guildId === guildId && match(h));
+
+/** Open (not yet completed) order tickets that use this code. */
+const openOrdersWith = (guildId, code) =>
+  db.tickets((t) => t.guildId === guildId && t.status === 'open' && !t.completedAt && t.order?.promo === normalize(code));
+
+/**
+ * Owners of open orders that use this code, and of orders being placed with it right now – pass as
+ * `reserved` to check(). except – a ticket channel to leave out (the order being checked itself).
+ */
+const reservedBy = (guildId, code, { except = null } = {}) => [
+  ...openOrdersWith(guildId, code)
+    .filter((t) => t.channelId !== except)
+    .map((t) => t.ownerId),
+  ...placingNow(guildId, (h) => h.code === normalize(code)).map((h) => h.userId),
+];
+
+/** How many open (not completed) orders this member has, or is placing right now – pass as `openOrders` to check(). */
+const openOrdersOf = (guildId, userId, { except = null } = {}) =>
+  db.tickets((t) => t.guildId === guildId && t.ownerId === userId && t.typeId === 'order' && t.status === 'open' && !t.completedAt && t.channelId !== except).length +
+  placingNow(guildId, (h) => h.userId === userId).length;
 
 /** Records one use – call it when the order is completed. */
 function redeem(guildId, code, userId, saleId = null) {
@@ -120,4 +175,4 @@ function redeem(guildId, code, userId, saleId = null) {
 /** "10% off" / "5€ off" */
 const label = (promo) => (promo.percent != null ? `${promo.percent}% off` : `${money(promo.amount)} off`);
 
-module.exports = { DAY, normalize, list, find, create, personal, remove, problem, check, apply, reservedBy, redeem, label };
+module.exports = { DAY, normalize, list, find, create, personal, remove, problem, overLimit, check, apply, hold, openOrdersWith, reservedBy, openOrdersOf, redeem, label };
