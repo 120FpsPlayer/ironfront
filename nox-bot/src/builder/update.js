@@ -13,7 +13,7 @@ const db = require('../lib/db');
 const { ROLES, CATEGORIES } = require('./layout');
 const { profile } = require('./permissions');
 const style = require('./style');
-const { createRole, overwriteResolver, channelOptions, channelOverwrites, ensureRoleOrder, publish, describeError } = require('./executor');
+const { createRole, overwriteResolver, channelOptions, channelOverwrites, channelWanted, ensureRoleOrder, publish, describeError } = require('./executor');
 
 /**
  * @returns {Promise<{ roles: string[], categories: string[], channels: string[], messages: number, errors: string[] }>}
@@ -80,7 +80,7 @@ async function addMissing(guild, { reason = `${config.brand.name} update` } = {}
       res.categories.push(name);
     }
     const added = [];
-    for (const ch of cat.channels) {
+    for (const ch of cat.channels.filter(channelWanted)) {
       if (channels[ch.key] && guild.channels.cache.has(channels[ch.key])) continue;
       const { opts } = channelOptions(cat, ch, { parentId: categories[cat.key], resolve, communityOn, reason });
       const channel = await attempt(`Channel ${opts.name}`, () => guild.channels.create(opts));

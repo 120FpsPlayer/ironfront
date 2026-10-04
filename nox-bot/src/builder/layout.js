@@ -13,6 +13,7 @@
  *   profile  – who can see / write (see builder/permissions.js)
  *   posters  – extra role keys allowed to write in read-only channels
  *   post     – which message set /build publishes there (see builder/content.js)
+ *   feature  – config.json section: with "enabled": false there, the channel is left out
  */
 
 const SEPARATOR = (key, label) => ({ key, name: `━━━━━ ${label} ━━━━━`, color: 0, perms: 'none', separator: true });
@@ -50,7 +51,7 @@ const CATEGORIES = [
     name: '📊 SERVER STATS',
     profile: 'stats',
     channels: [
-      voice('statShop', '🟢 Shop open', { profile: 'stats' }), // open / closed – see features/shopstatus.js
+      voice('statShop', '🟢 Shop open', { profile: 'stats', feature: 'shopStatus' }), // open / closed – see features/shopstatus.js
       voice('statMembers', '👥 Members: 0', { profile: 'stats' }),
       voice('statVouches', '⭐ Vouches: 0', { profile: 'stats' }),
     ],

@@ -354,7 +354,50 @@ test('panel refresh uploads the images again and copes with a missing image file
   assert.equal(fresh.files.length, 1);
 });
 
+test('images: the first order-ticket card shows the ordered product, even when another product name is the start of its name', async () => {
+  const { guild } = await builtGuild();
+  const short = shop.addProduct(guild, { name: 'Spotify', price: '5', description: 'One month.', image: { buffer: imageBytes('png'), ext: 'png' } });
+  const long = shop.addProduct(guild, { name: 'Spotify — 12 months', price: '40', description: 'A whole year.', image: { buffer: imageBytes('gif'), ext: 'gif' } });
+  const buyer = member(guild);
+  await run({ guild, member: buyer, kind: 'modal', customId: `shop:order:${long.id}`, fields: { quantity: '1' }, selects: { payment: ['0'] } });
+  const ticket = db.tickets((x) => x.guildId === guild.id && x.ownerId === buyer.id)[0];
+  const card = guild.channels.cache.get(ticket.channelId).messageList[0];
+  assert.deepEqual(fileNames(card.body), [`product-${long.id}.gif`], 'not the picture of "Spotify"');
+  assert.equal(ticket.order.productId, long.id);
+
+  // A "Custom order" ticket only has the typed answer: the longest matching name wins.
+  const typed = (value) => shop.ticketProduct(guild.id, { answers: [{ label: 'What would you like to buy?', value }] });
+  assert.equal(typed('Spotify — 12 months')?.id, long.id);
+  assert.equal(typed('Spotify — 12 months — 40€')?.id, long.id);
+  assert.equal(typed('spotify')?.id, short.id);
+  assert.equal(typed('Spotify — 5€')?.id, short.id);
+  assert.equal(typed('Spotify Premium'), null);
+});
+
 // ───────────── Notify me ─────────────
+
+test('Notify me: a Buy button of a product that has sold out since offers Notify me instead of a dead end', async () => {
+  const { guild, owner } = await builtGuild();
+  const item = shop.addProduct(guild, { name: 'Nitro', price: '10', description: 'Instant.', image: { buffer: imageBytes('png'), ext: 'png' } });
+  const announcement = await shop.announceProduct(guild, item);
+  assert.ok(customIds(announcement.body).includes(`shop:buy:${item.id}`), '#restocks keeps its Buy now button');
+  await product(guild, owner, 'stock', { product: item.id, status: 'out' });
+
+  const buyer = member(guild);
+  const buy = await run({ guild, member: buyer, kind: 'button', customId: `shop:buy:${item.id}` });
+  assert.equal(buy.state.modals.length, 0, 'no order form');
+  assert.ok(buy.deferred && !buy.state.replies.length, 'answered privately (deferred ephemeral reply)');
+  const answer = lastResponse(buy);
+  assert.match(textOf(answer), /Nitro[\s\S]*Sold out right now – click \*\*Notify me\*\*/);
+  assert.ok(customIds(answer).includes(`restock:notify:${item.id}`));
+  assert.ok(!customIds(answer).includes(`shop:buy:${item.id}`));
+  assert.deepEqual(fileNames(answer), [`product-${item.id}.png`]);
+
+  const notify = await run({ guild, member: buyer, kind: 'button', customId: `restock:notify:${item.id}` });
+  assert.match(textOf(lastResponse(notify)), /You're on the list/);
+  assert.deepEqual(restock.waiting(guild.id, item.id), [buyer.id]);
+});
+
 
 test('Notify me: a sold-out product offers a toggle, a restock DMs everyone waiting once and clears the list', async () => {
   const { guild, owner } = await builtGuild();

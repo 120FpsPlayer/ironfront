@@ -8,6 +8,8 @@
  * Shown as the locked voice channel "🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ" / "🔴┃ꜱʜᴏᴘ ᴄʟᴏꜱᴇᴅ" at the top of the server, in the shop panel,
  * the ticket panel and in new tickets. A timer checks every minute: the channel is renamed only when its name
  * has to change (Discord allows 2 renames per 10 minutes) and the panels are refreshed when the state flips.
+ * With config.json → shopStatus.enabled false there is no status channel: /build leaves it out and the timer
+ * removes one made earlier (it would say "open" forever). The panels still show the state.
  */
 
 const config = require('../lib/config');
@@ -86,6 +88,23 @@ async function renameChannel(guild, now = clock.now()) {
   return { renamed: res.ok, wait: res.ok ? 0 : res.wait };
 }
 
+const removeFailed = new Set(); // servers where the status channel couldn't be removed – warned once
+
+/** shopStatus turned off: deletes the status channel /build made earlier → true when it was removed. */
+async function removeChannel(guild) {
+  const channel = guild.channels.cache.get(db.channelId(guild.id, 'statShop') ?? '');
+  if (!channel || removeFailed.has(guild.id)) return false;
+  try {
+    await channel.delete('Shop status channel turned off in config.json (shopStatus.enabled)');
+  } catch (err) {
+    removeFailed.add(guild.id);
+    console.warn(`[shop status] ${guild.name}: the status channel is turned off in config.json but I couldn't delete it (${err.message}) – delete it by hand.`);
+    return false;
+  }
+  console.log(`[shop status] ${guild.name}: removed the status channel – it is turned off in config.json (shopStatus.enabled).`);
+  return true;
+}
+
 async function refreshPanels(guild) {
   for (const kind of ['shop', 'tickets']) await panels.refresh(guild, kind).catch((err) => console.warn('[shop status]', err.message));
 }
@@ -98,6 +117,7 @@ const shownLine = (guildId, now) => statusLine(guildId, 'shop', now) ?? '';
 
 /** Brings one server up to date: status channel name, and the panels when what they show changed. */
 async function sync(guild, now = clock.now()) {
+  if (!config.shopStatus.enabled) await removeChannel(guild);
   const state = db.guild(guild.id).shopStatus;
   const open = isOpen(guild.id, now);
   const line = shownLine(guild.id, now);

@@ -240,9 +240,12 @@ function everyoneCanRead(channelKey) {
   return false;
 }
 
+/** Channels of a feature turned off in config.json (layout.js → feature, e.g. the shop status channel) aren't made. */
+const channelWanted = (ch) => !ch.feature || Boolean(config[ch.feature]?.enabled);
+
 /** Number of progress steps (for the progress bar). */
 function plannedSteps() {
-  const channels = CATEGORIES.reduce((n, c) => n + c.channels.length, 0);
+  const channels = CATEGORIES.reduce((n, c) => n + c.channels.filter(channelWanted).length, 0);
   const posts = CATEGORIES.flatMap((c) => c.channels).filter((c) => c.post).length;
   return ROLES.length + CATEGORIES.length + channels + posts + 12;
 }
@@ -406,7 +409,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       R.categories[cat.key] = category.id;
       R.created.categories += 1;
 
-      for (const ch of cat.channels) {
+      for (const ch of cat.channels.filter(channelWanted)) {
         const { opts, convert } = channelOptions(cat, ch, { parentId: category.id, resolve, communityOn, reason });
         if (convert) toConvert.push(ch.key);
         const channel = await attempt(`Channel ${opts.name}`, () => guild.channels.create(opts));
@@ -652,4 +655,4 @@ async function ensureRoleOrder(guild, ids) {
   return true;
 }
 
-module.exports = { buildServer, publish, sendItem, describeError, discordLocale, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath, createRole, overwriteResolver, channelOptions, ensureRoleOrder };
+module.exports = { buildServer, publish, sendItem, describeError, discordLocale, BuildAborted, mergeOverwrites, channelOverwrites, everyoneCanRead, automodRules, plannedSteps, logoPath, createRole, overwriteResolver, channelOptions, channelWanted, ensureRoleOrder };

@@ -161,7 +161,8 @@ async function refreshControlMessage(channel, ticket) {
   await msg.edit(payload).catch((err) => console.warn('[card] Failed to refresh:', err.message));
 }
 
-async function openTicket(member, type, answers = []) {
+/** extra: more ticket fields, stored before the first card is posted (the shop's `order`, so the card shows that product). */
+async function openTicket(member, type, answers = [], extra = {}) {
   const guild = member.guild;
   const key = `${guild.id}:${member.id}`;
   if (creating.has(key)) throw new UserError('Your ticket is being created, one moment…');
@@ -220,6 +221,7 @@ async function openTicket(member, type, answers = []) {
       rating: null,
       transcriptUrl: null,
       controlMessageId: null,
+      ...extra,
     });
 
     const pings = settings.pingStaffOnOpen ? staffRoles : [];

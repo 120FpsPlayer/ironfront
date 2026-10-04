@@ -6,14 +6,56 @@ const hours = require('./hours');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
-function load() {
-  let raw;
+/**
+ * Sections added in later versions. A config.json without them (kept from an older version) gets exactly
+ * what the shipped config.json has, so updating the bot never turns a feature off without anyone noticing.
+ */
+const FEATURE_DEFAULTS = {
+  orders: { receipts: true, proofs: true, vouchReminderHours: 24 },
+  promos: { enabled: true },
+  welcomeDiscount: { enabled: true, percent: 5, validDays: 7 },
+  invites: {
+    enabled: true,
+    rewards: [
+      { invites: 5, percent: 10 },
+      { invites: 15, percent: 15 },
+      { invites: 30, percent: 20 },
+    ],
+  },
+  shopStatus: { enabled: true, openName: '🟢 Shop open', closedName: '🔴 Shop closed' },
+  security: { impersonationAlerts: true, lockdownPausesInvites: true },
+  backups: { enabled: true, everyHours: 24 },
+  salesReport: { enabled: true, weekday: 1, hour: 10 },
+};
+
+/** Switches someone can turn off in config.json → [what is off, where, the same test the feature uses]. */
+const SWITCHES = [
+  ['promo codes', 'promos.enabled', (c) => c.promos.enabled === false],
+  ['first-purchase code', 'welcomeDiscount.enabled', (c) => !c.welcomeDiscount.enabled],
+  ['invite tracking', 'invites.enabled', (c) => c.invites.enabled === false],
+  ['shop status channel', 'shopStatus.enabled', (c) => !c.shopStatus.enabled],
+  ['automatic backups', 'backups.enabled', (c) => !c.backups.enabled],
+  ['weekly sales report', 'salesReport.enabled', (c) => !c.salesReport.enabled],
+  ['look-alike alerts', 'security.impersonationAlerts', (c) => !c.security.impersonationAlerts],
+  ['receipts by DM', 'orders.receipts', (c) => !c.orders.receipts],
+  ['#proofs posts', 'orders.proofs', (c) => !c.orders.proofs],
+  ['vouch reminders', 'orders.vouchReminderHours', (c) => !(Number(c.orders.vouchReminderHours) > 0)],
+  ['opening hours', 'workingHours.enabled', (c) => !c.workingHours.enabled],
+];
+
+/** "automatic backups (backups.enabled), …" – the features config.json turns off (empty when none). */
+const turnedOff = (c) => SWITCHES.filter(([, , off]) => off(c)).map(([what, where]) => `${what} (${where})`);
+
+function read() {
   try {
-    raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch (err) {
     throw new Error(`config.json could not be read: ${err.message}`);
   }
+}
 
+/** Checks the raw config.json object and fills in the defaults (changes and returns it). */
+function load(raw = read()) {
   if (!Array.isArray(raw.ticketTypes) || raw.ticketTypes.length === 0) {
     throw new Error('config.json: "ticketTypes" must contain at least one ticket type.');
   }
@@ -77,19 +119,16 @@ function load() {
   // Written from workingHours, so the panels and the info cards always show the same hours (set it to override).
   raw.shop.supportHours ??= hours.hoursText(raw.workingHours);
   raw.vouches ??= {};
-  raw.orders = { receipts: true, proofs: true, vouchReminderHours: 24, ...raw.orders };
-  raw.promos = { enabled: true, ...raw.promos };
-  raw.welcomeDiscount = { enabled: false, percent: 5, validDays: 7, ...raw.welcomeDiscount };
-  raw.invites = { enabled: false, rewards: [], ...raw.invites };
-  raw.shopStatus = { enabled: false, openName: '🟢 Shop open', closedName: '🔴 Shop closed', ...raw.shopStatus };
-  raw.security = { impersonationAlerts: true, lockdownPausesInvites: true, ...raw.security };
-  raw.backups = { enabled: false, everyHours: 24, ...raw.backups };
-  raw.salesReport = { enabled: false, weekday: 1, hour: 10, ...raw.salesReport };
+  for (const [key, defaults] of Object.entries(FEATURE_DEFAULTS)) raw[key] = { ...JSON.parse(JSON.stringify(defaults)), ...raw[key] }; // a copy – nested lists are never shared
   return raw;
 }
 
 const config = load();
 
 config.getType = (id) => config.ticketTypes.find((t) => t.id === id) ?? null;
+/** The features config.json turns off – printed once at startup and by npm run check. */
+config.turnedOff = (c = config) => turnedOff(c);
+/** For tests: the same checks and defaults for another config.json object. */
+config.load = load;
 
 module.exports = config;

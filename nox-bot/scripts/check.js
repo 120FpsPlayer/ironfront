@@ -13,6 +13,8 @@ process.chdir(path.join(__dirname, '..'));
 try {
   const config = require('../src/lib/config');
   console.log(`✔ config.json is valid – ${config.ticketTypes.length} ticket types, ${config.snippets.length} canned replies, ${config.shop.paymentMethods.length} payment methods`);
+  const off = config.turnedOff();
+  if (off.length) console.log(`ℹ Turned off in config.json: ${off.join(', ')}.`);
 } catch (err) {
   console.error(`✖ ${err.message}`);
   process.exit(1);

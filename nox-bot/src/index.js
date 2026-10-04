@@ -53,6 +53,8 @@ const every = (ms, fn, firstDelay = ms) => {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag} · servers: ${c.guilds.cache.size} · commands: ${commands.size}`);
+  const off = config.turnedOff();
+  if (off.length) console.log(`ℹ️  Turned off in config.json: ${off.join(', ')}.`);
   reportRoles([...c.guilds.cache.values()], config.ticketTypes);
 
   if (env.autoDeployCommands) {

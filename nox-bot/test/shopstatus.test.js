@@ -258,6 +258,37 @@ test('/shop close | open | auto: manual mode wins over the hours until /shop aut
   assert.match(gone, /No status channel yet/);
 });
 
+test('shopStatus turned off in config.json: no status channel that keeps saying "open" – an old one is removed, /build leaves it out', async () => {
+  const guild = await builtGuild();
+  const owner = guild.members.cache.get(guild.ownerId);
+  const channel = ch(guild, 'statShop');
+  const statusChannels = (g) => [...g.channels.cache.values()].filter((c) => [OPEN_NAME(), CLOSED_NAME()].includes(c.name));
+  config.shopStatus.enabled = false;
+  try {
+    setClock(SUMMER.closes);
+    await shopstatus.tick(guild.client);
+    assert.equal(guild.channels.cache.has(channel.id), false, 'the status channel is removed instead of saying "open" forever');
+    assert.deepEqual(statusChannels(guild), []);
+    await shopstatus.tick(guild.client); // nothing left to do
+
+    const close = await run({ guild, member: owner, kind: 'command', commandName: 'shop', subcommand: 'close' });
+    assert.match(textOf(lastResponse(close)), /Right now:\*\* 🔴 Closed[\s\S]*The status channel is turned off \(config\.json → shopStatus\.enabled\)/);
+    assert.match(textOf(panelMessage(guild, 'shop').body), /Closed right now/, 'the panels still show the state');
+
+    const update = await run({ guild, member: owner, kind: 'command', commandName: 'build', options: { only: 'update' } });
+    assert.match(textOf(lastResponse(update)), /Server updated/);
+    assert.deepEqual(statusChannels(guild), [], '/build only:update does not bring it back');
+
+    const fresh = new FakeGuild();
+    await buildServer({ guild: fresh, mode: 'add', invokerId: fresh.ownerId });
+    assert.equal(ch(fresh, 'statShop'), undefined, 'a new build leaves it out');
+    assert.deepEqual(statusChannels(fresh), []);
+    assert.ok(ch(fresh, 'statMembers'), 'the other stat channels are there');
+  } finally {
+    config.shopStatus.enabled = true;
+  }
+});
+
 test('/shop: only admins and sellers can open or close the shop', async () => {
   const guild = await builtGuild();
   setClock(SUMMER.opens);
