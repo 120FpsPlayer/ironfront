@@ -370,6 +370,30 @@ async function handleComponent(interaction) {
   return null;
 }
 
+/**
+ * Discord gives the bot 3 seconds to answer a click or a form. 10062 = it came too late (the bot was busy
+ * starting, the host is slow or the connection lagged) – nothing happened, the user can just try again.
+ * 40060 = something else already answered it, which means a second copy of the bot runs with the same token.
+ * Neither can be answered any more, so this is one clear console line instead of a stack trace.
+ */
+const TOO_LATE = new Set([10062, 40060]);
+const lateClicks = [];
+function reportTooLate(interaction, err) {
+  const what = interaction.customId ? `A click (${interaction.customId})` : `/${interaction.commandName}`;
+  if (err.code === 40060) {
+    console.warn(`⚠️  ${what} was already answered by another bot process – is the bot running twice with the same token (e.g. on your PC and on the host)? Stop the extra copy.`);
+    return;
+  }
+  const age = ((Date.now() - interaction.createdTimestamp) / 1000).toFixed(1);
+  console.warn(`⏳ ${what} expired before the bot could answer (Discord allows 3 s, it was ${age} s old). Nothing was created – the user can simply try again.`);
+  const now = Date.now();
+  lateClicks.push(now);
+  while (lateClicks.length && now - lateClicks[0] > 10 * 60_000) lateClicks.shift();
+  if (lateClicks.length === 3) {
+    console.warn('   This keeps happening – the host is too slow or far away. Use Node.js 20 or newer and a faster plan or a host region close to Discord (EU/US).');
+  }
+}
+
 module.exports = async function handleInteraction(interaction, commands) {
   try {
     if (!interaction.inGuild() || !interaction.guild) {
@@ -399,6 +423,7 @@ module.exports = async function handleInteraction(interaction, commands) {
       await replyError(interaction, err.message).catch(() => null);
       return;
     }
+    if (TOO_LATE.has(err?.code)) return reportTooLate(interaction, err);
     console.error('[interaction]', interaction.customId ?? interaction.commandName, err);
     const missing = err?.code === 50013;
     await replyError(

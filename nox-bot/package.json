@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node index.js",
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node scripts/test.js",
     "check": "node scripts/check.js",
     "render-assets": "node tools/render-assets.js"
   },

@@ -291,6 +291,9 @@ npm i -D playwright && npm run render-assets
 | Community mode wasn't enabled | Discord refused it for this server. Everything else still works (announcement channels are normal read-only channels). You can turn it on later under Server Settings → Enable Community |
 | A custom emoji was deleted | Nothing breaks – the bot switches to a normal emoji. Run `/build only:emojis` to upload it again |
 | "Discord only allows renaming a channel twice per 10 minutes" | That's Discord's limit – wait the minutes it says and try again |
+| `⏳ A click (…) expired before the bot could answer` or `Unknown interaction (10062)` | Discord gives the bot 3 seconds to answer. It happens when someone clicks while the bot is starting or the host is very slow – they just click again. If it happens all the time: use Node.js 20 or newer and a faster plan / a host region in the EU or US |
+| `… was already answered by another bot process` | The bot is running twice with the same token (e.g. on your PC and on the host) – stop one of them |
+| `ExperimentalWarning: buffer.File is an experimental feature` | Harmless – it's printed by Node.js 18. Pick Node.js 20 or 22 on your host to get rid of it (and for a faster bot) |
 | Buttons say "This interaction failed" | The bot must be **online** – buttons are handled live by the bot |
 | Transcripts are empty | Turn on **Message Content Intent** |
 | The new channels (#proofs, #sales, #backups, shop status) are missing | Run `/build only:update` (the shop status channel only exists while `shopStatus.enabled` is `true`) |
