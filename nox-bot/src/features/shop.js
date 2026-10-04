@@ -13,10 +13,14 @@ const {
 } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
+const hooks = require('../lib/hooks');
+const images = require('../lib/productImages');
 const panels = require('../lib/panels');
+const shopstatus = require('./shopstatus');
+const { splitEmoji } = require('../builder/style');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
 const { UserError, embed, truncate, sendToChannel } = require('../lib/utils');
-const { SPACER, container, text, divider, btn, linkBtn, row, header, buttonSection, v2, channelUrl } = require('../lib/v2');
+const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl } = require('../lib/v2');
 
 const STOCK = {
   in: { label: 'In stock', dot: '🟢' },
@@ -83,18 +87,223 @@ function requireProduct(guildId, query) {
 // A deleted custom product emoji would show as plain ":name:" text – use the default then.
 const productEmoji = (guild, p) => (p.emoji && (!p.emoji.startsWith('<') || customEmojiUsable(guild, p.emoji)) ? p.emoji : e(guild, 'diamond'));
 
+// ───────────── Categories ─────────────
+
+const MAX_CATEGORIES = 20; // + "Other products" – all fit in one select menu (25)
+
+/** "  Game   keys " → "Game keys"; empty / "none" → null (no category). */
+function cleanCategory(input) {
+  const name = String(input ?? '').replace(/\s+/g, ' ').trim();
+  if (!name || /^(none|-)$/i.test(name)) return null;
+  if (name.length > 30) throw new UserError('Category names can be up to 30 characters.');
+  return name;
+}
+
+/** Categories in catalog order (the order products were added), optionally ignoring one product. */
+function categories(guildId, exceptProductId = null) {
+  const seen = new Map();
+  for (const p of products(guildId)) {
+    if (p.category && p.id !== exceptProductId && !seen.has(p.category.toLowerCase())) seen.set(p.category.toLowerCase(), p.category);
+  }
+  return [...seen.values()];
+}
+
+/** The category a product should get – reuses the spelling of an existing one ("games" → "Games"). */
+function resolveCategory(guildId, input, productId = null) {
+  const name = cleanCategory(input);
+  if (!name) return null;
+  const others = categories(guildId, productId);
+  const existing = others.find((c) => c.toLowerCase() === name.toLowerCase());
+  if (existing) return existing;
+  if (others.length >= MAX_CATEGORIES) throw new UserError(`The shop can have up to ${MAX_CATEGORIES} categories – use one of the existing ones.`);
+  return name;
+}
+
+/** Products grouped by category: [{ key, name, value, products }] – products without a category come last. */
+function groups(list) {
+  const map = new Map();
+  for (const p of list) {
+    const key = p.category ? p.category.toLowerCase() : '';
+    if (!map.has(key)) map.set(key, { key, name: p.category || null, value: key ? `c:${key}` : 'none', products: [] });
+    map.get(key).products.push(p);
+  }
+  const named = [...map.values()].filter((g) => g.key);
+  return map.has('') ? [...named, map.get('')] : named;
+}
+
+let RGI = null;
+try {
+  RGI = new RegExp('^\\p{RGI_Emoji}$', 'v');
+} catch {
+  RGI = UNICODE_EMOJI; // Node < 20
+}
+
+/** "🎮 Games" → { emoji: '🎮', label: 'Games' }; "Games" → { emoji: null, label: 'Games' }. */
+function categoryParts(group, titled = true) {
+  if (!group.name) return { emoji: null, label: titled ? 'Other products' : 'Products' };
+  const { emoji, label } = splitEmoji(group.name);
+  return emoji && RGI.test(emoji) ? { emoji, label } : { emoji: null, label: group.name };
+}
+
+const groupTitle = (guild, group, titled = true) => {
+  const { emoji, label } = categoryParts(group, titled);
+  return `${emoji ?? e(guild, group.name ? 'folder' : 'box')} ${label}`;
+};
+
+/**
+ * /product add | edit → category: existing ones first (Discord highlights the first suggestion, so Enter
+ * reuses one instead of making a near-duplicate), then what is being typed as a new one.
+ */
+function categoryAutocomplete(interaction, typed) {
+  const q = String(typed ?? '').replace(/\s+/g, ' ').trim().slice(0, 30);
+  const list = categories(interaction.guild.id);
+  const choices = list.filter((c) => !q || c.toLowerCase().includes(q.toLowerCase())).slice(0, 23).map((c) => ({ name: c, value: c }));
+  if (q && !/^(none|-)$/i.test(q) && !list.some((c) => c.toLowerCase() === q.toLowerCase())) choices.push({ name: `➕ New category: ${q}`, value: q });
+  if (interaction.options.getSubcommand(false) === 'edit') choices.push({ name: '🚫 No category', value: 'none' });
+  return interaction.respond(choices.slice(0, 25));
+}
+
+function groupSummary(group) {
+  const n = group.products.length;
+  const out = group.products.filter((p) => p.stock === 'out').length;
+  return `${n} ${n === 1 ? 'product' : 'products'}${out ? ` · ${out} sold out` : ''}`;
+}
+
+// ───────────── Product cards ─────────────
+
+const CARD_LIMIT = 8; // more products → compact list with a menu
+const UPLOAD_LIMIT = 8 * 1024 * 1024; // images per message (Discord allows 10 files and 10 MB)
+
+function cardText(guild, p) {
+  const stock = STOCK[p.stock] ?? STOCK.in;
+  return `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${formatPrice(p.price)}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}`;
+}
+
+/** Buy – or 🔔 Notify me while it's sold out (features/restock.js). */
+function cardButton(guild, p) {
+  return p.stock === 'out'
+    ? btn(`restock:notify:${p.id}`, 'Notify me', ce(guild, 'bell'))
+    : btn(`shop:buy:${p.id}`, 'Buy', ce(guild, 'cart'), ButtonStyle.Primary);
+}
+
+/** A product card: the button on the right – or, with an image, the image on the right and the button below. */
+function addCard(c, guild, p, image = null) {
+  if (!image) return c.addSectionComponents(buttonSection(cardText(guild, p), cardButton(guild, p)));
+  c.addSectionComponents(section(cardText(guild, p), image.url));
+  return c.addActionRowComponents(row(cardButton(guild, p)));
+}
+
+/** Images of these products that fit into one message (10 files, 8 MB) → Map(productId → attachment). */
+function pickImages(list, max = 10) {
+  const picked = new Map();
+  let bytes = 0;
+  for (const p of list) {
+    if (picked.size >= max) break;
+    const image = images.attachment(p);
+    if (!image || bytes + image.size > UPLOAD_LIMIT) continue;
+    bytes += image.size;
+    picked.set(p.id, image);
+  }
+  return picked;
+}
+
+/** Components and text characters of a Components V2 payload – Discord allows 40 and 4000. */
+function measure(payload) {
+  let total = 0;
+  let chars = 0;
+  const walk = (c) => {
+    const d = typeof c?.toJSON === 'function' ? c.toJSON() : c;
+    if (!d?.type) return;
+    total += 1;
+    if (d.type === 10) chars += d.content.length;
+    for (const x of d.components ?? []) walk(x);
+    if (d.accessory) walk(d.accessory);
+  };
+  for (const c of payload.components ?? []) walk(c);
+  return { total, chars };
+}
+
+const fits = (payload) => {
+  const { total, chars } = measure(payload);
+  return total <= 40 && chars <= 4000;
+};
+
+/** Cards grouped under category headers; returns the image files. */
+function addCards(c, guild, list, pictures) {
+  const gs = groups(list);
+  const titled = gs.some((g) => g.name);
+  gs.forEach((g, i) => {
+    if (titled) {
+      if (i > 0) c.addSeparatorComponents(divider());
+      c.addTextDisplayComponents(text(`## ${groupTitle(guild, g)}`));
+    }
+    for (const p of g.products) addCard(c, guild, p, pictures.get(p.id));
+  });
+  return list.map((p) => pictures.get(p.id)?.file).filter(Boolean);
+}
+
+/** Many products: a short list per category and a menu – categories open an ephemeral list (features/catalog.js). */
+function addList(c, guild, list) {
+  const gs = groups(list);
+  const titled = gs.some((g) => g.name);
+  let budget = 2400;
+  const lines = [];
+  let shown = 0;
+  for (const g of gs) {
+    for (const [i, p] of g.products.entries()) {
+      const stock = STOCK[p.stock] ?? STOCK.in;
+      const head = titled && i === 0 ? `### ${groupTitle(guild, g)}${SPACER}·${SPACER}${g.products.length}\n` : '';
+      const line = `${head}**${productEmoji(guild, p)} ${p.name}** — **${formatPrice(p.price)}** · ${stock.dot} ${stock.label}\n-# ${truncate(p.description, 90)}`;
+      if (budget - line.length < 0) break;
+      budget -= line.length;
+      lines.push(line);
+      shown += 1;
+    }
+  }
+  const how = titled ? 'open a category below to buy (sold out? get a DM when it is back)' : 'pick a product below to order it';
+  lines.push(shown < list.length ? `-# …and ${list.length - shown} more – ${how}.` : `-# ${how[0].toUpperCase()}${how.slice(1)}.`);
+  c.addTextDisplayComponents(text(lines.join('\n')));
+  c.addActionRowComponents(row(titled ? categoryMenu(guild, gs) : productMenu(guild, list)));
+}
+
+function categoryMenu(guild, gs) {
+  return new StringSelectMenuBuilder()
+    .setCustomId('catalog:browse')
+    .setPlaceholder('📂 Browse a category…')
+    .addOptions(
+      gs.slice(0, 25).map((g) => {
+        const { emoji, label } = categoryParts(g);
+        return { label: truncate(label, 100), value: g.value, description: groupSummary(g), emoji: emoji ?? ce(guild, g.name ? 'folder' : 'box') };
+      }),
+    );
+}
+
+/** Buyable products open the order form, sold-out ones offer "Notify me". */
+function productMenu(guild, list) {
+  const options = list.slice(0, list.length > 25 ? 24 : 25).map((p) => ({
+    label: truncate(p.name, 100),
+    value: p.id,
+    description: truncate(`${formatPrice(p.price)} · ${p.stock === 'out' ? 'Sold out – get a DM when it is back' : p.description}`, 100),
+    emoji: ce(guild, p.stock === 'out' ? 'bell' : 'cart'),
+  }));
+  if (list.length > 25) options.push({ label: `All ${list.length} products…`, value: 'all', description: 'Browse the whole catalog page by page', emoji: ce(guild, 'search') });
+  return new StringSelectMenuBuilder().setCustomId('catalog:pick').setPlaceholder('🛒 Choose a product…').addOptions(options);
+}
+
 // ───────────── Catalog panel ─────────────
 
-function shopPanel(guild) {
-  const list = products(guild.id);
+function panelPayload(guild, list, { cards = false, pictures = new Map(), now } = {}) {
   const c = container(COLORS.brand);
+  const status = shopstatus.statusLine(guild.id, 'shop', now);
   const intro =
     `# ${e(guild, 'cart')} ${config.brand.name} Shop\n${config.brand.tagline ?? ''}\n` +
     `-# ${list.length ? `${list.length} ${list.length === 1 ? 'product' : 'products'}` : 'Catalog coming soon'} · ` +
-    `${e(guild, 'clock')} ${config.shop.deliveryTime ?? 'Fast delivery'}`;
+    `${e(guild, 'clock')} ${config.shop.deliveryTime ?? 'Fast delivery'}` +
+    (status ? `\n${status}` : '');
   header(c, intro, guild.iconURL?.({ size: 256 }));
   c.addSeparatorComponents(divider(true));
 
+  let files = [];
   if (!list.length) {
     c.addTextDisplayComponents(
       text(
@@ -103,38 +312,10 @@ function shopPanel(guild) {
           'Click **Custom order** below and our team will help you directly.',
       ),
     );
-  } else if (list.length <= 8) {
-    for (const p of list) {
-      const stock = STOCK[p.stock] ?? STOCK.in;
-      const body = `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${formatPrice(p.price)}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}`;
-      const buy = p.stock === 'out'
-        ? btn(`shop:buy:${p.id}`, 'Sold out', ce(guild, 'x'), ButtonStyle.Secondary).setDisabled(true)
-        : btn(`shop:buy:${p.id}`, 'Buy', ce(guild, 'cart'), ButtonStyle.Primary);
-      c.addSectionComponents(buttonSection(body, buy));
-    }
+  } else if (cards) {
+    files = addCards(c, guild, list, pictures);
   } else {
-    let budget = 2600;
-    const lines = [];
-    for (const p of list) {
-      const stock = STOCK[p.stock] ?? STOCK.in;
-      const line = `**${productEmoji(guild, p)} ${p.name}** — **${formatPrice(p.price)}** · ${stock.dot} ${stock.label}\n-# ${truncate(p.description, 90)}`;
-      if (budget - line.length < 0) break;
-      budget -= line.length;
-      lines.push(line);
-    }
-    if (lines.length < list.length) lines.push(`-# …and ${list.length - lines.length} more – pick from the list below.`);
-    c.addTextDisplayComponents(text(lines.join('\n')));
-    const buyable = list.filter((p) => p.stock !== 'out').slice(0, 25);
-    if (buyable.length) {
-      c.addActionRowComponents(
-        row(
-          new StringSelectMenuBuilder()
-            .setCustomId('shop:select')
-            .setPlaceholder('🛒 Choose a product to buy…')
-            .addOptions(buyable.map((p) => ({ label: truncate(p.name, 100), value: p.id, description: truncate(`${formatPrice(p.price)} · ${p.description}`, 100), emoji: ce(guild, 'cart') }))),
-        ),
-      );
-    }
+    addList(c, guild, list);
   }
 
   c.addSeparatorComponents(divider(true));
@@ -152,7 +333,22 @@ function shopPanel(guild) {
   if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
   if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
   c.addActionRowComponents(row(...buttons));
-  return v2(c);
+  return v2(c, { files });
+}
+
+/**
+ * Up to 8 products: cards with Buy buttons under category headers, with as many product images as
+ * Discord's limits allow. More products: a compact list per category and a menu.
+ */
+function shopPanel(guild, { now } = {}) {
+  const list = products(guild.id);
+  if (list.length && list.length <= CARD_LIMIT) {
+    for (let n = Math.min(list.length, 10); n >= 0; n -= 1) {
+      const payload = panelPayload(guild, list, { cards: true, pictures: pickImages(list, n), now });
+      if (fits(payload)) return payload;
+    }
+  }
+  return panelPayload(guild, list, { now });
 }
 
 panels.register('shop', (guild) => shopPanel(guild));
@@ -160,35 +356,73 @@ const refreshShop = (guild) => panels.schedule(guild, 'shop');
 
 // ───────────── Catalog management (/product) ─────────────
 
-function addProduct(guild, { name, price, description, emoji, stock = 'in' }) {
+function assertUniqueName(guildId, name, productId = null) {
+  if (products(guildId).some((p) => p.id !== productId && p.name.toLowerCase() === name.trim().toLowerCase())) {
+    throw new UserError('A product with this name already exists.');
+  }
+}
+
+/** image: { buffer, ext } from productImages.download() */
+function addProduct(guild, { name, price, description, emoji, stock = 'in', category = null, image = null }) {
   const list = products(guild.id);
   if (list.length >= 50) throw new UserError('The catalog is full (50 products). Remove an old product first.');
-  if (list.some((p) => p.name.toLowerCase() === name.trim().toLowerCase())) throw new UserError('A product with this name already exists.');
+  assertUniqueName(guild.id, name);
   const product = {
     id: crypto.randomBytes(4).toString('hex'),
     name: truncate(name.trim(), 80),
     price: truncate(price.trim(), 40),
     description: truncate(description.trim(), 400),
     emoji: parseEmoji(emoji, guild),
+    category: resolveCategory(guild.id, category),
     stock: STOCK[stock] ? stock : 'in',
+    image: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
+  if (image) product.image = images.save(product.id, image);
   list.push(product);
   db.save();
   refreshShop(guild);
   return product;
 }
 
-function editProduct(guild, query, patch) {
+/** Tells everyone waiting (features/restock.js) when a sold-out product can be bought again. */
+async function afterStockChange(guild, product, wasOut) {
+  const restocked = wasOut && product.stock !== 'out';
+  if (restocked) await hooks.emit('productRestocked', { guild, product });
+  return restocked;
+}
+
+/**
+ * patch: { name, price, description, emoji, category ('none' removes it), image ({ buffer, ext }), removeImage, stock }
+ * – missing / null fields stay as they are.
+ */
+async function editProduct(guild, query, patch) {
   const p = requireProduct(guild.id, query);
-  if (patch.name) p.name = truncate(patch.name.trim(), 80);
-  if (patch.price) p.price = truncate(patch.price.trim(), 40);
-  if (patch.description) p.description = truncate(patch.description.trim(), 400);
-  if (patch.emoji !== undefined && patch.emoji !== null) p.emoji = parseEmoji(patch.emoji, guild);
-  p.updatedAt = Date.now();
+  const next = {};
+  if (patch.name) {
+    assertUniqueName(guild.id, patch.name, p.id);
+    next.name = truncate(patch.name.trim(), 80);
+  }
+  if (patch.price) next.price = truncate(patch.price.trim(), 40);
+  if (patch.description) next.description = truncate(patch.description.trim(), 400);
+  if (patch.emoji != null) next.emoji = parseEmoji(patch.emoji, guild);
+  if (patch.category != null) next.category = resolveCategory(guild.id, patch.category, p.id);
+  if (patch.stock) {
+    if (!STOCK[patch.stock]) throw new UserError('Unknown stock status.');
+    next.stock = patch.stock;
+  }
+  // Files last – only once everything else is valid.
+  if (patch.image) next.image = images.save(p.id, patch.image);
+  else if (patch.removeImage) {
+    images.remove(p.id);
+    next.image = null;
+  }
+  const wasOut = p.stock === 'out';
+  Object.assign(p, next, { updatedAt: Date.now() });
   db.save();
   refreshShop(guild);
+  await afterStockChange(guild, p, wasOut);
   return p;
 }
 
@@ -196,12 +430,14 @@ function removeProduct(guild, query) {
   const p = requireProduct(guild.id, query);
   const g = db.guild(guild.id);
   g.products = g.products.filter((x) => x.id !== p.id);
+  delete g.notify[p.id];
+  images.remove(p.id);
   db.save();
   refreshShop(guild);
   return p;
 }
 
-function setStock(guild, query, stock) {
+async function setStock(guild, query, stock) {
   const p = requireProduct(guild.id, query);
   if (!STOCK[stock]) throw new UserError('Unknown stock status.');
   const wasOut = p.stock === 'out';
@@ -209,7 +445,7 @@ function setStock(guild, query, stock) {
   p.updatedAt = Date.now();
   db.save();
   refreshShop(guild);
-  return { product: p, restocked: wasOut && stock !== 'out' };
+  return { product: p, restocked: await afterStockChange(guild, p, wasOut) };
 }
 
 /** Posts "New product" / "Back in stock" in #restocks and pings the Restocks role. */
@@ -217,12 +453,22 @@ async function announceProduct(guild, p, kind = 'new') {
   const channelId = db.channelId(guild.id, 'restocks');
   if (!channelId) return null;
   const roleId = db.roleId(guild.id, 'pingRestocks');
+  const image = images.attachment(p);
   const c = container(kind === 'new' ? COLORS.brand : COLORS.success);
   const title = kind === 'new' ? `${e(guild, 'sparkles')} New product` : `${e(guild, 'box')} Back in stock`;
-  c.addTextDisplayComponents(text(`## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${formatPrice(p.price)}`));
+  header(c, `## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${formatPrice(p.price)}`, image?.url);
   c.addActionRowComponents(row(btn(`shop:buy:${p.id}`, 'Buy now', ce(guild, 'cart'), ButtonStyle.Primary)));
   if (roleId) c.addTextDisplayComponents(text(`-# 🔔 <@&${roleId}>`));
-  return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] } }));
+  return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] }, files: image ? [image.file] : [] }));
+}
+
+/** The product an order ticket is about: ticket.order.productId, or the product answer ("GTA V — 20€" / "GTA V"). */
+function ticketProduct(guildId, ticket) {
+  if (!guildId || !ticket) return null;
+  const id = ticket.order?.productId;
+  if (id) return products(guildId).find((p) => p.id === id) ?? null;
+  const names = (ticket.answers ?? []).filter((a) => /product|buy/i.test(a.label ?? '')).map((a) => String(a.value ?? '').split(' — ')[0].trim().toLowerCase());
+  return products(guildId).find((p) => names.includes(p.name.toLowerCase())) ?? null;
 }
 
 // ───────────── Buying ─────────────
@@ -387,7 +633,9 @@ async function submitOrder(interaction, productId) {
 }
 
 function autocomplete(interaction) {
-  const q = interaction.options.getFocused().toLowerCase();
+  const focused = interaction.options.getFocused(true);
+  if (focused.name === 'category') return categoryAutocomplete(interaction, focused.value);
+  const q = String(focused.value ?? '').toLowerCase();
   return interaction.respond(
     products(interaction.guild.id)
       .filter((p) => !q || p.name.toLowerCase().includes(q))
@@ -402,6 +650,20 @@ module.exports = {
   parseEmoji,
   products,
   findProduct,
+  productEmoji,
+  MAX_CATEGORIES,
+  categories,
+  groups,
+  groupTitle,
+  groupSummary,
+  categoryParts,
+  cardText,
+  cardButton,
+  addCard,
+  pickImages,
+  measure,
+  fits,
+  ticketProduct,
   shopPanel,
   refreshShop,
   addProduct,

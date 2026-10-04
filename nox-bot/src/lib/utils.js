@@ -99,33 +99,14 @@ function channelName(ticket, type) {
   return ((config.server.smallCaps === false ? name : smallCaps(name)).slice(0, 100) || `ticket-${pad(ticket.number)}`);
 }
 
-function workingStatus(now = new Date()) {
-  const wh = config.workingHours;
-  if (!wh?.enabled) return { open: true, text: null };
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: wh.timezone ?? 'UTC',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(now)
-      .map((p) => [p.type, p.value]),
-  );
-  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
-  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
-  const toMin = (s) => Number(s.split(':')[0]) * 60 + Number(s.split(':')[1] ?? 0);
-  const from = toMin(wh.from ?? '00:00');
-  const to = toMin(wh.to ?? '23:59');
-  const inHours = from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to;
-  const open = (wh.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(day) && inHours;
-  return {
-    open,
-    text: open
-      ? `🟢 Support is online now (${wh.from}–${wh.to} ${wh.timezone ?? 'UTC'})`
-      : `🌙 We're outside support hours (${wh.from}–${wh.to} ${wh.timezone ?? 'UTC'}) – we'll reply as soon as we can`,
-  };
+/**
+ * Is the shop open right now? → { open, text } (text: null without working hours or a manual override).
+ * Follows config.json → workingHours; with a guildId, /shop open | close wins (features/shopstatus.js).
+ * place: 'support' (ticket panel) · 'ticket' (a new ticket) · 'shop' (shop panel) – see shopstatus.statusLine.
+ */
+function workingStatus(now, guildId = null, place = 'support') {
+  const shopstatus = require('../features/shopstatus'); // here, because shopstatus needs this file
+  return { open: shopstatus.isOpen(guildId, now), text: shopstatus.statusLine(guildId, place, now) };
 }
 
 function avgResponseTime(guildId) {

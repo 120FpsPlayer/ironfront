@@ -16,6 +16,8 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
 const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money } = require('../lib/utils');
+const shop = require('../features/shop'); // used at render time – safe with circular requires
+const productImages = require('../lib/productImages');
 const { SPACER, text, divider, btn, linkBtn, row, section, container, header, v2, notice } = require('../lib/v2');
 
 /** Custom NØX emoji for a ticket type (falls back to the Unicode emoji from config.json). */
@@ -64,7 +66,7 @@ function panelPayload(guild, style = 'buttons') {
   }
 
   const footer = [];
-  const status = workingStatus();
+  const status = workingStatus(undefined, guild.id);
   if (status.text) footer.push(status.text);
   if (p.showStats !== false) {
     const avg = avgResponseTime(guild.id);
@@ -93,16 +95,22 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
   const p = PRIORITIES[ticket.priority] ?? PRIORITIES.normal;
   const c = container(p.color);
 
-  const status = workingStatus(new Date(ticket.createdAt));
+  const guildId = guild?.id ?? ticket.guildId;
+  const status = workingStatus(new Date(ticket.createdAt ?? Date.now()), guildId, 'ticket');
+  // "We're closed right now" only until someone from the team has taken the ticket.
+  const closedNote = !status.open && !ticket.claimedBy && !ticket.firstResponseAt;
   const intro =
     `## ${typeText(guild, type)} ${type?.label ?? 'Ticket'}${SPACER}\`#${pad(ticket.number)}\`\n` +
     `Hi <@${ticket.ownerId}>! 👋 Thanks for reaching out to **${config.brand.name}**.\n` +
     (type?.id === 'order'
       ? 'A seller will confirm your order, the final price and payment details right here. **Never pay anyone in DMs.**'
       : 'Please describe your request in as much detail as possible and attach screenshots if you can – our team will reply shortly.') +
-    (status.open ? '' : `\n-# ${status.text}`);
+    (closedNote ? `\n-# ${status.text}` : '');
   c.addSectionComponents(section(intro, ownerUser?.displayAvatarURL?.({ size: 128 })));
 
+  // An order for a shop product shows the product image next to the form.
+  const product = type?.id === 'order' && ticket.answers?.length ? shop.ticketProduct(guildId, ticket) : null;
+  const picture = product ? productImages.attachment(product) : null;
   if (ticket.answers?.length) {
     c.addSeparatorComponents(divider());
     const budget = Math.floor(2200 / ticket.answers.length);
@@ -112,7 +120,8 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
         return `**${a.label}**\n${value.split('\n').map((l) => `> ${l}`).join('\n')}`;
       })
       .join('\n');
-    c.addTextDisplayComponents(text(`### 📝 Form\n${answers}`));
+    if (picture) c.addSectionComponents(section(`### 📝 Form\n${answers}`, picture.url));
+    else c.addTextDisplayComponents(text(`### 📝 Form\n${answers}`));
   }
 
   c.addSeparatorComponents(divider());
@@ -146,7 +155,7 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
 
   if (pingRoles.length) c.addTextDisplayComponents(text(`-# 🔔 ${pingRoles.map((id) => `<@&${id}>`).join(' ')}`));
 
-  return v2(c, { mentions: { users: [ticket.ownerId], roles: pingRoles } });
+  return v2(c, { mentions: { users: [ticket.ownerId], roles: pingRoles }, files: picture ? [picture.file] : [] });
 }
 
 function manageSelect(ticket, guild) {
