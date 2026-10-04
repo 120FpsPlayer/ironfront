@@ -3,6 +3,7 @@
 const { db } = require('./helpers/setup');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { Collection } = require('discord.js');
 const { FakeGuild, validateMessage } = require('./helpers/fakeDiscord');
 const { createInteraction, lastResponse, textOf } = require('./helpers/fakeInteraction');
 const { buildServer } = require('../src/builder/executor');
@@ -186,13 +187,14 @@ test('an invite counts only once the member verifies and while they stay; leave 
   await hooks.emit('verified', first);
   assert.equal(invites.counts(guild.id, alice.id).valid, 0, "someone who left can't count");
 
-  // Rejoining through Bob's invite: Bob's now, and only after verifying again
+  // Rejoining through Bob's invite: they already counted for Alice, so they never count for Bob
   const back = await join(guild, b.code, { id: first.id });
-  assert.deepEqual(record(guild, back), { inviterId: bob.id, code: b.code, joinedAt: record(guild, back).joinedAt, verified: false, left: false });
-  assert.deepEqual(invites.counts(guild.id, bob.id), { valid: 0, pending: 1, left: 0 });
+  assert.deepEqual(record(guild, back), { inviterId: bob.id, code: b.code, joinedAt: record(guild, back).joinedAt, verified: false, left: false, creditedTo: alice.id });
+  assert.deepEqual(invites.counts(guild.id, bob.id), { valid: 0, pending: 0, left: 0 });
   assert.deepEqual(invites.counts(guild.id, alice.id), { valid: 0, pending: 1, left: 0 });
   await verify(guild, back);
-  assert.deepEqual(invites.counts(guild.id, bob.id), { valid: 1, pending: 0, left: 0 });
+  assert.deepEqual(invites.counts(guild.id, bob.id), { valid: 0, pending: 0, left: 0 });
+  assert.equal(record(guild, back).creditedTo, alice.id, 'still credited to Alice');
 
   // Alice leaves and rejoins with her own invite: never counts
   await leave(guild, alice);
@@ -402,6 +404,84 @@ test('/invites top: the 10 best inviters, ranked by valid invites, and your own 
   assert.ok(lines[1].startsWith(`🥈 <@${inviters[10].id}> – **11 valid invites**`));
   assert.ok(lines[9].startsWith(`**10.** <@${inviters[2].id}> – **3 valid invites**`));
   assert.match(out, /You're \*\*#12\*\* with 1 valid invite\./);
+});
+
+// ───────────── Regressions ─────────────
+
+test('rewards cannot be farmed by rotating the same accounts through different inviters', async () => {
+  await withRewards([{ invites: 2, percent: 10 }], async () => {
+    const guild = await setup();
+    const [alice, bob, carol] = [member(guild), member(guild), member(guild)];
+    const inviteOf = new Map();
+    for (const who of [alice, bob, carol]) inviteOf.set(who.id, guild.addInvite({ inviterId: who.id }).code);
+    await invites.refresh(guild);
+    const codes = () => promos.list(guild.id).filter((p) => p.code.startsWith('INVITE'));
+
+    // Two friends join through Alice's invite and verify: Alice's reward
+    const ids = [uid(), uid()];
+    for (const id of ids) await verify(guild, await join(guild, inviteOf.get(alice.id), { id }));
+    assert.equal(invites.counts(guild.id, alice.id).valid, 2);
+    assert.equal(codes().length, 1);
+
+    // They leave and come back through Bob's, then Carol's invite and verify again: nobody new gets them
+    for (const next of [bob, carol]) {
+      for (const id of ids) {
+        await leave(guild, guild.members.cache.get(id));
+        await verify(guild, await join(guild, inviteOf.get(next.id), { id }));
+      }
+      assert.deepEqual(invites.counts(guild.id, next.id), { valid: 0, pending: 0, left: 0 }, 'they already counted for Alice');
+    }
+    assert.equal(codes().length, 1, 'still one reward for two real invites');
+    assert.ok(!invites.leaderboard(guild.id).some((c) => c.inviterId !== alice.id));
+
+    // Back through Alice's own invite: they count for her again – once, and no second code
+    for (const id of ids) {
+      await leave(guild, guild.members.cache.get(id));
+      await verify(guild, await join(guild, inviteOf.get(alice.id), { id }));
+    }
+    assert.deepEqual(invites.counts(guild.id, alice.id), { valid: 2, pending: 0, left: 0 });
+    assert.equal(codes().length, 1);
+
+    // Someone who never counted for anyone (left before verifying) can still count for the next inviter
+    const unsure = await join(guild, inviteOf.get(bob.id));
+    await leave(guild, unsure);
+    await verify(guild, await join(guild, inviteOf.get(carol.id), { id: unsure.id }));
+    assert.equal(invites.counts(guild.id, carol.id).valid, 1);
+  });
+});
+
+test('the bot being removed and added again: members are fetched again, invite counts are never dropped from a partial member list', async () => {
+  const guild = await setup();
+  const alice = member(guild);
+  const data = invites.store(guild.id).members;
+  for (let i = 0; i < 3; i += 1) data[member(guild).id] = { inviterId: alice.id, code: 'x', joinedAt: Date.now(), verified: true, left: false };
+  await invites.prepare(guild); // the start
+  assert.deepEqual(invites.counts(guild.id, alice.id), { valid: 3, pending: 0, left: 0 });
+
+  // Re-added: discord.js builds a new Guild object with the same ID – only the bot is cached until the members are fetched
+  const everyone = guild.members.cache;
+  const readded = Object.assign(Object.create(Object.getPrototypeOf(guild)), guild);
+  let fetches = 0;
+  readded.members = {
+    cache: new Collection([['bot', guild.me]]),
+    me: guild.me,
+    async fetch(arg) {
+      if (arg !== undefined) return guild.members.fetch(arg);
+      fetches += 1;
+      for (const [id, m] of everyone) this.cache.set(id, m);
+      return this.cache;
+    },
+  };
+  await hooks.emit('guildCreate', readded);
+  assert.equal(fetches, 1, 'the new server object is fetched (once for every feature)');
+  assert.deepEqual(invites.counts(guild.id, alice.id), { valid: 3, pending: 0, left: 0 });
+
+  // A member list that is still missing people (Discord sent fewer than memberCount) never marks anyone as left
+  const partial = Object.assign(Object.create(Object.getPrototypeOf(guild)), guild);
+  partial.members = { cache: new Collection([['bot', guild.me]]), me: guild.me, fetch: async () => partial.members.cache };
+  Object.defineProperty(partial, 'memberCount', { value: everyone.size });
+  await invites.prepare(partial);
+  assert.deepEqual(invites.counts(guild.id, alice.id), { valid: 3, pending: 0, left: 0 });
 });
 
 test('/invites when tracking is turned off', async () => {

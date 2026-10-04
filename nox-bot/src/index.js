@@ -134,6 +134,7 @@ const DISCORD_EVENTS = {
   [Events.UserUpdate]: 'userUpdate',
   [Events.InviteCreate]: 'inviteCreate',
   [Events.InviteDelete]: 'inviteDelete',
+  [Events.GuildCreate]: 'guildCreate', // the bot was added (or re-added) to a server after the start
 };
 for (const [event, name] of Object.entries(DISCORD_EVENTS)) client.on(event, (...args) => hooks.emit(name, ...args));
 client.on(Events.MessageDelete, (message) => welcome.onMessageDelete(message).catch(() => null));

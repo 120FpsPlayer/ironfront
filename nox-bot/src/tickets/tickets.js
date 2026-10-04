@@ -16,6 +16,7 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const panels = require('../lib/panels');
 const promos = require('../features/promos');
+const lockdown = require('../features/lockdown');
 const ui = require('./ui');
 const { createTranscript } = require('./transcript');
 const { openDeniedReason } = require('../lib/permissions');
@@ -126,6 +127,9 @@ function checkCanOpen(member) {
   const category = member.guild.channels.cache.get(settings.categoryId);
   if (!category || category.type !== ChannelType.GuildCategory) {
     return 'The ticket system is not set up yet. An administrator needs to run `/build` (or `/setup set`).';
+  }
+  if (lockdown.pausedFor(member)) {
+    return "The server is locked right now – new tickets and orders are paused until it's unlocked. Your open tickets keep working.";
   }
   const roleError = openDeniedReason(member);
   if (roleError) return roleError;

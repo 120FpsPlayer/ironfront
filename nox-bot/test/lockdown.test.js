@@ -11,8 +11,12 @@ const handle = require('../src/handlers/interactions');
 const loadCommands = require('../src/commands');
 const config = require('../src/lib/config');
 const lockdown = require('../src/features/lockdown');
+const shop = require('../src/features/shop');
+const tickets = require('../src/tickets/tickets');
+const { toBits } = require('../src/builder/permissions');
 
 const commands = loadCommands();
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let n = 960000000000000000n;
 const uid = () => String(++n);
@@ -22,6 +26,12 @@ const member = (guild, roles = ['member']) => guild.addMember(uid(), roles.map((
 
 const command = async (guild, who, commandName, options = {}) => {
   const i = createInteraction({ guild, member: who, kind: 'command', commandName, options });
+  await handle(i, commands);
+  return i;
+};
+
+const press = async (guild, who, customId, channel = undefined) => {
+  const i = createInteraction({ guild, member: who, kind: 'button', customId, channel });
   await handle(i, commands);
   return i;
 };
@@ -173,17 +183,19 @@ test('invites: already paused stay paused, the setting can turn pausing off, a m
   }
 });
 
-test('notice goes to #chat without #announcements; quiet staff roles are pointed out', async () => {
+test('notice goes to #chat without #announcements; staff roles without their own Send Messages keep talking', async () => {
   const { guild, mod } = await setup();
   db.guild(guild.id).build.channels.announcements = null;
   const seller = guild.roles.cache.get(role(guild, 'seller'));
   const sellerBits = seller.permissions.bitfield;
-  await seller.setPermissions(sellerBits & ~P.SendMessages); // e.g. edited by hand
+  await seller.setPermissions(sellerBits & ~P.SendMessages); // e.g. edited by hand – sellers talk through the Member role
+  const sellerMember = member(guild, ['member', 'seller']);
 
   const lock = await command(guild, mod, 'lockdown', { reason: 'Spam wave' });
   const out = textOf(lastResponse(lock));
   assert.match(out, new RegExp(`Notice posted in <#${db.channelId(guild.id, 'chat')}>`));
-  assert.match(out, new RegExp(`<@&${seller.id}> has no \\*\\*Send Messages\\*\\* of its own`));
+  assert.match(out, new RegExp(`<@&${seller.id}> had no \\*\\*Send Messages\\*\\* of its own – it gets it until \`/unlock\`, so its members can still talk`));
+  assert.ok(can(sellerMember, ch(guild, 'chat'), P.SendMessages), 'sellers can still talk');
   assert.match(textOf(ch(guild, 'chat').messageList.at(-1).body), /The server is locked[\s\S]*Spam wave/);
 
   // Changes made during the lockdown (outside the locked permissions) are kept by /unlock
@@ -191,6 +203,7 @@ test('notice goes to #chat without #announcements; quiet staff roles are pointed
   await memberRole.setPermissions(memberRole.permissions.bitfield | P.AttachFiles);
   await command(guild, mod, 'unlock');
   assert.ok(memberRole.permissions.has(P.AttachFiles) && memberRole.permissions.has(P.SendMessages));
+  assert.equal(seller.permissions.bitfield, sellerBits & ~P.SendMessages, 'the seller role is back to exactly what it was');
 });
 
 test('/lockdown without a Member role or with a role above the bot explains what to do', async () => {
@@ -205,4 +218,159 @@ test('/lockdown without a Member role or with a role above the bot explains what
   db.guild(guild.id).settings.verifyRoleId = null;
   const none = await command(guild, mod, 'lockdown');
   assert.match(textOf(lastResponse(none)), /no Member role/);
+});
+
+// ───────────── Regressions ─────────────
+
+test('while locked, members cannot post vouches or open new tickets and orders through the bot – staff can, open tickets keep working', async () => {
+  const { guild, mod } = await setup();
+  const raider = member(guild);
+  const buyer = member(guild);
+  const staffer = member(guild, ['member', 'support']);
+  const product = shop.addProduct(guild, { name: 'Netflix Premium', price: '5', description: 'Instant delivery.' });
+  const own = await tickets.openTicket(buyer, config.getType('support'), []); // opened before the lockdown
+  await command(guild, mod, 'lockdown', { reason: 'Raid' });
+
+  const vouches = ch(guild, 'vouches');
+  const posts = vouches.messageList.length;
+  const vouch = await command(guild, raider, 'vouch', { rating: 1, product: 'x', review: 'RAID RAID join discord.gg/xxx now' });
+  assert.match(textOf(lastResponse(vouch)), /server is locked[\s\S]*vouches are paused/);
+  const form = await press(guild, raider, 'vouch:open', vouches);
+  assert.match(textOf(lastResponse(form)), /vouches are paused/);
+  assert.equal(form.state.modals.length, 0);
+  assert.equal(vouches.messageList.length, posts, 'nothing was posted in #vouches');
+
+  const ticketCount = () => db.tickets((t) => t.guildId === guild.id).length;
+  const count = ticketCount();
+  const open = await press(guild, raider, 'ticket:open:support');
+  assert.match(textOf(lastResponse(open)), /server is locked[\s\S]*new tickets and orders are paused[\s\S]*open tickets keep working/);
+  const buy = await press(guild, raider, `shop:buy:${product.id}`);
+  assert.match(textOf(lastResponse(buy)), /new tickets and orders are paused/);
+  assert.equal(buy.state.modals.length, 0);
+  await assert.rejects(tickets.openTicket(raider, config.getType('order'), []), /new tickets and orders are paused/, 'an order form sent just before the lock');
+  assert.equal(ticketCount(), count, 'no new ticket channels');
+
+  // Staff still can; the ticket from before keeps working
+  await tickets.openTicket(staffer, config.getType('support'), []);
+  assert.equal(ticketCount(), count + 1);
+  assert.ok(can(buyer, guild.channels.cache.get(own.id), P.SendMessages), 'the owner can still write in their open ticket');
+
+  await command(guild, mod, 'unlock');
+  const after = await command(guild, raider, 'vouch', { rating: 5, product: 'Netflix Premium', review: 'Fast delivery, thank you!' });
+  assert.match(textOf(lastResponse(after)), /Thank you for your vouch/);
+  const again = await press(guild, raider, `shop:buy:${product.id}`);
+  assert.equal(again.state.modals.length, 1, 'orders work again after /unlock');
+});
+
+test('staff roles from /setup keep talking during a lockdown, and the reply is based on the real roles', async () => {
+  const { guild, mod } = await setup();
+  const helpers = await guild.roles.create({ name: 'Helpers', permissions: 0n }); // relies on the Member role
+  db.updateSettings(guild.id, { staffRoleIds: [helpers.id] });
+  const helper = member(guild);
+  helper.roles.cache.set(helpers.id, helpers);
+  const buyer = member(guild);
+  const chat = ch(guild, 'chat');
+  const lounge = ch(guild, 'lounge');
+  const before = snapshot(guild);
+  assert.ok(can(helper, chat, P.SendMessages));
+
+  const lock = await command(guild, mod, 'lockdown');
+  const out = textOf(lastResponse(lock));
+  assert.ok(!can(buyer, chat, P.SendMessages), 'members are quiet');
+  assert.ok(can(helper, chat, P.SendMessages) && can(helper, lounge, P.Connect), 'the helpers can still talk');
+  assert.match(out, new RegExp(`<@&${helpers.id}> had no \\*\\*Send Messages\\*\\* of its own – it gets it until \`/unlock\`, so its members can still talk`));
+  assert.doesNotMatch(out, /⚠️/);
+  assert.equal(lockdown.current(guild.id).staffRoles.length, 1);
+
+  await command(guild, mod, 'unlock');
+  assert.deepEqual(snapshot(guild), before, 'the helpers role is exactly as before');
+
+  // A quiet staff role I can't edit is reported – no "the team can still talk"
+  helpers.position = 5000;
+  const again = textOf(lastResponse(await command(guild, mod, 'lockdown')));
+  assert.match(again, new RegExp(`⚠️ <@&${helpers.id}> has no \\*\\*Send Messages\\*\\* of its own and I can't edit it`));
+  assert.doesNotMatch(again, /can still talk/);
+  await command(guild, mod, 'unlock');
+});
+
+test('/unlock while /lockdown is still running waits for it – nothing stays locked behind its back', async () => {
+  const { guild, mod } = await setup();
+  const mod2 = member(guild, ['member', 'moderator']);
+  const before = snapshot(guild);
+  // A slow Discord: every permission edit takes a moment
+  for (const r of guild.roles.cache.values()) {
+    const set = r.setPermissions.bind(r);
+    r.setPermissions = async (...args) => {
+      await sleep(15);
+      return set(...args);
+    };
+  }
+  for (const c of guild.channels.cache.values()) {
+    const overwrites = c.permissionOverwrites;
+    const edit = overwrites.edit;
+    overwrites.edit = async (...args) => {
+      await sleep(15);
+      return edit.apply(overwrites, args);
+    };
+  }
+  const disable = guild.disableInvites.bind(guild);
+  guild.disableInvites = async (...args) => {
+    await sleep(15);
+    return disable(...args);
+  };
+
+  const locking = command(guild, mod, 'lockdown', { reason: 'Raid' });
+  await sleep(5);
+  const unlocking = command(guild, mod2, 'unlock');
+  const [lock, unlock] = await Promise.all([locking, unlocking]);
+  assert.match(textOf(lastResponse(lock)), /Server locked/);
+  assert.match(textOf(lastResponse(unlock)), /Server unlocked[\s\S]*Restored \*\*\d+\*\* channel permissions[\s\S]*Invites are open again/);
+  assert.equal(lockdown.current(guild.id), null);
+  assert.deepEqual(snapshot(guild), before, 'roles, channels and invites are exactly as before');
+  const notices = ch(guild, 'announcements').messageList.slice(-2).map((m) => textOf(m.body));
+  assert.match(notices[0], /The server is locked/);
+  assert.match(notices[1], /The server is unlocked/);
+});
+
+test('every other non-staff role that lets people chat is locked too and restored exactly; roles I cannot edit are reported', async () => {
+  const guild = new FakeGuild();
+  const level = await guild.roles.create({ name: 'Level 5', permissions: toBits(['ViewChannel', 'ReadMessageHistory', 'SendMessages', 'AddReactions', 'Connect', 'Speak']) });
+  await buildServer({ guild, mode: 'add', invokerId: guild.ownerId }); // "add" keeps the server's old roles
+  const mod = member(guild, ['member', 'moderator']);
+  const chat = ch(guild, 'chat');
+  const lounge = ch(guild, 'lounge');
+  const announcements = ch(guild, 'announcements');
+  // Leftovers that also let people talk: @everyone, an overwrite for the old role, a role above mine
+  await guild.roles.everyone.setPermissions(toBits(['SendMessages', 'AddReactions']));
+  await announcements.permissionOverwrites.edit(level.id, { SendMessages: true, AttachFiles: true });
+  const above = await guild.roles.create({ name: 'Old VIP', permissions: toBits(['SendMessages']) });
+  above.position = 5000;
+  const booster = await guild.roles.create({ name: 'Server Booster', permissions: toBits(['SendMessages', 'AddReactions']) });
+  booster.managed = true; // managed by Discord, but below my role – its permissions can be changed
+  const leveled = member(guild);
+  leveled.roles.cache.set(level.id, level);
+  const boosting = member(guild);
+  boosting.roles.cache.set(booster.id, booster);
+  const before = snapshot(guild);
+  assert.ok(can(leveled, chat, P.SendMessages) && can(leveled, announcements, P.SendMessages));
+
+  const lock = await command(guild, mod, 'lockdown', { reason: 'Raid' });
+  const out = textOf(lastResponse(lock));
+  for (const [flag, channel] of [[P.SendMessages, chat], [P.AddReactions, chat], [P.Connect, lounge], [P.SendMessages, announcements]]) {
+    assert.ok(!can(leveled, channel, flag), `members with the old role are quiet in #${channel.name}`);
+  }
+  const overwrite = announcements.overwriteList.find((o) => o.id === level.id);
+  assert.ok(overwrite.allow & P.AttachFiles && !(overwrite.allow & P.SendMessages), 'only the locked permissions are taken from the overwrite');
+  assert.ok(!guild.roles.everyone.permissions.has(P.SendMessages), '@everyone is locked too');
+  assert.ok(!can(boosting, chat, P.SendMessages), 'boosters are quiet too');
+  assert.ok(can(mod, chat, P.SendMessages), 'staff still talk');
+  assert.ok(guild.roles.cache.get(role(guild, 'bots')).permissions.has(P.SendMessages), 'the Bots role is left alone');
+  assert.match(out, new RegExp(`Also locked:[^\\n]*<@&${level.id}>`));
+  assert.match(out, new RegExp(`⚠️ <@&${above.id}> still allows \\*\\*Send Messages\\*\\*`));
+  const state = lockdown.current(guild.id);
+  assert.ok(state.roles.some((r) => r.id === level.id) && state.roles.some((r) => r.id === guild.id));
+  assert.ok(state.channels.some((c) => c.id === announcements.id && c.roleId === level.id));
+
+  await command(guild, mod, 'unlock');
+  assert.deepEqual(snapshot(guild), before, 'every role and overwrite is exactly as before');
 });

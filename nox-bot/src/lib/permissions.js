@@ -73,6 +73,27 @@ function isStaff(member, type = null) {
   return !type && hasRole(member, builtRoles(member.guild.id, STAFF_KEYS));
 }
 
+/**
+ * Every role that makes its members staff: the staff roles from /build, ADMIN_ROLE_IDS, the ticket staff roles
+ * (/setup, SUPPORT_ROLE_IDS, and those of the given ticket types) and – when Discord admins count as admins –
+ * roles with Administrator or Manage Server. Never @everyone. Returns a Set of role IDs.
+ */
+function allStaffRoleIds(guild, types = []) {
+  const ids = new Set([
+    ...builtRoles(guild.id, STAFF_KEYS),
+    ...env.adminRoleIds,
+    ...ticketRoleIds(guild.id, null),
+    ...types.flatMap((type) => ticketRoleIds(guild.id, type)),
+  ]);
+  if (env.discordAdminsAreAdmins) {
+    for (const r of guild.roles.cache.values()) {
+      if (r.permissions.has(PermissionFlagsBits.Administrator) || r.permissions.has(PermissionFlagsBits.ManageGuild)) ids.add(r.id);
+    }
+  }
+  ids.delete(guild.id);
+  return ids;
+}
+
 function openDeniedReason(member) {
   if (isAdmin(member)) return null;
   if (hasRole(member, env.blockedRoleIds)) return 'Your role is not allowed to open tickets.';
@@ -117,6 +138,7 @@ module.exports = {
   isMod,
   isShopManager,
   isStaff,
+  allStaffRoleIds,
   ticketRoleIds,
   openDeniedReason,
   reportRoles,

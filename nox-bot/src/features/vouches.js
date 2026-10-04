@@ -13,6 +13,7 @@ const {
 const config = require('../lib/config');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
+const lockdown = require('./lockdown');
 const { e, ce, emojiId, COLORS } = require('../lib/theme');
 const { UserError, embed, ts, truncate, sendToChannel } = require('../lib/utils');
 const { container, text, divider, btn, row, section, gallery, header, v2, linkBtn } = require('../lib/v2');
@@ -67,6 +68,7 @@ function vouchPanel(guild) {
 panels.register('vouches', (guild) => vouchPanel(guild));
 
 function checkCanVouch(member) {
+  if (lockdown.pausedFor(member)) throw new UserError("The server is locked right now – vouches are paused until it's unlocked. Please try again later 💜");
   const cfg = config.vouches;
   const customer = db.roleId(member.guild.id, 'customer');
   if (cfg.requireCustomerRole && customer && !member.roles.cache.has(customer)) {

@@ -9,15 +9,18 @@
  *    Manage Server permission; without it joins are recorded without an inviter and a warning is printed once.
  *  - An invite counts once the new member verifies (hooks 'verified') and only while they stay; leaving takes it
  *    off the count. Self-invites, bots and the bot's own invites never count.
+ *  - A member counts for one inviter ever: the first one they verified under (creditedTo, kept across rejoins).
+ *    Rejoining through someone else's invite counts for nobody – the same accounts can't be passed around.
  *  - Reaching a level in config.invites.rewards [{ invites, percent }] gives the inviter a personal code
  *    (promos.personal, 30 days, prefix INVITE) by DM – once per level ever, so leaving / rejoining can't farm codes.
+ *  - Members who left while the bot was offline stop counting (reconcile) – only after the whole member list of
+ *    that server object was fetched, never from a partial one.
  *
  * db.guild(id).invites:
- *   members   { [memberId]: { inviterId, code, joinedAt, verified, verifiedAt?, left, leftAt? } }
+ *   members   { [memberId]: { inviterId, code, joinedAt, verified, verifiedAt?, left, leftAt?, creditedTo? } }
  *   rewarded  { [inviterId]: { [invites]: { code, percent, at, delivered } } }
  */
 
-const { Events } = require('discord.js');
 const hooks = require('../lib/hooks');
 const config = require('../lib/config');
 const db = require('../lib/db');
@@ -105,11 +108,24 @@ async function attribute(member, now = Date.now()) {
     if (invite) ({ inviterId, code } = invite);
     else if (sure && guild.vanityURLCode) code = guild.vanityURLCode; // nothing changed → the vanity URL
   }
+  const records = store(guild.id).members;
   const record = { inviterId, code, joinedAt: now, verified: false, left: false };
-  store(guild.id).members[member.id] = record; // a rejoin starts over – they have to verify again anyway
+  const creditedTo = creditOf(member.id, records[member.id]);
+  if (creditedTo) record.creditedTo = creditedTo; // who they counted for stays – everything else starts over
+  records[member.id] = record;
   db.save();
   return record;
 }
+
+/** The inviter this member has counted for (records from before creditedTo existed: a verified invite). */
+function creditOf(id, record) {
+  if (!record) return null;
+  if (record.creditedTo) return record.creditedTo;
+  return record.verified && record.inviterId && record.inviterId !== id ? record.inviterId : null;
+}
+
+/** Does this record count for its inviter? Not when the member already counted for someone else. */
+const countsFor = (id, record) => Boolean(record.inviterId) && record.inviterId !== id && (!record.creditedTo || record.creditedTo === record.inviterId);
 
 function onLeave(member, now = Date.now()) {
   const record = store(member.guild.id).members[member.id];
@@ -122,13 +138,18 @@ async function onVerified(member) {
   const record = store(member.guild.id).members[member.id];
   if (!record || record.left || record.verified) return [];
   Object.assign(record, { verified: true, verifiedAt: Date.now() });
+  if (record.inviterId && record.inviterId !== member.id) record.creditedTo ??= record.inviterId;
   db.save();
-  if (!record.inviterId || record.inviterId === member.id) return [];
+  if (!countsFor(member.id, record)) return [];
   return checkRewards(member.guild, record.inviterId);
 }
 
 /** Members who left while the bot was offline don't count anymore. Needs the full member list in the cache. */
 function reconcile(guild, now = Date.now()) {
+  if (!members.complete(guild)) {
+    console.warn(`[invites] ${guild.name}: the member list is incomplete – nobody is marked as left.`);
+    return 0;
+  }
   let changed = 0;
   for (const [id, record] of Object.entries(store(guild.id).members)) {
     if (record.left || guild.members.cache.has(id)) continue;
@@ -151,7 +172,7 @@ async function prepare(guild) {
 function counts(guildId, inviterId) {
   const c = { valid: 0, pending: 0, left: 0 };
   for (const [id, r] of Object.entries(store(guildId).members)) {
-    if (r.inviterId !== inviterId || id === inviterId) continue;
+    if (r.inviterId !== inviterId || !countsFor(id, r)) continue;
     if (r.left) c.left += 1;
     else if (r.verified) c.valid += 1;
     else c.pending += 1;
@@ -163,7 +184,7 @@ function counts(guildId, inviterId) {
 function leaderboard(guildId) {
   const byInviter = new Map();
   for (const [id, r] of Object.entries(store(guildId).members)) {
-    if (!r.inviterId || id === r.inviterId) continue;
+    if (!countsFor(id, r)) continue;
     const c = byInviter.get(r.inviterId) ?? { inviterId: r.inviterId, valid: 0, pending: 0, left: 0 };
     if (r.left) c.left += 1;
     else if (r.verified) c.valid += 1;
@@ -326,8 +347,8 @@ function topEmbed(guild, viewerId) {
 hooks.on('ready', async (client) => {
   if (!enabled()) return;
   for (const guild of client.guilds.cache.values()) await prepare(guild);
-  client.on?.(Events.GuildCreate, (guild) => prepare(guild).catch((err) => console.warn('[invites]', err.message)));
 });
+hooks.on('guildCreate', (guild) => prepare(guild)); // added (or re-added) to a server: a new Guild object, fetched again
 hooks.on('inviteCreate', (invite) => {
   const list = invite.guild && cache.get(invite.guild.id);
   if (list) list.set(invite.code, snapshot(invite, invite.guild));
