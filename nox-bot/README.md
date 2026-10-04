@@ -15,7 +15,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 | | |
 |---|---|
 | 🎭 **20 roles** | Founder, Co-Founder, Manager, Administrator, Moderator, Support, Trial Support, Seller, VIP, Partner, Loyal Customer, Customer, Bots, Member, 3 notification roles + 3 separators – all in a purple palette with the right permissions |
-| 📁 **11 categories, 43 channels** | Server stats · Welcome · Shop · Support · Community · VIP Lounge · Voice · Staff · Logs · Tickets · Closed tickets |
+| 📁 **11 categories, 43 channels** (42 with the shop status channel turned off) | Server stats · Welcome · Shop · Support · Community · VIP Lounge · Voice · Staff · Logs · Tickets · Closed tickets |
 | 🔐 **Permissions done right** | New people only see **#verify**, **#rules** and **#welcome** (read-only, so their welcome ping reaches them). Info channels are read-only, staff/log/VIP areas are private, media channels allow files, AFK is muted |
 | 🖼️ **Custom banners** | 36 purple banners (1080×400) – every info channel starts with its own banner and a styled card |
 | 😀 **Custom emojis** | 67 purple emojis (`:nox_cart:`, `:nox_check:`, `:nox_paypal:`…) – the bot uses them in all its messages |
@@ -31,7 +31,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 - **Payments:** PaysafeCard, Crypto (BTC, ETH) and PayPal – edit them in `config.json`.
 - **Buy → order form → private ticket.** The form asks for quantity, a **payment method** from a list and an optional
   **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
-- **Discount codes** – `/promo create NOX10 percent:10` (or an amount off), with expiry, max uses, once per member,
+- **Discount codes** – `/promo create code:NOX10 percent:10` (or an amount off), with expiry, max uses, once per member,
   first order only.
 - **Order completed** (ticket menu → confirm the amount paid) → the sale is recorded, the buyer gets a **receipt by DM**,
   the **Customer** role (after 5 orders **Loyal Customer**), and an anonymous **proof** is posted in #proofs.
@@ -54,7 +54,8 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 ### 🛡️ Security & growth
 - **Look-alike alerts** – someone joins as "supp0rt_nox" or copies a staff member's avatar? Staff get an alert in
   #automod-logs with **Ban / Kick / Timeout / Ignore** buttons.
-- **`/lockdown`** – during a raid members can't chat, react or use voice and invites are paused; `/unlock` puts everything back exactly.
+- **`/lockdown`** – during a raid everyone except the team can't chat, react or use voice, new tickets, orders and vouches
+  are paused (open tickets keep working) and invites are paused; `/unlock` puts every role and setting back exactly.
 - **Invite tracking with rewards** – the bot knows who invited whom. An invite counts once the new member verifies and stays;
   at **5 / 15 / 30** invites the inviter gets a personal **10% / 15% / 20%** code by DM. `/invites stats` · `/invites top`.
 
@@ -222,11 +223,11 @@ Admin commands are hidden from normal members automatically.
 | `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`), **name style** (see below) |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
-| `shop` | Currency, delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
+| `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods** |
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
 | `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off) |
 | `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
-| `workingHours`, `shopStatus` | Opening hours (default **10:00–20:00 every day, Europe/Warsaw**) and the open/closed status channel names |
+| `workingHours`, `shopStatus` | Opening hours (default **10:00–20:00 every day, Europe/Warsaw**); the open/closed status channel on/off (`enabled`) and its names |
 | `invites` | Invite tracking on/off and the rewards (`{ "invites": 5, "percent": 10 }` …) |
 | `security` | Look-alike alerts, whether `/lockdown` pauses invites |
 | `backups`, `salesReport` | How often to back up; the weekday and hour of the weekly sales report |
@@ -252,6 +253,8 @@ After changing the style, restart the bot and run **`/build only:names`**.
 Replace the bot files (keep **`.env`** and the **`data/`** folder), run `npm install`, restart the bot and run
 **`/build only:update`** once – it adds the channels and roles that are new in this version (e.g. 🧾┃ᴘʀᴏᴏꜰꜱ,
 📈┃ꜱᴀʟᴇꜱ, 💾┃ʙᴀᴄᴋᴜᴘꜱ and the shop status channel), applies the name style and updates every panel.
+If you changed `config.json` yourself you can keep your copy: sections it doesn't have yet get the default values,
+and the console lists every feature that is turned off in it.
 
 **Currency** – `shop.currency` (default `€`) and `shop.currencyPosition` (`after` → `20€`, `before` → `€20`).
 Only plain-number prices get it; `from 5€` or `$10` are shown exactly as you typed them.
@@ -290,7 +293,7 @@ npm i -D playwright && npm run render-assets
 | "Discord only allows renaming a channel twice per 10 minutes" | That's Discord's limit – wait the minutes it says and try again |
 | Buttons say "This interaction failed" | The bot must be **online** – buttons are handled live by the bot |
 | Transcripts are empty | Turn on **Message Content Intent** |
-| The new channels (#proofs, #sales, #backups, shop status) are missing | Run `/build only:update` |
+| The new channels (#proofs, #sales, #backups, shop status) are missing | Run `/build only:update` (the shop status channel only exists while `shopStatus.enabled` is `true`) |
 | "The image is too big" | Product images can be up to 1 MB – save it as JPG or WEBP |
 | Invites aren't counted | The bot needs to see the server's invites – it has Administrator, so check its role wasn't changed. Invites only count after the new member verifies |
 
@@ -312,7 +315,8 @@ src/
 ├── index.js                 Discord client, events, timers
 ├── builder/                 /build – layout, permissions, content, executor, emoji upload
 ├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
-│                            announcements, welcome/logs, stats, sales report, backups, invites, lockdown, look-alike alerts
+│                            announcements, welcome/logs, stats, sales report, backups, customer profiles,
+│                            Notify me, invites, lockdown, look-alike alerts, housekeeping
 ├── tickets/                 ticket system, cards, HTML transcripts
 ├── commands/                slash commands
 ├── handlers/interactions.js buttons, menus and forms
@@ -325,9 +329,10 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-42 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+177 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
-every permission, the shop → ticket → order → vouch flow, in-place panel updates, verification, giveaways, ratings and more.
+every permission, the shop → ticket → order → vouch flow, promo code limits (also for orders placed at the same moment),
+opening hours across summer/winter time, lockdown, invite rewards, in-place panel updates, verification, giveaways, ratings and more.
 
 ---
 
