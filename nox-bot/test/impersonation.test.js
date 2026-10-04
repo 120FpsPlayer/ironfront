@@ -21,8 +21,8 @@ const uid = () => String(++n);
 const role = (guild, key) => db.roleId(guild.id, key);
 
 /** A member with a real-looking profile (the fake's default "user<id>" names would all look alike). */
-function person(guild, { username, globalName = null, nickname = null, avatar = null, roles = ['member'], bot = false, ageDays = 400 } = {}) {
-  const m = guild.addMember(uid(), roles.map((k) => role(guild, k)), { bot, createdTimestamp: Date.now() - ageDays * DAY });
+function person(guild, { id = uid(), username, globalName = null, nickname = null, avatar = null, roles = ['member'], bot = false, ageDays = 400 } = {}) {
+  const m = guild.addMember(id, roles.map((k) => role(guild, k)), { bot, createdTimestamp: Date.now() - ageDays * DAY });
   Object.assign(m.user, { username, globalName, avatar, client: guild.client });
   m.nickname = nickname;
   m.avatar = null;
@@ -85,7 +85,8 @@ test('matching: exact names, staff name + title, one letter off for 5+ character
     ['Support | Alex', 'Alex', 'title'],
     ['Alex NØX Team', 'Alex', 'title'],
     ['real.alex.admin', 'Alex', 'title'],
-    ['Danlel', 'Daniel', 'similar'],
+    ['Danlel', 'Daniel', 'exact'], // a small L for the i
+    ['Danial', 'Daniel', 'similar'],
     ['Jhonny', 'Johnny', 'similar'],
     ['Dainel', 'Daniel', 'similar'], // two letters swapped
     ['Danie1l', 'Daniel', 'exact'], // 1 → l, then the double l collapses
@@ -331,4 +332,146 @@ test('the alert card stays within Discord limits with long names and every kind 
   };
   const r = validateMessage(imp.alertCard(guild, alert), guild);
   assert.ok(r.total <= 40 && r.textLength <= 4000);
+});
+
+// ───────────── Regressions ─────────────
+
+test('i, I, l, 1 and | are one letter on both sides: ALL CAPS, lowercase usernames and leetspeak copies are caught', () => {
+  const yes = [
+    ['MIA', 'Mia', 'exact'],
+    ['mia', 'MIA', 'exact'],
+    ['KAI', 'Kai', 'exact'],
+    ['LIAM', 'Liam', 'exact'],
+    ['L1AM', 'Liam', 'exact'],
+    ['NICK', 'Nick', 'exact'],
+    ['ALI', 'Ali', 'exact'],
+    ['ivan', 'Ivan', 'exact'], // Discord usernames are always lowercase
+    ['lvan', 'ivan', 'exact'],
+    ['ivan_support', 'Ivan', 'title'],
+    ['DANIEL | SUPPORT', 'Daniel', 'title'],
+    ['Dan1el Support', 'Daniel', 'title'],
+    ['CHRIS ADMIN', 'Chris', 'title'],
+    ['Chr1s Admin', 'Chris', 'title'],
+    ['ALEX ADMIN', 'Alex', 'title'], // the title words themselves in capitals
+    ['ALEX OFFICIAL', 'Alex', 'title'],
+    ['Mila', 'Milan', 'similar'],
+  ];
+  for (const [name, staff, kind] of yes) assert.equal(imp.compare(name, staff), kind, `${name} vs ${staff}`);
+  assert.equal(imp.normalize('MIA'), imp.normalize('mia'));
+  assert.equal(imp.normalize('Ivan'), imp.normalize('ivan'));
+
+  const no = [
+    ['Eel', 'Ell'], // still too short once repeated letters are collapsed
+    ['Kevin', 'Ivan'],
+    ['Lisa', 'Liam'],
+    ['Olivia', 'Oliver'],
+    ['Lina', 'Nina'],
+    ['Mike', 'Mika'],
+    ['Emilia', 'Amelia'],
+  ];
+  for (const [name, staff] of no) assert.equal(imp.compare(name, staff), null, `${name} vs ${staff}`);
+});
+
+test('joins: capital and lowercase copies of staff names raise an alert', async () => {
+  const { guild } = await setup();
+  person(guild, { username: 'mia', globalName: 'Mia', roles: ['member', 'support'] });
+  person(guild, { username: 'vanya77', globalName: 'Ivan', roles: ['member', 'support'] });
+  const before = alerts(guild).length;
+  for (const profile of [{ username: 'x1', globalName: 'MIA' }, { username: 'ivan' }, { username: 'ivan_support' }, { username: 'x2', globalName: 'ALEX ADMIN' }]) {
+    await join(guild, profile);
+  }
+  assert.equal(alerts(guild).length, before + 4, 'one alert each');
+});
+
+test('the staff list is built once and reused – a raid of joins does not rescan every member', async () => {
+  const { guild, staff } = await setup();
+  for (let i = 0; i < 200; i += 1) person(guild, { username: `buyer${i}` });
+  // The member scan reads every member's roles once – count it on a bystander
+  const bystander = person(guild, { username: 'bystander' });
+  let reads = 0;
+  const roles = bystander.roles.cache;
+  Object.defineProperty(bystander.roles, 'cache', {
+    get() {
+      reads += 1;
+      return roles;
+    },
+  });
+  const before = alerts(guild).length;
+  for (let i = 0; i < 40; i += 1) await join(guild, { username: `raider_${i}`, globalName: 'Alex Support' });
+  assert.equal(alerts(guild).length, before + 40, 'every raider is still reported');
+  assert.ok(reads <= 1, `the members were scanned ${reads} times for 40 joins`);
+  assert.ok(lastAlert(guild).matches.every((m) => m.staffId === staff.id));
+
+  // Promotions, renames and demotions of staff are picked up through member / user updates
+  const max = person(guild, { username: 'maximilian', globalName: 'Maximilian' });
+  let old = max.snapshot();
+  max.roles.cache.set(role(guild, 'support'), guild.roles.cache.get(role(guild, 'support')));
+  await hooks.emit('memberUpdate', old, max);
+  await join(guild, { username: 'maximillian' });
+  assert.deepEqual(lastAlert(guild).matches.map((m) => [m.kind, m.staffId]), [['exact', max.id]], 'a new staff member counts right away');
+
+  old = staff.snapshot();
+  staff.nickname = 'Samuel | Support';
+  await hooks.emit('memberUpdate', old, staff);
+  await join(guild, { username: 'samuel_support' });
+  assert.equal(lastAlert(guild).matches[0].staffId, staff.id, 'a staff nickname change counts right away');
+
+  old = max.snapshot();
+  max.user.username = 'theodore';
+  await hooks.emit('userUpdate', old.user, max.user);
+  await join(guild, { username: 'the0dore' });
+  assert.equal(lastAlert(guild).matches[0].staffId, max.id, 'a staff username change counts right away');
+
+  old = max.snapshot();
+  max.roles.cache.delete(role(guild, 'support'));
+  await hooks.emit('memberUpdate', old, max);
+  const count = alerts(guild).length;
+  await join(guild, { username: 'theod0re' });
+  assert.equal(alerts(guild).length, count, 'a former staff member is no longer protected');
+
+  // A new admin role changes who is staff (Discord admins count as staff)
+  const zoe = person(guild, { username: 'zoe.rose', globalName: 'Zoe Rose' });
+  const boss = await guild.roles.create({ name: 'Boss', permissions: PermissionFlagsBits.Administrator });
+  zoe.roles.cache.set(boss.id, boss);
+  await join(guild, { username: 'z0e_rose' });
+  assert.equal(lastAlert(guild).matches[0].staffId, zoe.id);
+});
+
+test('a kicked or departed look-alike who rejoins with the same name is reported again', async () => {
+  const { guild, mod } = await setup();
+  const id = uid();
+  const profile = { id, username: 'scammer123', globalName: 'Alex | Support' };
+  await join(guild, profile);
+  const start = alerts(guild).length;
+  const first = lastAlert(guild);
+  await press(guild, mod, 'kick', first);
+  assert.ok(!guild.members.cache.has(id), 'kicked');
+
+  // Rejoins a minute later with the same name
+  await join(guild, profile);
+  assert.equal(alerts(guild).length, start + 1, 'a new alert for the new join');
+  const second = lastAlert(guild);
+  assert.notEqual(second.id, first.id);
+  assert.equal(second.trigger, 'join');
+
+  // Profile changes within the same stay are still reported only once
+  const member = guild.members.cache.get(id);
+  const old = member.snapshot();
+  member.nickname = 'just chilling';
+  await hooks.emit('memberUpdate', old, member);
+  assert.equal(alerts(guild).length, start + 1);
+
+  // Leaving on their own and coming back is a new stay too
+  guild.removeMember(id);
+  await hooks.emit('memberRemove', member);
+  await join(guild, profile);
+  assert.equal(alerts(guild).length, start + 2);
+
+  // Ignore still silences that user + name for good, also across rejoins
+  await press(guild, mod, 'ignore', lastAlert(guild));
+  const again = guild.members.cache.get(id);
+  guild.removeMember(id);
+  await hooks.emit('memberRemove', again);
+  await join(guild, profile);
+  assert.equal(alerts(guild).length, start + 2);
 });

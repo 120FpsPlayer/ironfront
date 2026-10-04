@@ -7,14 +7,16 @@
  * with the staff (members with a staff role, and admins). Look-alikes get an alert card in #automod-logs with
  * Ban / Kick / Timeout 24h / Ignore buttons – only moderators can press them, the result is shown on the card.
  *
- * Names are normalised first: lowercase, accents removed, look-alikes mapped (0→o 1→l 3→e 4→a 5→s 7→t @→a $→s,
- * capital I→l, Cyrillic / Greek twins), only letters and digits kept, repeated letters collapsed. A name matches
- * a staff member when it is
+ * Names are normalised first: lowercase, accents removed, look-alikes mapped (0→o 3→e 4→a 5→s 7→t @→a $→s,
+ * i / I / l / 1 / | → l, Cyrillic / Greek twins), only letters and digits kept, repeated letters collapsed – the
+ * same way for staff and members, so "MIA", "mia" and "M1a" are one name. A name matches a staff member when it is
  *   exact     the same name                                          "Al3x" = alex
  *   title     the staff name plus support / admin / staff / team …   "alex_support", "Support | Alex", "NØX Team"
- *   similar   one edit away (staff names of 5+ characters)           "Danlel" ≈ daniel
+ *   similar   one edit away (staff names of 5+ characters)           "Danial" ≈ daniel
  *   avatar    the same avatar picture
- * Staff and bots are never flagged. One alert per user + name per 24 hours; Ignore silences that user + name for good.
+ * Staff and bots are never flagged. One alert per user + name per 24 hours while they stay – someone who is kicked,
+ * banned or leaves and comes back is reported again; Ignore silences that user + name for good.
+ * The staff list is kept per server (staffList) and rebuilt when the staff or their roles change.
  *
  * Buttons: imp:<ban|kick|timeout|ignore>:<alertId>
  * State:   db.guild(id).security.impersonation = { alerts: { [id]: ALERT }, ignored: { [key]: { by, at } } }
@@ -22,14 +24,14 @@
  */
 
 const crypto = require('node:crypto');
-const { ButtonStyle, PermissionFlagsBits, escapeMarkdown } = require('discord.js');
+const { ButtonStyle, escapeMarkdown } = require('discord.js');
 const { env } = require('../env');
 const hooks = require('../lib/hooks');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const members = require('../lib/members');
 const { e, ce, COLORS } = require('../lib/theme');
-const { STAFF_KEYS, isMod, isStaff, ticketRoleIds } = require('../lib/permissions');
+const { allStaffRoleIds, isMod, isStaff } = require('../lib/permissions');
 const { UserError, ts, truncate, sendToChannel } = require('../lib/utils');
 const { container, text, divider, btn, row, header, v2 } = require('../lib/v2');
 
@@ -53,22 +55,29 @@ const LOOKALIKES = {
   ø: 'o', ł: 'l', đ: 'd', ħ: 'h', ı: 'i', ß: 'ss', æ: 'ae', œ: 'oe',
 };
 
-/** { full, short } – the normalised name, without and with repeated letters collapsed. */
+const collapse = (s) => s.replace(/(.)\1+/g, '$1');
+
+/**
+ * { full, short, size } – the normalised name, without and with repeated letters collapsed. i, I, l, 1, | and !
+ * all look alike, so they become the same letter (l) – on both sides, so "MIA", "mia" and "M1a" are one name.
+ * size is how many letters the name really has (repeats counted once, i and l still told apart): it decides
+ * whether a name is long enough to compare, so merging i and l doesn't make "Ali" or "Emily" shorter.
+ */
 function forms(name) {
   const plain = String(name ?? '')
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
-    .replace(/I/g, 'l') // a capital i looks exactly like a small L
     .replace(/(?<=\p{L})\|(?=\p{L})/gu, 'l') // "A|ex" – but "Alex | Support" keeps its separator
     .replace(/(?<=\p{L})!(?=\p{L})/gu, 'i') // "L!am" – but "Alex!!" is just Alex
     .toLowerCase();
-  const full = [...plain]
+  const letters = [...plain]
     .map((ch) => LOOKALIKES[ch] ?? ch)
     .join('')
     .replace(/[^a-z0-9]/g, '')
     .replace(/rn/g, 'm')
     .replace(/vv/g, 'w');
-  return { full, short: full.replace(/(.)\1+/g, '$1') };
+  const full = letters.replace(/i/g, 'l');
+  return { full, short: collapse(full), size: collapse(letters).length };
 }
 
 /** "Ａ1ex_$upp0rt" → "alexsuport" */
@@ -114,10 +123,10 @@ function titled(candidate, staff) {
 
 /** compare() for names that are already normalised with forms(). */
 function compareForms(a, b, { titleOnly = false } = {}) {
-  if (a.short.length < 3 || b.short.length < 3) return null;
+  if (a.size < 3 || b.size < 3) return null;
   if (!titleOnly && a.short === b.short) return 'exact';
   if (titled(a, b)) return 'title';
-  if (!titleOnly && b.short.length >= 5 && Math.abs(a.short.length - b.short.length) <= 1 && distance(a.short, b.short) <= 1) return 'similar';
+  if (!titleOnly && b.size >= 5 && Math.abs(a.short.length - b.short.length) <= 1 && distance(a.short, b.short) <= 1) return 'similar';
   return null;
 }
 
@@ -147,24 +156,15 @@ function namesOf(member) {
 const avatarsOf = (member) => [...new Set([member.user?.avatar, member.avatar].filter(Boolean))];
 
 /**
- * Roles that can make someone staff (staff roles from /build and the ticket settings, admin roles, roles with
- * admin permissions) – a cheap first filter, so a join on a big server doesn't run isStaff() for every member.
+ * Every staff member's names (plus their name without titles) and avatars – and the brand as "the team".
+ * roleIds (roles that can make someone staff) is a cheap first filter, so isStaff() only runs for likely staff.
  */
-function staffRoleIds(guild) {
-  const ids = new Set([...STAFF_KEYS.map((key) => db.roleId(guild.id, key)), ...ticketRoleIds(guild.id, null), ...env.adminRoleIds].filter(Boolean));
-  if (env.discordAdminsAreAdmins) {
-    for (const r of guild.roles.cache.values()) {
-      if (r.permissions.has(PermissionFlagsBits.Administrator) || r.permissions.has(PermissionFlagsBits.ManageGuild)) ids.add(r.id);
-    }
-  }
-  ids.delete(guild.id);
-  return [...ids];
-}
-
-/** Every staff member's names (plus their name without titles) and avatars – and the brand as "the team". */
-function staffProfiles(guild) {
-  const roleIds = staffRoleIds(guild);
-  const maybeStaff = (m) => m.id === guild.ownerId || env.ownerIds.includes(m.id) || roleIds.some((id) => m.roles.cache.has(id));
+function staffProfiles(guild, roleIds = allStaffRoleIds(guild)) {
+  const hasStaffRole = (m) => {
+    for (const id of m.roles.cache.keys()) if (roleIds.has(id)) return true; // roles.cache builds a new Collection – read it once
+    return false;
+  };
+  const maybeStaff = (m) => m.id === guild.ownerId || env.ownerIds.includes(m.id) || hasStaffRole(m);
   const list = [];
   for (const m of guild.members.cache.values()) {
     if (m.user?.bot || !maybeStaff(m) || !isStaff(m)) continue;
@@ -178,6 +178,30 @@ function staffProfiles(guild) {
   list.push({ id: null, names: [{ name: config.brand.name, forms: forms(config.brand.name) }], avatars: [], titleOnly: true });
   return list;
 }
+
+/**
+ * staffProfiles(), kept per server – a raid of joins compares against the same list instead of scanning every
+ * member each time. Rebuilt when the staff roles change (a role is created, deleted or gets admin permissions,
+ * /setup, /build, a new owner), when a staff member changes, joins or leaves (forgetStaff), and at the latest
+ * after STAFF_TTL in case Discord didn't tell us about something.
+ */
+const STAFF_TTL = 10 * 60_000;
+const staffCache = new WeakMap(); // Guild → { signature, at, list }
+
+function staffList(guild, now = Date.now()) {
+  const roleIds = allStaffRoleIds(guild);
+  const signature = `${guild.ownerId}|${[...roleIds].filter((id) => guild.roles.cache.has(id)).sort().join(',')}`;
+  const cached = staffCache.get(guild);
+  if (cached && cached.signature === signature && now - cached.at < STAFF_TTL) return cached.list;
+  const list = staffProfiles(guild, roleIds);
+  staffCache.set(guild, { signature, at: now, list });
+  return list;
+}
+
+const forgetStaff = (guild) => guild && staffCache.delete(guild);
+
+/** Is this member staff now, or in the kept staff list (e.g. just lost their staff role)? */
+const staffChange = (member) => isStaff(member) || Boolean(staffCache.get(member.guild)?.list.some((s) => s.id === member.id));
 
 const RANK = { exact: 0, title: 1, similar: 2 };
 
@@ -219,7 +243,34 @@ function prune(state, now) {
   for (const [id, alert] of Object.entries(state.alerts)) if (now - alert.at > KEEP_ALERTS) delete state.alerts[id];
 }
 
-const alertedRecently = (state, key, now) => Object.values(state.alerts).some((a) => now - a.at < REPEAT_AFTER && a.matches.some((m) => m.key === key));
+/**
+ * Was this user + name reported in the last 24 hours, during the member's current stay? A kick or ban from the
+ * alert, leaving the server (goneAt) or a different join time ends that stay – someone who comes back is new.
+ */
+function alertedRecently(state, key, now, member) {
+  const joinedAt = member.joinedTimestamp ?? null;
+  return Object.values(state.alerts).some(
+    (a) =>
+      now - a.at < REPEAT_AFTER &&
+      !a.goneAt &&
+      !a.actions.some((x) => x.action === 'kick' || x.action === 'ban') &&
+      (a.joinedAt == null || joinedAt == null || a.joinedAt === joinedAt) &&
+      a.matches.some((m) => m.key === key),
+  );
+}
+
+/** The member left (or was kicked / banned): their earlier alerts don't hold back a new one when they come back. */
+function memberGone(member, now = Date.now()) {
+  if (!member?.guild) return;
+  const state = store(member.guild.id);
+  let changed = false;
+  for (const alert of Object.values(state.alerts)) {
+    if (alert.userId !== member.id || alert.goneAt) continue;
+    alert.goneAt = now;
+    changed = true;
+  }
+  if (changed) db.save();
+}
 
 const TRIGGERS = {
   join: 'joined the server',
@@ -297,7 +348,7 @@ async function check(member, trigger = 'join', now = Date.now()) {
   if (!channelId) return null;
   const state = store(guild.id);
   prune(state, now);
-  const matches = findMatches(member, staffProfiles(guild)).filter((m) => !state.ignored[m.key] && !alertedRecently(state, m.key, now));
+  const matches = findMatches(member, staffList(guild, now)).filter((m) => !state.ignored[m.key] && !alertedRecently(state, m.key, now, member));
   if (!matches.length) return null;
 
   const alert = {
@@ -390,8 +441,17 @@ function userChange(before, after) {
   return null;
 }
 
-hooks.on('memberAdd', (member) => check(member, 'join'));
+// A staff member who joins, leaves, gets or loses a staff role or changes their profile → rebuild the staff list.
+hooks.on('memberAdd', (member) => {
+  if (staffChange(member)) forgetStaff(member.guild);
+  return check(member, 'join');
+});
+hooks.on('memberRemove', (member) => {
+  if (staffChange(member)) forgetStaff(member.guild);
+  memberGone(member);
+});
 hooks.on('memberUpdate', (before, after) => {
+  if (!before || before.partial || isStaff(before) || staffChange(after)) forgetStaff(after.guild);
   const what = memberChange(before, after);
   return what ? check(after, what) : null;
 });
@@ -400,14 +460,22 @@ hooks.on('userUpdate', async (before, after) => {
   if (!what) return;
   for (const guild of after.client?.guilds?.cache?.values() ?? []) {
     const member = guild.members.cache.get(after.id);
-    if (member) await check(member, what);
+    if (!member) continue;
+    if (staffChange(member)) forgetStaff(guild);
+    await check(member, what);
   }
 });
 // Staff who haven't talked since the start aren't cached – load everyone once, so all staff names are known.
-hooks.on('ready', async (client) => {
+// A server the bot is (re-)added to is a new Guild object with almost no members cached: load it too.
+async function loadMembers(guild) {
   if (!config.security.impersonationAlerts) return;
-  for (const guild of client.guilds.cache.values()) await members.fetchAll(guild);
+  await members.fetchAll(guild);
+  forgetStaff(guild);
+}
+hooks.on('ready', async (client) => {
+  for (const guild of client.guilds.cache.values()) await loadMembers(guild);
 });
+hooks.on('guildCreate', (guild) => loadMembers(guild));
 hooks.route('imp', { button: onButton });
 
-module.exports = { normalize, forms, distance, compare, core, findMatches, staffProfiles, check, alertCard, store };
+module.exports = { normalize, forms, distance, compare, core, findMatches, staffProfiles, staffList, forgetStaff, check, alertCard, store };
