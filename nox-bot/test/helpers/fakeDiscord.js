@@ -817,10 +817,15 @@ class FakeGuild {
       },
     };
 
+    this.inviteList = new Collection(); // code → invite, see addInvite() / useInvite()
     this.invites = {
       async create(channelId) {
         if (!guild.channels.cache.has(channelId)) throw apiError(10003, 'Unknown Channel');
         return { url: 'https://discord.gg/noxtest', code: 'noxtest' };
+      },
+      async fetch() {
+        guild.assertBotCan('ManageGuild');
+        return new Collection([...guild.inviteList.values()].map((invite) => [invite.code, { ...invite }]));
       },
     };
 
@@ -962,5 +967,119 @@ class FakeGuild {
     return m;
   }
 }
+
+// ───────────── Invites, profiles and moderation (security features) ─────────────
+
+const DAY_MS = 86_400_000;
+
+/** guild.deny('ManageGuild', …) – the bot loses these permissions: matching calls fail with 50013 like on Discord. */
+FakeGuild.prototype.deny = function deny(...names) {
+  this.deniedPermissions ??= new Set();
+  for (const name of names) this.deniedPermissions.add(name);
+  return this;
+};
+
+FakeGuild.prototype.assertBotCan = function assertBotCan(name) {
+  if (this.deniedPermissions?.has(name)) throw apiError(50013, 'Missing Permissions');
+};
+
+/** Like discord.js: toggles the INVITES_DISABLED feature through guild.edit (needs Manage Server). */
+FakeGuild.prototype.disableInvites = async function disableInvites(disabled = true) {
+  this.assertBotCan('ManageGuild');
+  const features = this.features.filter((f) => f !== 'INVITES_DISABLED');
+  if (disabled) features.push('INVITES_DISABLED');
+  return this.edit({ features });
+};
+
+/** A server invite (guild.invites.fetch() returns copies of these). */
+FakeGuild.prototype.addInvite = function addInvite({ code = `inv${nextId().slice(-8)}`, inviterId = null, uses = 0, maxUses = 0 } = {}) {
+  const inviter = inviterId ? this.members.cache.get(inviterId)?.user ?? { id: inviterId, bot: false } : null;
+  const invite = { code, uses, maxUses, inviterId, inviter, guild: this };
+  this.inviteList.set(code, invite);
+  return invite;
+};
+
+/** Someone joins with this invite: one more use, and Discord deletes an invite that is used up. */
+FakeGuild.prototype.useInvite = function useInvite(code) {
+  const invite = this.inviteList.get(code);
+  if (!invite) throw new Error(`no invite ${code}`);
+  invite.uses += 1;
+  if (invite.maxUses && invite.uses >= invite.maxUses) this.inviteList.delete(code);
+  return invite;
+};
+
+/** guild.bans.create(user, { reason, deleteMessageSeconds }) – removes the member like Discord does. */
+Object.defineProperty(FakeGuild.prototype, 'bans', {
+  get() {
+    if (!this.banManager) {
+      const guild = this;
+      this.banManager = {
+        cache: new Collection(),
+        async create(user, { reason = null, deleteMessageSeconds = 0 } = {}) {
+          const id = typeof user === 'string' ? user : user.id;
+          guild.assertBotCan('BanMembers');
+          if (deleteMessageSeconds < 0 || deleteMessageSeconds > 604_800) throw apiError(50035, 'delete_message_seconds must be 0–604800');
+          const member = guild.members.cache.get(id);
+          if (member && !member.bannable) throw apiError(50013, 'Missing Permissions');
+          this.cache.set(id, { user: member?.user ?? { id }, reason });
+          guild.removeMember(id);
+          return id;
+        },
+      };
+    }
+    return this.banManager;
+  },
+});
+
+/** The member is gone (kicked, banned or left): fetching them fails with Unknown Member afterwards. */
+FakeGuild.prototype.removeMember = function removeMember(id) {
+  this.members.cache.delete(id);
+  this.unknownMembers ??= new Set();
+  this.unknownMembers.add(id);
+};
+
+Object.defineProperties(FakeMember.prototype, {
+  // The bot can act on members below its highest role (never on the owner).
+  manageable: {
+    get() {
+      return this.id !== this.guild.ownerId && this.guild.me.roles.highest.position > this.roles.highest.position;
+    },
+  },
+  kickable: {
+    get() {
+      return this.manageable && !this.guild.deniedPermissions?.has('KickMembers');
+    },
+  },
+  bannable: {
+    get() {
+      return this.manageable && !this.guild.deniedPermissions?.has('BanMembers');
+    },
+  },
+  moderatable: {
+    get() {
+      return this.manageable && !this.permissions.has(PermissionsBitField.Flags.Administrator) && !this.guild.deniedPermissions?.has('ModerateMembers');
+    },
+  },
+});
+
+FakeMember.prototype.kick = async function kick(reason = null) {
+  if (!this.kickable) throw apiError(50013, 'Missing Permissions');
+  this.guild.log.push(['kick', this.id, reason]);
+  this.guild.removeMember(this.id);
+  return this;
+};
+
+FakeMember.prototype.timeout = async function timeout(ms, reason = null) {
+  if (!this.moderatable) throw apiError(50013, 'Missing Permissions');
+  if (ms !== null && (ms <= 0 || ms > 28 * DAY_MS)) throw apiError(50035, 'communication_disabled_until must be within 28 days');
+  this.communicationDisabledUntilTimestamp = ms === null ? null : Date.now() + ms;
+  this.guild.log.push(['timeout', this.id, reason]);
+  return this;
+};
+
+/** A copy of the member as it is now – the "old" member / user for memberUpdate and userUpdate events. */
+FakeMember.prototype.snapshot = function snapshot() {
+  return Object.assign(Object.create(FakeMember.prototype), this, { user: { ...this.user } });
+};
 
 module.exports = { FakeGuild, FakeMember, FakeChannel, FakeRole, FakeMessage, validateMessage, validateV2, validateModal, apiError, nextId };
