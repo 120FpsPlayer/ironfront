@@ -126,8 +126,8 @@ module.exports = {
         if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await shop.announceProduct(guild, product, 'new').catch(() => null);
       }
-      const extras = [product.category && `in **${product.category}**`, product.image && 'with its image'].filter(Boolean).join(' ');
-      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)})${extras ? ` ${extras}` : ''} to the shop. The shop panel updates in a few seconds.`);
+      const extras = [product.category && ` in **${product.category}**`, product.image && ' with its image'].filter(Boolean).join('');
+      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop${extras}. The shop panel updates in a few seconds.`);
     }
 
     if (sub === 'edit') {

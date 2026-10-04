@@ -139,6 +139,8 @@ function problem(wh) {
   for (const key of ['from', 'to']) {
     if (wh[key] !== undefined && !/^([01]?\d|2[0-3]):[0-5]\d$|^24:00$/.test(String(wh[key]))) return `"${key}" must be a time like "10:00" (got ${JSON.stringify(wh[key])})`;
   }
+  const { from, to } = range(wh);
+  if (from === to) return '"from" and "to" must be different – for open all day use "00:00" and "24:00"';
   if (wh.days !== undefined && (!Array.isArray(wh.days) || !wh.days.length || wh.days.some((d) => !ALL_DAYS.includes(d)))) {
     return '"days" must list days from 0 (Sunday) to 6 (Saturday), e.g. [1, 2, 3, 4, 5, 6, 0]';
   }

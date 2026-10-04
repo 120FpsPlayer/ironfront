@@ -97,13 +97,15 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
 
   const guildId = guild?.id ?? ticket.guildId;
   const status = workingStatus(new Date(ticket.createdAt ?? Date.now()), guildId, 'ticket');
+  // "We're closed right now" only until someone from the team has taken the ticket.
+  const closedNote = !status.open && !ticket.claimedBy && !ticket.firstResponseAt;
   const intro =
     `## ${typeText(guild, type)} ${type?.label ?? 'Ticket'}${SPACER}\`#${pad(ticket.number)}\`\n` +
     `Hi <@${ticket.ownerId}>! 👋 Thanks for reaching out to **${config.brand.name}**.\n` +
     (type?.id === 'order'
       ? 'A seller will confirm your order, the final price and payment details right here. **Never pay anyone in DMs.**'
       : 'Please describe your request in as much detail as possible and attach screenshots if you can – our team will reply shortly.') +
-    (status.open ? '' : `\n-# ${status.text}`);
+    (closedNote ? `\n-# ${status.text}` : '');
   c.addSectionComponents(section(intro, ownerUser?.displayAvatarURL?.({ size: 128 })));
 
   // An order for a shop product shows the product image next to the form.

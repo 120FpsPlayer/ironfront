@@ -24,13 +24,14 @@ function statusEmbed(guild, { title, res = null, now = shopstatus.clock.now() })
   if (next) lines.push(`**${open ? 'Closes' : 'Opens'}:** ${shopstatus.whenText(next, now)}`);
   if (m !== 'auto') lines.push('-# Stays like this until someone runs `/shop auto`.');
 
-  const channelId = db.channelId(guild.id, 'statShop');
+  const { channel, upToDate } = shopstatus.statusChannel(guild, now);
   const notes = [];
   if (res?.error) notes.push(`⚠️ I couldn't rename the status channel: ${res.error}`);
-  else if (res?.wait) notes.push(`⏳ Discord only allows renaming a channel twice per 10 minutes – the status channel <#${channelId}> updates by itself in about ${res.wait} min.`);
+  else if (res?.wait) notes.push(`⏳ Discord only allows renaming a channel twice per 10 minutes – the status channel ${channel} updates by itself in about ${res.wait} min.`);
   else if (!config.shopStatus.enabled) notes.push('ℹ️ The status channel is turned off (config.json → shopStatus.enabled).');
-  else if (!channelId) notes.push('ℹ️ No status channel yet – run `/build only:update` to add it.');
-  else notes.push(`The status channel <#${channelId}>, the shop panel and the ticket panel are up to date.`);
+  else if (!channel) notes.push('ℹ️ No status channel yet – run `/build only:update` to add it.');
+  else if (!upToDate) notes.push(`⏳ The status channel ${channel} still says otherwise – it is renamed by itself within 10 minutes (Discord allows 2 renames per 10 minutes).`);
+  else notes.push(`The status channel ${channel}, the shop panel and the ticket panel are up to date.`);
 
   return embed(open ? COLORS.success : COLORS.danger)
     .setTitle(title)
@@ -52,7 +53,7 @@ module.exports = {
     .addSubcommand((s) => s.setName('open').setDescription('Open the shop now, outside the opening hours too (until /shop auto)'))
     .addSubcommand((s) => s.setName('close').setDescription('Close the shop now, during the opening hours too (until /shop auto)'))
     .addSubcommand((s) => s.setName('auto').setDescription('Follow the opening hours again (config.json → workingHours)'))
-    .addSubcommand((s) => s.setName('status').setDescription('Is the shop open, the opening hours and the next change')),
+    .addSubcommand((s) => s.setName('status').setDescription('Show if the shop is open, the opening hours and the next change')),
 
   async execute(interaction) {
     if (!isShopManager(interaction.member)) return replyError(interaction, 'Only administrators and sellers can open or close the shop.');

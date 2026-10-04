@@ -125,9 +125,10 @@ test('categories: /product add | edit with autocomplete, the shop panel groups p
   assert.equal(byName('Netflix'), undefined);
 
   // Autocomplete: existing categories, "New category" for what is typed, "No category" when editing.
+  // Existing categories come first – Discord highlights the first suggestion, so Enter reuses "💻 Software".
   const ac = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'add', focusedOption: 'category', focused: 'so' });
-  assert.deepEqual(ac.state.responded.map((c) => c.value), ['so', '💻 Software']);
-  assert.match(ac.state.responded[0].name, /New category: so/);
+  assert.deepEqual(ac.state.responded.map((c) => c.value), ['💻 Software', 'so']);
+  assert.match(ac.state.responded[1].name, /New category: so/);
   const all = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'edit', focusedOption: 'category', focused: '' });
   assert.deepEqual(all.state.responded.map((c) => c.value), ['Games', '💻 Software', 'none']);
   const products = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'edit', focusedOption: 'product', focused: 'gta' });
@@ -245,7 +246,7 @@ test('images: /product add stores the picture and shows it in the shop panel, th
   const pic = upload('gta.png', imageBytes('png', 4096));
   stubFetch(pic);
   const add = await product(guild, owner, 'add', { name: 'GTA V', price: '20', description: 'Instant delivery.', category: 'Games', image: pic });
-  assert.match(textOf(lastResponse(add)), /Added \*\*GTA V\*\* \(20€\) in \*\*Games\*\* with its image/);
+  assert.match(textOf(lastResponse(add)), /Added \*\*GTA V\*\* \(20€\) to the shop in \*\*Games\*\* with its image\./);
   assert.deepEqual(fetched, [pic.url], 'downloaded once – Discord links expire');
   const gta = shop.findProduct(guild.id, 'GTA V');
   assert.equal(gta.image.ext, 'png');

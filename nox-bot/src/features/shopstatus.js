@@ -61,7 +61,7 @@ function statusLine(guildId, place = 'shop', now = clock.now()) {
   const next = nextChange(guildId, now);
   const back = next ? `we open ${whenText(next, now)}` : "we'll be back soon";
   if (place === 'support') return `🔴 **Support is offline right now** – ${back}. Open a ticket anyway, we reply as soon as we're back.`;
-  if (place === 'ticket') return `🔴 **We're closed right now** – ${back}. A seller replies as soon as we're back.`;
+  if (place === 'ticket') return `🔴 **We're closed right now** – ${back}. Our team replies as soon as we're back.`;
   return `🔴 **Closed right now** – ${back}. You can still order; a seller replies when we open.`;
 }
 
@@ -71,11 +71,17 @@ function statusChannelName(guildId, now = clock.now()) {
   return channelName(isOpen(guildId, now) ? config.shopStatus.openName : config.shopStatus.closedName).replace(/\uFE0F/g, '');
 }
 
+/** The status channel (null when there is none) and whether its name shows the right state. */
+function statusChannel(guild, now = clock.now()) {
+  const channel = guild.channels.cache.get(db.channelId(guild.id, 'statShop') ?? '') ?? null;
+  const name = statusChannelName(guild.id, now);
+  return { channel, name, upToDate: !channel || !name || sameChannelName(channel.name, name) };
+}
+
 /** Renames the status channel – only when the name is different. → { renamed, wait (minutes, rate limit) } */
 async function renameChannel(guild, now = clock.now()) {
-  const name = statusChannelName(guild.id, now);
-  const channel = guild.channels.cache.get(db.channelId(guild.id, 'statShop') ?? '');
-  if (!name || !channel || sameChannelName(channel.name, name)) return { renamed: false, wait: 0 };
+  const { channel, name, upToDate } = statusChannel(guild, now);
+  if (upToDate) return { renamed: false, wait: 0 };
   const res = await safeRename(channel, name);
   return { renamed: res.ok, wait: res.ok ? 0 : res.wait };
 }
@@ -84,13 +90,20 @@ async function refreshPanels(guild) {
   for (const kind of ['shop', 'tickets']) await panels.refresh(guild, kind).catch((err) => console.warn('[shop status]', err.message));
 }
 
-/** Brings one server up to date: status channel name, and the panels when the state flipped. */
+/**
+ * What the panels say right now. It changes when the state flips, and also at midnight while closed
+ * ("tomorrow at 10:00" → "at 10:00"), so the panels are refreshed then too.
+ */
+const shownLine = (guildId, now) => statusLine(guildId, 'shop', now) ?? '';
+
+/** Brings one server up to date: status channel name, and the panels when what they show changed. */
 async function sync(guild, now = clock.now()) {
   const state = db.guild(guild.id).shopStatus;
   const open = isOpen(guild.id, now);
+  const line = shownLine(guild.id, now);
   const flipped = state.open !== open;
-  if (flipped) {
-    state.open = open;
+  if (flipped || state.line !== line) {
+    Object.assign(state, { open, line });
     db.save();
     await refreshPanels(guild);
   }
@@ -109,7 +122,8 @@ async function setMode(guild, newMode, { by = null, now = clock.now() } = {}) {
   if (!MODES.includes(newMode)) throw new UserError('Unknown mode – use open, closed or auto.');
   const state = db.guild(guild.id).shopStatus;
   Object.assign(state, { mode: newMode, setBy: by, setAt: now.getTime() });
-  state.open = isOpen(guild.id, now); // after the new mode is in place
+  // After the new mode is in place:
+  Object.assign(state, { open: isOpen(guild.id, now), line: shownLine(guild.id, now) });
   db.save();
   await refreshPanels(guild);
   let rename;
@@ -124,4 +138,4 @@ async function setMode(guild, newMode, { by = null, now = clock.now() } = {}) {
 // First run before the stat channels update (20 s), so they find the status channel already named right.
 hooks.every('shopStatus', 60_000, (client) => tick(client), 15_000);
 
-module.exports = { MODES, clock, mode, isOpen, hoursText, nextChange, whenText, statusLine, statusChannelName, renameChannel, sync, tick, setMode };
+module.exports = { MODES, clock, mode, isOpen, hoursText, nextChange, whenText, statusLine, statusChannelName, statusChannel, renameChannel, sync, tick, setMode };

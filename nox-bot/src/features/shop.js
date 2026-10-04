@@ -150,12 +150,15 @@ const groupTitle = (guild, group, titled = true) => {
   return `${emoji ?? e(guild, group.name ? 'folder' : 'box')} ${label}`;
 };
 
-/** /product add | edit → category: existing ones, plus what is being typed as a new one. */
+/**
+ * /product add | edit → category: existing ones first (Discord highlights the first suggestion, so Enter
+ * reuses one instead of making a near-duplicate), then what is being typed as a new one.
+ */
 function categoryAutocomplete(interaction, typed) {
   const q = String(typed ?? '').replace(/\s+/g, ' ').trim().slice(0, 30);
   const list = categories(interaction.guild.id);
-  const choices = list.filter((c) => !q || c.toLowerCase().includes(q.toLowerCase())).map((c) => ({ name: c, value: c }));
-  if (q && !/^(none|-)$/i.test(q) && !list.some((c) => c.toLowerCase() === q.toLowerCase())) choices.unshift({ name: `➕ New category: ${q}`, value: q });
+  const choices = list.filter((c) => !q || c.toLowerCase().includes(q.toLowerCase())).slice(0, 23).map((c) => ({ name: c, value: c }));
+  if (q && !/^(none|-)$/i.test(q) && !list.some((c) => c.toLowerCase() === q.toLowerCase())) choices.push({ name: `➕ New category: ${q}`, value: q });
   if (interaction.options.getSubcommand(false) === 'edit') choices.push({ name: '🚫 No category', value: 'none' });
   return interaction.respond(choices.slice(0, 25));
 }

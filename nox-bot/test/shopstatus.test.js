@@ -9,6 +9,7 @@ const { buildServer } = require('../src/builder/executor');
 const handle = require('../src/handlers/interactions');
 const loadCommands = require('../src/commands');
 const config = require('../src/lib/config');
+const hooks = require('../src/lib/hooks');
 const hours = require('../src/lib/hours');
 const shopstatus = require('../src/features/shopstatus');
 const { channelName } = require('../src/builder/style');
@@ -94,6 +95,9 @@ test('the hours text comes from workingHours, so support hours and panels always
   assert.match(hours.problem({ enabled: true, timezone: 'Mars/Olympus' }), /timezone/);
   assert.match(hours.problem({ enabled: true, timezone: 'Europe/Warsaw', from: '25:00' }), /"from"/);
   assert.match(hours.problem({ enabled: true, timezone: 'Europe/Warsaw', days: [7] }), /"days"/);
+  // The same time twice would keep the shop closed forever – open all day is 00:00–24:00.
+  assert.match(hours.problem({ enabled: true, timezone: 'Europe/Warsaw', from: '10:00', to: '10:00' }), /"from" and "to" must be different.*00:00.*24:00/);
+  assert.equal(hours.problem({ enabled: true, timezone: 'Europe/Warsaw', from: '00:00', to: '24:00' }), null);
   assert.equal(hours.problem({ enabled: false, timezone: 'nonsense' }), null);
 });
 
@@ -157,6 +161,32 @@ test('timer: flips at 10:00 and 20:00 – renames the status channel only when t
   assert.match(textOf(panelMessage(evening, 'shop').body), /we open tomorrow at 10:00/);
 });
 
+test('timer: runs every minute; at midnight a closed shop says "at 10:00" instead of "tomorrow at 10:00"', async () => {
+  const timer = hooks.timers().find((x) => x.name === 'shopStatus');
+  assert.equal(timer?.ms, 60_000, 'checked every minute');
+
+  const guild = await builtGuild();
+  const channel = ch(guild, 'statShop');
+  const shopPanel = () => textOf(panelMessage(guild, 'shop').body);
+  setClock(SUMMER.closes); // 20:00 in Warsaw
+  await shopstatus.tick(guild.client);
+  assert.match(shopPanel(), /we open tomorrow at 10:00/);
+  const renames = channel.renames;
+
+  setClock('2026-07-15T22:00:00Z'); // 00:00 in Warsaw – the opening is today now
+  await shopstatus.tick(guild.client);
+  assert.match(shopPanel(), /Closed right now\*\* – we open at 10:00/);
+  assert.doesNotMatch(shopPanel(), /tomorrow/);
+  assert.match(textOf(panelMessage(guild, 'tickets').body), /Support is offline right now\*\* – we open at 10:00/);
+  assert.equal(channel.renames, renames, 'still closed – the channel keeps its name');
+
+  // Nothing else changes during the night: no more edits.
+  const edits = panelMessage(guild, 'shop').edits;
+  setClock('2026-07-16T03:00:00Z');
+  await shopstatus.tick(guild.client);
+  assert.equal(panelMessage(guild, 'shop').edits, edits);
+});
+
 test('timer: Discord allows 2 renames per 10 minutes – the rename waits, the panels still flip', async () => {
   const guild = await builtGuild();
   const channel = ch(guild, 'statShop');
@@ -213,10 +243,19 @@ test('/shop close | open | auto: manual mode wins over the hours until /shop aut
   assert.equal(shopstatus.mode(guild.id), 'auto');
   assert.equal(channel.name, OPEN_NAME(), 'waits for the rate limit');
   assert.match(textOf(panelMessage(guild, 'shop').body), /we open tomorrow at 10:00/);
+  // /shop status doesn't claim the channel is up to date while the rename still waits.
+  const pending = textOf(lastResponse(await run({ guild, member: owner, kind: 'command', commandName: 'shop', subcommand: 'status' })));
+  assert.match(pending, /Right now:\*\* 🔴 Closed[\s\S]*status channel <#\d+> still says otherwise – it is renamed by itself within 10 minutes/);
+  assert.doesNotMatch(pending, /up to date/);
 
   setClock(SUMMER.opens);
   const status = await run({ guild, member: owner, kind: 'command', commandName: 'shop', subcommand: 'status' });
-  assert.match(textOf(lastResponse(status)), /Shop status[\s\S]*Right now:\*\* 🟢 Open[\s\S]*Opening hours:\*\* Every day 10:00–20:00[\s\S]*Closes:\*\* at 20:00/);
+  assert.match(textOf(lastResponse(status)), /Shop status[\s\S]*Right now:\*\* 🟢 Open[\s\S]*Opening hours:\*\* Every day 10:00–20:00[\s\S]*Closes:\*\* at 20:00[\s\S]*up to date/);
+
+  // A deleted status channel is not linked as if it were there.
+  channel.guild.channels.cache.delete(channel.id);
+  const gone = textOf(lastResponse(await run({ guild, member: owner, kind: 'command', commandName: 'shop', subcommand: 'status' })));
+  assert.match(gone, /No status channel yet/);
 });
 
 test('/shop: only admins and sellers can open or close the shop', async () => {
@@ -247,7 +286,14 @@ test('tickets agree with the shop status: the ticket panel and a new ticket say 
   await shopstatus.setMode(guild, 'closed', { by: owner.id });
   assert.match(textOf(ui.panelPayload(guild)), /Support is offline right now\*\* – we'll be back soon/);
   const closed = await t.openTicket(buyer, config.getType('order'), [{ label: 'What would you like to buy?', value: 'Nitro' }]);
-  assert.match(textOf(closed.messageList[0].body), /We're closed right now\*\* – we'll be back soon\. A seller replies as soon as we're back\./);
+  assert.match(textOf(closed.messageList[0].body), /We're closed right now\*\* – we'll be back soon\. Our team replies as soon as we're back\./);
+  // Any ticket type – the note doesn't promise "a seller" for a support or report ticket.
+  const help = await t.openTicket(member(guild), config.getType('support'), [{ label: 'Subject', value: 'Hi' }]);
+  assert.match(textOf(help.messageList[0].body), /We're closed right now/);
+  assert.doesNotMatch(textOf(help.messageList[0].body), /seller/i);
+  // Once someone from the team takes the ticket, the card no longer says "we're closed".
+  await t.claimTicket(help, owner);
+  assert.doesNotMatch(textOf(help.messageList[0].body), /closed right now/i);
 
   await shopstatus.setMode(guild, 'open', { by: owner.id });
   assert.match(textOf(ui.panelPayload(guild)), /Support is online now\*\* · Every day 10:00–20:00/);
