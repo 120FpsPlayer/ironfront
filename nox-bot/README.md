@@ -1,7 +1,8 @@
 # 🌙 NØX – all-in-one Discord bot
 
 One bot that **builds your whole Discord server with a single command** and then **runs it**:
-verification, a live shop with Buy buttons, tickets, vouches, giveaways, AutoMod, logs, stats and more.
+verification, a live shop with Buy buttons, discount codes, receipts and order proofs, tickets, vouches, giveaways,
+sales stats, invite rewards, raid protection, AutoMod, logs, backups and more.
 Purple theme, custom banners and custom emojis included. Everything is in English.
 
 Type **`/build`**, click **Build**, wait about two minutes – done. 💜
@@ -14,9 +15,9 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 | | |
 |---|---|
 | 🎭 **20 roles** | Founder, Co-Founder, Manager, Administrator, Moderator, Support, Trial Support, Seller, VIP, Partner, Loyal Customer, Customer, Bots, Member, 3 notification roles + 3 separators – all in a purple palette with the right permissions |
-| 📁 **11 categories, 39 channels** | Server stats · Welcome · Shop · Support · Community · VIP Lounge · Voice · Staff · Logs · Tickets · Closed tickets |
+| 📁 **11 categories, 43 channels** | Server stats · Welcome · Shop · Support · Community · VIP Lounge · Voice · Staff · Logs · Tickets · Closed tickets |
 | 🔐 **Permissions done right** | New people only see **#verify**, **#rules** and **#welcome** (read-only, so their welcome ping reaches them). Info channels are read-only, staff/log/VIP areas are private, media channels allow files, AFK is muted |
-| 🖼️ **Custom banners** | 35 purple banners (1080×400) – every info channel starts with its own banner and a styled card |
+| 🖼️ **Custom banners** | 36 purple banners (1080×400) – every info channel starts with its own banner and a styled card |
 | 😀 **Custom emojis** | 67 purple emojis (`:nox_cart:`, `:nox_check:`, `:nox_paypal:`…) – the bot uses them in all its messages |
 | 🌙 **Branding** | Renames the server to **NØX**, sets the server icon (and banner on boosted servers) |
 | 🌐 **Community mode** | Announcement channels, welcome screen, rules + updates channels |
@@ -25,11 +26,37 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 ### 🛒 Selling
 - **Live shop panel** in #shop – add products with `/product add`, they appear instantly with a **Buy** button.
   Prices typed as plain numbers get the currency automatically (`20` → **20€**).
+- **Categories and product pictures** – group products (Games, Accounts, Nitro…) and attach an image to each one.
+  Big catalogs get a category menu that opens a private list with Buy buttons.
 - **Payments:** PaysafeCard, Crypto (BTC, ETH) and PayPal – edit them in `config.json`.
-- **Buy → order form → private ticket.** The form asks for quantity and lets the buyer **pick a payment method from a list**.
-- **Order completed** (one click in the ticket menu) → the buyer gets the **Customer** role automatically, after 5 orders **Loyal Customer**, and is asked for a vouch.
+- **Buy → order form → private ticket.** The form asks for quantity, a **payment method** from a list and an optional
+  **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
+- **Discount codes** – `/promo create NOX10 percent:10` (or an amount off), with expiry, max uses, once per member,
+  first order only.
+- **Order completed** (ticket menu → confirm the amount paid) → the sale is recorded, the buyer gets a **receipt by DM**,
+  the **Customer** role (after 5 orders **Loyal Customer**), and an anonymous **proof** is posted in #proofs.
+- **Vouch reminder** – 24 hours after the order the customer gets a DM with a **Leave a vouch** button (only if they haven't vouched yet).
+- **First-purchase code** – new members get a personal 5% code by DM after they verify.
+- **Notify me** – sold-out products get a 🔔 button; when they're back in stock everyone who clicked gets a DM.
+- **Open / closed** – the shop is open **10:00–20:00 every day** (Polish time): the status channel at the top shows
+  `🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ` / `🔴┃ꜱʜᴏᴘ ᴄʟᴏꜱᴇᴅ`, and the shop and ticket panels say so. It switches by itself;
+  `/shop open` · `/shop close` override it until `/shop auto`.
 - **Restock pings** – new products and restocks are announced in #restocks and ping the Restocks role.
 - **Payment methods, How to buy, FAQ** – ready-made cards, edit them in `config.json`.
+
+### 📈 For you and your team
+- **`/sales`** – revenue, orders, average order, top products, sellers, payment methods and discounts for today,
+  7 days, 30 days or all time, compared with the period before. A **weekly report** is posted in #sales every Monday at 10:00.
+- **`/customer view @user`** – orders, total spent, last orders, tickets, vouches, invites and **private staff notes**
+  (`/customer note add`).
+- **Automatic backups** – every 24 hours the bot posts a backup of its data in #backups (admins only); `/backup` makes one now.
+
+### 🛡️ Security & growth
+- **Look-alike alerts** – someone joins as "supp0rt_nox" or copies a staff member's avatar? Staff get an alert in
+  #automod-logs with **Ban / Kick / Timeout / Ignore** buttons.
+- **`/lockdown`** – during a raid members can't chat, react or use voice and invites are paused; `/unlock` puts everything back exactly.
+- **Invite tracking with rewards** – the bot knows who invited whom. An invite counts once the new member verifies and stays;
+  at **5 / 15 / 30** invites the inviter gets a personal **10% / 15% / 20%** code by DM. `/invites stats` · `/invites top`.
 
 ### ⭐ Vouches
 - **Leave a vouch** button with a star-rating form, or `/vouch` with an optional screenshot.
@@ -108,16 +135,17 @@ Give your team their roles (Manager, Support, Seller…) and you're good to go.
 ## 🗺️ What /build creates
 
 ```
-〔 📊 SERVER STATS 〕    👥┃ᴍᴇᴍʙᴇʀꜱ: 123 · ⭐┃ᴠᴏᴜᴄʜᴇꜱ: 45                     (everyone can see, nobody can join)
+〔 📊 SERVER STATS 〕    🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ · 👥┃ᴍᴇᴍʙᴇʀꜱ: 123 · ⭐┃ᴠᴏᴜᴄʜᴇꜱ: 45      (everyone can see, nobody can join)
 〔 👋 WELCOME 〕         ✅┃ᴠᴇʀɪꜰʏ · 📜┃ʀᴜʟᴇꜱ · 👋┃ᴡᴇʟᴄᴏᴍᴇ · 📌┃ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ · 📢┃ᴀɴɴᴏᴜɴᴄᴇᴍᴇɴᴛꜱ
                         🎉┃ɢɪᴠᴇᴀᴡᴀʏꜱ · 🎭┃ʀᴏʟᴇꜱ · 🤝┃ᴘᴀʀᴛɴᴇʀꜱ
-〔 🛒 SHOP 〕            🛒┃ꜱʜᴏᴘ · 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ · 💳┃ᴘᴀʏᴍᴇɴᴛꜱ · ✨┃ʀᴇꜱᴛᴏᴄᴋꜱ · ⭐┃ᴠᴏᴜᴄʜᴇꜱ
+〔 🛒 SHOP 〕            🛒┃ꜱʜᴏᴘ · 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ · 💳┃ᴘᴀʏᴍᴇɴᴛꜱ · ✨┃ʀᴇꜱᴛᴏᴄᴋꜱ · ⭐┃ᴠᴏᴜᴄʜᴇꜱ · 🧾┃ᴘʀᴏᴏꜰꜱ
 〔 🎧 SUPPORT 〕         🎫┃ᴛɪᴄᴋᴇᴛꜱ · ❓┃ꜰᴀǫ
 〔 💬 COMMUNITY 〕       💬┃ᴄʜᴀᴛ · 📸┃ᴍᴇᴅɪᴀ · 😂┃ᴍᴇᴍᴇꜱ · 🤖┃ᴄᴏᴍᴍᴀɴᴅꜱ · 🏆┃ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ · 🚀┃ʙᴏᴏꜱᴛᴇʀꜱ
 〔 💎 VIP LOUNGE 〕      💎┃ᴠɪᴘ-ᴄʜᴀᴛ · 💎┃ᴠɪᴘ ʟᴏᴜɴɢᴇ                  (VIP, partners, loyal customers, boosters, staff)
 〔 🔊 VOICE 〕           🔊┃ʟᴏᴜɴɢᴇ · 🎮┃ɢᴀᴍɪɴɢ · 🎵┃ᴍᴜꜱɪᴄ · 👥┃ᴅᴜᴏ · 💤┃ᴀꜰᴋ
 〔 🔒 STAFF 〕           💼┃ꜱᴛᴀꜰꜰ-ᴄʜᴀᴛ · 🔧┃ꜱᴛᴀꜰꜰ-ᴄᴏᴍᴍᴀɴᴅꜱ · 📣┃ᴅɪꜱᴄᴏʀᴅ-ᴜᴘᴅᴀᴛᴇꜱ · 🔒┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ
 〔 📁 LOGS 〕            📁┃ᴛɪᴄᴋᴇᴛ-ʟᴏɢꜱ · 📄┃ᴛʀᴀɴꜱᴄʀɪᴘᴛꜱ · ✅┃ᴠᴇʀɪꜰʏ-ʟᴏɢꜱ · 📋┃ꜱᴇʀᴠᴇʀ-ʟᴏɢꜱ · 🤖┃ᴀᴜᴛᴏᴍᴏᴅ-ʟᴏɢꜱ
+                        📈┃ꜱᴀʟᴇꜱ · 💾┃ʙᴀᴄᴋᴜᴘꜱ                                  (admins only)
 〔 🎫 TICKETS 〕 / 〔 🔐 CLOSED TICKETS 〕                        (ticket channels go here: 🛒┃ᴏʀᴅᴇʀ-0001)
 ```
 Discord allows 50 channels per category: when 〔 🎫 TICKETS 〕 is full the bot opens **〔 🎫 TICKETS 2 〕** (3, …),
@@ -135,7 +163,7 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | Write in #restocks | | | ✅ | | | ✅ |
 | Staff chat, ticket logs, transcripts | | | ✅ | ✅ | ✅ | ✅ |
 | Server, verify & AutoMod logs | | | | | ✅ | ✅ |
-| #discord-updates | | | | | | ✅ |
+| #discord-updates, #sales, #backups | | | | | | ✅ |
 
 ---
 
@@ -144,15 +172,23 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | Command | What it does | Who |
 |---|---|---|
 | `/build` | Build the whole server (Build / Wipe & Build) | Owner, admins |
+| `/build only:update` | **After a bot update:** adds new channels & roles, applies the name style and updates every panel – nothing is deleted | Owner, admins |
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
 | `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
 | `/build only:names` | Rename all channels & categories to the name style from `config.json` (e.g. after an update) – nothing else changes | Owner, admins |
-| `/product add / edit / stock / remove / list` | Manage the shop – the #shop panel updates by itself | Admins, sellers |
+| `/product add / edit / stock / remove / list` | Manage the shop (categories, images, stock) – the #shop panel updates by itself | Admins, sellers |
+| `/promo create / list / info / delete` | Discount codes | Admins, sellers |
+| `/shop open / close / auto / status` | Open or close the shop by hand, or follow the opening hours again | Admins, sellers |
+| `/sales` | Sales statistics | Admins, sellers |
+| `/customer view / note add / note remove` | Customer profiles and private staff notes | Staff |
+| `/lockdown` · `/unlock` | Lock the server during a raid and unlock it again | Moderators+ |
+| `/backup` | Back up the bot data now (it also happens automatically) | Admins |
+| `/invites stats / top` | Your invites, the next reward and the top inviters | Everyone |
 | `/vouch` | Leave a review (with optional screenshot) | Everyone |
 | `/giveaway start / end / reroll / list` | Giveaways | Moderators+ |
 | `/announce` | Styled announcement with banner, button and ping | Moderators+ |
 | `/ticket info / close` | Your ticket | Ticket author |
-| `/ticket claim / unclaim / add / remove / priority / move / rename / request-close / complete` | Handle tickets | Staff |
+| `/ticket claim / unclaim / add / remove / priority / move / rename / request-close / complete` | Handle tickets (`complete amount:` = what the customer paid) | Staff |
 | `/reply` | Canned replies | Staff |
 | `/blacklist add / remove / list` | Block people from tickets | Staff |
 | `/stats` | Ticket statistics and staff leaderboard | Staff |
@@ -167,11 +203,14 @@ Admin commands are hidden from normal members automatically.
 ## 🛍️ How an order works
 
 1. A customer clicks **Buy** in #shop (or opens a **Purchase** ticket).
-2. They choose the quantity and a payment method → a **private ticket** opens. Sellers and support are pinged.
-3. A seller claims it, sends the price and payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
-4. After delivery the seller picks **⚙️ Manage ticket → Order completed**:
-   the customer gets the **Customer** role (and **Loyal Customer** after 5 orders) and a **Leave a vouch** button.
+2. They choose the quantity, a payment method and (optionally) a promo code → a **private ticket** opens with the total to pay.
+   Sellers and support are pinged. Outside the opening hours the ticket says when you're back.
+3. A seller claims it, sends the payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
+4. After delivery the seller picks **⚙️ Manage ticket → Order completed** and confirms the amount paid:
+   the sale is recorded for `/sales`, the customer gets a **receipt by DM**, the **Customer** role (and **Loyal Customer**
+   after 5 orders) and a **Leave a vouch** button, and an anonymous proof appears in #proofs.
 5. The ticket is closed – the customer gets the transcript and a rating request by DM, the transcript is saved in #transcripts.
+6. 24 hours later the customer gets a friendly vouch reminder (unless they already left one).
 
 ---
 
@@ -185,6 +224,12 @@ Admin commands are hidden from normal members automatically.
 | `verification` | Math question on/off, minimum account age in days |
 | `shop` | Currency, delivery time, support hours, refund policy, orders needed for Loyal Customer, **payment methods** |
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
+| `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off) |
+| `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
+| `workingHours`, `shopStatus` | Opening hours (default **10:00–20:00 every day, Europe/Warsaw**) and the open/closed status channel names |
+| `invites` | Invite tracking on/off and the rewards (`{ "invites": 5, "percent": 10 }` …) |
+| `security` | Look-alike alerts, whether `/lockdown` pauses invites |
+| `backups`, `salesReport` | How often to back up; the weekday and hour of the weekly sales report |
 | `panel`, `ticketTypes`, `snippets`, `defaults` | Ticket panel texts, ticket categories and their questions, canned replies, limits and auto-close |
 
 After editing:
@@ -202,6 +247,11 @@ Crypto (BTC, ETH) and PayPal.
 and `server.smallCaps` (`true` → `📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ`, `false` → `📦┃how-to-buy`). Ticket channels follow `channelNameFormat`
 (default `{prio}{emoji}┃{prefix}-{number}` → `🛒┃ᴏʀᴅᴇʀ-0001`). The names themselves are in `src/builder/layout.js`.
 After changing the style, restart the bot and run **`/build only:names`**.
+
+### Updating the bot
+Replace the bot files (keep **`.env`** and the **`data/`** folder), run `npm install`, restart the bot and run
+**`/build only:update`** once – it adds the channels and roles that are new in this version (e.g. 🧾┃ᴘʀᴏᴏꜰꜱ,
+📈┃ꜱᴀʟᴇꜱ, 💾┃ʙᴀᴄᴋᴜᴘꜱ and the shop status channel), applies the name style and updates every panel.
 
 **Currency** – `shop.currency` (default `€`) and `shop.currencyPosition` (`after` → `20€`, `before` → `€20`).
 Only plain-number prices get it; `from 5€` or `$10` are shown exactly as you typed them.
@@ -240,8 +290,13 @@ npm i -D playwright && npm run render-assets
 | "Discord only allows renaming a channel twice per 10 minutes" | That's Discord's limit – wait the minutes it says and try again |
 | Buttons say "This interaction failed" | The bot must be **online** – buttons are handled live by the bot |
 | Transcripts are empty | Turn on **Message Content Intent** |
+| The new channels (#proofs, #sales, #backups, shop status) are missing | Run `/build only:update` |
+| "The image is too big" | Product images can be up to 1 MB – save it as JPG or WEBP |
+| Invites aren't counted | The bot needs to see the server's invites – it has Administrator, so check its role wasn't changed. Invites only count after the new member verifies |
 
-💾 **Backup:** everything (tickets, products, vouches, giveaways) lives in `data/db.json` – copy that file.
+💾 **Backup:** everything (tickets, products, sales, promo codes, vouches, giveaways) lives in `data/db.json`, product images in
+`data/products/`. The bot also posts an automatic backup in #backups – to restore one, unzip it, rename it to `db.json`
+and put it in `data/` while the bot is stopped.
 
 ---
 
@@ -256,7 +311,8 @@ data/db.json                 the bot's data (created automatically)
 src/
 ├── index.js                 Discord client, events, timers
 ├── builder/                 /build – layout, permissions, content, executor, emoji upload
-├── features/                verification, shop, vouches, giveaways, roles, announcements, welcome/logs, stats
+├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
+│                            announcements, welcome/logs, stats, sales report, backups, invites, lockdown, look-alike alerts
 ├── tickets/                 ticket system, cards, HTML transcripts
 ├── commands/                slash commands
 ├── handlers/interactions.js buttons, menus and forms
