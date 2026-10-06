@@ -99,10 +99,14 @@ async function grant(interaction, role) {
     .filter(([id]) => id)
     .map(([id, label, icon]) => linkBtn(channelUrl(g.id, id), label, ce(g, icon)));
   if (links.length) c.addActionRowComponents(row(...links));
-  await interaction.reply({ ...v2(c), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
-  // Log after replying – Discord needs an answer within 3 seconds.
-  await log(interaction, { ok: true });
-  await hooks.emit('verified', interaction.member);
+  try {
+    await interaction.reply({ ...v2(c), flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral });
+  } finally {
+    // The role is given at this point – log it and run the 'verified' features (invite credit, welcome code)
+    // even when Discord refused a late reply. Logging comes after the reply: Discord needs an answer within 3 seconds.
+    await log(interaction, { ok: true }).catch((err) => console.warn('[verify] log:', err.message));
+    await hooks.emit('verified', interaction.member);
+  }
 }
 
 async function handleButton(interaction) {

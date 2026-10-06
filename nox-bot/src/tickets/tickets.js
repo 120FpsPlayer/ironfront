@@ -489,6 +489,7 @@ function trackMessage(message) {
   if (!ticket || ticket.status !== 'open') return;
   const fromStaff = message.author.id !== ticket.ownerId && isStaff(message.member, config.getType(ticket.typeId));
   const patch = { lastActivity: Date.now(), lastMessageBy: fromStaff ? 'staff' : 'owner', warned: false };
+  if (!fromStaff && ticket.lastMessageBy === 'staff') patch.waitingSince = Date.now(); // the customer waits from here
   if (fromStaff && !ticket.firstResponseAt) {
     patch.firstResponseAt = Date.now();
     schedulePanelRefresh(message.guild);
@@ -512,7 +513,7 @@ async function answerCloseRequest(channel, member, accepted, message) {
   if (accepted) {
     await closeTicket(channel, member, 'The author confirmed the issue is resolved');
   } else {
-    db.updateTicket(channel.id, { lastMessageBy: 'owner', lastActivity: Date.now(), warned: false });
+    db.updateTicket(channel.id, { lastMessageBy: 'owner', lastActivity: Date.now(), warned: false, ...(ticket.lastMessageBy === 'staff' && { waitingSince: Date.now() }) });
     await channel.send(ui.notice(COLORS.warning, `🔔 <@${by}>, the author still needs help.`, { mentions: { users: [by] } }));
   }
 }
@@ -646,7 +647,7 @@ async function pingStaff(channel, member) {
   const roles = ticket.claimedBy ? [] : staffRoleIds(channel.guild.id, config.getType(ticket.typeId)).filter((id) => channel.guild.roles.cache.has(id));
   const who = ticket.claimedBy ? `<@${ticket.claimedBy}>` : roles.map((id) => `<@&${id}>`).join(' ') || 'Support';
   await channel.send(
-    ui.notice(COLORS.warning, `🔔 ${who} – <@${ticket.ownerId}> has been waiting for a reply for ${duration(Date.now() - ticket.lastActivity)}.`, {
+    ui.notice(COLORS.warning, `🔔 ${who} – <@${ticket.ownerId}> has been waiting for a reply for ${duration(Date.now() - (ticket.waitingSince ?? ticket.createdAt))}.`, {
       mentions: { users: ticket.claimedBy ? [ticket.claimedBy] : [], roles },
     }),
   );
@@ -655,7 +656,7 @@ async function pingStaff(channel, member) {
 async function stillNeedHelp(channel, member, message) {
   const ticket = requireOpen(channel);
   if (ticket.ownerId !== member.id) throw new UserError('This button is for the ticket author.');
-  db.updateTicket(channel.id, { lastMessageBy: 'owner', lastActivity: Date.now(), warned: false });
+  db.updateTicket(channel.id, { lastMessageBy: 'owner', lastActivity: Date.now(), warned: false, ...(ticket.lastMessageBy === 'staff' && { waitingSince: Date.now() }) });
   await message.edit(ui.notice(COLORS.success, `✋ <@${ticket.ownerId}> still needs help – automatic closing cancelled.`)).catch(() => null);
 }
 
@@ -834,7 +835,7 @@ async function runInactivityCheck(client) {
   const now = Date.now();
   for (const ticket of db.tickets((t) => t.status === 'open')) {
     const guild = client.guilds.cache.get(ticket.guildId);
-    if (!guild) continue;
+    if (!guild || guild.available === false) continue; // a Discord outage is not a deleted ticket
     const channel = guild.channels.cache.get(ticket.channelId);
     if (!channel) {
       db.updateTicket(ticket.channelId, { status: 'deleted', deletedAt: now });

@@ -107,7 +107,21 @@ async function drawWinners(guild, entries, count, exclude = []) {
   return winners;
 }
 
-async function end(guild, gw, { reroll = false, count = null } = {}) {
+const drawing = new Set(); // giveaways whose winners are being drawn right now
+
+/** Ends a giveaway (or rerolls it) – one draw at a time, and a normal end only once. */
+async function end(guild, gw, opts = {}) {
+  if (drawing.has(gw.id)) throw new UserError('Winners for this giveaway are being drawn right now – try again in a moment.');
+  if (!opts.reroll && gw.ended) throw new UserError('This giveaway has already ended – use `/giveaway reroll` for a new winner.');
+  drawing.add(gw.id);
+  try {
+    return await draw(guild, gw, opts);
+  } finally {
+    drawing.delete(gw.id);
+  }
+}
+
+async function draw(guild, gw, { reroll = false, count = null } = {}) {
   const winners = await drawWinners(guild, gw.entries, count ?? gw.winnersCount, reroll ? gw.winners : []);
   // A reroll adds the new winners (so they're excluded from the next reroll too).
   gw.winners = reroll ? [...new Set([...gw.winners, ...winners])] : winners;
@@ -164,7 +178,7 @@ async function tick(client) {
   const now = Date.now();
   for (const guildId of db.allGuildIds()) {
     const guild = client.guilds.cache.get(guildId);
-    if (!guild) continue;
+    if (!guild || guild.available === false) continue;
     for (const gw of all(guildId)) {
       if (gw.ended || gw.endsAt > now) continue;
       await end(guild, gw).catch((err) => console.error(`[giveaway] Failed to end ${gw.id}:`, err.message));

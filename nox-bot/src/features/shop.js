@@ -135,7 +135,9 @@ let RGI = null;
 try {
   RGI = new RegExp('^\\p{RGI_Emoji}$', 'v');
 } catch {
-  RGI = UNICODE_EMOJI; // Node < 20
+  // Node 18 has no 'v' flag: one emoji is one grapheme ("⭐⭐⭐" is three, and Discord rejects it as a button emoji)
+  const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  RGI = { test: (s) => UNICODE_EMOJI.test(s) && [...graphemes.segment(s)].length === 1 };
 }
 
 /** "🎮 Games" → { emoji: '🎮', label: 'Games' }; "Games" → { emoji: null, label: 'Games' }. */
@@ -294,10 +296,13 @@ function navRow(guild, value, index, pages) {
       btn(`shopview:page:${index + 1}:${value}`, 'Next', '▶️').setDisabled(index >= pages - 1),
     );
   }
-  const howTo = db.channelId(guild.id, 'howToBuy');
-  const vouches = db.channelId(guild.id, 'vouches');
-  if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
-  if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
+  // With page buttons the links move into the footer text, so 5 tabs + 5 products with images still fit.
+  if (pages <= 1) {
+    const howTo = db.channelId(guild.id, 'howToBuy');
+    const vouches = db.channelId(guild.id, 'vouches');
+    if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
+    if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
+  }
   return buttons.length ? row(...buttons) : null;
 }
 
@@ -331,8 +336,12 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
 
   c.addSeparatorComponents(divider(true));
   const methods = config.shop.paymentMethods.map((m) => m.name);
+  const links = pages > 1 ? ['howToBuy', 'vouches'].map((k) => db.channelId(guild.id, k)).filter(Boolean).map((id) => `<#${id}>`) : [];
   c.addTextDisplayComponents(
-    text(`-# ${methods.length ? `${e(guild, 'card')} We accept: ${methods.join(' · ')} · ` : ''}🔒 We never ask for payment in DMs – only inside your ticket.`),
+    text(
+      `-# ${methods.length ? `${e(guild, 'card')} We accept: ${methods.join(' · ')} · ` : ''}🔒 We never ask for payment in DMs – only inside your ticket.` +
+        (links.length ? `\n-# ${links.join(' · ')}` : ''),
+    ),
   );
   const nav = navRow(guild, active, index, pages);
   if (nav) c.addActionRowComponents(nav);
@@ -622,6 +631,11 @@ async function submitOrder(interaction, productId) {
   const tickets = require('../tickets/tickets');
   const product = findProduct(interaction.guild.id, productId);
   if (!product) throw new UserError('This product is no longer available.');
+  // Sold out while the form was open – offer Notify me instead of an order ticket.
+  if (product.stock === 'out') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return interaction.editReply(soldOutView(interaction.guild, product));
+  }
   const field = (id) => {
     try {
       return interaction.fields.getTextInputValue(id)?.trim() ?? '';

@@ -151,6 +151,7 @@ function scheduleReminder({ guild, ticket, sale }) {
     dueAt: sale.completedAt + hours * HOUR,
     sent: false,
     completedAt: sale.completedAt,
+    orderedAt: sale.createdAt ?? sale.completedAt, // a vouch left while the order was open counts too
     saleId: sale.id,
     ticketNumber: sale.ticketNumber,
     product: sale.product,
@@ -186,7 +187,7 @@ async function runReminders(client, now = Date.now()) {
       if (!guild || r.dueAt > now) continue;
       Object.assign(r, { sent: true, sentAt: now }); // marked first, so a slow DM can never be sent twice
       db.save();
-      if (vouchedSince(guildId, r.userId, r.completedAt)) r.result = 'already vouched';
+      if (vouchedSince(guildId, r.userId, r.orderedAt ?? r.completedAt)) r.result = 'already vouched';
       else if (!db.channelId(guildId, 'vouches')) r.result = 'no vouches channel';
       else {
         const member = await guild.members.fetch(r.userId).catch(() => null);
@@ -212,7 +213,7 @@ async function openVouchForm(interaction, [guildId, ticketChannelId]) {
   const { guild, member } = await resolveMember(interaction, guildId);
   const ticket = db.getTicket(ticketChannelId);
   if (ticket && ticket.ownerId !== member.id) throw new UserError('This button belongs to someone else.');
-  if (ticket?.completedAt && vouchedSince(guild.id, member.id, ticket.completedAt)) {
+  if (ticket?.completedAt && vouchedSince(guild.id, member.id, ticket.createdAt ?? ticket.completedAt)) {
     throw new UserError("You've already left a vouch for this order – thank you! 💜");
   }
   vouches.checkCanVouch(member);

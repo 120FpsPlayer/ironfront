@@ -28,6 +28,7 @@ function render(kind, guild, panel = {}) {
 const forEdit = (payload) => ({ ...payload, files: payload.files ?? [], attachments: [] });
 
 async function refresh(guild, kind = null) {
+  if (guild.available === false) return; // Discord outage: channels look missing, but nothing was deleted
   for (const panel of db.panels(guild.id, kind)) {
     const panelKind = panel.kind ?? 'tickets';
     if (!renderers.has(panelKind)) continue;

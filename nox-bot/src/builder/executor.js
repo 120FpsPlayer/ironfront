@@ -363,6 +363,13 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       const g = db.guild(guild.id);
       g.panels = [];
       g.build = null;
+      // A /lockdown can't survive the wipe: the roles and channels it locked are gone, the new ones aren't locked.
+      const locked = g.security?.lockdown;
+      if (locked) {
+        if (locked.invitesPaused) await attempt('Resuming invites paused by /lockdown', () => guild.disableInvites(false), { warn: true });
+        delete g.security.lockdown;
+        R.warnings.push(`The server was locked with /lockdown – the wipe ended the lockdown${locked.invitesPaused ? ' and resumed invites' : ''}. Run /lockdown again if the raid isn't over.`);
+      }
       db.save();
     }
 

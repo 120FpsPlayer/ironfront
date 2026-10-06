@@ -12,6 +12,7 @@ const {
 } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
+const hooks = require('../lib/hooks');
 const panels = require('../lib/panels');
 const lockdown = require('./lockdown');
 const { e, ce, emojiId, COLORS } = require('../lib/theme');
@@ -105,7 +106,11 @@ function vouchModal(guild, { customId = 'vouch:submit', productId = null } = {})
             .setCustomId('product')
             .setPlaceholder('Choose a product…')
             .addOptions([
-              ...products.slice(0, 24).map((p) => ({ label: truncate(p.name, 100), value: p.id, default: p.id === productId })),
+              // The bought product first, then the newest ones (a menu holds 25 options).
+              ...[products.find((p) => p.id === productId), ...[...products].reverse().filter((p) => p.id !== productId)]
+                .filter(Boolean)
+                .slice(0, 24)
+                .map((p) => ({ label: truncate(p.name, 100), value: p.id, default: p.id === productId })),
               { label: 'Something else', value: '__other', emoji: '✨' },
             ]),
         ),
@@ -160,7 +165,9 @@ async function postVouch(guild, member, { rating, product, review, image = null 
   if (clean.length < (Number(config.vouches.minLength) || 10)) throw new UserError(`Please write a bit more (at least ${config.vouches.minLength || 10} characters).`);
 
   const g = db.guild(guild.id);
-  const n = g.vouches.length + 1;
+  // Reserved before the first await, so two vouches at the same moment never share a number.
+  g.vouchSeq = Math.max(Number(g.vouchSeq) || 0, g.vouches.length, ...g.vouches.map((v) => Number(v.n) || 0)) + 1;
+  const n = g.vouchSeq;
   const c = container(r >= 4 ? COLORS.brand : r === 3 ? COLORS.warning : COLORS.danger);
   c.addSectionComponents(
     section(`## ${stars(guild, r)}\n### Vouch #${n}${' '}·${' '}${RATING_LABELS[r]}\n>>> ${truncate(clean, 1500)}`, member.displayAvatarURL?.({ size: 128 })),
@@ -222,4 +229,19 @@ function thanks(interaction, n, message) {
   });
 }
 
-module.exports = { stars, stats, vouchPanel, vouchModal, openModal, submitModal, postVouch, fetchImage, thanks, checkCanVouch };
+/** A vouch message deleted by the team (fake or spam vouch): take it out of the counters and averages too. */
+function onMessageDelete(message) {
+  const guild = message?.guild;
+  if (!guild) return false;
+  const g = db.guild(guild.id);
+  const i = g.vouches.findIndex((v) => v.messageId === message.id);
+  if (i === -1) return false;
+  g.vouches.splice(i, 1);
+  db.save();
+  panels.schedule(guild, 'vouches');
+  panels.schedule(guild, 'shop');
+  return true;
+}
+hooks.on('messageDelete', onMessageDelete);
+
+module.exports = { onMessageDelete, stars, stats, vouchPanel, vouchModal, openModal, submitModal, postVouch, fetchImage, thanks, checkCanVouch };

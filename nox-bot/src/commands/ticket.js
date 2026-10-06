@@ -115,6 +115,8 @@ module.exports = {
     }
 
     if (!staff) return replyError(interaction, 'This command is only available to staff members.');
+    // These make several Discord calls – answer first so a slow host doesn't miss Discord's 3 seconds.
+    if (['add', 'remove', 'claim', 'unclaim', 'request-close'].includes(sub)) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     switch (sub) {
       case 'add':

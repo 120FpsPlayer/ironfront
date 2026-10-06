@@ -148,6 +148,14 @@ async function removeRetired(guild, { reason = `${config.brand.name} update`, ke
         res.errors.push(`#${channel.name} was kept because you ran the update in it – run it in another channel to remove it.`);
         continue;
       }
+      // A category with channels left in it (yours, or the one kept above) stays – deleting it would scatter them.
+      if (channel.type === ChannelType.GuildCategory) {
+        const left = guild.channels.cache.filter((c) => c.parentId === channel.id);
+        if (left.size) {
+          res.errors.push(`${channel.name} was kept because it still has ${left.map((c) => `#${c.name}`).join(', ')} – move or delete them and run the update again.`);
+          continue;
+        }
+      }
       try {
         await channel.delete(reason);
         names.push(channel.name);
