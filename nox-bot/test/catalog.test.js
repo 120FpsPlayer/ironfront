@@ -470,3 +470,14 @@ test('/product: only admins and sellers can manage the catalog', async () => {
   assert.deepEqual({ category: item.category, stock: item.stock }, { category: null, stock: 'in' });
   assert.ok(shop.findProduct(guild.id, item.id));
 });
+
+test('the shop panel "Purchase" button takes buyers to #tickets', async () => {
+  const guild = new FakeGuild();
+  await buildServer({ guild, mode: 'add', invokerId: guild.ownerId });
+  const payload = await panels.render('shop', guild);
+  const json = JSON.stringify(payload.components.map((c) => (c.toJSON ? c.toJSON() : c)));
+  const ticketsUrl = `https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'tickets')}`;
+  assert.ok(json.includes(`"label":"Purchase"`), 'labelled like the Purchase ticket');
+  assert.ok(json.includes(ticketsUrl), 'links to #tickets');
+  assert.ok(!json.includes('Custom order'), 'no old "Custom order" button');
+});

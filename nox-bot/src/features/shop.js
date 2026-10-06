@@ -318,7 +318,7 @@ function panelPayload(guild, list, { cards = false, pictures = new Map(), now } 
       text(
         `### ${e(guild, 'box')} New products are on the way\n` +
           'Our catalog is being stocked right now. Want something already? ' +
-          'Click **Custom order** below and our team will help you directly.',
+          `Click **${purchaseType().label}** below to open a ticket – our team will help you directly.`,
       ),
     );
   } else if (cards) {
@@ -336,13 +336,26 @@ function panelPayload(guild, list, { cards = false, pictures = new Map(), now } 
   footer.push('🔒 We never ask for payment in DMs – only inside your ticket.');
   c.addTextDisplayComponents(text(footer.map((l) => `-# ${l}`).join('\n')));
 
-  const buttons = [btn('ticket:open:order', 'Custom order', ce(guild, 'sparkles'), ButtonStyle.Secondary)];
+  // "Purchase" takes buyers to #tickets, where they open a Purchase ticket for anything that isn't listed.
+  const purchase = purchaseType();
+  const tickets = db.channelId(guild.id, 'tickets');
+  const buttons = [
+    tickets
+      ? linkBtn(channelUrl(guild.id, tickets), purchase.label, ce(guild, purchase.icon))
+      : btn('ticket:open:order', purchase.label, ce(guild, purchase.icon), ButtonStyle.Secondary),
+  ];
   const howTo = db.channelId(guild.id, 'howToBuy');
   const vouches = db.channelId(guild.id, 'vouches');
   if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
   if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
   c.addActionRowComponents(row(...buttons));
   return v2(c, { files });
+}
+
+/** The Purchase ticket type's name and emoji (config.json → ticketTypes "order"). */
+function purchaseType() {
+  const type = config.getType('order');
+  return { label: truncate(type?.label || 'Purchase', 80), icon: type?.icon || 'cart' };
 }
 
 /**
