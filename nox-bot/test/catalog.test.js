@@ -3,6 +3,7 @@
 const { db } = require('./helpers/setup');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { ButtonStyle, MessageFlags, MessageFlagsBitField } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const { FakeGuild, validateMessage } = require('./helpers/fakeDiscord');
@@ -73,6 +74,23 @@ function selectOptions(payload) {
 
 const fileNames = (payload) => (payload.files ?? []).map((f) => f.name);
 
+/** Every button in a payload (JSON). */
+function buttons(payload) {
+  const out = [];
+  const walk = (c) => {
+    const d = c?.toJSON ? c.toJSON() : c;
+    if (!d) return;
+    if (d.type === 2) out.push(d);
+    for (const x of d.components ?? []) walk(x);
+    if (d.accessory) walk(d.accessory);
+  };
+  for (const c of payload?.components ?? []) walk(c);
+  return out;
+}
+const labels = (payload) => buttons(payload).map((b) => b.label ?? '').join(' | ');
+/** The products on a page – their Buy or Notify me buttons. */
+const productIds = (payload) => customIds(payload).filter((id) => /^(shop:buy|restock:notify):/.test(id)).map((id) => id.split(':')[2]);
+
 // ───────────── Fake image downloads ─────────────
 
 const SIGNATURES = { png: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], jpg: [0xff, 0xd8, 0xff, 0xe0], gif: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] };
@@ -134,13 +152,19 @@ test('categories: /product add | edit with autocomplete, the shop panel groups p
   const products = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'edit', focusedOption: 'product', focused: 'gta' });
   assert.deepEqual(products.state.responded.map((c) => c.value), [byName('GTA V').id]);
 
+  // The panel: tabs (All · Games · 💻 Software · Other), "All" open, the first page with every product and its category.
   await panels.refresh(guild, 'shop');
   const panel = shopMessage(guild).body;
+  validateMessage(panel, guild);
+  const tabs = buttons(panel).filter((b) => b.custom_id?.startsWith('shopview:tab:'));
+  assert.deepEqual(tabs.map((b) => b.label), ['All', 'Games', 'Software', 'Other']);
+  assert.equal(tabs[0].style, ButtonStyle.Primary, '"All" is the open tab');
+  assert.equal(tabs.find((b) => b.label === 'Software').emoji.name, '💻', "a category's own emoji is its icon");
   const body = textOf(panel);
-  const order = ['Games', 'GTA V', 'Minecraft', '💻 Software', 'Windows 11 Pro', 'Other products', 'Steam Gift Card'].map((s) => body.indexOf(s));
-  assert.ok(order.every((pos, i) => pos !== -1 && (i === 0 || pos > order[i - 1])), `grouped in order: ${order}`);
-  assert.match(body, /## 💻 Software/, "a category's own emoji is its icon");
+  for (const name of ['GTA V', 'Minecraft', 'Windows 11 Pro', 'Steam Gift Card']) assert.match(body, new RegExp(name));
+  assert.match(body, /📂 Games/);
   assert.deepEqual(customIds(panel).filter((id) => id.startsWith('shop:buy:')).length, 4);
+  assert.ok(!customIds(panel).some((id) => id.startsWith('shopview:page:')), 'one page – no ◀ ▶');
 
   // Moving and removing categories.
   await product(guild, owner, 'edit', { product: byName('Minecraft').id, category: '💻 software' });
@@ -150,10 +174,10 @@ test('categories: /product add | edit with autocomplete, the shop panel groups p
   assert.deepEqual(shop.categories(guild.id), ['💻 Software']);
 });
 
-test('many products: a compact list per category and a category menu that answers with Buy / Notify me buttons', async () => {
+test('tabs and pages: 5 products per page, ◀ ▶ and tabs answer privately and then update in place', async () => {
   const { guild } = await builtGuild();
   const buyer = member(guild);
-  for (const [category, count] of [['Games', 5], ['🎬 Streaming', 4], ['Software', 3]]) {
+  for (const [category, count] of [['Games', 7], ['🎬 Streaming', 4], ['Software', 3]]) {
     for (let i = 1; i <= count; i += 1) shop.addProduct(guild, { name: `${category} ${i}`, price: `${i * 5}`, description: 'Instant delivery, full warranty.', category });
   }
   await shop.setStock(guild, 'Games 2', 'out');
@@ -161,82 +185,94 @@ test('many products: a compact list per category and a category menu that answer
   const message = shopMessage(guild);
   const panel = message.body;
   validateMessage(panel, guild);
-  assert.ok(customIds(panel).includes('catalog:browse'));
-  assert.deepEqual(selectOptions(panel).map((o) => o.label), ['Games', 'Streaming', 'Software']);
-  assert.match(selectOptions(panel)[0].description, /5 products · 1 sold out/);
-
-  const browse = await run({ guild, member: buyer, kind: 'select', customId: 'catalog:browse', values: ['c:games'], message });
-  const list = lastResponse(browse);
-  assert.equal(browse.deferred, true, 'answers privately');
-  const ids = customIds(list);
+  assert.deepEqual(buttons(panel).filter((b) => b.custom_id?.startsWith('shopview:tab:')).map((b) => b.label), ['All', 'Games', 'Streaming', 'Software']);
+  assert.equal(productIds(panel).length, 5, '5 products per page');
+  assert.match(labels(panel), /Page 1 \/ 3/);
   const games = shop.products(guild.id).filter((p) => p.category === 'Games');
-  assert.deepEqual(ids.filter((id) => id.startsWith('shop:buy:')).length, 4);
-  assert.ok(ids.includes(`restock:notify:${games[1].id}`), 'the sold-out product offers Notify me');
-  assert.doesNotMatch(textOf(list), /Streaming|Software 1/);
+  assert.ok(customIds(panel).includes(`restock:notify:${games[1].id}`), 'a sold-out product offers Notify me');
 
-  // A whole shop: 50 products in 20 categories stays within Discord's limits, every category opens.
+  // ▶ on the public panel: a private copy of page 2 (the panel itself doesn't change).
+  const next = await run({ guild, member: buyer, kind: 'button', customId: 'shopview:page:1:all', message });
+  assert.equal(next.deferred, true, 'answers privately');
+  const page2 = lastResponse(next);
+  validateMessage(page2, guild);
+  assert.match(labels(page2), /Page 2 \/ 3/);
+  assert.notDeepEqual(productIds(page2), productIds(panel));
+  assert.deepEqual(shopMessage(guild).body, panel, 'the public panel is untouched');
+
+  // ▶ inside the private copy: it updates in place.
+  const privateCopy = { flags: new MessageFlagsBitField(MessageFlags.Ephemeral) };
+  const last = await run({ guild, member: buyer, kind: 'button', customId: 'shopview:page:2:all', message: privateCopy });
+  assert.equal(last.state.updates.length + last.state.edits.length > 0, true);
+  const page3 = lastResponse(last);
+  assert.match(labels(page3), /Page 3 \/ 3/);
+  assert.equal(productIds(page3).length, 4, '14 products → 5 + 5 + 4');
+  assert.ok(buttons(page3).find((b) => b.label === 'Next').disabled, 'Next is off on the last page');
+  const everything = new Set([...productIds(panel), ...productIds(page2), ...productIds(page3)]);
+  assert.equal(everything.size, 14, 'every product is on exactly one page');
+
+  // A tab: only that category.
+  const tab = await run({ guild, member: buyer, kind: 'button', customId: 'shopview:tab:c:games', message: privateCopy });
+  const gamesPage = lastResponse(tab);
+  const gameIds = new Set(games.map((p) => p.id));
+  assert.ok(productIds(gamesPage).every((id) => gameIds.has(id)), 'only Games products');
+  assert.equal(buttons(gamesPage).find((b) => b.label === 'Games').style, ButtonStyle.Primary);
+  assert.match(labels(gamesPage), /Page 1 \/ 2/);
+
+  // 50 products in 20 categories: the tabs become a menu, every tab and page stays within Discord's limits.
   const big = (await builtGuild()).guild;
   for (let i = 0; i < 50; i += 1) {
     shop.addProduct(big, { name: `Product ${i} ${'x'.repeat(60)}`, price: '1 299,99', description: 'd'.repeat(400), category: `Category ${String(i % 20).padStart(2, '0')} ${'c'.repeat(18)}` });
   }
   const full = shop.shopPanel(big);
   validateMessage(full, big);
-  assert.equal(selectOptions(full).length, 20);
+  assert.equal(selectOptions(full).length, 21, 'All + 20 categories');
   for (const option of selectOptions(full)) {
-    const i = await run({ guild: big, member: member(big), kind: 'select', customId: 'catalog:browse', values: [option.value] });
-    assert.ok(lastResponse(i), option.label);
+    const i = await run({ guild: big, member: member(big), kind: 'select', customId: 'shopview:tabs', values: [option.value] });
+    validateMessage(lastResponse(i), big);
+    assert.ok(productIds(lastResponse(i)).length >= 1 && productIds(lastResponse(i)).length <= 5, option.label);
   }
+  for (let page = 0; page < 10; page += 1) validateMessage(shop.shopView(big, { page }), big);
 });
 
-test('a long category is shown page by page', async () => {
+test('a long category is shown 5 per page until the last page', async () => {
   const { guild } = await builtGuild();
   for (let i = 1; i <= 30; i += 1) shop.addProduct(guild, { name: `Key ${i}`, price: '9.99', description: 'Instant delivery. '.repeat(10), category: 'Keys' });
   shop.addProduct(guild, { name: 'Other', price: '5', description: 'Something else.', category: 'Misc' });
-  const first = await run({ guild, member: member(guild), kind: 'select', customId: 'catalog:browse', values: ['c:keys'] });
-  const page1 = lastResponse(first);
-  assert.match(textOf(page1), /30 products · page 1 of \d/);
-  const next = customIds(page1).find((id) => id.startsWith('catalog:page:1:'));
-  assert.equal(next, 'catalog:page:1:c:keys');
-  const shown = new Set(customIds(page1).filter((id) => id.startsWith('shop:buy:')));
-  let page = page1;
+  const privateCopy = { flags: new MessageFlagsBitField(MessageFlags.Ephemeral) };
+  let page = lastResponse(await run({ guild, member: member(guild), kind: 'button', customId: 'shopview:tab:c:keys' }));
+  const shown = new Set(productIds(page));
   let pages = 1;
-  while (customIds(page).includes(`catalog:page:${pages}:c:keys`)) {
-    const i = await run({ guild, member: member(guild), kind: 'button', customId: `catalog:page:${pages}:c:keys` });
+  while (!buttons(page).find((b) => b.label === 'Next').disabled) {
+    const i = await run({ guild, member: member(guild), kind: 'button', customId: `shopview:page:${pages}:c:keys`, message: privateCopy });
     page = lastResponse(i);
     assert.deepEqual(page.attachments, [], 'turning a page replaces the message');
-    for (const id of customIds(page).filter((x) => x.startsWith('shop:buy:'))) shown.add(id);
+    assert.ok(productIds(page).length <= 5);
+    for (const id of productIds(page)) shown.add(id);
     pages += 1;
     if (pages > 10) break;
   }
-  assert.ok(pages >= 2);
+  assert.equal(pages, 6, '30 products → 6 pages');
   assert.equal(shown.size, 30, 'every product of the category is on a page');
 });
 
-test('without categories: a product menu – buyable products open the order form, sold-out ones offer Notify me', async () => {
+test('without categories: no tabs, just pages of 5 – sold-out products offer Notify me, older panel menus still work', async () => {
   const { guild } = await builtGuild();
   const buyer = member(guild);
   for (let i = 1; i <= 10; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.' });
   const soldOut = shop.findProduct(guild.id, 'Product 3');
   await shop.setStock(guild, soldOut.id, 'out');
   const panel = shop.shopPanel(guild);
-  assert.ok(customIds(panel).includes('catalog:pick'));
-  const options = selectOptions(panel);
-  assert.equal(options.length, 10, 'sold-out products stay in the menu');
-  assert.match(options.find((o) => o.value === soldOut.id).description, /Sold out – get a DM when it is back/);
+  validateMessage(panel, guild);
+  assert.ok(!customIds(panel).some((id) => id.startsWith('shopview:tab')), 'no tabs without categories');
+  assert.match(labels(panel), /Page 1 \/ 2/);
+  assert.ok(customIds(panel).includes(`restock:notify:${soldOut.id}`));
 
+  // An older panel's product menu still opens the order form, its "All products" option the pages.
   const buy = await run({ guild, member: buyer, kind: 'select', customId: 'catalog:pick', values: [shop.findProduct(guild.id, 'Product 1').id] });
   assert.equal(buy.state.modals.length, 1, 'the order form opens');
-  const follow = await run({ guild, member: buyer, kind: 'select', customId: 'catalog:pick', values: [soldOut.id] });
-  assert.ok(customIds(lastResponse(follow)).includes(`restock:notify:${soldOut.id}`));
-  assert.match(textOf(lastResponse(follow)), /Sold out right now/);
-
-  // More than 25 products: the last option opens the whole catalog page by page.
-  for (let i = 11; i <= 30; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.' });
-  const many = selectOptions(shop.shopPanel(guild));
-  assert.equal(many.length, 25);
-  assert.equal(many[24].value, 'all');
   const all = await run({ guild, member: buyer, kind: 'select', customId: 'catalog:pick', values: ['all'] });
-  assert.match(textOf(lastResponse(all)), /All products[\s\S]*30 products/);
+  assert.match(labels(lastResponse(all)), /Page 1 \/ 2/);
 });
 
 // ───────────── Images ─────────────

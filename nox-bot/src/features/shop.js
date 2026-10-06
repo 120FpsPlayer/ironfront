@@ -171,12 +171,12 @@ function groupSummary(group) {
 
 // ───────────── Product cards ─────────────
 
-const CARD_LIMIT = 8; // more products → compact list with a menu
 const UPLOAD_LIMIT = 8 * 1024 * 1024; // images per message (Discord allows 10 files and 10 MB)
 
-function cardText(guild, p) {
+function cardText(guild, p, { category = false } = {}) {
   const stock = STOCK[p.stock] ?? STOCK.in;
-  return `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${formatPrice(p.price)}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}`;
+  const where = category ? ` · ${p.category ? `📂 ${p.category}` : '📂 Other'}` : '';
+  return `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${formatPrice(p.price)}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}${where}`;
 }
 
 /** Buy – or 🔔 Notify me while it's sold out (features/restock.js). */
@@ -187,9 +187,9 @@ function cardButton(guild, p) {
 }
 
 /** A product card: the button on the right – or, with an image, the image on the right and the button below. */
-function addCard(c, guild, p, image = null) {
-  if (!image) return c.addSectionComponents(buttonSection(cardText(guild, p), cardButton(guild, p)));
-  c.addSectionComponents(section(cardText(guild, p), image.url));
+function addCard(c, guild, p, image = null, opts = {}) {
+  if (!image) return c.addSectionComponents(buttonSection(cardText(guild, p, opts), cardButton(guild, p)));
+  c.addSectionComponents(section(cardText(guild, p, opts), image.url));
   return c.addActionRowComponents(row(cardButton(guild, p)));
 }
 
@@ -237,82 +237,85 @@ const fits = (payload) => {
   return total <= 40 && chars <= 4000;
 };
 
-/** Cards grouped under category headers; returns the image files. */
-function addCards(c, guild, list, pictures) {
+// ───────────── Catalog panel: tabs + pages ─────────────
+
+const PAGE_SIZE = 5; // products per page
+const TAB_BUTTONS = 5; // up to 5 tabs as buttons – more categories get a menu
+
+/** The tabs: "All" plus one per category ("Other" for products without one) – none when there are no categories. */
+function shopTabs(list) {
   const gs = groups(list);
-  const titled = gs.some((g) => g.name);
-  gs.forEach((g, i) => {
-    if (titled) {
-      if (i > 0) c.addSeparatorComponents(divider());
-      c.addTextDisplayComponents(text(`## ${groupTitle(guild, g)}`));
-    }
-    for (const p of g.products) addCard(c, guild, p, pictures.get(p.id));
-  });
-  return list.map((p) => pictures.get(p.id)?.file).filter(Boolean);
+  if (!gs.some((g) => g.name)) return [];
+  return [{ value: 'all', all: true, name: null, products: gs.flatMap((g) => g.products) }, ...gs];
 }
 
-/** Many products: a short list per category and a menu – categories open an ephemeral list (features/catalog.js). */
-function addList(c, guild, list) {
-  const gs = groups(list);
-  const titled = gs.some((g) => g.name);
-  let budget = 2400;
-  const lines = [];
-  let shown = 0;
-  for (const g of gs) {
-    for (const [i, p] of g.products.entries()) {
-      const stock = STOCK[p.stock] ?? STOCK.in;
-      const head = titled && i === 0 ? `### ${groupTitle(guild, g)}${SPACER}·${SPACER}${g.products.length}\n` : '';
-      const line = `${head}**${productEmoji(guild, p)} ${p.name}** — **${formatPrice(p.price)}** · ${stock.dot} ${stock.label}\n-# ${truncate(p.description, 90)}`;
-      if (budget - line.length < 0) break;
-      budget -= line.length;
-      lines.push(line);
-      shown += 1;
-    }
-  }
-  const how = titled ? 'open a category below to buy (sold out? get a DM when it is back)' : 'pick a product below to order it';
-  lines.push(shown < list.length ? `-# …and ${list.length - shown} more – ${how}.` : `-# ${how[0].toUpperCase()}${how.slice(1)}.`);
-  c.addTextDisplayComponents(text(lines.join('\n')));
-  c.addActionRowComponents(row(titled ? categoryMenu(guild, gs) : productMenu(guild, list)));
+function tabLabel(guild, tab) {
+  if (tab.all) return { label: 'All', emoji: ce(guild, 'cart') };
+  const { emoji, label } = categoryParts(tab);
+  return { label: tab.name ? label : 'Other', emoji: emoji ?? ce(guild, tab.name ? 'folder' : 'box') };
 }
 
-function categoryMenu(guild, gs) {
-  return new StringSelectMenuBuilder()
-    .setCustomId('catalog:browse')
-    .setPlaceholder('📂 Browse a category…')
-    .addOptions(
-      gs.slice(0, 25).map((g) => {
-        const { emoji, label } = categoryParts(g);
-        return { label: truncate(label, 100), value: g.value, description: groupSummary(g), emoji: emoji ?? ce(guild, g.name ? 'folder' : 'box') };
+/** Tab buttons (the open one highlighted) – or a menu when there are more tabs than fit in one row. */
+function tabsRow(guild, tabs, active) {
+  if (tabs.length <= TAB_BUTTONS) {
+    return row(
+      ...tabs.map((t) => {
+        const { label, emoji } = tabLabel(guild, t);
+        return btn(`shopview:tab:${t.value}`, truncate(label, 40), emoji, t.value === active ? ButtonStyle.Primary : ButtonStyle.Secondary);
       }),
     );
+  }
+  return row(
+    new StringSelectMenuBuilder()
+      .setCustomId('shopview:tabs')
+      .setPlaceholder('📂 Choose a category…')
+      .addOptions(
+        tabs.slice(0, 25).map((t) => {
+          const { label, emoji } = tabLabel(guild, t);
+          return { label: truncate(label, 100), value: t.value, description: groupSummary(t), emoji, default: t.value === active };
+        }),
+      ),
+  );
 }
 
-/** Buyable products open the order form, sold-out ones offer "Notify me". */
-function productMenu(guild, list) {
-  const options = list.slice(0, list.length > 25 ? 24 : 25).map((p) => ({
-    label: truncate(p.name, 100),
-    value: p.id,
-    description: truncate(`${formatPrice(p.price)} · ${p.stock === 'out' ? 'Sold out – get a DM when it is back' : p.description}`, 100),
-    emoji: ce(guild, p.stock === 'out' ? 'bell' : 'cart'),
-  }));
-  if (list.length > 25) options.push({ label: `All ${list.length} products…`, value: 'all', description: 'Browse the whole catalog page by page', emoji: ce(guild, 'search') });
-  return new StringSelectMenuBuilder().setCustomId('catalog:pick').setPlaceholder('🛒 Choose a product…').addOptions(options);
+/** Which products a tab shows, in the panel's order. */
+function tabProducts(list, value) {
+  if (!value || value === 'all') return groups(list).flatMap((g) => g.products);
+  return groups(list).find((g) => g.value === value)?.products ?? null;
 }
 
-// ───────────── Catalog panel ─────────────
+/** ◀ Page x/y ▶ – and the How to buy / Vouches links – in one row. */
+function navRow(guild, value, index, pages) {
+  const buttons = [];
+  if (pages > 1) {
+    buttons.push(
+      btn(`shopview:page:${index - 1}:${value}`, 'Previous', '◀️').setDisabled(index <= 0),
+      btn(`shopview:at:${index}`, `Page ${index + 1} / ${pages}`).setDisabled(true),
+      btn(`shopview:page:${index + 1}:${value}`, 'Next', '▶️').setDisabled(index >= pages - 1),
+    );
+  }
+  const howTo = db.channelId(guild.id, 'howToBuy');
+  const vouches = db.channelId(guild.id, 'vouches');
+  if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
+  if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
+  return buttons.length ? row(...buttons) : null;
+}
 
-function panelPayload(guild, list, { cards = false, pictures = new Map(), now } = {}) {
+function buildView(guild, { list, tabs, active, items, index, pages, pictures, now }) {
   const c = container(COLORS.brand);
   const status = shopstatus.statusLine(guild.id, 'shop', now);
-  const intro =
-    `# ${e(guild, 'cart')} ${config.brand.name} Shop\n${config.brand.tagline ?? ''}\n` +
-    `-# ${list.length ? `${list.length} ${list.length === 1 ? 'product' : 'products'}` : 'Catalog coming soon'} · ` +
-    `${e(guild, 'clock')} ${config.shop.deliveryTime ?? 'Fast delivery'}` +
-    (status ? `\n${status}` : '');
-  header(c, intro, guild.iconURL?.({ size: 256 }));
+  const vs = vouchStats(guild.id);
+  const meta = [
+    list.length ? `${list.length} ${list.length === 1 ? 'product' : 'products'}` : 'Catalog coming soon',
+    `${e(guild, 'clock')} ${config.shop.deliveryTime ?? 'Fast delivery'}`,
+    vs.count ? `${e(guild, 'star')} ${vs.avg.toFixed(1)}/5 from ${vs.count} ${vs.count === 1 ? 'vouch' : 'vouches'}` : null,
+  ].filter(Boolean);
+  c.addTextDisplayComponents(
+    text(`# ${e(guild, 'cart')} ${config.brand.name} Shop\n${config.brand.tagline ?? ''}\n-# ${meta.join(' · ')}${status ? `\n${status}` : ''}`),
+  );
+  if (tabs.length) c.addActionRowComponents(tabsRow(guild, tabs, active));
   c.addSeparatorComponents(divider(true));
 
-  let files = [];
   if (!list.length) {
     c.addTextDisplayComponents(
       text(
@@ -321,45 +324,42 @@ function panelPayload(guild, list, { cards = false, pictures = new Map(), now } 
           'Want a ping when they arrive? Grab the **Restocks** role.',
       ),
     );
-  } else if (cards) {
-    files = addCards(c, guild, list, pictures);
   } else {
-    addList(c, guild, list);
+    const showCategory = active === 'all' && tabs.length > 0;
+    for (const p of items) addCard(c, guild, p, pictures.get(p.id), { category: showCategory });
   }
 
   c.addSeparatorComponents(divider(true));
-  const footer = [];
   const methods = config.shop.paymentMethods.map((m) => m.name);
-  if (methods.length) footer.push(`${e(guild, 'card')} We accept: ${methods.join(' · ')}`);
-  const vs = vouchStats(guild.id);
-  if (vs.count) footer.push(`${e(guild, 'star')} Rated **${vs.avg.toFixed(1)}/5** from **${vs.count}** ${vs.count === 1 ? 'vouch' : 'vouches'}`);
-  footer.push('🔒 We never ask for payment in DMs – only inside your ticket.');
-  c.addTextDisplayComponents(text(footer.map((l) => `-# ${l}`).join('\n')));
-
-  // Buying works only through the Buy buttons above – the footer just helps.
-  const buttons = [];
-  const howTo = db.channelId(guild.id, 'howToBuy');
-  const vouches = db.channelId(guild.id, 'vouches');
-  if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
-  if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
-  if (buttons.length) c.addActionRowComponents(row(...buttons));
-  return v2(c, { files });
+  c.addTextDisplayComponents(
+    text(`-# ${methods.length ? `${e(guild, 'card')} We accept: ${methods.join(' · ')} · ` : ''}🔒 We never ask for payment in DMs – only inside your ticket.`),
+  );
+  const nav = navRow(guild, active, index, pages);
+  if (nav) c.addActionRowComponents(nav);
+  return v2(c, { files: items.map((p) => pictures.get(p.id)?.file).filter(Boolean) });
 }
 
 /**
- * Up to 8 products: cards with Buy buttons under category headers, with as many product images as
- * Discord's limits allow. More products: a compact list per category and a menu.
+ * The shop: tabs per category on top, 5 products per page, ◀ ▶ to turn pages. The panel in #shop always
+ * shows the first page of "All"; tabs and pages answer privately (features/catalog.js), so browsing never
+ * changes the panel for anyone else. Images are dropped from the bottom up if a page wouldn't fit Discord's limits.
  */
-function shopPanel(guild, { now } = {}) {
+function shopView(guild, { tab = 'all', page = 0, now } = {}) {
   const list = products(guild.id);
-  if (list.length && list.length <= CARD_LIMIT) {
-    for (let n = Math.min(list.length, 10); n >= 0; n -= 1) {
-      const payload = panelPayload(guild, list, { cards: true, pictures: pickImages(list, n), now });
-      if (fits(payload)) return payload;
-    }
+  const tabs = shopTabs(list);
+  const active = tabs.some((t) => t.value === tab) ? tab : 'all';
+  const all = tabProducts(list, active) ?? [];
+  const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  const index = Math.min(Math.max(0, Math.trunc(Number(page)) || 0), pages - 1);
+  const items = all.slice(index * PAGE_SIZE, (index + 1) * PAGE_SIZE);
+  for (let n = items.length; n >= 0; n -= 1) {
+    const payload = buildView(guild, { list, tabs, active, items, index, pages, pictures: pickImages(items, n), now });
+    if (fits(payload) || n === 0) return payload;
   }
-  return panelPayload(guild, list, { now });
+  return null;
 }
+
+const shopPanel = (guild, { now } = {}) => shopView(guild, { now });
 
 panels.register('shop', (guild) => shopPanel(guild));
 const refreshShop = (guild) => panels.schedule(guild, 'shop');
@@ -722,6 +722,10 @@ module.exports = {
   measure,
   fits,
   ticketProduct,
+  PAGE_SIZE,
+  shopTabs,
+  tabProducts,
+  shopView,
   shopPanel,
   refreshShop,
   addProduct,

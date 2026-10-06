@@ -14,9 +14,9 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 ### 🏗️ `/build` – the whole server in one click
 | | |
 |---|---|
-| 🎭 **20 roles** | Founder, Co-Founder, Manager, Administrator, Moderator, Support, Trial Support, Seller, VIP, Partner, Loyal Customer, Customer, Bots, Member, 3 notification roles + 3 separators – all in a purple palette with the right permissions |
-| 📁 **11 categories, 43 channels** (42 with the shop status channel turned off) | Server stats · Welcome · Shop · Support · Community · VIP Lounge · Voice · Staff · Logs · Tickets · Closed tickets |
-| 🔐 **Permissions done right** | New people only see **#verify**, **#rules** and **#welcome** (read-only, so their welcome ping reaches them). Info channels are read-only, staff/log/VIP areas are private, media channels allow files, AFK is muted |
+| 🎭 **18 roles** | Founder, Co-Founder, Manager, Administrator, Moderator, Support, Trial Support, Seller, Loyal Customer, Customer, Bots, Member, 3 notification roles + 3 separators – all in a purple palette with the right permissions |
+| 📁 **9 categories, 32 channels** (31 with the shop status channel turned off) | Server stats · Welcome · Shop · Support · Community · Staff (with the staff voice room) · Logs · Tickets · Closed tickets |
+| 🔐 **Permissions done right** | New people only see **#verify**, **#rules** and **#welcome** (read-only, so their welcome ping reaches them). Info channels are read-only, staff and log areas are private |
 | 🖼️ **Custom banners** | 36 purple banners (1080×400) – every info channel starts with its own banner and a styled card |
 | 😀 **Custom emojis** | 67 purple emojis (`:nox_cart:`, `:nox_check:`, `:nox_paypal:`…) – the bot uses them in all its messages |
 | 🌙 **Branding** | Renames the server to **NØX**, sets the server icon (and banner on boosted servers) |
@@ -26,8 +26,10 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 ### 🛒 Selling
 - **Live shop panel** in #shop – add products with `/product add`, they appear instantly with a **Buy** button.
   Prices typed as plain numbers get the currency automatically (`20` → **20€**).
-- **Categories and product pictures** – group products (Games, Accounts, Nitro…) and attach an image to each one.
-  Big catalogs get a category menu that opens a private list with Buy buttons.
+- **Tabs and pages** – the shop shows **5 products per page** with ◀ ▶ buttons, and a **tab per category** (All · Games ·
+  Accounts …; with more than 4 categories the tabs become a menu). Turning pages or switching tabs opens a private copy
+  for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
+- **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
 - **Payments:** PaysafeCard, Crypto (BTC, ETH) and PayPal – edit them in `config.json`.
 - **Buy → order form → private ticket.** The form asks for quantity, a **payment method** from a list and an optional
   **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
@@ -66,7 +68,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 - Live counter with the average rating and a rating breakdown, plus a cooldown against spam.
 
 ### 🎫 Tickets (full ticket system)
-- 7 categories: **Purchase, Support, Claim a Reward, Partnership, Report a User, Staff Application, Punishment Appeal**.
+- 6 categories: **Purchase** (only through Buy in the shop), **Support, Claim a Reward, Report a User, Staff Application, Punishment Appeal**.
 - Forms, claim/unclaim, priorities, move between categories, add people, canned replies (`/reply`), close requests,
   auto-close for inactive tickets, **"Call support"** button, blacklist.
 - **HTML transcripts** that look like Discord, **DM to the author** with the transcript and a **1–5 ⭐ rating**.
@@ -138,12 +140,10 @@ Give your team their roles (Manager, Support, Seller…) and you're good to go.
 ```
 〔 📊 SERVER STATS 〕    🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ · 👥┃ᴍᴇᴍʙᴇʀꜱ: 123 · ⭐┃ᴠᴏᴜᴄʜᴇꜱ: 45      (everyone can see, nobody can join)
 〔 👋 WELCOME 〕         ✅┃ᴠᴇʀɪꜰʏ · 📜┃ʀᴜʟᴇꜱ · 👋┃ᴡᴇʟᴄᴏᴍᴇ · 📌┃ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ · 📢┃ᴀɴɴᴏᴜɴᴄᴇᴍᴇɴᴛꜱ
-                        🎉┃ɢɪᴠᴇᴀᴡᴀʏꜱ · 🎭┃ʀᴏʟᴇꜱ · 🤝┃ᴘᴀʀᴛɴᴇʀꜱ
+                        🎉┃ɢɪᴠᴇᴀᴡᴀʏꜱ · 🎭┃ʀᴏʟᴇꜱ
 〔 🛒 SHOP 〕            🛒┃ꜱʜᴏᴘ · 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ · 💳┃ᴘᴀʏᴍᴇɴᴛꜱ · ✨┃ʀᴇꜱᴛᴏᴄᴋꜱ · ⭐┃ᴠᴏᴜᴄʜᴇꜱ · 🧾┃ᴘʀᴏᴏꜰꜱ
 〔 🎧 SUPPORT 〕         🎫┃ᴛɪᴄᴋᴇᴛꜱ · ❓┃ꜰᴀǫ
-〔 💬 COMMUNITY 〕       💬┃ᴄʜᴀᴛ · 📸┃ᴍᴇᴅɪᴀ · 😂┃ᴍᴇᴍᴇꜱ · 🤖┃ᴄᴏᴍᴍᴀɴᴅꜱ · 🏆┃ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ · 🚀┃ʙᴏᴏꜱᴛᴇʀꜱ
-〔 💎 VIP LOUNGE 〕      💎┃ᴠɪᴘ-ᴄʜᴀᴛ · 💎┃ᴠɪᴘ ʟᴏᴜɴɢᴇ                  (VIP, partners, loyal customers, boosters, staff)
-〔 🔊 VOICE 〕           🔊┃ʟᴏᴜɴɢᴇ · 🎮┃ɢᴀᴍɪɴɢ · 🎵┃ᴍᴜꜱɪᴄ · 👥┃ᴅᴜᴏ · 💤┃ᴀꜰᴋ
+〔 💬 COMMUNITY 〕       💬┃ᴄʜᴀᴛ · 🏆┃ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ · 🚀┃ʙᴏᴏꜱᴛᴇʀꜱ
 〔 🔒 STAFF 〕           💼┃ꜱᴛᴀꜰꜰ-ᴄʜᴀᴛ · 🔧┃ꜱᴛᴀꜰꜰ-ᴄᴏᴍᴍᴀɴᴅꜱ · 📣┃ᴅɪꜱᴄᴏʀᴅ-ᴜᴘᴅᴀᴛᴇꜱ · 🔒┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ
 〔 📁 LOGS 〕            📁┃ᴛɪᴄᴋᴇᴛ-ʟᴏɢꜱ · 📄┃ᴛʀᴀɴꜱᴄʀɪᴘᴛꜱ · ✅┃ᴠᴇʀɪꜰʏ-ʟᴏɢꜱ · 📋┃ꜱᴇʀᴠᴇʀ-ʟᴏɢꜱ · 🤖┃ᴀᴜᴛᴏᴍᴏᴅ-ʟᴏɢꜱ
                         📈┃ꜱᴀʟᴇꜱ · 💾┃ʙᴀᴄᴋᴜᴘꜱ                                  (admins only)
@@ -160,7 +160,6 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | #verify | ✅ | | | | | ✅ |
 | #rules, server stats | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Shop, support, community | | ✅ | ✅ | ✅ | ✅ | ✅ |
-| VIP lounge | | VIP / partner / loyal / booster | ✅ | ✅ | ✅ | ✅ |
 | Write in #restocks | | | ✅ | | | ✅ |
 | Staff chat, ticket logs, transcripts | | | ✅ | ✅ | ✅ | ✅ |
 | Server, verify & AutoMod logs | | | | | ✅ | ✅ |
@@ -221,7 +220,7 @@ Admin commands are hidden from normal members automatically.
 | Section | What you can change |
 |---|---|
 | `brand` | Name, color, footer, tagline and the "About us" text |
-| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, AFK timeout, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`), **name style** (see below) |
+| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`), **name style** (see below) |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
 | `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods** |
@@ -253,7 +252,9 @@ After changing the style, restart the bot and run **`/build only:names`**.
 ### Updating the bot
 Replace the bot files (keep **`.env`** and the **`data/`** folder), run `npm install`, restart the bot and run
 **`/build only:update`** once – it adds the channels and roles that are new in this version (e.g. 🧾┃ᴘʀᴏᴏꜰꜱ,
-📈┃ꜱᴀʟᴇꜱ, 💾┃ʙᴀᴄᴋᴜᴘꜱ and the shop status channel), applies the name style and updates every panel.
+📈┃ꜱᴀʟᴇꜱ, 💾┃ʙᴀᴄᴋᴜᴘꜱ and the shop status channel), **removes the ones the bot made earlier that are no longer part
+of the server** (e.g. the VIP lounge, the voice channels, #memes – never channels or roles you made yourself),
+applies the name style and updates every panel. Run it in a channel that stays (e.g. #staff-commands).
 If you changed `config.json` yourself you can keep your copy: sections it doesn't have yet get the default values,
 and the console lists every feature that is turned off in it.
 
