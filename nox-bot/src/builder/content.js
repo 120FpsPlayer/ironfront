@@ -145,7 +145,7 @@ function informationPosts(x, build) {
   contact.addTextDisplayComponents(
     text(
       `# ${x.E('mail')} Contact\nThe fastest way to reach us is a ticket in ${x.ch('tickets')} – a private channel with our team.\n` +
-        `> ${x.E('cart')} **Buying something?** → Purchase ticket\n> ${x.E('question')} **Need help?** → Support ticket\n` +
+        `> ${x.E('cart')} **Buying something?** → click **Buy** in ${x.ch('shop')}\n> ${x.E('question')} **Need help?** → Support ticket\n` +
         `> ${x.E('group')} **Business or partnership?** → Partnership ticket\n` +
         `-# ${config.shop.supportHours ? `Support hours: ${config.shop.supportHours}` : ''}`,
     ),
@@ -218,7 +218,7 @@ function howToBuy(x) {
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
     text(
-      `> **1.** Browse the products in ${x.ch('shop')} and click **Buy** – or open a **Purchase** ticket in ${x.ch('tickets')}\n` +
+      `> **1.** Browse the products in ${x.ch('shop')} and click **Buy** next to the one you want\n` +
         '> **2.** Fill in the short form (quantity + payment method)\n' +
         `> **3.** A private ticket opens – a ${x.role('seller', 'Seller')} confirms the price and sends payment details\n` +
         '> **4.** Pay and receive your product right in the ticket\n' +
@@ -233,7 +233,7 @@ function howToBuy(x) {
         `${x.E('info')} **Refunds:** ${config.shop.refundPolicy ?? 'See the rules.'}`,
     ),
   );
-  c.addActionRowComponents(buttons(btn('ticket:open:order', 'Place an order', ce(x.guild, 'cart'), ButtonStyle.Primary), x.link('shop', 'Shop', 'basket'), x.link('payments', 'Payments', 'card')));
+  c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('payments', 'Payments', 'card')));
   return card(c);
 }
 
@@ -253,7 +253,7 @@ function payments(x) {
   if (has(/paypal/i)) tips.push('> **PayPal:** only pay to the PayPal address a seller gives you in your ticket.');
   tips.push('> Fraud attempts or payment disputes result in a permanent ban.');
   c.addTextDisplayComponents(text(`${x.E('warning')} **Stay safe**\n${tips.join('\n')}`));
-  c.addActionRowComponents(buttons(btn('ticket:open:order', 'Place an order', ce(x.guild, 'cart'), ButtonStyle.Primary), x.link('howToBuy', 'How to buy', 'info')));
+  c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('howToBuy', 'How to buy', 'info')));
   return card(c);
 }
 
@@ -284,7 +284,7 @@ function proofsIntro(x) {
 
 function faq(x) {
   const qa = [
-    ['How do I buy something?', `Click **Buy** on a product in ${x.ch('shop')} or open a **Purchase** ticket in ${x.ch('tickets')}. Full guide: ${x.ch('howToBuy')}.`],
+    ['How do I buy something?', `Click **Buy** next to a product in ${x.ch('shop')} – your private order ticket opens right away. Full guide: ${x.ch('howToBuy')}.`],
     ['Which payment methods do you accept?', `${config.shop.paymentMethods.map((m) => m.name).join(', ') || 'See'} – details in ${x.ch('payments')}.`],
     ['How fast is delivery?', `${config.shop.deliveryTime ?? 'Usually very fast'}. You receive everything inside your ticket.`],
     ['Is it safe to buy here?', `Yes – payments only happen in private tickets with our team, and you can read real reviews in ${x.ch('vouches')}. We never DM you first.`],

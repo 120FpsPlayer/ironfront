@@ -136,7 +136,8 @@
       "label": "Purchase",
       "emoji": "🛒",
       "icon": "cart",
-      "description": "Buy a product or ask about an order",
+      "description": "Buying? Click Buy next to a product in the shop",
+      "shopOnly": true,
       "channelPrefix": "order",
       "staffRoles": ["seller"],
       "questions": [

@@ -55,10 +55,26 @@ async function createAndRespond(interaction, type, answers) {
   }
 }
 
+/** Purchases only go through the Buy buttons in #shop – older buttons and the ticket menu point there. */
+function replyShopOnly(interaction) {
+  const shopId = db.channelId(interaction.guild.id, 'shop');
+  const payload = {
+    embeds: [
+      embed(COLORS.brand).setDescription(
+        `🛒 **Buying something?** Go to ${shopId ? `<#${shopId}>` : 'the shop'} and click **Buy** next to the product you want – your private order ticket opens right away.`,
+      ),
+    ],
+    components: shopId ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Go to shop').setEmoji('🛒').setURL(`https://discord.com/channels/${interaction.guild.id}/${shopId}`))] : [],
+    flags: MessageFlags.Ephemeral,
+  };
+  return interaction.reply(payload);
+}
+
 async function handleOpen(interaction, typeId, origin) {
   if (origin === 's') resetSelectPanel(interaction, 'tickets');
   const type = config.getType(typeId);
   if (!type) return replyError(interaction, 'This category no longer exists – ask the staff to refresh the panel.');
+  if (type.shopOnly) return replyShopOnly(interaction);
   const error = t.checkCanOpen(interaction.member);
   if (error) return replyError(interaction, error);
   if (type.questions.length) return interaction.showModal(t.buildForm(type, origin));
@@ -68,6 +84,7 @@ async function handleOpen(interaction, typeId, origin) {
 async function handleForm(interaction, typeId) {
   const type = config.getType(typeId);
   if (!type) return replyError(interaction, 'This category no longer exists.');
+  if (type.shopOnly) return replyShopOnly(interaction);
   const answers = type.questions.map((q) => {
     let value = '';
     try {

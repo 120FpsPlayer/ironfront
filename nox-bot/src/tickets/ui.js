@@ -18,7 +18,7 @@ const { e, ce, COLORS } = require('../lib/theme');
 const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money } = require('../lib/utils');
 const shop = require('../features/shop'); // used at render time – safe with circular requires
 const productImages = require('../lib/productImages');
-const { SPACER, text, divider, btn, linkBtn, row, section, container, header, v2, notice } = require('../lib/v2');
+const { SPACER, text, divider, btn, linkBtn, row, section, container, header, v2, notice, channelUrl } = require('../lib/v2');
 
 /** Custom NØX emoji for a ticket type (falls back to the Unicode emoji from config.json). */
 const typeEmoji = (guild, type) => (type?.icon && guild ? ce(guild, type.icon) : type?.emoji ?? '🎫');
@@ -40,17 +40,19 @@ function panelPayload(guild, style = 'buttons') {
   c.addSeparatorComponents(divider(true));
 
   if (useSections) {
+    const shopId = db.channelId(guild.id, 'shop');
     for (const t of types) {
-      c.addSectionComponents(
-        new SectionBuilder()
-          .addTextDisplayComponents(text(`### ${typeText(guild, t)} ${t.label}\n-# ${t.description ?? '​'}`))
-          .setButtonAccessory(
-            new ButtonBuilder()
+      // Shop-only types (Purchase) send people to #shop – buying works through the Buy buttons there.
+      const button =
+        t.shopOnly && shopId
+          ? new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(channelUrl(guild.id, shopId)).setLabel('Go to shop').setEmoji(typeEmoji(guild, t))
+          : new ButtonBuilder()
               .setCustomId(`ticket:open:${t.id}`)
               .setLabel(p.buttonLabel ?? 'Open')
               .setEmoji(typeEmoji(guild, t))
-              .setStyle(t.id === 'order' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-          ),
+              .setStyle(t.id === 'order' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+      c.addSectionComponents(
+        new SectionBuilder().addTextDisplayComponents(text(`### ${typeText(guild, t)} ${t.label}\n-# ${t.description ?? '​'}`)).setButtonAccessory(button),
       );
     }
   } else {

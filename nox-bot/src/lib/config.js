@@ -75,6 +75,7 @@ function load(raw = read()) {
     type.staffRoleIds ??= [];
     type.staffRoles ??= [];
     type.channelPrefix ??= type.id;
+    type.shopOnly = Boolean(type.shopOnly); // only through Buy in #shop – the ticket panel links to the shop instead
     if (type.questions.length > 5) throw new Error(`config.json: ticket type "${type.id}" has more than 5 questions (Discord form limit).`);
     for (const q of type.questions) {
       if (!q.id || !q.label) throw new Error(`config.json: every question in "${type.id}" needs an "id" and a "label".`);

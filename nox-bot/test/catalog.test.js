@@ -471,13 +471,46 @@ test('/product: only admins and sellers can manage the catalog', async () => {
   assert.ok(shop.findProduct(guild.id, item.id));
 });
 
-test('the shop panel "Purchase" button takes buyers to #tickets', async () => {
+test('buying only works through Buy in #shop: no Purchase button, the ticket panel links to the shop', async () => {
   const guild = new FakeGuild();
   await buildServer({ guild, mode: 'add', invokerId: guild.ownerId });
-  const payload = await panels.render('shop', guild);
-  const json = JSON.stringify(payload.components.map((c) => (c.toJSON ? c.toJSON() : c)));
-  const ticketsUrl = `https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'tickets')}`;
-  assert.ok(json.includes(`"label":"Purchase"`), 'labelled like the Purchase ticket');
-  assert.ok(json.includes(ticketsUrl), 'links to #tickets');
-  assert.ok(!json.includes('Custom order'), 'no old "Custom order" button');
+  const commands = loadCommands();
+  const json = (payload) => JSON.stringify((payload.components ?? []).map((c) => (c.toJSON ? c.toJSON() : c)));
+  const shopUrl = `https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'shop')}`;
+
+  // Shop panel: only "How to buy" and "Vouches" under the products.
+  const shopPanel = json(await panels.render('shop', guild));
+  assert.ok(!shopPanel.includes('ticket:open:order') && !shopPanel.includes('"label":"Purchase"'), 'no Purchase button in the shop');
+  assert.ok(shopPanel.includes('"label":"How to buy"') && shopPanel.includes('"label":"Vouches"'));
+
+  // Ticket panel: Purchase has a "Go to shop" link instead of "Open".
+  const ticketPanel = json(await panels.render('tickets', guild, { style: 'buttons' }));
+  assert.ok(!ticketPanel.includes('ticket:open:order'), 'no Open button for Purchase');
+  assert.ok(ticketPanel.includes(shopUrl) && ticketPanel.includes('"label":"Go to shop"'));
+  assert.ok(ticketPanel.includes('ticket:open:support'), 'other ticket types still open tickets');
+
+  // Info cards point to the shop too.
+  for (const key of ['howToBuy', 'payments']) {
+    const channel = guild.channels.cache.get(db.channelId(guild.id, key));
+    const cards = channel.messageList.map((m) => JSON.stringify(m.body)).join('');
+    assert.ok(!cards.includes('ticket:open:order'), `#${key} has no "Place an order" ticket button`);
+    assert.ok(cards.includes(shopUrl), `#${key} links to the shop`);
+  }
+
+  // Old buttons and forms that were posted before: a friendly pointer to #shop, no ticket.
+  const member = guild.addMember('960000000000000001', [db.roleId(guild.id, 'member')]);
+  const before = db.tickets(() => true).length;
+  for (const args of [
+    { kind: 'button', customId: 'ticket:open:order' },
+    { kind: 'select', customId: 'ticket:open', values: ['order'] },
+    { kind: 'modal', customId: 'ticket:form:order:b', fields: { product: 'GTA V' } },
+  ]) {
+    const i = createInteraction({ guild, member, ...args });
+    await handle(i, commands);
+    assert.equal(i.state.modals.length, 0, `${args.customId}: no form`);
+    const out = JSON.stringify(lastResponse(i));
+    assert.match(out, /click \*\*Buy\*\* next to the product/, args.customId);
+    assert.ok(out.includes(shopUrl), `${args.customId}: link to the shop`);
+  }
+  assert.equal(db.tickets(() => true).length, before, 'no Purchase ticket was opened');
 });

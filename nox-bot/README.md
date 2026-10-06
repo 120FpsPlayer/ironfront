@@ -203,7 +203,8 @@ Admin commands are hidden from normal members automatically.
 
 ## 🛍️ How an order works
 
-1. A customer clicks **Buy** in #shop (or opens a **Purchase** ticket).
+1. A customer clicks **Buy** next to a product in #shop – that's the only way to buy. The **Purchase** entry in the ticket
+   panel, *How to buy* and *Payments* all send people to #shop (`"shopOnly": true` on the `order` ticket type).
 2. They choose the quantity, a payment method and (optionally) a promo code → a **private ticket** opens with the total to pay.
    Sellers and support are pinged. Outside the opening hours the ticket says when you're back.
 3. A seller claims it, sends the payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
