@@ -14,7 +14,7 @@ module.exports = {
         .setName('only')
         .setDescription('Run just one part (leave empty to build the whole server)')
         .addChoices(
-          { name: '🆕 Update – add new channels & roles, apply names, update panels (after a bot update)', value: 'update' },
+          { name: '🆕 Update – add new & remove old channels/roles, apply names, update panels', value: 'update' },
           { name: '😀 Emojis – upload the missing custom emojis', value: 'emojis' },
           { name: '🔄 Panels – update all banners & cards (after editing config.json)', value: 'panels' },
           { name: '🎨 Names – rename channels & categories to the current style', value: 'names' },

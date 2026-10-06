@@ -18,8 +18,6 @@ const BANNER_CHOICES = [
   ['shop', '🛒 Shop'],
   ['products', '🏷️ Products'],
   ['payments', '💳 Payments'],
-  ['vip', '👑 VIP'],
-  ['partners', '🤝 Partners'],
   ['staff', '🛡️ Staff'],
   ['join-us', '➕ Join us (hiring)'],
   ['welcome', '👋 Welcome'],

@@ -102,7 +102,7 @@ function mergeOverwrites(...lists) {
 }
 
 /** Profiles that decide visibility themselves (they don't inherit the category). */
-const OWN_VISIBILITY = new Set(['verify', 'rules', 'stats', 'staff', 'admins', 'logs', 'staffLogs', 'vip', 'hidden']);
+const OWN_VISIBILITY = new Set(['verify', 'rules', 'stats', 'staff', 'admins', 'logs', 'staffLogs', 'hidden']);
 
 function channelOverwrites(cat, ch) {
   const own = profile(ch.profile, { posters: ch.posters });
@@ -117,7 +117,7 @@ const SCAM_KEYWORDS = [
 ];
 const INVITE_REGEX = '(?i)(discord\\.(gg|io|me|li)|discord(app)?\\.com/invite|dsc\\.gg)/[a-z0-9-]+';
 
-function automodRules(alertChannelId, exemptRoleIds, partnerRoleId) {
+function automodRules(alertChannelId, exemptRoleIds) {
   const block = { type: AutoModerationActionType.BlockMessage, metadata: { customMessage: 'Blocked by NØX AutoMod. Please read the rules.' } };
   const alert = alertChannelId ? [{ type: AutoModerationActionType.SendAlertMessage, metadata: { channel: alertChannelId } }] : [];
   const msg = (extra = []) => [block, ...alert, ...extra];
@@ -152,7 +152,7 @@ function automodRules(alertChannelId, exemptRoleIds, partnerRoleId) {
       triggerType: AutoModerationRuleTriggerType.Keyword,
       triggerMetadata: { regexPatterns: [INVITE_REGEX] },
       actions: msg(),
-      exemptRoles: [...new Set([...exemptRoles, partnerRoleId].filter(Boolean))].slice(0, 20),
+      exemptRoles,
     },
     {
       name: 'NØX · Scam names & profiles',
@@ -442,10 +442,6 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     }
     if (S.rename !== false) settings.name = config.brand.name;
     if (id('boosters')) settings.systemChannel = id('boosters');
-    if (id('afk')) {
-      settings.afkChannel = id('afk');
-      settings.afkTimeout = [60, 300, 900, 1800, 3600].includes(S.afkTimeoutSeconds) ? S.afkTimeoutSeconds : 900;
-    }
     await attempt('Server settings', () => guild.edit(settings));
     if (S.setIcon !== false) {
       await attempt('Server icon', () => guild.setIcon(logoPath(S.logo), reason), { warn: true });
@@ -541,7 +537,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     const existing = [...((await guild.autoModerationRules.fetch().catch(() => null))?.values() ?? [])];
     const exempt = [...GROUPS.staff, 'bots'].map((k) => R.roles[k]).filter(Boolean);
     let keywordRules = existing.filter((r) => r.triggerType === AutoModerationRuleTriggerType.Keyword).length;
-    for (const rule of automodRules(id('automodLogs'), exempt, R.roles.partner)) {
+    for (const rule of automodRules(id('automodLogs'), exempt)) {
       if (SINGLE_TRIGGERS.has(rule.triggerType) && existing.some((r) => r.triggerType === rule.triggerType)) {
         R.warnings.push(`AutoMod "${rule.name}" skipped – the server already has a rule of this type.`);
         continue;

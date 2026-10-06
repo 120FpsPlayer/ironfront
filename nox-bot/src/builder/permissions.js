@@ -61,7 +61,6 @@ const GROUPS = {
   admins: ['founder', 'coowner', 'manager', 'admin'],
   mods: ['founder', 'coowner', 'manager', 'admin', 'moderator'],
   staff: ['founder', 'coowner', 'manager', 'admin', 'moderator', 'support', 'trialSupport', 'seller'],
-  vip: ['vip', 'partner', 'loyal', '@booster'],
   bots: ['bots'],
 };
 
@@ -79,8 +78,6 @@ function profile(name, { posters = [] } = {}) {
   switch (name) {
     case 'public':
       return [];
-    case 'media':
-      return [ow('member', ['AttachFiles', 'EmbedLinks'])];
     case 'readonly':
       return [ow(E, [], [...SEND, 'AddReactions']), ow('member', ['AddReactions']), ...allowFor(writers, POST)];
     case 'botsOnly':
@@ -111,10 +108,6 @@ function profile(name, { posters = [] } = {}) {
         ...allowFor(G.staff, ['ViewChannel', 'ReadMessageHistory']),
         ...allowFor(G.bots, ['ViewChannel', 'SendMessages', 'EmbedLinks', 'AttachFiles', 'ReadMessageHistory']),
       ];
-    case 'vip':
-      return [ow(E, [], ['ViewChannel']), ...allowFor([...G.vip, ...G.staff, ...G.bots], ['ViewChannel'])];
-    case 'afk':
-      return [ow(E, [], ['Speak', 'Stream', 'UseSoundboard', 'UseEmbeddedActivities', 'SendMessages'])];
     case 'hidden':
       return [ow(E, [], ['ViewChannel']), ...allowFor([...G.staff, ...G.bots], ['ViewChannel'])];
     default:

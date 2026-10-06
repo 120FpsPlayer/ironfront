@@ -42,13 +42,10 @@ function rolesPanels(guild) {
     text(
       `### ${e(guild, 'diamond')} Special\n` +
         lines([
-          ['vip', 'exclusive deals and the VIP lounge'],
-          ['partner', 'official partner servers'],
           ['loyal', `given automatically after ${config.shop.loyalAfterOrders || 5} completed orders`],
           ['customer', 'given automatically after your first completed order'],
           ['member', 'everyone who passed verification'],
-        ]) +
-        '\n-# 🚀 Server Boosters also get access to the VIP lounge.',
+        ]),
     ),
   );
 

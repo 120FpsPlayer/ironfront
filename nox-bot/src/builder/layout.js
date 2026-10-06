@@ -27,9 +27,7 @@ const ROLES = [
   { key: 'support', name: '🎧 Support', color: 0x8b5cf6, perms: 'support', hoist: true, icon: '🎧', staff: true },
   { key: 'trialSupport', name: '🌱 Trial Support', color: 0x7c3aed, perms: 'trial', hoist: true, icon: '🌱', staff: true },
   { key: 'seller', name: '💼 Seller', color: 0xe0aaff, perms: 'seller', hoist: true, icon: '💼', staff: true },
-  SEPARATOR('sepSpecial', 'SPECIAL'),
-  { key: 'vip', name: '💎 VIP', color: 0xf0abfc, perms: 'none', hoist: true, icon: '💎' },
-  { key: 'partner', name: '🤝 Partner', color: 0x818cf8, perms: 'none', hoist: true, icon: '🤝' },
+  SEPARATOR('sepSpecial', 'CUSTOMERS'),
   { key: 'loyal', name: '💜 Loyal Customer', color: 0xe879f9, perms: 'none', hoist: true, icon: '💜' },
   { key: 'customer', name: '🛍️ Customer', color: 0xc4b5fd, perms: 'none', hoist: true, icon: '🛍️' },
   SEPARATOR('sepMembers', 'MEMBERS'),
@@ -69,7 +67,6 @@ const CATEGORIES = [
       news('announcements', '📢 announcements', { topic: 'Official news and updates.', post: 'announcements' }),
       text('giveaways', '🎉 giveaways', { profile: 'readonly', topic: 'Giveaways – click Enter to join!', post: 'giveaways' }),
       text('roles', '🎭 roles', { profile: 'readonly', topic: 'Server roles and notification roles.', post: 'roles' }),
-      text('partners', '🤝 partners', { profile: 'readonly', topic: 'Our official partners.', post: 'partners' }),
     ],
   },
   {
@@ -100,32 +97,8 @@ const CATEGORIES = [
     profile: 'public',
     channels: [
       text('chat', '💬 chat', { topic: 'General chat – keep it friendly and in English.', slowmode: 3 }),
-      text('media', '📸 media', { profile: 'media', topic: 'Screenshots, clips and pictures. Keep it SFW.', post: 'media', slowmode: 10 }),
-      text('memes', '😂 memes', { profile: 'media', topic: 'Memes only. Keep it SFW.', post: 'memes', slowmode: 10 }),
-      text('commands', '🤖 commands', { topic: 'Use bot commands here.', post: 'commands' }),
       text('leaderboard', '🏆 leaderboard', { profile: 'readonly', topic: 'The most active members.', post: 'leaderboard' }),
       text('boosters', '🚀 boosters', { profile: 'readonly', topic: 'Thank you for boosting!', post: 'boosters' }),
-    ],
-  },
-  {
-    key: 'catVip',
-    name: '💎 VIP LOUNGE',
-    profile: 'vip',
-    channels: [
-      text('vipChat', '💎 vip-chat', { profile: 'vip', topic: 'Exclusive chat for VIPs, partners, loyal customers and boosters.', post: 'vip' }),
-      voice('vipVoice', '💎 VIP Lounge', { profile: 'vip' }),
-    ],
-  },
-  {
-    key: 'catVoice',
-    name: '🔊 VOICE',
-    profile: 'public',
-    channels: [
-      voice('lounge', '🔊 Lounge'),
-      voice('gaming', '🎮 Gaming'),
-      voice('music', '🎵 Music'),
-      voice('duo', '👥 Duo', { userLimit: 2 }),
-      voice('afk', '💤 AFK', { profile: 'afk' }),
     ],
   },
   {

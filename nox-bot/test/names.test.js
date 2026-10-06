@@ -61,7 +61,7 @@ test('a fresh build uses the style for every category and channel', async () => 
   }
   assert.equal(byKey(guild, 'howToBuy').name, '📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ');
   assert.equal(byKey(guild, 'vouches').name, '⭐┃ᴠᴏᴜᴄʜᴇꜱ');
-  assert.equal(byKey(guild, 'lounge').name, '🔊┃ʟᴏᴜɴɢᴇ');
+  assert.equal(byKey(guild, 'staffVoice').name, '🔒┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ');
   assert.match(byKey(guild, 'statMembers').name, /^👥┃ᴍᴇᴍʙᴇʀꜱ: \d+$/);
   // Nothing to rename right after a build (also after Discord's own name rules for text channels).
   const res = await restyleNames(guild);

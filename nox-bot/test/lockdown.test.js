@@ -3,7 +3,7 @@
 const { db } = require('./helpers/setup');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { PermissionFlagsBits: P } = require('discord.js');
+const { ChannelType, PermissionFlagsBits: P } = require('discord.js');
 const { FakeGuild } = require('./helpers/fakeDiscord');
 const { createInteraction, lastResponse, textOf } = require('./helpers/fakeInteraction');
 const { buildServer } = require('../src/builder/executor');
@@ -76,7 +76,7 @@ test('lockdown → unlock round trip: members are silenced, staff can still talk
   const buyer = member(guild);
   const staff = { support: member(guild, ['member', 'support']), seller: member(guild, ['member', 'seller']), trial: member(guild, ['member', 'trialSupport']), mod };
   const chat = ch(guild, 'chat');
-  const lounge = ch(guild, 'lounge');
+  const lounge = await guild.channels.create({ name: 'lounge', type: ChannelType.GuildVoice }); // a public voice channel you made yourself
   const announcements = ch(guild, 'announcements');
   const memberRole = guild.roles.cache.get(role(guild, 'member'));
   const before = snapshot(guild);
@@ -270,7 +270,7 @@ test('staff roles from /setup keep talking during a lockdown, and the reply is b
   helper.roles.cache.set(helpers.id, helpers);
   const buyer = member(guild);
   const chat = ch(guild, 'chat');
-  const lounge = ch(guild, 'lounge');
+  const lounge = await guild.channels.create({ name: 'lounge', type: ChannelType.GuildVoice }); // a public voice channel you made yourself
   const before = snapshot(guild);
   assert.ok(can(helper, chat, P.SendMessages));
 
@@ -338,7 +338,7 @@ test('every other non-staff role that lets people chat is locked too and restore
   await buildServer({ guild, mode: 'add', invokerId: guild.ownerId }); // "add" keeps the server's old roles
   const mod = member(guild, ['member', 'moderator']);
   const chat = ch(guild, 'chat');
-  const lounge = ch(guild, 'lounge');
+  const lounge = await guild.channels.create({ name: 'lounge', type: ChannelType.GuildVoice }); // a public voice channel you made yourself
   const announcements = ch(guild, 'announcements');
   // Leftovers that also let people talk: @everyone, an overwrite for the old role, a role above mine
   await guild.roles.everyone.setPermissions(toBits(['SendMessages', 'AddReactions']));

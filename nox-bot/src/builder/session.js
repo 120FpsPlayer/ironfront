@@ -20,7 +20,7 @@ const { buildServer } = require('./executor');
 const { refreshContent } = require('./refresh');
 const { syncEmojis, describeEmojiResult } = require('./emojis');
 const { restyleNames } = require('./rename');
-const { addMissing } = require('./update');
+const { addMissing, removeRetired } = require('./update');
 const style = require('./style');
 const { EMOJI_PRIORITY } = require('../lib/theme');
 
@@ -203,19 +203,23 @@ async function runUpdate(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   running.set(guild.id, { abort: false });
   try {
-    const added = await addMissing(guild, { reason: `${config.brand.name} update by ${interaction.user.id}` });
+    const reason = `${config.brand.name} update by ${interaction.user.id}`;
+    const added = await addMissing(guild, { reason });
+    const removed = await removeRetired(guild, { reason, keepChannelId: interaction.channelId });
     const names = await restyleNames(guild);
     const panels = await refreshContent(guild);
     await require('../features/stats').updateStatChannels(guild.client).catch(() => null);
     const created = [...added.categories.map((n) => `📁 ${n}`), ...added.channels.map((n) => `# ${n}`), ...added.roles.map((n) => `🎭 ${n}`)];
-    const errors = [...added.errors, ...names.errors, ...panels.errors];
+    const gone = [...removed.channels.map((n) => `# ${n}`), ...removed.categories.map((n) => `📁 ${n}`), ...removed.roles.map((n) => `🎭 ${n}`)];
+    const errors = [...added.errors, ...removed.errors, ...names.errors, ...panels.errors];
     const lines = [
       created.length ? `**New:**\n${created.slice(0, 20).join('\n')}${created.length > 20 ? `\n…and ${created.length - 20} more` : ''}` : '**New:** nothing – the server already has every channel and role.',
+      gone.length ? `**Removed (no longer part of the server):**\n${gone.slice(0, 20).join('\n')}${gone.length > 20 ? `\n…and ${gone.length - 20} more` : ''}` : null,
       `**Names:** ${names.renamed} renamed${names.later.length ? ` · ⏳ ${names.later.length} wait for Discord's limit – run \`/build only:names\` in 10 minutes` : ''}`,
       `**Panels:** ${panels.edited} updated${panels.sent ? ` · ${panels.sent} re-sent` : ''}`,
     ];
     if (errors.length) lines.push(`⚠️ ${errors.slice(0, 5).join('\n')}`);
-    return interaction.editReply({ embeds: [embed(errors.length ? COLORS.warning : COLORS.success).setTitle('🆕 Server updated').setDescription(truncate(lines.join('\n\n'), 4000))] });
+    return interaction.editReply({ embeds: [embed(errors.length ? COLORS.warning : COLORS.success).setTitle('🆕 Server updated').setDescription(truncate(lines.filter(Boolean).join('\n\n'), 4000))] });
   } finally {
     running.delete(guild.id);
   }

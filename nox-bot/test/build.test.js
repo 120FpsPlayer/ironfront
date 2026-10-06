@@ -36,9 +36,13 @@ test('builds the full NØX server on a fresh server without errors', async () =>
   // Announcement channels were converted after Community mode was enabled.
   assert.equal(byKey(guild, 'announcements').type, ChannelType.GuildAnnouncement);
   assert.equal(byKey(guild, 'restocks').type, ChannelType.GuildAnnouncement);
-  // System channel = boosters, AFK configured.
+  // System channel = boosters; no public voice channels, no VIP lounge, no partners.
   assert.equal(guild.settings.systemChannel, db.channelId(guild.id, 'boosters'));
-  assert.equal(guild.settings.afkChannel, db.channelId(guild.id, 'afk'));
+  assert.equal(guild.settings.afkChannel, undefined);
+  const voice = [...guild.channels.cache.values()].filter((c) => c.type === ChannelType.GuildVoice).map((c) => c.id);
+  assert.deepEqual(voice.sort(), ['statShop', 'statMembers', 'statVouches', 'staffVoice'].map((k) => db.channelId(guild.id, k)).sort(), 'only stats + the staff room');
+  for (const key of ['vip', 'partner']) assert.equal(db.roleId(guild.id, key), null, `no ${key} role`);
+  for (const key of ['vipChat', 'partners', 'media', 'memes', 'commands', 'lounge']) assert.equal(db.channelId(guild.id, key), null, `no #${key}`);
   // @everyone has no permissions (gated server).
   assert.equal(guild.roles.everyone.permissions.bitfield, 0n);
 });
@@ -88,30 +92,26 @@ test('permissions: unverified users only see verify + rules, members see the ser
   // #welcome is readable (their welcome card pings them there) but read-only.
   assert.ok(can(visitor, 'welcome', P.ViewChannel) && can(visitor, 'welcome', P.ReadMessageHistory));
   assert.ok(!can(visitor, 'welcome', P.SendMessages) && !can(member, 'welcome', P.SendMessages));
-  for (const key of ['shop', 'chat', 'tickets', 'staffChat', 'serverLogs', 'vipChat']) assert.ok(!can(visitor, key, P.ViewChannel), `visitor cannot see #${key}`);
+  for (const key of ['shop', 'chat', 'tickets', 'staffChat', 'serverLogs']) assert.ok(!can(visitor, key, P.ViewChannel), `visitor cannot see #${key}`);
   assert.ok(can(visitor, 'statMembers', P.ViewChannel) && !can(visitor, 'statMembers', P.Connect), 'stats are visible but locked');
 
   // Verified member
   assert.ok(!can(member, 'verify', P.ViewChannel), 'verify disappears after verification');
-  for (const key of ['rules', 'shop', 'howToBuy', 'payments', 'vouches', 'tickets', 'faq', 'chat', 'media', 'roles', 'giveaways']) {
+  for (const key of ['rules', 'shop', 'howToBuy', 'payments', 'vouches', 'tickets', 'faq', 'chat', 'roles', 'giveaways']) {
     assert.ok(can(member, key, P.ViewChannel), `member sees #${key}`);
   }
   assert.ok(can(member, 'chat', P.SendMessages));
   assert.ok(!can(member, 'chat', P.AttachFiles), 'no files in chat');
-  assert.ok(can(member, 'media', P.AttachFiles), 'files allowed in media');
   for (const key of ['shop', 'rules', 'announcements', 'tickets', 'vouches', 'giveaways']) assert.ok(!can(member, key, P.SendMessages), `#${key} is read-only`);
-  for (const key of ['staffChat', 'ticketLogs', 'serverLogs', 'vipChat', 'discordUpdates']) assert.ok(!can(member, key, P.ViewChannel), `member cannot see #${key}`);
-  assert.ok(can(member, 'lounge', P.Speak));
-  assert.ok(!can(member, 'afk', P.Speak));
+  for (const key of ['staffChat', 'ticketLogs', 'serverLogs', 'discordUpdates', 'staffVoice']) assert.ok(!can(member, key, P.ViewChannel), `member cannot see #${key}`);
 });
 
-test('permissions: staff, sellers and VIPs see exactly their areas', async () => {
+test('permissions: staff and sellers see exactly their areas', async () => {
   const { guild } = await build();
   const m = role(guild, 'member');
   const support = guild.addMember('900000000000000003', [m, role(guild, 'support')]);
   const seller = guild.addMember('900000000000000004', [m, role(guild, 'seller')]);
   const mod = guild.addMember('900000000000000005', [m, role(guild, 'moderator')]);
-  const vip = guild.addMember('900000000000000006', [m, role(guild, 'vip')]);
   const admin = guild.addMember('900000000000000007', [m, role(guild, 'admin')]);
   const can = (x, key, perm) => byKey(guild, key).permissionsFor(x).has(perm);
 
@@ -124,9 +124,7 @@ test('permissions: staff, sellers and VIPs see exactly their areas', async () =>
   assert.ok(can(admin, 'announcements', P.SendMessages));
   assert.ok(can(admin, 'verify', P.ViewChannel), 'admins still see #verify');
   assert.ok(can(admin, 'discordUpdates', P.ViewChannel) && !can(support, 'discordUpdates', P.ViewChannel));
-  assert.ok(can(vip, 'vipChat', P.ViewChannel) && can(vip, 'vipChat', P.SendMessages));
-  assert.ok(!can(vip, 'staffChat', P.ViewChannel));
-  assert.ok(can(support, 'vipChat', P.ViewChannel), 'staff can moderate the VIP lounge');
+  assert.ok(can(support, 'staffVoice', P.ViewChannel) && can(support, 'staffVoice', P.Connect), 'the team uses the staff room');
 });
 
 test('emojis: fills the 50 free slots in priority order and reports the rest', async () => {

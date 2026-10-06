@@ -115,7 +115,7 @@ function profileData(guild, userId) {
 
 function badges(guild, member) {
   if (!member) return '';
-  const ids = ['vip', 'loyal', 'customer'].map((key) => db.roleId(guild.id, key)).filter((id) => id && member.roles?.cache?.has(id));
+  const ids = ['loyal', 'customer'].map((key) => db.roleId(guild.id, key)).filter((id) => id && member.roles?.cache?.has(id));
   return ids.length ? `\n${ids.map((id) => `<@&${id}>`).join(' ')}` : '';
 }
 

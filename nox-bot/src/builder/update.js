@@ -3,8 +3,10 @@
 /**
  * /build only:update – brings an already-built server up to date after a bot update:
  * creates the roles, categories and channels that were added to layout.js since the server was built
- * (with their permissions, banners and cards), then applies the name style and updates every panel.
- * Nothing that exists is deleted or re-created.
+ * (with their permissions, banners and cards), removes the ones the bot made that are no longer in
+ * layout.js, then applies the name style and updates every panel.
+ * Only things the bot created itself (remembered in its data) are ever removed – your own channels and
+ * roles are never touched.
  */
 
 const { ChannelType, OverwriteType } = require('discord.js');
@@ -109,4 +111,75 @@ async function addMissing(guild, { reason = `${config.brand.name} update` } = {}
   return res;
 }
 
-module.exports = { addMissing };
+/**
+ * Deletes the channels, categories and roles the bot created earlier that layout.js doesn't have any more
+ * (e.g. the VIP lounge, voice channels, #memes) – or that a feature switched off in config.json hides.
+ * @returns {Promise<{ channels: string[], categories: string[], roles: string[], errors: string[] }>}
+ */
+async function removeRetired(guild, { reason = `${config.brand.name} update`, keepChannelId = null } = {}) {
+  const build = db.build(guild.id);
+  if (!build) throw new Error('This server has not been built yet.');
+  const res = { channels: [], categories: [], roles: [], errors: [] };
+  const wantedChannels = new Set(CATEGORIES.flatMap((c) => c.channels.filter(channelWanted).map((ch) => ch.key)));
+  const wantedCategories = new Set(CATEGORIES.map((c) => c.key));
+  const wantedRoles = new Set(ROLES.map((r) => r.key));
+  const channels = { ...build.channels };
+  const categories = { ...build.categories };
+  const roles = { ...build.roles };
+  const posts = { ...build.posts };
+  const forget = (store, key) => {
+    delete store[key];
+    delete posts[key];
+  };
+
+  // Channels first, then their categories (a category must be empty before Discord deletes it cleanly).
+  for (const [list, wanted, names] of [
+    [channels, wantedChannels, res.channels],
+    [categories, wantedCategories, res.categories],
+  ]) {
+    for (const [key, id] of Object.entries(list)) {
+      if (wanted.has(key)) continue;
+      const channel = guild.channels.cache.get(id);
+      if (!channel) {
+        forget(list, key);
+        continue;
+      }
+      if (channel.id === keepChannelId) {
+        res.errors.push(`#${channel.name} was kept because you ran the update in it – run it in another channel to remove it.`);
+        continue;
+      }
+      try {
+        await channel.delete(reason);
+        names.push(channel.name);
+        forget(list, key);
+      } catch (err) {
+        if (err.code === 10003) forget(list, key);
+        else res.errors.push(`Deleting ${channel.name}: ${describeError(err)}`);
+      }
+    }
+  }
+  for (const [key, id] of Object.entries(roles)) {
+    if (wantedRoles.has(key)) continue;
+    const role = guild.roles.cache.get(id);
+    if (!role) {
+      delete roles[key];
+      continue;
+    }
+    if (!role.editable) {
+      res.errors.push(`Role "${role.name}" is above the bot's role – remove it by hand.`);
+      continue;
+    }
+    try {
+      await role.delete(reason);
+      res.roles.push(role.name);
+      delete roles[key];
+    } catch (err) {
+      if (err.code === 10011) delete roles[key];
+      else res.errors.push(`Deleting role "${role.name}": ${describeError(err)}`);
+    }
+  }
+  db.setBuild(guild.id, { ...db.build(guild.id), channels, categories, roles, posts });
+  return res;
+}
+
+module.exports = { addMissing, removeRetired };

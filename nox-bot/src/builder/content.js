@@ -47,7 +47,7 @@ function rulesCard(x) {
         '> **1.3** Keep public channels in English so everyone can follow.\n' +
         '> **1.4** No NSFW, gore or otherwise disturbing content – anywhere.\n' +
         '> **1.5** No advertising or self-promotion, including in DMs to our members.\n' +
-        '> **1.6** No impersonating staff, partners or other members.',
+        '> **1.6** No impersonating staff or other members.',
     ),
   );
   c.addTextDisplayComponents(
@@ -119,14 +119,14 @@ function informationPosts(x, build) {
     text(
       `### ${x.E('home')} Start here\n` +
         `> ${x.ch('rules')} – the rules\n> ${x.ch('announcements')} – official news\n> ${x.ch('giveaways')} – free stuff\n` +
-        `> ${x.ch('roles')} – roles & notifications\n> ${x.ch('partners')} – our partners\n` +
+        `> ${x.ch('roles')} – roles & notifications\n` +
         `### ${x.E('cart')} Shop\n` +
         `> ${x.ch('shop')} – all products\n> ${x.ch('howToBuy')} – how ordering works\n> ${x.ch('payments')} – payment methods\n` +
         `> ${x.ch('restocks')} – new products & restocks\n> ${x.ch('vouches')} – customer reviews\n` +
         `### ${x.E('ticket')} Support\n` +
         `> ${x.ch('tickets')} – open a ticket\n> ${x.ch('faq')} – quick answers\n` +
         `### ${x.E('chat')} Community\n` +
-        `> ${x.ch('chat')} · ${x.ch('media')} · ${x.ch('memes')} · ${x.ch('commands')} · ${x.ch('leaderboard')}`,
+        `> ${x.ch('chat')} · ${x.ch('leaderboard')} · ${x.ch('boosters')}`,
     ),
   );
 
@@ -146,7 +146,6 @@ function informationPosts(x, build) {
     text(
       `# ${x.E('mail')} Contact\nThe fastest way to reach us is a ticket in ${x.ch('tickets')} – a private channel with our team.\n` +
         `> ${x.E('cart')} **Buying something?** → click **Buy** in ${x.ch('shop')}\n> ${x.E('question')} **Need help?** → Support ticket\n` +
-        `> ${x.E('group')} **Business or partnership?** → Partnership ticket\n` +
         `-# ${config.shop.supportHours ? `Support hours: ${config.shop.supportHours}` : ''}`,
     ),
   );
@@ -194,19 +193,6 @@ function giveawaysIntro(x) {
         `-# Want a ping for every giveaway? Grab the ${x.role('pingGiveaways', 'Giveaways')} role in ${x.ch('roles')}.`,
     ),
   );
-  return card(c);
-}
-
-function partnersIntro(x) {
-  const c = container(COLORS.brand);
-  c.addTextDisplayComponents(
-    text(
-      `# ${x.E('group')} Partners\nServers and brands we work with. Want to join them?\n` +
-        `### ${x.E('check')} Requirements\n> Active community (100+ members)\n> No NSFW, scams or illegal content\n> You post our ad in return\n` +
-        '-# Partners get the Partner role and access to the VIP lounge.',
-    ),
-  );
-  c.addActionRowComponents(row(btn('ticket:open:partnership', 'Become a partner', ce(x.guild, 'group'), ButtonStyle.Primary)));
   return card(c);
 }
 
@@ -291,7 +277,7 @@ function faq(x) {
     ["I didn't get my order / something is wrong", `Open a **Support** ticket in ${x.ch('tickets')} within 48 hours and include your order details.`],
     ['Can I get a refund?', config.shop.refundPolicy ?? 'Open a support ticket and we will look at your case.'],
     ['How do I win giveaways?', `Click **Enter** on giveaways in ${x.ch('giveaways')} and turn on the giveaway ping in ${x.ch('roles')}.`],
-    ['Can I partner with you or join the team?', `Sure – open a **Partnership** or **Staff Application** ticket in ${x.ch('tickets')}.`],
+    ['Can I join the team?', `Sure – open a **Staff Application** ticket in ${x.ch('tickets')}.`],
   ];
   const c = container(COLORS.brand);
   header(c, `# ${x.E('question')} Frequently asked questions\nCan't find your answer? Open a ticket in ${x.ch('tickets')}.`, x.icon);
@@ -300,50 +286,16 @@ function faq(x) {
   return card(c);
 }
 
-// ───────────── COMMUNITY & VIP ─────────────
-
-function simple(x, title, body) {
-  const c = container(COLORS.brand);
-  c.addTextDisplayComponents(text(`# ${title}\n${body}`));
-  return card(c);
-}
-
-function commandsCard(x) {
-  const c = container(COLORS.brand);
-  c.addTextDisplayComponents(
-    text(
-      `# ${x.E('gear')} Bot commands\nUse commands in this channel to keep the chat clean.\n` +
-        `### ${x.E('person')} Everyone\n` +
-        '> `/vouch` – leave a review after a purchase\n> `/help` – all commands you can use\n' +
-        '> `/ticket info` · `/ticket close` – inside your ticket\n' +
-        `### ${x.E('shield')} Staff\n` +
-        '> `/ticket` · `/reply` · `/stats` · `/blacklist` – tickets\n> `/product` – manage the shop catalog\n' +
-        '> `/giveaway` – run giveaways · `/announce` – post announcements',
-    ),
-  );
-  return card(c);
-}
+// ───────────── COMMUNITY ─────────────
 
 function boostersCard(x) {
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(
     text(
       `# ${x.E('rocket')} Server Boosters\nBoosting ${x.brand} unlocks a better server for everyone – thank you! 💜\n` +
-        `### ${x.E('gift')} Booster perks\n> ${x.E('diamond')} Access to the VIP lounge ${x.ch('vipChat')}\n` +
+        `### ${x.E('gift')} Booster perks\n` +
         '> 🚀 A special role at the top of the member list\n> 💜 Our eternal gratitude\n' +
         '-# Boost announcements appear in this channel.',
-    ),
-  );
-  return card(c);
-}
-
-function vipCard(x) {
-  const c = container(COLORS.brand);
-  c.addTextDisplayComponents(
-    text(
-      `# ${x.E('diamond')} VIP Lounge\nWelcome to the inner circle. This space is for ${x.role('vip', 'VIPs')}, ${x.role('partner', 'partners')}, ` +
-        `${x.role('loyal', 'loyal customers')} and boosters.\n> ${x.E('sparkles')} Early access to drops and restocks\n` +
-        '> 🏷️ Exclusive deals – watch this channel\n> 💬 A calmer place to hang out',
     ),
   );
   return card(c);
@@ -386,8 +338,6 @@ function postsFor(key, guild) {
       return [{ banner: 'giveaways' }, giveawaysIntro(x)];
     case 'roles':
       return [{ banner: 'roles' }, ...rolesPanels(guild).map((payload) => ({ payload }))];
-    case 'partners':
-      return [{ banner: 'partners' }, partnersIntro(x)];
     case 'shop':
       return [{ banner: 'shop' }, { panel: 'shop' }];
     case 'howToBuy':
@@ -404,18 +354,10 @@ function postsFor(key, guild) {
       return [{ banner: 'support' }, { panel: 'tickets', extra: { style: 'buttons' } }];
     case 'faq':
       return [{ banner: 'faq' }, faq(x)];
-    case 'media':
-      return [{ banner: 'media' }, simple(x, `${x.E('camera')} Media`, 'Share screenshots, clips and pictures.\n-# Keep it SFW · no ads · credit creators.')];
-    case 'memes':
-      return [{ banner: 'memes' }, simple(x, '😂 Memes', 'Post your best memes here.\n-# Keep it SFW and friendly – no hate, no NSFW.')];
-    case 'commands':
-      return [{ banner: 'bot-commands' }, commandsCard(x)];
     case 'leaderboard':
       return [{ banner: 'leaderboard' }, { panel: 'leaderboard' }];
     case 'boosters':
       return [{ banner: 'boosters' }, boostersCard(x)];
-    case 'vip':
-      return [{ banner: 'vip' }, vipCard(x)];
     case 'staff':
       return [{ banner: 'staff' }, staffHandbook(x)];
     default:
