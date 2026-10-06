@@ -98,3 +98,22 @@ test('ticket renames: Discord limit hit by renames the bot did not make → clea
   assert.equal(db.getTicket(channel.id).priority, 'high');
   assert.match(textOf(channel.messageList.at(-1).body), /Discord limit, ~\d+ min/);
 });
+
+test('"Yes, close it" still works after the customer wrote "thanks, all good!" first', async () => {
+  const handle = require('../src/handlers/interactions');
+  const commands = require('../src/commands')();
+  const { createInteraction } = require('./helpers/fakeInteraction');
+  const guild = await builtGuild();
+  const author = guild.addMember(uid(), [role(guild, 'member')]);
+  const staff = guild.addMember(uid(), [role(guild, 'member'), role(guild, 'support')]);
+  const channel = await t.openTicket(author, config.getType('support'), [{ label: 'Subject', value: 'x' }]);
+  await t.requestClose(channel, staff);
+  const card = channel.messageList.at(-1);
+  // The customer answers in chat first …
+  t.trackMessage({ guild, channel, author: author.user, member: author, content: 'thanks, all good!' });
+  assert.ok(db.getTicket(channel.id).closeRequest, 'the close request is still waiting');
+  // … and then clicks Yes.
+  const yes = createInteraction({ guild, member: author, kind: 'button', customId: 'ticket:closereq_yes', channel, message: card });
+  await handle(yes, commands);
+  assert.equal(db.getTicket(channel.id).status, 'closed');
+});

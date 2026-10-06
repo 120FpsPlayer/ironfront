@@ -19,7 +19,6 @@ const tickets = require('./tickets/tickets');
 const giveaways = require('./features/giveaways');
 const welcome = require('./features/welcome');
 const stats = require('./features/stats');
-const { isStaff } = require('./lib/utils');
 const { reportRoles } = require('./lib/permissions');
 const { onEmojiChange } = require('./builder/emojis');
 const { rejectOnRateLimit } = require('./lib/ratelimit');
@@ -111,16 +110,7 @@ client.on(Events.InteractionCreate, (interaction) => handleInteraction(interacti
 client.on(Events.MessageCreate, (message) => {
   if (!message.guild || message.author.bot) return;
   stats.trackMessage(message);
-  const ticket = db.getTicket(message.channel.id);
-  if (!ticket || ticket.status !== 'open') return;
-  const fromStaff = message.author.id !== ticket.ownerId && isStaff(message.member, config.getType(ticket.typeId));
-  const patch = { lastActivity: Date.now(), lastMessageBy: fromStaff ? 'staff' : 'owner', warned: false };
-  if (fromStaff && !ticket.firstResponseAt) {
-    patch.firstResponseAt = Date.now();
-    tickets.schedulePanelRefresh(message.guild);
-  }
-  if (!fromStaff && ticket.closeRequest) patch.closeRequest = null;
-  db.updateTicket(message.channel.id, patch);
+  tickets.trackMessage(message);
 });
 
 client.on(Events.GuildMemberAdd, (member) => welcome.onMemberAdd(member).catch((err) => console.warn('[welcome]', err.message)));
