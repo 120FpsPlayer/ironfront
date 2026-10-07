@@ -158,7 +158,8 @@ async function fetchImage(attachment) {
   return { buffer: Buffer.from(await res.arrayBuffer()), ext };
 }
 
-async function postVouch(guild, member, { rating, product, review, image = null }) {
+/** productId: the catalog product picked in the vouch form – a typed name (/vouch) is matched to the catalog by name. */
+async function postVouch(guild, member, { rating, product, productId = null, review, image = null }) {
   checkCanVouch(member);
   const r = Math.max(1, Math.min(5, Number(rating) || 5));
   const clean = String(review ?? '').trim();
@@ -183,7 +184,10 @@ async function postVouch(guild, member, { rating, product, review, image = null 
 
   const message = await sendToChannel(guild, db.channelId(guild.id, 'vouches'), v2(c, { files }));
   if (!message) throw new UserError('I could not post your vouch – please tell the staff.');
-  g.vouches.push({ n, userId: member.id, rating: r, product: truncate(product || '', 100), review: truncate(clean, 500), at: Date.now(), messageId: message.id });
+  // The product's ID too, for the ⭐ rating badge in the shop (features/badges.js).
+  const name = String(product ?? '').trim().toLowerCase();
+  const id = productId ?? g.products.find((p) => name && p.name.toLowerCase() === name)?.id ?? null;
+  g.vouches.push({ n, userId: member.id, rating: r, product: truncate(product || '', 100), productId: id, review: truncate(clean, 500), at: Date.now(), messageId: message.id });
   g.vouchCooldowns[member.id] = Date.now();
   db.save();
   // Keep the "Leave a vouch" panel as the newest message, so it's always the first thing people see.
@@ -209,16 +213,17 @@ async function submitModal(interaction, guild = interaction.guild, member = inte
     // keep default
   }
   let product = read('product_other');
+  let productId = null;
   try {
     const [id] = interaction.fields.getStringSelectValues('product');
     const p = db.guild(guild.id).products.find((x) => x.id === id);
-    if (p) product = p.name;
+    if (p) [product, productId] = [p.name, p.id];
   } catch {
     // no product select in this modal
   }
   if (!product) throw new UserError('Please tell us which product you bought.');
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { n, message } = await postVouch(guild, member, { rating, product, review: read('review') });
+  const { n, message } = await postVouch(guild, member, { rating, product, productId, review: read('review') });
   return thanks(interaction, n, message);
 }
 

@@ -64,7 +64,7 @@ function restockDm(guild, product) {
   header(
     c,
     `## 🔔 Back in stock!\n${shop.productEmoji(guild, product)} **${product.name}** is back in stock at **${config.brand.name}**.\n` +
-      `**Price:** ${shop.formatPrice(product.price)}\n-# Restocks can sell out fast – be quick!`,
+      `**Price:** ${shop.activeSale(product) ? shop.priceMarkdown(product) : shop.priceLabel(product)}\n-# Restocks can sell out fast – be quick!`,
     image?.url ?? guild.iconURL?.({ size: 256 }),
   );
   const shopChannel = db.channelId(guild.id, 'shop');

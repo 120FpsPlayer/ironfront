@@ -6,7 +6,7 @@ const images = require('../lib/productImages');
 const restock = require('../features/restock');
 const shop = require('../features/shop');
 const { COLORS } = require('../lib/theme');
-const { embed, reply, replyError, truncate } = require('../lib/utils');
+const { embed, reply, replyError, truncate, ts } = require('../lib/utils');
 const { isShopManager } = require('../lib/permissions');
 
 const STOCK_CHOICES = [
@@ -17,6 +17,19 @@ const STOCK_CHOICES = [
 
 const categoryOption = (o, description) => o.setName('category').setDescription(description).setMaxLength(30).setAutocomplete(true);
 const imageOption = (o, description) => o.setName('image').setDescription(description);
+const countOption = (o, description) => o.setName('count').setDescription(description).setMinValue(0).setMaxValue(100_000);
+
+/** "**in stock** · **12 left**" – the stock status, and the counter when the product has one. */
+const stockState = (p) =>
+  `**${(shop.STOCK[p.stock] ?? shop.STOCK.in).label.toLowerCase()}**${shop.counted(p) && p.stock !== 'out' ? ` · **${p.stockCount} left**` : ''}`;
+
+/** The options of a product as a preview: "1 month — 5€" (and the sale price during a flash sale). */
+function variantPreview(p) {
+  const sale = shop.activeSale(p);
+  const lines = shop.variantsOf(p).map((v) => `• ${v.name} — ${sale ? `~~${shop.formatPrice(v.price)}~~ ` : ''}**${shop.variantPrice(p, v)}**`);
+  if (sale) lines.push(`-# ⚡ −${sale.percent}% flash sale until ${ts(sale.endsAt, 'f')}`);
+  return lines.join('\n');
+}
 
 /** Checks the image before deferring, then downloads it (Discord's links expire). */
 async function readImage(interaction) {
@@ -44,9 +57,18 @@ async function restockNotes(guild, product, { restocked, announce }) {
 function listEmbed(guild) {
   const list = shop.products(guild.id);
   const waiting = db.guild(guild.id).notify;
-  const line = (p) =>
-    `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.formatPrice(p.price)}${p.image ? ' · 🖼️' : ''}` +
-    `${waiting[p.id]?.length ? ` · 🔔 ${waiting[p.id].length} waiting` : ''}\n-# ${truncate(p.description, 90)}`;
+  const line = (p) => {
+    const sale = shop.activeSale(p);
+    const options = shop.variantsOf(p).length;
+    const extras = [
+      shop.counted(p) && `${p.stockCount} left`,
+      options && `${options} ${options === 1 ? 'option' : 'options'}`,
+      sale && `⚡ −${sale.percent}% until ${ts(sale.endsAt, 'R')}`,
+      p.image && '🖼️',
+      waiting[p.id]?.length && `🔔 ${waiting[p.id].length} waiting`,
+    ].filter(Boolean);
+    return `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.priceLabel(p)}${extras.map((x) => ` · ${x}`).join('')}\n-# ${truncate(p.description, 90)}`;
+  };
   const gs = shop.groups(list);
   const titled = gs.some((g) => g.name);
   const text = gs.map((g) => `${titled ? `### ${shop.groupTitle(guild, g)}\n` : ''}${g.products.map(line).join('\n')}`).join('\n');
@@ -71,7 +93,8 @@ module.exports = {
         .addStringOption((o) => o.setName('stock').setDescription('Stock status (default: in stock)').addChoices(...STOCK_CHOICES))
         .addBooleanOption((o) => o.setName('announce').setDescription('Announce it in #restocks with a ping? (default: yes)'))
         .addStringOption((o) => categoryOption(o, 'Category in the shop, e.g. Games or 🎮 Games (pick one or type a new one)'))
-        .addAttachmentOption((o) => imageOption(o, 'Product image – PNG, JPG, WEBP or GIF, up to 1 MB')),
+        .addAttachmentOption((o) => imageOption(o, 'Product image – PNG, JPG, WEBP or GIF, up to 1 MB'))
+        .addIntegerOption((o) => countOption(o, 'How many you have – shown as "12 left", counted down per completed order')),
     )
     .addSubcommand((s) =>
       s
@@ -85,15 +108,30 @@ module.exports = {
         .addStringOption((o) => categoryOption(o, 'New category – or "none" to remove it'))
         .addAttachmentOption((o) => imageOption(o, 'New product image – PNG, JPG, WEBP or GIF, up to 1 MB'))
         .addBooleanOption((o) => o.setName('remove_image').setDescription('Remove the product image'))
-        .addStringOption((o) => o.setName('stock').setDescription('New stock status').addChoices(...STOCK_CHOICES)),
+        .addStringOption((o) => o.setName('stock').setDescription('New stock status – on its own it turns the stock counter off').addChoices(...STOCK_CHOICES))
+        .addIntegerOption((o) => countOption(o, 'How many are left – sets the stock status, counted down per completed order')),
     )
     .addSubcommand((s) =>
       s
         .setName('stock')
-        .setDescription('Change the stock status')
+        .setDescription('Change the stock status, or set how many are left')
         .addStringOption((o) => o.setName('product').setDescription('Product').setRequired(true).setAutocomplete(true))
-        .addStringOption((o) => o.setName('status').setDescription('Stock status').setRequired(true).addChoices(...STOCK_CHOICES))
+        .addStringOption((o) => o.setName('status').setDescription('Stock status – on its own it turns the stock counter off').addChoices(...STOCK_CHOICES))
+        .addIntegerOption((o) => countOption(o, 'How many are left – sets the status (0 = sold out), counted down per order'))
         .addBooleanOption((o) => o.setName('announce').setDescription('Announce a restock in #restocks? (default: yes)')),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('variants')
+        .setDescription('Options with their own price, e.g. 1 / 3 / 12 months')
+        .addStringOption((o) => o.setName('product').setDescription('Product').setRequired(true).setAutocomplete(true))
+        .addStringOption((o) =>
+          o
+            .setName('variants')
+            .setDescription('"1 month = 5, 3 months = 12" – up to 10, separated by , or ; – "none" removes them')
+            .setRequired(true)
+            .setMaxLength(1000),
+        ),
     )
     .addSubcommand((s) =>
       s
@@ -119,6 +157,7 @@ module.exports = {
         description: o.getString('description'),
         emoji: o.getString('emoji'),
         stock: o.getString('stock') ?? 'in',
+        stockCount: o.getInteger('count'),
         category: o.getString('category'),
         image,
       });
@@ -127,7 +166,8 @@ module.exports = {
         await shop.announceProduct(guild, product, 'new').catch(() => null);
       }
       const extras = [product.category && ` in **${product.category}**`, product.image && ' with its image'].filter(Boolean).join('');
-      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop${extras}. The shop panel updates in a few seconds.`);
+      const counter = shop.counted(product) ? ` It is ${stockState(product)}.` : '';
+      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop${extras}.${counter} The shop panel updates in a few seconds.`);
     }
 
     if (sub === 'edit') {
@@ -143,18 +183,43 @@ module.exports = {
         emoji: o.getString('emoji'),
         category: o.getString('category'),
         stock: o.getString('stock'),
+        stockCount: o.getInteger('count'),
         image,
         removeImage: o.getBoolean('remove_image') ?? false,
       });
       const notes = await restockNotes(guild, p, { restocked: wasOut && p.stock !== 'out', announce: true });
-      return reply(interaction, `Updated **${p.name}**${p.category ? ` (category: **${p.category}**)` : ''}. The shop panel updates in a few seconds.${notes}`);
+      const stock = o.getInteger('count') != null || o.getString('stock') ? ` It is ${stockState(p)}${shop.counted(p) ? '' : ' (no stock counter)'}.` : '';
+      return reply(interaction, `Updated **${p.name}**${p.category ? ` (category: **${p.category}**)` : ''}.${stock} The shop panel updates in a few seconds.${notes}`);
     }
 
     if (sub === 'stock') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { product, restocked } = await shop.setStock(guild, o.getString('product'), o.getString('status'));
+      const { product, restocked, counterOff } = await shop.setStock(guild, o.getString('product'), o.getString('status'), { count: o.getInteger('count') });
       const notes = await restockNotes(guild, product, { restocked, announce: o.getBoolean('announce') ?? true });
-      return reply(interaction, `**${product.name}** is now **${shop.STOCK[product.stock].label.toLowerCase()}**.${notes}`);
+      const counter = shop.counted(product)
+        ? ' Completed orders count it down – at 0 it is sold out.'
+        : counterOff
+          ? ' The stock counter is off now – set a **count** to turn it back on.'
+          : '';
+      return reply(interaction, `**${product.name}** is now ${stockState(product)}.${counter}${notes}`);
+    }
+
+    if (sub === 'variants') {
+      const p = shop.setVariants(guild, o.getString('product'), o.getString('variants'));
+      if (!shop.variantsOf(p).length) {
+        return reply(interaction, `**${p.name}** has no options any more – it is sold for one price again: **${shop.formatPrice(p.price)}**. The shop panel updates in a few seconds.`);
+      }
+      const n = shop.variantsOf(p).length;
+      return reply(interaction, {
+        embeds: [
+          embed(COLORS.success)
+            .setTitle(truncate(`🧩 ${p.name} – ${n} ${n === 1 ? 'option' : 'options'}`, 256))
+            .setDescription(
+              `${variantPreview(p)}\n\nThe shop shows **${shop.priceLabel(p)}**, and buyers pick an option in the order form. ` +
+                'The shop panel updates in a few seconds.\n-# Run the command again to change them – an option that keeps its name stays valid in order forms that are already open.',
+            ),
+        ],
+      });
     }
 
     if (sub === 'remove') {
