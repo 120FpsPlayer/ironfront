@@ -286,7 +286,7 @@ function tabProducts(list, value) {
   return groups(list).find((g) => g.value === value)?.products ?? null;
 }
 
-/** ◀ Page x/y ▶ – and the How to buy / Vouches links – in one row. */
+/** ◀ Page x/y ▶ – or the How to buy / Vouches links – and My orders (features/myorders.js) in one row. */
 function navRow(guild, value, index, pages) {
   const buttons = [];
   if (pages > 1) {
@@ -296,14 +296,15 @@ function navRow(guild, value, index, pages) {
       btn(`shopview:page:${index + 1}:${value}`, 'Next', '▶️').setDisabled(index >= pages - 1),
     );
   }
-  // With page buttons the links move into the footer text, so 5 tabs + 5 products with images still fit.
+  // With page buttons the links move into the footer text, so the row never has more than 4 buttons.
   if (pages <= 1) {
     const howTo = db.channelId(guild.id, 'howToBuy');
     const vouches = db.channelId(guild.id, 'vouches');
     if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
     if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
   }
-  return buttons.length ? row(...buttons) : null;
+  buttons.push(btn('myorders:open', 'My orders', ce(guild, 'box')));
+  return row(...buttons);
 }
 
 function buildView(guild, { list, tabs, active, items, index, pages, pictures, now }) {
