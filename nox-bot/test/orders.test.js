@@ -222,6 +222,7 @@ test('completing from the ⚙️ menu: amount form → sale recorded, promo rede
     sellerId: seller.id,
     productId: product.id,
     product: 'Nitro Boost',
+    variant: null,
     quantity: 3,
     amount: 25.5,
     currency: '€',

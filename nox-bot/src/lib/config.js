@@ -11,7 +11,9 @@ const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
  * what the shipped config.json has, so updating the bot never turns a feature off without anyone noticing.
  */
 const FEATURE_DEFAULTS = {
-  orders: { receipts: true, proofs: true, vouchReminderHours: 24 },
+  orders: { receipts: true, proofs: true, vouchReminderHours: 24, statusDms: true, paymentProofs: true },
+  badges: { enabled: true, bestsellerMinSales: 3, ratingMinVouches: 2 },
+  staffReminders: { enabled: true, unclaimedMinutes: 15, repeatMinutes: 60 },
   promos: { enabled: true },
   welcomeDiscount: { enabled: true, percent: 5, validDays: 7 },
   invites: {
@@ -40,6 +42,10 @@ const SWITCHES = [
   ['receipts by DM', 'orders.receipts', (c) => !c.orders.receipts],
   ['#proofs posts', 'orders.proofs', (c) => !c.orders.proofs],
   ['vouch reminders', 'orders.vouchReminderHours', (c) => !(Number(c.orders.vouchReminderHours) > 0)],
+  ['order status DMs', 'orders.statusDms', (c) => !c.orders.statusDms],
+  ["\"I've paid\" button", 'orders.paymentProofs', (c) => !c.orders.paymentProofs],
+  ['shop badges', 'badges.enabled', (c) => !c.badges.enabled],
+  ['unclaimed ticket reminders', 'staffReminders.enabled', (c) => !c.staffReminders.enabled],
   ['opening hours', 'workingHours.enabled', (c) => !c.workingHours.enabled],
 ];
 
@@ -117,6 +123,7 @@ function load(raw = read()) {
   raw.welcome ??= { enabled: true };
   raw.shop ??= {};
   raw.shop.paymentMethods ??= [];
+  raw.shop.lowStockAt ??= 3; // a stock counter at or below this shows "Low stock"
   // Written from workingHours, so the panels and the info cards always show the same hours (set it to override).
   raw.shop.supportHours ??= hours.hoursText(raw.workingHours);
   raw.vouches ??= {};

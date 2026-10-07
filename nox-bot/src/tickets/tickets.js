@@ -754,6 +754,7 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
     sellerId: staff.id,
     productId: order.productId ?? null,
     product: order.product ?? null,
+    variant: order.variant ?? null,
     quantity: order.quantity ?? 1,
     amount: paid == null ? null : Math.round(paid * 100) / 100,
     currency: config.shop.currency ?? '€',

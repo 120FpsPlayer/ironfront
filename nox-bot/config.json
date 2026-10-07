@@ -44,6 +44,7 @@
     "deliveryTime": "Usually within 5–30 minutes",
     "refundPolicy": "Refunds are only possible if we can't deliver your product. Once delivery has started, all sales are final.",
     "loyalAfterOrders": 5,
+    "lowStockAt": 3,
     "paymentMethods": [
       { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Send the PIN code only inside your ticket" },
       { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)" },
@@ -61,7 +62,21 @@
   "orders": {
     "receipts": true,
     "proofs": true,
-    "vouchReminderHours": 24
+    "vouchReminderHours": 24,
+    "statusDms": true,
+    "paymentProofs": true
+  },
+
+  "badges": {
+    "enabled": true,
+    "bestsellerMinSales": 3,
+    "ratingMinVouches": 2
+  },
+
+  "staffReminders": {
+    "enabled": true,
+    "unclaimedMinutes": 15,
+    "repeatMinutes": 60
   },
 
   "promos": {

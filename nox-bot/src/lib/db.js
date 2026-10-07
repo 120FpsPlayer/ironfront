@@ -81,7 +81,7 @@ function guild(guildId) {
   g.panels ??= [];
   g.build ??= null;
   g.emojis ??= {};
-  g.products ??= [];
+  g.products ??= []; // see PRODUCT below
   g.vouches ??= [];
   g.orders ??= {};
   g.giveaways ??= {};
@@ -175,10 +175,26 @@ module.exports = {
     save();
   },
 
+  // ───────────── Products ─────────────
+  /**
+   * PRODUCT – one product in the shop (src/features/shop.js):
+   * { id, name, price, description, emoji, category, stock ('in' | 'low' | 'out'), image, createdAt, updatedAt,
+   *   variants:   [{ id, name, price }] – options with their own price (e.g. 1 / 3 / 12 months); empty = one price
+   *   stockCount: number | null – how many are left; null = not counted (only the stock status). Completed
+   *               orders count it down; 0 → Sold out
+   *   sale:       { percent, endsAt, startedBy, startedAt } | null – a flash sale (/sale start) }
+   *
+   * ORDER – ticket.order of an order ticket placed in the shop:
+   * { productId, product, variant, unitPrice, quantity, method, methodIndex, promo, discount, subtotal, total,
+   *   salePercent, status, statusAt, statusBy, history, payment }
+   *   variant – the variant's name (product = "Name — variant"); salePercent – the flash sale it was bought in
+   *   status  – see src/lib/orderStatus.js; payment – what "I've paid" sent: { at, method, note, files }
+   */
+
   // ───────────── Sales ─────────────
   /**
    * SALE – one completed order:
-   * { id, ticketNumber, channelId, userId, sellerId, productId, product, quantity, amount, currency,
+   * { id, ticketNumber, channelId, userId, sellerId, productId, product, variant, quantity, amount, currency,
    *   method, promo, discount, createdAt, completedAt }
    * amount = total paid (number, in config.shop.currency) or null when unknown; discount = amount saved.
    */
