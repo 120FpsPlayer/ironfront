@@ -286,17 +286,17 @@ function tabProducts(list, value) {
   return groups(list).find((g) => g.value === value)?.products ?? null;
 }
 
-/** ◀ Page x/y ▶ – or the How to buy / Vouches links – and My orders (features/myorders.js) in one row. */
+/** ◀ Page x/y · ▶ Next – or the How to buy / Vouches links – and My orders (features/myorders.js) in one row. */
 function navRow(guild, value, index, pages) {
   const buttons = [];
+  // The page number sits on ◀ (no separate page button), so 5 tabs + 5 products with images + My orders still fit 40 components.
   if (pages > 1) {
     buttons.push(
-      btn(`shopview:page:${index - 1}:${value}`, 'Previous', '◀️').setDisabled(index <= 0),
-      btn(`shopview:at:${index}`, `Page ${index + 1} / ${pages}`).setDisabled(true),
+      btn(`shopview:page:${index - 1}:${value}`, `Page ${index + 1} / ${pages}`, '◀️').setDisabled(index <= 0),
       btn(`shopview:page:${index + 1}:${value}`, 'Next', '▶️').setDisabled(index >= pages - 1),
     );
   }
-  // With page buttons the links move into the footer text, so the row never has more than 4 buttons.
+  // With page buttons the links move into the footer text, so the row never has more than 3 buttons.
   if (pages <= 1) {
     const howTo = db.channelId(guild.id, 'howToBuy');
     const vouches = db.channelId(guild.id, 'vouches');

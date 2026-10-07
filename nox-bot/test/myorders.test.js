@@ -82,7 +82,7 @@ const pickReceipt = (guild, who, saleId) => run({ guild, member: who, kind: 'sel
 
 // ───────────── The button in the shop ─────────────
 
-test('My orders is in the shop row: How to buy · Vouches · My orders on one page, ◀ Page ▶ · My orders with pages – on the panel and every private page', async () => {
+test('My orders is in the shop row: How to buy · Vouches · My orders on one page, ◀ Page x / y · ▶ Next · My orders with pages – on the panel and every private page', async () => {
   const guild = await builtGuild();
   const buyer = member(guild);
   for (let i = 1; i <= 3; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.' });
@@ -96,7 +96,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
   const message = guild.channels.cache.get(panelInfo.channelId).messageList.find((m) => m.id === panelInfo.messageId);
   const panel = message.body;
   validateMessage(panel, guild);
-  assert.deepEqual(navLabels(panel), ['Previous', 'Page 1 / 3', 'Next', 'My orders']);
+  assert.deepEqual(navLabels(panel), ['Page 1 / 3', 'Next', 'My orders']);
 
   // Private copies: a page turned from the panel, a page inside the copy, a tab.
   const copies = [
@@ -108,7 +108,9 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
     validateMessage(copy, guild);
     assert.ok(customIds(copy).includes('myorders:open'));
   }
-  assert.deepEqual(navLabels(copies[1]), ['Previous', 'Page 3 / 3', 'Next', 'My orders']);
+  assert.deepEqual(navLabels(copies[1]), ['Page 3 / 3', 'Next', 'My orders']);
+  assert.equal(navRow(copies[1]).components[0].custom_id, 'shopview:page:1:all', '◀ goes back a page');
+  assert.ok(navRow(copies[1]).components[1].disabled, 'Next is off on the last page');
   for (const payload of [one, panel, ...copies]) {
     for (const r of actionRows(payload)) assert.ok(r.components.length <= 5, 'at most 5 buttons in a row');
   }
@@ -119,7 +121,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
   assert.deepEqual(navLabels(shop.shopView(guild, { tab: 'c:keys', page: 1 })), ['My orders']);
 });
 
-test('the shop still fits 40 components with 5 tabs, pages and 5 products with images (an image is dropped if needed)', async () => {
+test('the shop still fits 40 components with 5 tabs, pages and 5 products with images – with every image', async () => {
   const guild = await builtGuild();
   const png = () => {
     const buf = Buffer.alloc(2048, 7);
@@ -137,7 +139,9 @@ test('the shop still fits 40 components with 5 tabs, pages and 5 products with i
     assert.ok(navRow(payload).components.length <= 5);
   }
   assert.equal(actionRows(pages[0]).find((r) => r.components.some((b) => b.custom_id?.startsWith('shopview:tab:'))).components.length, 5, '5 tabs');
-  assert.ok(pages[0].files.length >= 4, `${pages[0].files.length} of 5 images on a full page`);
+  // Every page keeps the picture of every product on it (shopView would drop them from the bottom up if not).
+  assert.deepEqual(pages.map((p) => p.files.length), [5, 5, 2, 3]);
+  assert.equal(validateMessage(pages[0], guild).total, 40, 'a full page uses exactly 40 components');
 });
 
 // ───────────── The view ─────────────
@@ -176,6 +180,7 @@ test('My orders: open orders with status, total and ticket link; completed order
 
   const click = await openMyOrders(guild, buyer);
   assert.equal(click.deferred, true, 'deferred first');
+  assert.equal(click.state.deferredAs, 'reply', 'a new private message');
   const view = lastResponse(click);
   validateMessage(view, guild);
   assert.equal(view.flags & MessageFlags.IsComponentsV2, MessageFlags.IsComponentsV2);
@@ -228,9 +233,11 @@ test('View a receipt: shows your receipt in place with a way back – someone el
   assert.match(body, /Nitro Boost × 2/);
   assert.match(body, /\*\*Total paid:\*\* \*\*18€\*\*/);
   assert.match(body, new RegExp(`\\*\\*Seller:\\*\\* ${seller.displayName}`));
-  assert.ok(customIds(receipt).includes('myorders:back'));
+  assert.equal(pick.state.deferredAs, 'update');
+  assert.ok(customIds(receipt).includes('myorders:back:0'));
 
-  const back = await run({ guild, member: buyer, kind: 'button', customId: 'myorders:back', message: privateCopy });
+  const back = await run({ guild, member: buyer, kind: 'button', customId: 'myorders:back:0', message: privateCopy });
+  assert.equal(back.state.deferredAs, 'update');
   assert.match(textOf(lastResponse(back)), /My orders[\s\S]*Completed orders/);
 
   // Forged menu values: someone else's sale, or one that doesn't exist.
@@ -253,7 +260,7 @@ test('My orders: friendly empty state that points to Buy in the shop', async () 
   assert.deepEqual(selectOptions(view), []);
 });
 
-test('My orders with many long orders: 10 completed + "older", 5 open + links – within 40 components and 4000 characters', async () => {
+test('My orders with many long orders: 10 completed per page, 5 open + links – within 40 components and 4000 characters on every page', async () => {
   const guild = new FakeGuild({ premiumTier: 3 }); // custom emojis → the longest text
   await buildServer({ guild, mode: 'add', invokerId: guild.ownerId });
   const buyer = member(guild);
@@ -294,16 +301,86 @@ test('My orders with many long orders: 10 completed + "older", 5 open + links �
   const body = textOf(view);
   assert.match(body, /8 open · 40 completed/);
   assert.match(body, /\+3 more: (<#\d+> ?){3}/);
-  assert.match(body, /\+30 older orders/);
+  assert.match(body, /1–10 of 40 completed orders/);
   assert.equal((body.match(/✅ Delivered/g) ?? []).length, 10);
   assert.ok(body.indexOf('`S-0001`') < body.indexOf('`S-0002`'), 'newest first');
   const options = selectOptions(view);
   assert.equal(options.length, myorders.SHOWN_SALES);
   assert.equal(options[0].value, 'S-0001');
   for (const o of options) assert.ok(o.label.length <= 100 && (o.description ?? '').length <= 100);
+  for (let page = 1; page < 4; page += 1) {
+    const older = myorders.ordersView(guild, buyer.id, { page });
+    const size = validateMessage(older, guild);
+    assert.ok(size.total <= 40 && size.textLength <= 4000, `page ${page + 1}: ${size.total} components, ${size.textLength} characters`);
+  }
 
   // A receipt of an old sale without its ticket (deleted) and without an amount still works.
   const pick = await pickReceipt(guild, buyer, 'S-0003');
   validateMessage(lastResponse(pick), guild);
   assert.match(textOf(lastResponse(pick)), /as agreed in your ticket/);
+});
+
+test('Completed orders 10 per page: ◀ Newer / ▶ Older reach every receipt, ◀ My orders goes back to the same page', async () => {
+  const guild = await builtGuild();
+  const [buyer, other] = [member(guild), member(guild)];
+  const sale = (id, userId, daysAgo) =>
+    db.addSale(guild.id, { id, ticketNumber: 1, channelId: uid(), userId, sellerId: null, productId: null, product: `Key ${id}`, quantity: 1, amount: 5, currency: '€', createdAt: Date.now(), completedAt: Date.now() - daysAgo * 86_400_000 });
+  for (let i = 1; i <= 25; i += 1) sale(`S-${String(i).padStart(4, '0')}`, buyer.id, i);
+  sale('S-0100', other.id, 0);
+  const ids = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => `S-${String(from + i).padStart(4, '0')}`);
+  const components = (payload) => actionRows(payload).flatMap((r) => r.components);
+  const pageButton = (payload, page) => components(payload).find((c) => c.custom_id === `myorders:page:${page}`);
+  const menuId = (payload) => components(payload).find((c) => c.type === 3)?.custom_id;
+  const turn = (customId) => run({ guild, member: buyer, kind: 'button', customId, message: privateCopy });
+
+  // Page 1: the 10 newest, ◀ Newer off, ▶ Older on.
+  const first = lastResponse(await openMyOrders(guild, buyer));
+  validateMessage(first, guild);
+  assert.match(textOf(first), /1–10 of 25 completed orders/);
+  assert.deepEqual(selectOptions(first).map((o) => o.value), ids(1, 10));
+  assert.equal(menuId(first), 'myorders:receipt:0');
+  assert.equal(pageButton(first, -1).label, 'Newer');
+  assert.ok(pageButton(first, -1).disabled);
+  assert.equal(pageButton(first, 1).label, 'Older');
+  assert.ok(!pageButton(first, 1).disabled);
+
+  // ▶ Older: the list is replaced in place.
+  const click = await turn('myorders:page:1');
+  assert.equal(click.state.deferredAs, 'update', 'in place');
+  assert.equal(click.state.replies.length, 0);
+  const second = lastResponse(click);
+  validateMessage(second, guild);
+  assert.match(textOf(second), /11–20 of 25 completed orders/);
+  assert.deepEqual(selectOptions(second).map((o) => o.value), ids(11, 20));
+  assert.ok(!pageButton(second, 0).disabled && !pageButton(second, 2).disabled);
+
+  const third = lastResponse(await turn('myorders:page:2'));
+  assert.match(textOf(third), /21–25 of 25 completed orders/);
+  assert.deepEqual(selectOptions(third).map((o) => o.value), ids(21, 25));
+  assert.ok(pageButton(third, 3).disabled, 'Older is off on the last page');
+  const reachable = [first, second, third].flatMap((v) => selectOptions(v).map((o) => o.value));
+  assert.deepEqual(reachable, ids(1, 25), 'every receipt is in a menu – none twice, nobody else\'s');
+
+  // A receipt from the last page – ◀ My orders goes back to that page.
+  const pick = await run({ guild, member: buyer, kind: 'select', customId: 'myorders:receipt:2', values: ['S-0023'], message: privateCopy });
+  assert.match(textOf(lastResponse(pick)), /\*\*Receipt:\*\* `S-0023`/);
+  assert.ok(customIds(lastResponse(pick)).includes('myorders:back:2'));
+  assert.match(textOf(lastResponse(await turn('myorders:back:2'))), /21–25 of 25/);
+  // Someone else's sale is still refused on any page.
+  const forged = await run({ guild, member: buyer, kind: 'select', customId: 'myorders:receipt:1', values: ['S-0100'], message: privateCopy });
+  assert.match(textOf(lastResponse(forged)), /isn't one of your orders/);
+
+  // Forged or out-of-range pages land on the first / last page.
+  for (const [customId, range] of [['myorders:page:99', '21–25'], ['myorders:page:-4', '1–10'], ['myorders:page:x', '1–10']]) {
+    assert.match(textOf(lastResponse(await turn(customId))), new RegExp(`${range} of 25`), customId);
+  }
+  // Menus and buttons sent before there were pages still work (page 1).
+  const oldMenu = await run({ guild, member: buyer, kind: 'select', customId: 'myorders:receipt', values: ['S-0002'], message: privateCopy });
+  assert.ok(customIds(lastResponse(oldMenu)).includes('myorders:back:0'));
+  assert.match(textOf(lastResponse(await turn('myorders:back'))), /1–10 of 25/);
+
+  // 10 or fewer completed orders: one page, no ◀ ▶.
+  const one = myorders.ordersView(guild, other.id);
+  assert.ok(!customIds(one).some((id) => id.startsWith('myorders:page:')));
+  assert.doesNotMatch(textOf(one), /of \d+ completed orders/);
 });

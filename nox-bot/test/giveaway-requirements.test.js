@@ -77,6 +77,7 @@ test('/giveaway start buyers_only + min_invites: stored on the giveaway and list
   validateMessage(card, guild);
   const body = textOf(card);
   assert.match(body, /\*\*Required role:\*\* <@&\d+>\n(?:🛒|<:nox_cart:\d+>) Only customers can enter\n📨 Invited at least \*\*3\*\* members/);
+  assert.match(body, /when the timer ends – the requirements are checked again then\./);
 
   // One invite → "member"; no options → no requirement lines.
   const one = await giveaways.start(guild, mod, { prize: 'Key', durationMs: 3_600_000, winners: 1, minInvites: 1 });
@@ -84,7 +85,7 @@ test('/giveaway start buyers_only + min_invites: stored on the giveaway and list
   const plain = await giveaways.start(guild, mod, { prize: 'Plain', durationMs: 3_600_000, winners: 1 });
   assert.equal(plain.gw.buyersOnly, false);
   assert.equal(plain.gw.minInvites, null);
-  assert.doesNotMatch(textOf(giveaways.card(guild, plain.gw)), /Only customers|Invited at least/);
+  assert.doesNotMatch(textOf(giveaways.card(guild, plain.gw)), /Only customers|Invited at least|checked again/);
 });
 
 test('/giveaway start min_invites is refused while invite tracking is off – buyers_only still works', async () => {
@@ -182,6 +183,34 @@ test('the draw (and a reroll) skips entrants whose invites dropped below min_inv
   invited(guild, bob, 1);
   assert.deepEqual(await giveaways.end(guild, gw, { reroll: true, count: 1 }), [bob.id]);
   assert.deepEqual(gw.winners, [alice.id, bob.id]);
+});
+
+test('the draw (and a reroll) skips entrants who lost the required role since they entered', async () => {
+  const { guild, mod } = await builtGuild();
+  const vip = role(guild, 'loyal');
+  const { gw } = await giveaways.start(guild, mod, { prize: 'Nitro', durationMs: 3_600_000, winners: 2, requiredRole: { id: vip } });
+  const [alice, bob] = [member(guild, ['member', 'loyal']), member(guild, ['member', 'loyal'])];
+  for (const who of [alice, bob]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You're in!/);
+
+  await bob.roles.remove(vip);
+  assert.deepEqual(await giveaways.end(guild, gw), [alice.id], 'bob lost the role – skipped, his place stays empty');
+  assert.deepEqual(await giveaways.end(guild, gw, { reroll: true, count: 1 }), []);
+  await bob.roles.add(vip);
+  assert.deepEqual(await giveaways.end(guild, gw, { reroll: true, count: 1 }), [bob.id]);
+});
+
+test('buyers_only at the draw: a completed order always counts, the Customer role only while they still have it', async () => {
+  const { guild, mod } = await builtGuild();
+  const customerRole = role(guild, 'customer');
+  const { gw } = await giveaways.start(guild, mod, { prize: 'Nitro', durationMs: 3_600_000, winners: 2, buyersOnly: true });
+  const byRole = member(guild, ['member', 'customer']); // the role given by hand – no order
+  const buyer = member(guild);
+  db.guild(guild.id).orders[buyer.id] = 1;
+  for (const who of [byRole, buyer]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You're in!/);
+
+  await byRole.roles.remove(customerRole);
+  await buyer.roles.remove(customerRole); // had no role – the order still counts
+  assert.deepEqual(await giveaways.end(guild, gw), [buyer.id]);
 });
 
 // ───────────── Old giveaways ─────────────

@@ -16,8 +16,8 @@ const { container, text, divider, btn, row, header, v2, linkBtn, channelUrl } = 
  * Who can enter (all optional – giveaways from before a requirement existed simply don't have it):
  *   requiredRoleId   members with this role
  *   buyersOnly       customers: at least one completed order, or the Customer role
- *   minInvites       members with at least this many valid invites (features/invites.js – verified and still here);
- *                    checked again for whoever is drawn, because invites drop when invited members leave
+ *   minInvites       members with at least this many valid invites (features/invites.js – verified and still here)
+ * All of them are checked again for whoever is drawn: a role can be taken away, invites drop when invited members leave.
  */
 
 const editTimers = new Map();
@@ -46,7 +46,8 @@ function card(guild, gw) {
       text(gw.winners.length ? `### ${e(guild, 'trophy')} Winners\n${gw.winners.map((id) => `<@${id}>`).join(', ')}` : '### 😢 No valid entries – no winner this time.'),
     );
   } else {
-    c.addTextDisplayComponents(text('-# Click **Enter** to join. Click again to leave. Winners are picked at random when the timer ends.'));
+    const recheck = gw.requiredRoleId || gw.buyersOnly || gw.minInvites ? ' – the requirements are checked again then' : '';
+    c.addTextDisplayComponents(text(`-# Click **Enter** to join. Click again to leave. Winners are picked at random when the timer ends${recheck}.`));
     c.addActionRowComponents(row(btn(`gw:enter:${gw.id}`, 'Enter', ce(guild, 'gift'), ButtonStyle.Primary)));
   }
   return v2(c);
@@ -150,14 +151,14 @@ function entryBlock(member, gw) {
   return null;
 }
 
-/** Random winners from the entries – only people who are still on the server (and still have their invites) can win. */
+/** Random winners from the entries – only people who are still on the server and still meet every requirement can win. */
 async function drawWinners(guild, entries, count, exclude = [], gw = {}) {
   const pool = entries.filter((id) => !exclude.includes(id));
   const winners = [];
   while (pool.length && winners.length < count) {
     const id = pool.splice(crypto.randomInt(pool.length), 1)[0];
     const member = guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => null));
-    if (member && !invitesMissing(guild.id, id, gw)) winners.push(id);
+    if (member && !entryBlock(member, gw)) winners.push(id);
   }
   return winners;
 }

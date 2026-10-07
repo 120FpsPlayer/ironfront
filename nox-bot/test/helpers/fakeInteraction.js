@@ -76,11 +76,14 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
       state.edits.push(payload);
       return payload;
     },
+    // state.deferredAs: 'reply' (a new message) or 'update' (the clicked message is replaced)
     deferReply: async () => {
       interaction.deferred = true;
+      state.deferredAs = 'reply';
     },
     deferUpdate: async () => {
       interaction.deferred = true;
+      state.deferredAs = 'update';
     },
     showModal: async (modal) => {
       state.modals.push(validateModal(modal, guild));

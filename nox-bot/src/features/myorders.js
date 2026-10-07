@@ -4,13 +4,14 @@
  * "My orders" – a button in the shop's bottom row (on the panel and on every private page). It answers privately
  * with the orders of the member who clicked, nobody else's:
  *   open orders       their open order tickets: number, product, quantity, total, status (lib/orderStatus.js) and a link
- *   completed orders  their sales, newest first – the last 10, older ones are only counted
- *   View a receipt    a menu with those completed orders – shows the receipt (features/orders.js) in place
+ *   completed orders  their sales, newest first – 10 per page, ◀ Newer / ▶ Older for the rest
+ *   View a receipt    a menu with the completed orders of that page – shows the receipt (features/orders.js) in place
  *
- * Components:
- *   myorders:open       the shop button – always a new private message
- *   myorders:back       ◀ My orders under a receipt – the list again (in place)
- *   myorders:receipt    the receipt menu – value: a sale ID, refused unless it's the member's own sale
+ * Components (<page> = the page of completed orders, so ◀ My orders goes back to where the member was):
+ *   myorders:open             the shop button – always a new private message
+ *   myorders:page:<page>      ◀ Newer / ▶ Older – the list in place
+ *   myorders:back:<page>      ◀ My orders under a receipt – the list again (in place)
+ *   myorders:receipt:<page>   the receipt menu – value: a sale ID, refused unless it's the member's own sale
  */
 
 const { MessageFlags, StringSelectMenuBuilder } = require('discord.js');
@@ -24,12 +25,13 @@ const { UserError, money, pad, ts, truncate } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, buttonSection, v2, channelUrl } = require('../lib/v2');
 
 const SHOWN_OPEN = 5; // open orders with their own ticket button – more are only linked
-const SHOWN_SALES = 10; // completed orders listed (and in the receipt menu – Discord allows 25 options)
+const SHOWN_SALES = 10; // completed orders per page (and in the receipt menu – Discord allows 25 options)
 const MORE_LINKS = 10; // channel links for the open orders after those
 
 const isPrivate = (interaction) => Boolean(interaction.message?.flags?.has?.(MessageFlags.Ephemeral));
 const productName = (name) => truncate(name || 'Custom order', 60);
 const day = (at) => new Date(at).toISOString().slice(0, 10);
+const pageOf = (raw) => Math.max(0, Math.trunc(Number(raw)) || 0); // custom IDs can be forged – too far is clamped by the view
 
 // ───────────── This member's orders ─────────────
 
@@ -66,10 +68,10 @@ function saleLine(sale) {
   return parts.join(' · ');
 }
 
-function receiptMenu(sales) {
+function receiptMenu(sales, page) {
   const unique = sales.filter((s, i) => sales.findIndex((x) => x.id === s.id) === i).slice(0, 25);
   return new StringSelectMenuBuilder()
-    .setCustomId('myorders:receipt')
+    .setCustomId(`myorders:receipt:${page}`)
     .setPlaceholder('🧾 View a receipt…')
     .addOptions(
       unique.map((s) => ({
@@ -81,8 +83,8 @@ function receiptMenu(sales) {
     );
 }
 
-/** The private "My orders" view of one member. */
-function ordersView(guild, userId) {
+/** The private "My orders" view of one member – page: which 10 of their completed orders are listed (0 = the newest). */
+function ordersView(guild, userId, { page = 0 } = {}) {
   const open = openOrders(guild.id, userId);
   const sales = completedOrders(guild.id, userId);
   const shop = db.channelId(guild.id, 'shop');
@@ -111,13 +113,21 @@ function ordersView(guild, userId) {
     if (rest.length) c.addTextDisplayComponents(text(`-# +${rest.length} more: ${rest.slice(0, MORE_LINKS).map((t) => `<#${t.channelId}>`).join(' ')}`));
   }
   if (sales.length) {
-    const shown = sales.slice(0, SHOWN_SALES);
-    const older = sales.length - shown.length;
+    const pages = Math.ceil(sales.length / SHOWN_SALES);
+    const index = Math.min(pageOf(page), pages - 1);
+    const shown = sales.slice(index * SHOWN_SALES, (index + 1) * SHOWN_SALES);
+    const range = pages > 1 ? `\n-# ${index * SHOWN_SALES + 1}–${index * SHOWN_SALES + shown.length} of ${sales.length} completed orders` : '';
     c.addSeparatorComponents(divider());
-    c.addTextDisplayComponents(
-      text(`### ${e(guild, 'check')} Completed orders\n${shown.map(saleLine).join('\n')}${older ? `\n-# +${older} older ${older === 1 ? 'order' : 'orders'}` : ''}`),
-    );
-    c.addActionRowComponents(row(receiptMenu(shown)));
+    c.addTextDisplayComponents(text(`### ${e(guild, 'check')} Completed orders\n${shown.map(saleLine).join('\n')}${range}`));
+    c.addActionRowComponents(row(receiptMenu(shown, index)));
+    if (pages > 1) {
+      c.addActionRowComponents(
+        row(
+          btn(`myorders:page:${index - 1}`, 'Newer', '◀️').setDisabled(index <= 0),
+          btn(`myorders:page:${index + 1}`, 'Older', '▶️').setDisabled(index >= pages - 1),
+        ),
+      );
+    }
   }
   return v2(c);
 }
@@ -128,12 +138,12 @@ function ordersView(guild, userId) {
 const defer = (interaction, inPlace) =>
   inPlace && isPrivate(interaction) ? interaction.deferUpdate() : interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-async function showList(interaction, inPlace) {
+async function showList(interaction, inPlace, page = 0) {
   await defer(interaction, inPlace);
-  return interaction.editReply(ordersView(interaction.guild, interaction.user.id));
+  return interaction.editReply(ordersView(interaction.guild, interaction.user.id, { page }));
 }
 
-async function showReceipt(interaction) {
+async function showReceipt(interaction, page = 0) {
   const guild = interaction.guild;
   const sale = db.sales(guild.id).find((s) => s.id === interaction.values?.[0]);
   // Menu values can be forged – only the member's own receipts.
@@ -142,17 +152,17 @@ async function showReceipt(interaction) {
   const seller = sale.sellerId ? await guild.members.fetch(sale.sellerId).catch(() => null) : null;
   const sellerName = seller?.displayName ?? seller?.user?.globalName ?? seller?.user?.username ?? null;
   const payload = orders.receiptCard(guild, { sale, ticket: db.getTicket(sale.channelId), sellerName });
-  payload.components[0].addActionRowComponents(row(btn('myorders:back', 'My orders', '◀️')));
+  payload.components[0].addActionRowComponents(row(btn(`myorders:back:${pageOf(page)}`, 'My orders', '◀️')));
   return interaction.editReply(payload);
 }
 
 hooks.route('myorders', {
-  button(interaction, action) {
+  button(interaction, action, args) {
     if (action === 'open') return showList(interaction, false);
-    if (action === 'back') return showList(interaction, true);
+    if (action === 'back' || action === 'page') return showList(interaction, true, args[0]);
     return null;
   },
-  select: (interaction, action) => (action === 'receipt' ? showReceipt(interaction) : null),
+  select: (interaction, action, args) => (action === 'receipt' ? showReceipt(interaction, args[0]) : null),
 });
 
 module.exports = { ordersView, openOrders, completedOrders, SHOWN_SALES };
