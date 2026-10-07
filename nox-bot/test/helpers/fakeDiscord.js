@@ -132,6 +132,10 @@ function validateV2(components, files, where = 'components') {
         if (!c.items?.length || c.items.length > 10) throw apiError(50035, `${path}: gallery needs 1-10 items`);
         for (const item of c.items) if (!mediaUrlOk(item.media?.url, files)) throw apiError(50035, `${path}: invalid media url ${item.media?.url}`);
         break;
+      case 13:
+        // A file component only shows an uploaded file of this message (attachment://name).
+        if (!c.file?.url?.startsWith('attachment://') || !mediaUrlOk(c.file.url, files)) throw apiError(50035, `${path}: invalid file url ${c.file?.url}`);
+        break;
       case 14:
         break;
       case 17:
@@ -236,6 +240,12 @@ function checkModal(modal) {
       if (inner.min_length && inner.max_length && inner.min_length > inner.max_length) throw new Error('min > max');
     } else if (inner.type === 3) {
       validateSelect(inner, `modal[${i}]`);
+    } else if (inner.type === 19) {
+      // File upload: 0–10 files (min) and 1–10 (max).
+      if (!inner.custom_id || inner.custom_id.length > 100) throw new Error(`file upload custom_id: ${inner.custom_id}`);
+      const min = inner.min_values ?? 1;
+      const max = inner.max_values ?? 1;
+      if (min < 0 || min > 10 || max < 1 || max > 10 || min > max) throw new Error(`file upload min/max values ${min}/${max}`);
     } else {
       throw new Error(`unsupported modal component ${inner.type}`);
     }

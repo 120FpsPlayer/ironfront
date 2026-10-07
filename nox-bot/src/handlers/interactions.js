@@ -24,6 +24,8 @@ const shop = require('../features/shop');
 const vouches = require('../features/vouches');
 const giveaways = require('../features/giveaways');
 const announce = require('../features/announce');
+const orderstatus = require('../features/orderstatus');
+const { statusLabel } = require('../lib/orderStatus');
 const buildSession = require('../builder/session');
 
 const ephemeral = { flags: MessageFlags.Ephemeral };
@@ -226,6 +228,10 @@ async function handleManage(interaction) {
       await t.requestClose(channel, member);
       await t.refreshControlMessage(channel, ticket);
       return await reply(interaction, 'Close request sent to the author.');
+    }
+    if (kind === 'status') {
+      const { dm } = await orderstatus.setStatus(channel, value, member);
+      return await reply(interaction, `Order status set to **${statusLabel(value)}**${dm ? ' – the customer got a DM.' : '.'}`);
     }
     return null;
   } catch (err) {

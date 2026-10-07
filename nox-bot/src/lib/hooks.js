@@ -12,6 +12,7 @@
  * Bot events:
  *   verified(member)                               someone passed verification
  *   orderCompleted({ guild, ticket, member, staff, sale })   a purchase was marked as completed
+ *   orderStatus({ guild, ticket, status, staff })  an order's status changed (staff: null when the customer sent a payment)
  *   productRestocked({ guild, product })           a sold-out product is buyable again
  */
 
