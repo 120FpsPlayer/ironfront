@@ -25,6 +25,8 @@ module.exports = {
           inviteLine,
           '`/ticket info` · `/ticket close` – inside your ticket',
           '🔔 **Call support** – a button in your ticket if you have been waiting a while',
+          config.orders.paymentProofs === false ? null : "💳 **I've paid** – a button in your order ticket: send your PIN, a screenshot or the transaction ID",
+          '🧾 **My orders** – a button in the shop: your open orders, their status and all your receipts',
         ]
           .filter(Boolean)
           .join('\n'),
@@ -36,6 +38,7 @@ module.exports = {
           '`/ticket claim` · `/ticket unclaim` · `/ticket add` · `/ticket remove`',
           '`/ticket priority` · `/ticket move` · `/ticket rename` · `/ticket request-close`',
           '`/ticket complete` – mark a purchase as delivered (records the sale, receipt, proof, Customer role)',
+          `⚙️ ticket menu → **Status: Paid / In progress**${config.orders.statusDms === false ? '' : ' – the customer gets a DM'}${config.staffReminders.enabled === false ? '' : ' · unclaimed tickets are reminded in the staff chat'}`,
           '`/customer view` · `/customer note add` – customer profiles and private notes',
           '`/reply` – canned replies · `/blacklist` · `/stats`',
         ].join('\n'),
@@ -45,7 +48,8 @@ module.exports = {
       e.addFields({
         name: '🛒 Shop',
         value: [
-          '`/product add` · `/product edit` · `/product stock` · `/product remove` · `/product list` – categories, images, stock',
+          '`/product add` · `/product edit` · `/product stock` · `/product variants` · `/product remove` · `/product list` – categories, images, options, stock counter',
+          '`/sale start` · `/sale stop` · `/sale list` – flash sales with a countdown in the shop',
           '`/promo create` · `/promo list` · `/promo info` · `/promo delete` – discount codes',
           '`/shop open` · `/shop close` · `/shop auto` · `/shop status` – open/closed status',
           '`/sales` – revenue, orders, top products and sellers',
@@ -53,7 +57,12 @@ module.exports = {
       });
     }
     if (isMod(member)) {
-      e.addFields({ name: '🎉 Community', value: '`/giveaway start` · `/giveaway end` · `/giveaway reroll` · `/giveaway list`\n`/announce` – styled announcement with banner & ping' });
+      e.addFields({
+        name: '🎉 Community',
+        value:
+          '`/giveaway start` · `/giveaway end` · `/giveaway reroll` · `/giveaway list` – `required_role` / `buyers_only` / `min_invites` limit who can enter (checked again at the draw)\n' +
+          '`/announce` – styled announcement with banner & ping',
+      });
       e.addFields({
         name: '🚨 Security',
         value: `\`/lockdown\` · \`/unlock\` – lock the server during a raid${config.security.impersonationAlerts ? '\nLook-alike staff accounts are reported in #automod-logs automatically' : ''}`,

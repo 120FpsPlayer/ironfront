@@ -205,10 +205,13 @@ function howToBuy(x) {
   c.addTextDisplayComponents(
     text(
       `> **1.** Browse the products in ${x.ch('shop')} and click **Buy** next to the one you want\n` +
-        '> **2.** Fill in the short form (quantity + payment method)\n' +
+        '> **2.** Fill in the short form (option, quantity + payment method)\n' +
         `> **3.** A private ticket opens – a ${x.role('seller', 'Seller')} confirms the price and sends payment details\n` +
-        '> **4.** Pay and receive your product right in the ticket\n' +
-        `> **5.** Enjoy – and leave a vouch in ${x.ch('vouches')} ${x.E('star')}`,
+        (config.orders.paymentProofs === false
+          ? '> **4.** Pay and receive your product right in the ticket\n'
+          : "> **4.** Pay, click **I've paid** in the ticket (PIN, screenshot or transaction ID) and receive your product right there\n") +
+        `> **5.** Enjoy – and leave a vouch in ${x.ch('vouches')} ${x.E('star')}\n` +
+        `-# ${config.orders.statusDms === false ? '' : 'You get a DM when your payment is confirmed and when your order is on its way · '}**My orders** in ${x.ch('shop')} shows your orders and receipts`,
     ),
   );
   c.addSeparatorComponents(divider());
@@ -307,11 +310,12 @@ function staffHandbook(x) {
     text(
       `# ${x.E('shield')} Staff handbook\nEverything you need to run **${x.brand}**.\n` +
         `### ${x.E('ticket')} Tickets\n> Claim a ticket before you answer · use \`/reply\` for canned replies\n` +
-        '> In a **Purchase** ticket choose **Order completed** in the ⚙️ menu after delivery – the customer gets the Customer role and a vouch request\n' +
+        '> In a **Purchase** ticket set **Status: Paid** / **In progress** in the ⚙️ menu (the customer gets a DM) and choose **Order completed** after delivery – the customer gets the Customer role and a vouch request\n' +
         `> Transcripts land in ${x.ch('transcripts')}, every action in ${x.ch('ticketLogs')}\n` +
-        `### ${x.E('cart')} Shop\n> \`/product add\` · \`/product edit\` · \`/product stock\` · \`/product remove\` – the ${x.ch('shop')} panel updates by itself\n` +
+        `### ${x.E('cart')} Shop\n> \`/product add\` · \`/product edit\` · \`/product stock\` · \`/product variants\` · \`/product remove\` – the ${x.ch('shop')} panel updates by itself\n` +
+        '> `/sale start` – a flash sale with a countdown · `/product stock count:` – a stock counter that counts down by itself\n' +
         `> New products and restocks are announced in ${x.ch('restocks')} automatically\n` +
-        `### ${x.E('gift')} Community\n> \`/giveaway start\` · \`/giveaway end\` · \`/giveaway reroll\`\n> \`/announce\` – a styled announcement with an optional banner and ping\n` +
+        `### ${x.E('gift')} Community\n> \`/giveaway start\` (optional: customers only, minimum invites) · \`/giveaway end\` · \`/giveaway reroll\`\n> \`/announce\` – a styled announcement with an optional banner and ping\n` +
         `### ${x.E('refresh')} Changing the texts\n> Edit \`config.json\` (texts, payments), restart the bot and run \`/build only:panels\` – every card updates in place · new name style → \`/build only:names\`\n` +
         `### ${x.E('warning')} Golden rules\n> Never ask for payment outside a ticket · stay polite · when unsure, ask a ${x.role('manager', 'Manager')}`,
     ),

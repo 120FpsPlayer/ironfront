@@ -31,8 +31,35 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
 - **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
 - **Payments:** PaysafeCard, Crypto (BTC, ETH) and PayPal – edit them in `config.json`.
-- **Buy → order form → private ticket.** The form asks for quantity, a **payment method** from a list and an optional
-  **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
+- **Buy → order form → private ticket.** The form asks for the option, quantity, a **payment method** from a list and an
+  optional **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
+- **Options** – one product, several prices: `/product variants product:Netflix variants:"1 month = 5, 3 months = 12, 12 months = 40"`
+  (up to 10, separated by `,` `;` or new lines – `none` removes them). The shop shows **from 5€** and every option,
+  the order form asks which one, and the ticket, receipt, #proofs, `/sales` and the weekly report show it ("Netflix — 3 months").
+- **Stock counter** – `/product stock product:Nitro count:12` (or `count:` on `/product add` / `/product edit`): the shop shows
+  **12 left** / **Only 2 left**, every completed order counts it down, at 0 it's **Sold out** (with Notify me) and the team
+  gets a note in #ticket-logs. Nobody can order more than is left. Setting only a status turns the counter off.
+  "Only N left" starts at `shop.lowStockAt` (3).
+- **Flash sales** – `/sale start product:Nitro percent:20 duration:2h` (30m, 2h, 1d, 1h30m – up to 7 days): the shop shows
+  ~~20€~~ **16€** · −20% with a live countdown, orders get the sale price (promo codes come on top), it ends by itself
+  (or `/sale stop`) and is announced in #restocks with the Restocks ping (`announce:false` to skip). `/sale list` shows
+  what's on sale. Only for products whose price – or every option price – is a plain number (`20`, `19.99`, or with the
+  shop currency like `20€`; `$20` in a € shop is refused).
+- **Badges** – 🔥 **Bestseller** on the product with the most units sold (at least 3) and ⭐ **4.9** – the average vouch
+  rating of a product (from 2 vouches). The shop updates after every completed order. Turn them off or change the limits
+  in `config.json → badges`.
+- **"I've paid"** – the order ticket has an **I've paid** button for the customer: they send their PaysafeCard PIN(s)
+  (checked: 16 digits each), screenshots and/or a transaction ID. The seller handling the ticket (or the sellers, while
+  nobody has claimed it) is pinged, the screenshots are kept in the ticket, and the log only shows the last 4 digits of
+  a PIN. A corrected PIN can be sent again after a minute – it only pings the team again after the Call support
+  cooldown (`defaults.pingStaffCooldownMinutes`), or right away once a seller set the order back to Awaiting payment.
+  Turn it off with `orders.paymentProofs`.
+- **Order status** – ⚙️ Manage ticket → **Status: Paid / In progress / Awaiting payment**. The ticket shows the status
+  (⏳ Awaiting payment → 📨 Payment sent → 💳 Paid → 🔧 In progress → ✅ Delivered) and the customer gets a short DM
+  with a link to the ticket (`orders.statusDms`). "Order completed" = Delivered – the receipt says so.
+- **My orders** – a button under the shop (on every page) shows each member, privately, their open orders with their
+  status, total and a link to the ticket, and all their completed orders (10 per page, ◀ Newer / ▶ Older) with a
+  receipt for each.
 - **Discount codes** – `/promo create code:NOX10 percent:10` (or an amount off), with expiry, max uses, once per member,
   first order only.
 - **Order completed** (ticket menu → confirm the amount paid) → the sale is recorded, the buyer gets a **receipt by DM**,
@@ -52,6 +79,10 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 - **`/customer view @user`** – orders, total spent, last orders, tickets, vouches, invites and **private staff notes**
   (`/customer note add`).
 - **Automatic backups** – every 24 hours the bot posts a backup of its data in #backups (admins only); `/backup` makes one now.
+- **Unclaimed ticket reminders** – while the shop is open, tickets nobody has claimed for 15 minutes are listed in
+  #staff-chat (one message, with links, pinging the staff roles of those tickets), again every 60 minutes until someone
+  claims them. Tickets from the night are reminded when the shop opens. `staffReminders` in `config.json`
+  (`repeatMinutes: 0` = only once).
 
 ### 🛡️ Security & growth
 - **Look-alike alerts** – someone joins as "supp0rt_nox" or copies a staff member's avatar? Staff get an alert in
@@ -79,7 +110,10 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 - Every attempt is logged in #verify-logs. Existing members get the Member role automatically during `/build`.
 
 ### 🎉 Community
-- **Giveaways** – Enter button, live entry count, automatic winner draw, reroll, required role; winners claim through a ticket.
+- **Giveaways** – Enter button, live entry count, automatic winner draw, reroll; entry requirements: a **required role**,
+  **customers only** (`buyers_only:`) and **at least N invites** (`min_invites:` – only invited members who verified and
+  are still here count); every requirement is checked again for the winners at the draw and on rerolls; winners claim
+  through a ticket.
 - **Notification roles** in #roles (Announcements / Giveaways / Restocks).
 - **`/announce`** – a form that posts a styled announcement with a banner, an optional button and a ping.
 - **Welcome cards** in #welcome, **logs** for joins, leaves, deleted and edited messages.
@@ -176,7 +210,8 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
 | `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
 | `/build only:names` | Rename all channels & categories to the name style from `config.json` (e.g. after an update) – nothing else changes | Owner, admins |
-| `/product add / edit / stock / remove / list` | Manage the shop (categories, images, stock) – the #shop panel updates by itself | Admins, sellers |
+| `/product add / edit / stock / variants / remove / list` | Manage the shop (categories, images, options, stock counter) – the #shop panel updates by itself | Admins, sellers |
+| `/sale start / stop / list` | Flash sales – a percentage off a product for a while, with a countdown in the shop | Admins, sellers |
 | `/promo create / list / info / delete` | Discount codes | Admins, sellers |
 | `/shop open / close / auto / status` | Open or close the shop by hand, or follow the opening hours again | Admins, sellers |
 | `/sales` | Sales statistics | Admins, sellers |
@@ -185,7 +220,7 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | `/backup` | Back up the bot data now (it also happens automatically) | Admins |
 | `/invites stats / top` | Your invites, the next reward and the top inviters | Everyone |
 | `/vouch` | Leave a review (with optional screenshot) | Everyone |
-| `/giveaway start / end / reroll / list` | Giveaways | Moderators+ |
+| `/giveaway start / end / reroll / list` | Giveaways (start: optional `required_role`, `buyers_only`, `min_invites`) | Moderators+ |
 | `/announce` | Styled announcement with banner, button and ping | Moderators+ |
 | `/ticket info / close` | Your ticket | Ticket author |
 | `/ticket claim / unclaim / add / remove / priority / move / rename / request-close / complete` | Handle tickets (`complete amount:` = what the customer paid) | Staff |
@@ -204,12 +239,16 @@ Admin commands are hidden from normal members automatically.
 
 1. A customer clicks **Buy** next to a product in #shop – that's the only way to buy. The **Purchase** entry in the ticket
    panel, *How to buy* and *Payments* all send people to #shop (`"shopOnly": true` on the `order` ticket type).
-2. They choose the quantity, a payment method and (optionally) a promo code → a **private ticket** opens with the total to pay.
-   Sellers and support are pinged. Outside the opening hours the ticket says when you're back.
-3. A seller claims it, sends the payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
+2. They choose the option, quantity, a payment method and (optionally) a promo code → a **private ticket** opens with the
+   total to pay (with the flash sale price, if one is running). Sellers and support are pinged. Outside the opening hours
+   the ticket says when you're back. Nobody claims it within 15 minutes? The team is reminded in #staff-chat.
+3. A seller claims it and sends the payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
+   The customer pays and clicks **I've paid** (PIN / screenshot / transaction ID) – the seller is pinged, checks it and sets
+   **⚙️ → Status: Paid**, later **Status: In progress**; the customer gets a DM for each step.
 4. After delivery the seller picks **⚙️ Manage ticket → Order completed** and confirms the amount paid:
-   the sale is recorded for `/sales`, the customer gets a **receipt by DM**, the **Customer** role (and **Loyal Customer**
-   after 5 orders) and a **Leave a vouch** button, and an anonymous proof appears in #proofs.
+   the sale is recorded for `/sales`, the stock counter goes down, the customer gets a **receipt by DM** (✅ Delivered),
+   the **Customer** role (and **Loyal Customer** after 5 orders) and a **Leave a vouch** button, and an anonymous proof
+   appears in #proofs. The order and its receipt stay in the customer's **My orders**.
 5. The ticket is closed – the customer gets the transcript and a rating request by DM, the transcript is saved in #transcripts.
 6. 24 hours later the customer gets a friendly vouch reminder (unless they already left one).
 
@@ -223,9 +262,11 @@ Admin commands are hidden from normal members automatically.
 | `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `eclipse-nox`, `eclipse`, `eclipse-wordmark`, `night` or `neon`), Community mode, verification level, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`), **name style** (see below) |
 | `emojis` | Upload custom emojis, emoji name prefix |
 | `verification` | Math question on/off, minimum account age in days |
-| `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods** |
+| `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods**, `lowStockAt` (a stock counter at or below this shows "🟠 Only N left", default 3) |
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
-| `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off) |
+| `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **I've paid** button (`paymentProofs`) |
+| `badges` | 🔥 Bestseller and ⭐ rating in the shop on/off (`enabled`), units sold for Bestseller (`bestsellerMinSales`, 3), vouches needed for a rating (`ratingMinVouches`, 2) |
+| `staffReminders` | Unclaimed ticket reminders on/off, after how many minutes (`unclaimedMinutes`, 15) and how often again (`repeatMinutes`, 60 – `0` = once) |
 | `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
 | `workingHours`, `shopStatus` | Opening hours (default **10:00–20:00 every day, Europe/Warsaw**); the open/closed status channel on/off (`enabled`) and its names |
 | `invites` | Invite tracking on/off and the rewards (`{ "invites": 5, "percent": 10 }` …) |
@@ -321,7 +362,8 @@ src/
 ├── builder/                 /build – layout, permissions, content, executor, emoji upload
 ├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
 │                            announcements, welcome/logs, stats, sales report, backups, customer profiles,
-│                            Notify me, invites, lockdown, look-alike alerts, housekeeping
+│                            Notify me, invites, lockdown, look-alike alerts, housekeeping, flash sales, badges,
+│                            I've paid, order status, My orders, staff reminders
 ├── tickets/                 ticket system, cards, HTML transcripts
 ├── commands/                slash commands
 ├── handlers/interactions.js buttons, menus and forms
@@ -334,9 +376,10 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-177 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+260 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
-every permission, the shop → ticket → order → vouch flow, promo code limits (also for orders placed at the same moment),
+every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
+order status DMs, My orders, staff reminders, giveaway requirements, promo code limits (also for orders placed at the same moment),
 opening hours across summer/winter time, lockdown, invite rewards, in-place panel updates, verification, giveaways, ratings and more.
 
 ---

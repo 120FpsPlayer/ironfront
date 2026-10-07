@@ -82,7 +82,7 @@ function guild(guildId) {
   g.build ??= null;
   g.emojis ??= {};
   g.products ??= []; // see PRODUCT below
-  g.vouches ??= [];
+  g.vouches ??= []; // { n, userId, rating, product, productId, review, at, messageId } – productId on newer vouches
   g.orders ??= {};
   g.giveaways ??= {};
   g.activity ??= { total: {}, weekKey: null, week: {} };
@@ -186,9 +186,14 @@ module.exports = {
    *
    * ORDER – ticket.order of an order ticket placed in the shop:
    * { productId, product, variant, unitPrice, quantity, method, methodIndex, promo, discount, subtotal, total,
-   *   salePercent, status, statusAt, statusBy, history, payment }
-   *   variant – the variant's name (product = "Name — variant"); salePercent – the flash sale it was bought in
-   *   status  – see src/lib/orderStatus.js; payment – what "I've paid" sent: { at, method, note, files }
+   *   salePercent, listPrice, status, statusAt, statusBy, history, payment }
+   *   variant – the variant's name (product = "Name — variant"); salePercent – the flash sale it was bought in,
+   *             listPrice – the unit price before that sale (both only when a sale applied)
+   *   status  – see src/lib/orderStatus.js; history – the last 20 changes
+   *   payment – what "I've paid" sent: { at, method, note, pins, files: [{ name, url }], messageId } (src/features/payments.js)
+   *
+   * Order and other tickets also keep unclaimedAt (when staff last unclaimed it) and unclaimedRemindedAt (the last
+   * "nobody has claimed this" reminder in the staff chat – src/features/staffreminders.js).
    */
 
   // ───────────── Sales ─────────────
