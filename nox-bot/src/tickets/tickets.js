@@ -542,7 +542,8 @@ async function unclaimTicket(channel, member) {
   const ticket = requireOpen(channel);
   if (!ticket.claimedBy) throw new UserError('Nobody has claimed this ticket.');
   if (ticket.claimedBy !== member.id && !isAdmin(member)) throw new UserError('Only the person handling the ticket (or an administrator) can unclaim it.');
-  db.updateTicket(channel.id, { claimedBy: null });
+  // unclaimedAt: the unclaimed-ticket reminders (features/staffreminders.js) count from here again.
+  db.updateTicket(channel.id, { claimedBy: null, unclaimedAt: Date.now() });
   await refreshControlMessage(channel, ticket);
   await channel.send(ui.notice(COLORS.warning, `↩️ ${member} is no longer handling this ticket – waiting for another staff member.`));
 }

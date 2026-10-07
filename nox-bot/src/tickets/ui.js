@@ -18,7 +18,8 @@ const { e, ce, COLORS } = require('../lib/theme');
 const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money } = require('../lib/utils');
 const shop = require('../features/shop'); // used at render time – safe with circular requires
 const productImages = require('../lib/productImages');
-const { SPACER, text, divider, btn, linkBtn, row, section, container, header, v2, notice, channelUrl } = require('../lib/v2');
+const { ORDER_STATUS, statusOf, statusLabel } = require('../lib/orderStatus');
+const { SPACER, text, divider, btn, linkBtn, row, section, buttonSection, container, header, v2, notice, channelUrl } = require('../lib/v2');
 
 /** Custom NØX emoji for a ticket type (falls back to the Unicode emoji from config.json). */
 const typeEmoji = (guild, type) => (type?.icon && guild ? ce(guild, type.icon) : type?.emoji ?? '🎫');
@@ -82,15 +83,49 @@ function panelPayload(guild, style = 'buttons') {
   return v2(c);
 }
 
+/** "**Order:** 💳 Paid · <t:…:R>" for order tickets (null for other tickets). */
+function orderStatusLine(ticket) {
+  const status = statusOf(ticket) ?? (ticket.completedAt ? 'delivered' : null);
+  if (!status) return null;
+  const at = { delivered: ticket.completedAt, cancelled: ticket.closedAt }[status] ?? (ticket.order?.status === status ? ticket.order.statusAt : null);
+  return `**Order:** ${statusLabel(status)}${at ? ` · ${ts(at, 'R')}` : ''}`;
+}
+
 function statusLine(ticket) {
   const p = PRIORITIES[ticket.priority] ?? PRIORITIES.normal;
   const status = ticket.status === 'open' ? '🟢 Open' : '🔴 Closed';
   const claim = ticket.claimedBy ? `<@${ticket.claimedBy}>` : '*waiting to be claimed*';
+  const order = orderStatusLine(ticket);
   return (
     `**Status:** ${status}${SPACER}**Priority:** ${p.emoji} ${p.label}\n` +
     `**Handled by:** ${claim}${SPACER}**Created:** ${ts(ticket.createdAt, 'R')}` +
-    (ticket.completedAt ? `\n**Order:** ✅ completed ${ts(ticket.completedAt, 'R')}` : '')
+    (order ? `\n${order}` : '')
   );
+}
+
+/** Does the order take PaysafeCard PINs – PaysafeCard, or no payment method known. */
+const takesPins = (method) => !String(method ?? '').trim() || /paysafe/i.test(String(method));
+
+/** Can the customer send their payment ("I've paid") – an open order that waits for its payment. */
+function acceptsPayment(ticket) {
+  return (
+    config.orders?.paymentProofs !== false &&
+    ticket?.typeId === 'order' &&
+    ticket.status === 'open' &&
+    !ticket.completedAt &&
+    ['awaiting', 'sent'].includes(statusOf(ticket))
+  );
+}
+
+/** "I've paid" on the order card (src/features/payments.js). */
+function paymentSection(ticket) {
+  const sent = statusOf(ticket) === 'sent' ? ticket.order?.payment : null; // not after staff set it back to awaiting
+  const method = ticket.order ? ticket.order.method : require('./tickets').orderDetails(ticket).method; // here – tickets.js needs this file
+  const proof = takesPins(method) ? 'your PaysafeCard PIN, a screenshot or the transaction ID' : 'a screenshot or the transaction ID';
+  const content = sent?.at
+    ? `📨 **Payment sent ${ts(sent.at, 'R')}** – a seller is checking it.\n-# Made a mistake? Click **I've paid** again to send a correction.`
+    : `💳 **Paid already?** Click **I've paid** and send ${proof} – the seller is notified right away.`;
+  return buttonSection(content, btn('pay:open', "I've paid", '💳', ButtonStyle.Success));
 }
 
 function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [], previousCount = 0 } = {}) {
@@ -128,6 +163,7 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
 
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(text(statusLine(ticket)));
+  if (acceptsPayment(ticket)) c.addSectionComponents(paymentSection(ticket));
 
   if (ticket.participants?.length) {
     c.addTextDisplayComponents(text(`**Added members:** ${ticket.participants.map((id) => `<@${id}>`).join(', ')}`));
@@ -160,6 +196,13 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
   return v2(c, { mentions: { users: [ticket.ownerId], roles: pingRoles }, files: picture ? [picture.file] : [] });
 }
 
+/** What the "Status: …" options of the ⚙️ menu do (src/features/orderstatus.js). */
+const STATUS_OPTIONS = {
+  paid: 'The payment is confirmed',
+  progress: 'You are preparing / delivering the order',
+  awaiting: 'Undo – still waiting for the payment',
+};
+
 function manageSelect(ticket, guild) {
   const options = [];
   if (ticket.typeId === 'order' && !ticket.completedAt) {
@@ -169,6 +212,12 @@ function manageSelect(ticket, guild) {
       emoji: guild ? ce(guild, 'check') : '✅',
       description: 'Confirm the amount paid – records the sale, gives the Customer role',
     });
+    const current = statusOf(ticket);
+    const dm = config.orders?.statusDms !== false ? ' – DMs the customer' : '';
+    for (const [key, what] of Object.entries(STATUS_OPTIONS)) {
+      if (key === current) continue;
+      options.push({ label: `Status: ${ORDER_STATUS[key].label}`, value: `status:${key}`, emoji: ORDER_STATUS[key].emoji, description: `${what}${dm}` });
+    }
   }
   for (const [value, p] of Object.entries(PRIORITIES)) {
     if (value === ticket.priority) continue;
@@ -298,6 +347,9 @@ module.exports = {
   typeEmoji,
   typeText,
   panelPayload,
+  orderStatusLine,
+  takesPins,
+  acceptsPayment,
   ticketCard,
   closedCard,
   closeRequestCard,

@@ -5,6 +5,7 @@
  * records the sale and emits orderCompleted), plus the first-purchase discount:
  *
  *   receipt           DM to the customer with the order details           config.orders.receipts
+ *                     (it says "✅ Delivered" – the status DM of features/orderstatus.js is left out then)
  *   proof             anonymous "Order delivered" card in #proofs           config.orders.proofs
  *   vouch reminder    one DM "How was your order?" some hours later         config.orders.vouchReminderHours (0 = off)
  *   welcome discount  personal first-order code by DM after verifying       config.welcomeDiscount
@@ -23,6 +24,7 @@ const promos = require('./promos');
 const vouches = require('./vouches');
 const tickets = require('../tickets/tickets');
 const ui = require('../tickets/ui');
+const { statusLabel } = require('../lib/orderStatus');
 const { e, ce, COLORS } = require('../lib/theme');
 const { UserError, reply, isStaff, money, parseAmount, pad, ts, duration, truncate, sendToChannel } = require('../lib/utils');
 const { SPACER, container, text, divider, btn, linkBtn, row, header, v2, channelUrl } = require('../lib/v2');
@@ -86,6 +88,7 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
   c.addSeparatorComponents(divider());
   const lines = [
     `**Order:** \`#${pad(sale.ticketNumber)}\`${SPACER}**Receipt:** \`${sale.id}\``,
+    `**Status:** ${statusLabel('delivered')}`,
     `**Product:** ${productEmoji(guild, catalogProduct(guild.id, sale))} ${truncate(sale.product ?? 'Custom order', 100)} × ${sale.quantity}`,
   ];
   if (order.unitPrice != null) lines.push(`**Unit price:** ${money(order.unitPrice)}`);

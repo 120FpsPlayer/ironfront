@@ -314,14 +314,14 @@ test('receipt by DM: order details, total paid, seller, server and a vouch butto
   assert.match(textOf(lastResponse(done)), /Order completed/);
   assert.equal(guild.dms.filter((d) => d.to === shy.id).length, 0);
 
-  // Receipts turned off
+  // Receipts turned off (the short "✅ Delivered" status DM of features/orderstatus.js goes out instead)
   config.orders.receipts = false;
   try {
     const quiet = member(guild);
     const o3 = await order(guild, quiet, product);
-    const before = guild.dms.filter((d) => d.to === quiet.id).length;
+    const receipts = () => guild.dms.filter((d) => d.to === quiet.id && /Here is your receipt/.test(textOf(d.payload))).length;
     await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '10' }, channel: o3.channel });
-    assert.equal(guild.dms.filter((d) => d.to === quiet.id).length, before);
+    assert.equal(receipts(), 0);
   } finally {
     config.orders.receipts = true;
   }

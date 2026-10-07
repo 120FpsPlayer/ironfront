@@ -8,8 +8,9 @@ const { validateMessage, validateModal } = require('./fakeDiscord');
  * like Discord would, and recorded in `state` so tests can inspect it.
  *
  * kind: 'command' | 'button' | 'select' | 'userselect' | 'modal' | 'autocomplete'
+ * uploads: files of a form's file upload fields – { [customId]: [{ name, url, size, contentType }] }
  */
-function createInteraction({ guild, member, kind = 'button', customId, values, fields = {}, selects = {}, options = {}, subcommand = null, commandName, channel, message = null, focused = '', focusedOption = null }) {
+function createInteraction({ guild, member, kind = 'button', customId, values, fields = {}, selects = {}, uploads = {}, options = {}, subcommand = null, commandName, channel, message = null, focused = '', focusedOption = null }) {
   const state = { replies: [], updates: [], edits: [], modals: [], followUps: [], responded: null };
   const record = (bucket) => async (payload) => {
     if (typeof payload === 'string') payload = { content: payload };
@@ -53,6 +54,15 @@ function createInteraction({ guild, member, kind = 'button', customId, values, f
       getStringSelectValues: (id) => {
         if (!(id in selects)) throw new Error(`no select ${id}`);
         return selects[id];
+      },
+      // Like discord.js: a Collection of attachments, or null when nothing was uploaded.
+      getUploadedFiles: (id, required = false) => {
+        const list = uploads[id] ?? [];
+        if (!list.length) {
+          if (required) throw new Error(`no files in ${id}`);
+          return null;
+        }
+        return new Collection(list.map((a, i) => [String(i + 1), { id: String(i + 1), size: 1000, contentType: 'image/png', ...a }]));
       },
     },
     options: {
