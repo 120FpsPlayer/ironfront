@@ -35,6 +35,8 @@ function fakeStripe() {
   const sessions = new Map();
   const calls = [];
   let seq = 0;
+  let failNextCreate = false;
+  let longUrl = 0;
   const realFetch = global.fetch;
   global.fetch = async (url, opts = {}) => {
     const u = new URL(url);
@@ -45,18 +47,33 @@ function fakeStripe() {
     const json = (status, body) => ({ ok: status < 300, status, json: async () => body });
     if (opts.method === 'POST' && u.pathname === '/v1/checkout/sessions') {
       seq += 1;
-      const s = { id: `cs_test_${seq}`, url: `https://checkout.stripe.com/c/pay/cs_test_${seq}`, status: 'open', payment_status: 'unpaid', amount_total: Number(params['line_items[0][price_data][unit_amount]']), expires_at: Number(params.expires_at), payment_intent: null };
+      const s = { id: `cs_test_${seq}`, url: `https://checkout.stripe.com/c/pay/cs_test_${seq}${'x'.repeat(longUrl)}`, status: 'open', payment_status: 'unpaid', currency: params['line_items[0][price_data][currency]'], amount_total: Number(params['line_items[0][price_data][unit_amount]']), expires_at: Number(params.expires_at), payment_intent: null };
       sessions.set(s.id, s);
+      if (failNextCreate) {
+        failNextCreate = false;
+        throw new Error('The operation was aborted due to timeout'); // created on Stripe, but the answer never arrived
+      }
       return json(200, s);
     }
     const m = /^\/v1\/checkout\/sessions\/([^/]+)(\/expire)?$/.exec(u.pathname);
     const s = m && sessions.get(m[1]);
     if (!s) return json(404, { error: { message: 'No such checkout session' } });
-    if (m[2]) s.status = 'expired';
+    if (m[2]) {
+      // Like Stripe: only open sessions can be expired
+      if (s.status !== 'open') return json(400, { error: { message: 'Only Checkout Sessions with a status in [open] can be expired.' } });
+      s.status = 'expired';
+    }
     return json(200, s);
   };
   const pay = (id, amount) => Object.assign(sessions.get(id), { status: 'complete', payment_status: 'paid', payment_intent: `pi_${id}`, ...(amount != null && { amount_total: amount }) });
-  return { sessions, calls, pay, restore: () => (global.fetch = realFetch) };
+  return {
+    sessions,
+    calls,
+    pay,
+    failNextCreate: () => (failNextCreate = true),
+    longUrls: (n) => (longUrl = n),
+    restore: () => (global.fetch = realFetch),
+  };
 }
 
 async function shopGuild() {
@@ -249,5 +266,166 @@ test('other payment methods, no fixed total or a refused key → no link, a clea
     const failed = await order(guild, member(guild), product);
     assert.equal(failed.ticket().order.stripe, undefined);
     assert.ok(failed.channel.messageList.some((m) => /link couldn't be made right now/.test(textOf(m.body ?? m))));
+  });
+});
+
+// ───────────── Money safety (review findings) ─────────────
+
+test('a link paid moments before "New link" is recorded – no second link, nobody pays twice', async () => {
+  await withKey(async (api) => {
+    const { guild, product } = await shopGuild();
+    const buyer = member(guild);
+    const { channel, ticket } = await order(guild, buyer, product);
+    api.pay('cs_test_1'); // paid – the next check is still up to 30 s away
+    const i = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
+    assert.match(textOf(lastResponse(i)), /Your payment just came in/);
+    assert.equal(api.sessions.size, 1, 'no new session');
+    assert.equal(ticket().order.stripe.status, 'paid');
+    assert.equal(statusOf(ticket()), 'paid');
+  });
+});
+
+test('staff set Paid while the customer also paid by Stripe → recorded as paid with a "paid twice?" warning, never "expired"', async () => {
+  await withKey(async (api) => {
+    const { guild, product, seller } = await shopGuild();
+    const { channel, ticket } = await order(guild, member(guild), product);
+    api.pay('cs_test_1');
+    await orderstatus.setStatus(channel, 'paid', seller);
+    assert.equal(ticket().order.stripe.status, 'paid');
+    assert.equal(ticket().order.stripe.paymentIntent, 'pi_cs_test_1');
+    assert.ok(channel.messageList.some((m) => /may have paid twice/.test(textOf(m.body ?? m))));
+    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Paid with Stripe/);
+  });
+});
+
+test('deleted tickets: the link is stopped – and a payment that still comes in is logged with a ping', async () => {
+  await withKey(async (api) => {
+    const { guild, product, seller } = await shopGuild();
+    const first = await order(guild, member(guild), product);
+    await t.deleteTicket(first.channel, seller);
+    await stripe.checkPayments(guild.client);
+    assert.ok(api.calls.some((c) => c.path === '/v1/checkout/sessions/cs_test_1/expire'));
+    assert.equal(first.ticket().order.stripe.status, 'expired');
+
+    const second = await order(guild, member(guild), product);
+    api.pay('cs_test_2');
+    await t.deleteTicket(second.channel, seller);
+    await stripe.checkPayments(guild.client);
+    assert.equal(second.ticket().order.stripe.status, 'paid');
+    const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
+    const body = log.body ?? log;
+    assert.match(JSON.stringify(body), /Stripe payment received[\s\S]*deleted/);
+    assert.deepEqual(body.allowedMentions, { users: [], roles: [role(guild, 'seller')] });
+  });
+});
+
+test('a link made half-way (Stripe created it, the answer got lost) never blocks the next one – each try has its own key', async () => {
+  await withKey(async (api) => {
+    const { guild, product } = await shopGuild();
+    const buyer = member(guild);
+    const { channel, ticket } = await order(guild, buyer, product);
+    api.sessions.get('cs_test_1').status = 'expired';
+    await stripe.checkPayments(guild.client);
+    api.failNextCreate();
+    const failed = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
+    assert.match(textOf(lastResponse(failed)), /Stripe couldn't make a link right now/);
+    // A minute later
+    const prev = Date.now;
+    Date.now = () => prev() + 61_000;
+    try {
+      const ok = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
+      assert.match(textOf(lastResponse(ok)), /new payment link/);
+    } finally {
+      Date.now = prev;
+    }
+    const keys = api.calls.filter((c) => c.path === '/v1/checkout/sessions').map((c) => c.idempotencyKey);
+    assert.deepEqual(keys, [`nox-${channel.id}-1`, `nox-${channel.id}-2`, `nox-${channel.id}-3`]);
+    assert.equal(ticket().order.stripe.status, 'open');
+  });
+});
+
+test('currency: an unclear shop currency makes no links; zero-decimal currencies are not charged 100×', async () => {
+  await withKey(async (api) => {
+    const { guild, product } = await shopGuild();
+    const prev = { shop: config.shop.currency, stripe: config.stripe.currency };
+    try {
+      config.shop.currency = 'kr'; // SEK, NOK or DKK?
+      assert.equal(stripe.currency(), null);
+      assert.equal(stripe.enabled(), false);
+      await order(guild, member(guild), product);
+      assert.equal(api.calls.length, 0);
+
+      config.stripe.currency = 'sek';
+      assert.equal(stripe.currency(), 'sek');
+      config.shop.currency = '¥';
+      config.stripe.currency = '';
+      await order(guild, member(guild), product, { quantity: '1' });
+      const create = api.calls.find((c) => c.path === '/v1/checkout/sessions');
+      assert.equal(create.params['line_items[0][price_data][currency]'], 'jpy');
+      assert.equal(create.params['line_items[0][price_data][unit_amount]'], '12', '¥12 is 12, not 1200');
+    } finally {
+      config.shop.currency = prev.shop;
+      config.stripe.currency = prev.stripe;
+    }
+  });
+});
+
+test('paid amount different from the order total → not set to Paid, the team is asked to check', async () => {
+  await withKey(async (api) => {
+    const { guild, product } = await shopGuild();
+    const { channel, ticket } = await order(guild, member(guild), product, { quantity: '2' });
+    api.pay('cs_test_1', 1200); // 12€ came in, the order is 24€
+    await stripe.checkPayments(guild.client);
+    assert.equal(ticket().order.stripe.status, 'paid');
+    assert.equal(statusOf(ticket()), 'awaiting', 'not Paid');
+    assert.ok(channel.messageList.some((m) => /order total is \*\*24€\*\* – it was \*\*not\*\* set to Paid/.test(textOf(m.body ?? m))));
+  });
+});
+
+test('paid while the ticket was closed → recorded as Paid, so reopening keeps the order paid', async () => {
+  await withKey(async (api) => {
+    const { guild, product, seller } = await shopGuild();
+    const { channel, ticket } = await order(guild, member(guild), product);
+    await t.closeTicket(channel, seller, 'No answer');
+    api.pay('cs_test_1');
+    await stripe.checkPayments(guild.client);
+    assert.equal(ticket().order.status, 'paid');
+    await t.reopenTicket(channel, seller);
+    assert.equal(statusOf(ticket()), 'paid');
+  });
+});
+
+test('a refused key: the team is told once in the log, and I\'ve paid comes back for the customer', async () => {
+  await withKey(async () => {
+    const { guild, product } = await shopGuild();
+    const buyer = member(guild);
+    const { channel, ticket } = await order(guild, buyer, product);
+    assert.equal(stripe.confirmsItself(ticket()), true);
+    global.fetch = async () => ({ ok: false, status: 401, json: async () => ({ error: { message: 'Invalid API Key provided' } }) });
+    const logs = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList;
+    const before = logs.length;
+    await stripe.checkPayments(guild.client);
+    await stripe.checkPayments(guild.client);
+    const warnings = logs.slice(before).filter((m) => /Stripe refused the key/.test(JSON.stringify(m.body ?? m)));
+    assert.equal(warnings.length, 1, 'once');
+    assert.equal(stripe.confirmsItself(ticket()), false);
+    const pay = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
+    assert.ok(!/Stripe/.test(textOf(lastResponse(pay)) ?? ''), "I've paid works again");
+  });
+});
+
+test('a link Stripe no longer knows (test key → live key) stops being checked; long links go into the text', async () => {
+  await withKey(async (api) => {
+    const { guild, product } = await shopGuild();
+    const { ticket } = await order(guild, member(guild), product);
+    api.sessions.delete('cs_test_1');
+    await stripe.checkPayments(guild.client);
+    assert.equal(ticket().order.stripe.status, 'expired');
+
+    api.longUrls(600);
+    const { channel } = await order(guild, member(guild), product);
+    const card = stripeCard(channel).body ?? stripeCard(channel);
+    validateMessage(card, guild);
+    assert.match(textOf(card), /\[💳 Pay 24€\]\(https:\/\/checkout\.stripe\.com/);
   });
 });

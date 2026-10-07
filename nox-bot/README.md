@@ -35,8 +35,10 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   **Pay 24€** link in its ticket right away. Once the customer has paid, the bot sees it within 30 seconds, sets the
   order to **Paid**, tells the customer and pings the seller – nobody has to check anything by hand. No website or
   webhook needed, it works on any host. Links last 23 hours (then a **New payment link** button appears); a link stops
-  working when the order is paid another way or the ticket is closed, so nobody pays twice. Without a key Stripe is
-  just a payment method in the list and the seller sends a link by hand.
+  working when the order is paid another way or the ticket is closed or deleted, so nobody pays twice – and a payment
+  that still comes in is never lost: it's recorded and the team is told. The order is only set to Paid when the amount
+  matches its total (otherwise staff are asked to check). Without a key Stripe is just a payment method in the list
+  and the seller sends a link by hand.
 - **Buy → order form → private ticket.** The form asks for the option, quantity, a **payment method** from a list and an
   optional **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
 - **Options** – one product, several prices: `/product variants product:Netflix variants:"1 month = 5, 3 months = 12, 12 months = 40"`
@@ -295,7 +297,8 @@ then **restart the bot** and run **`/build only:panels`** – every banner and c
 (`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…). The default is PaysafeCard,
 Crypto (BTC, ETH), PayPal and Stripe. The entry with `"stripe": true` gets the automatic card payment links
 (only with `STRIPE_SECRET_KEY` in `.env`); `stripe.currency` sets the Stripe currency (`eur`, `usd`, `pln`… – empty =
-from `shop.currency`), `stripe.enabled: false` turns the links off.
+from `shop.currency`: € → eur, $ → usd, £ → gbp, zł → pln; for `kr` and other unclear signs set it, otherwise no
+links are made), `stripe.enabled: false` turns the links off.
 
 **Name style** – `server.channelStyle` (default `{emoji}┃{name}`), `server.categoryStyle` (default `〔 {name} 〕`)
 and `server.smallCaps` (`true` → `📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ`, `false` → `📦┃how-to-buy`). Ticket channels follow `channelNameFormat`
@@ -389,7 +392,7 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-271 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+280 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
 order status DMs, My orders, staff reminders, Stripe payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
