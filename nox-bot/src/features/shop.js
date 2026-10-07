@@ -492,15 +492,23 @@ function stockPatch({ stock = null, count = null } = {}) {
   return { stock, stockCount: null };
 }
 
-/** Why a product can't be on a flash sale – its price (or an option's price) is not a plain number – or null. */
-function saleProblem(p) {
-  const options = variantsOf(p);
-  if (!options.length) return parseAmount(p.price) == null ? `its price "${truncate(p.price, 40)}" is not a plain number (like \`20\` or \`19.99\`)` : null;
-  const bad = options.find((v) => parseAmount(v.price) == null);
-  return bad ? `the price of the option **${truncate(bad.name, 50)}** ("${truncate(bad.price, 40)}") is not a plain number (like \`5\` or \`4.99\`)` : null;
+/** A price a flash sale can reduce: "20", "19.99", "20€" → the amount; text or another currency ("$20" in a € shop) → null. */
+function saleAmount(raw) {
+  const rest = String(raw ?? '').replace(config.shop.currency ?? '€', '');
+  return /[€$£]/.test(rest) ? null : parseAmount(raw);
 }
 
-/** A change that would leave a product on sale with a price that isn't a number is refused. */
+/** Why a product can't be on a flash sale – its price (or an option's price) is not a plain number in the shop currency – or null. */
+function saleProblem(p) {
+  const currency = config.shop.currency ?? '€';
+  const why = (price, example) => (parseAmount(price) == null ? `is not a plain number (like ${example})` : `is in another currency than the shop's${currency ? ` (${currency})` : ''}`);
+  const options = variantsOf(p);
+  if (!options.length) return saleAmount(p.price) == null ? `its price "${truncate(p.price, 40)}" ${why(p.price, '`20` or `19.99`')}` : null;
+  const bad = options.find((v) => saleAmount(v.price) == null);
+  return bad ? `the price of the option **${truncate(bad.name, 50)}** ("${truncate(bad.price, 40)}") ${why(bad.price, '`5` or `4.99`')}` : null;
+}
+
+/** A change that would leave a product on sale with a price it can't reduce (see saleProblem) is refused. */
 function assertSaleStillWorks(p, next) {
   if (!activeSale(p)) return;
   const problem = saleProblem({ ...p, ...next });
@@ -617,6 +625,12 @@ async function countDown({ guild, sale }) {
   return left;
 }
 hooks.on('orderCompleted', countDown);
+
+/** Every sale of a catalog product can move the 🔥 Bestseller badge – the panel is refreshed even when the stock isn't counted. */
+function afterSale({ guild, sale }) {
+  if (sale && productBadges.enabled() && productBadges.productOf(products(guild.id), sale)) refreshShop(guild);
+}
+hooks.on('orderCompleted', afterSale);
 
 // ───────────── Variants (/product variants) ─────────────
 
@@ -831,7 +845,7 @@ function recheckOrderPromo(guildId, ticket) {
   });
   if (!error) return null;
   const subtotal = order.subtotal ?? null;
-  const price = { unitPrice: order.unitPrice ?? null, salePercent: order.salePercent ?? null, subtotal, total: subtotal, discount: 0, code: order.promo, promo: null, error };
+  const price = { unitPrice: order.unitPrice ?? null, listPrice: order.listPrice ?? null, salePercent: order.salePercent ?? null, subtotal, total: subtotal, discount: 0, code: order.promo, promo: null, error };
   const answers = (ticket.answers ?? []).filter((a) => a.label !== 'Price' && a.label !== 'Promo code');
   return {
     code: order.promo,
@@ -928,7 +942,7 @@ async function submitOrder(interaction, productId) {
     discount: price.discount,
     subtotal: price.subtotal,
     total: price.total,
-    ...(price.salePercent && { salePercent: price.salePercent }),
+    ...(price.salePercent && { salePercent: price.salePercent, listPrice: price.listPrice }), // listPrice: the unit price before the sale
   };
 
   // From here on this order holds its code (and counts as an open order of this member) – opening the

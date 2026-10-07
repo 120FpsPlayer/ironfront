@@ -73,4 +73,4 @@ function compute(guildId) {
   return out;
 }
 
-module.exports = { finder, productOf, bestseller, ratings, compute };
+module.exports = { enabled, finder, productOf, bestseller, ratings, compute };

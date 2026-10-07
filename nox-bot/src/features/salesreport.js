@@ -208,7 +208,13 @@ function summarize(guildId, { from, to }) {
   const known = list.filter((s) => isAmount(s.amount));
   const revenue = round(known.reduce((sum, s) => sum + s.amount, 0));
   const discounted = list.filter((s) => s.promo || Number(s.discount) > 0);
-  const productName = (s) => catalog.find((p) => p.id === s.productId)?.name ?? (String(s.product ?? '').trim() || 'Custom order');
+  // One row per product – and per option bought ("Netflix — 3 months"), under the product's current name.
+  const productName = (s) => {
+    const name = catalog.find((p) => p.id === s.productId)?.name;
+    if (!name) return String(s.product ?? '').trim() || 'Custom order';
+    return s.variant ? `${name} — ${s.variant}` : name;
+  };
+  const productKey = (s) => (s.productId == null ? `name:${productName(s).toLowerCase()}` : `${s.productId}${s.variant ? `:${String(s.variant).toLowerCase()}` : ''}`);
   return {
     orders: list.length,
     revenue,
@@ -216,7 +222,7 @@ function summarize(guildId, { from, to }) {
     unknown: list.length - known.length,
     average: known.length ? round(revenue / known.length) : null,
     first: list.reduce((min, s) => Math.min(min, completedAt(s)), Infinity),
-    products: tally(list, (s) => s.productId ?? `name:${productName(s).toLowerCase()}`, productName),
+    products: tally(list, productKey, productName),
     sellers: tally(list.filter((s) => s.sellerId), (s) => s.sellerId, (s) => s.sellerId),
     methods: tally(list, methodName, methodName),
     discount: round(discounted.reduce((sum, s) => sum + (Number(s.discount) || 0), 0)),
