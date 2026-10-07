@@ -49,11 +49,39 @@ function renderEmbed(e) {
   </div>`;
 }
 
-function renderAttachment(a) {
-  if (a.contentType?.startsWith('image/')) {
-    return `<a href="${esc(a.url)}" target="_blank"><img class="att-img" src="${esc(a.url)}" alt="${esc(a.name)}"></a>`;
+/**
+ * Discord attachment links expire after about a day and disappear with the ticket channel – so screenshots
+ * and files (payment proof!) are copied into the transcript itself, up to 4 MB each and 6 MB in total
+ * (the .html must stay under Discord's 10 MB upload limit). Bigger files keep their Discord link.
+ */
+const FILE_MAX = 4 * 1024 * 1024;
+const TOTAL_MAX = 6 * 1024 * 1024;
+async function inlineAttachments(messages) {
+  const out = new Map();
+  let total = 0;
+  for (const m of messages) {
+    for (const a of m.attachments?.values() ?? []) {
+      if (!a.url || !(a.size > 0) || a.size > FILE_MAX || total + a.size > TOTAL_MAX) continue;
+      try {
+        const res = await fetch(a.url, { signal: globalThis.AbortSignal?.timeout?.(15_000) });
+        if (!res.ok) continue;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (total + buf.length > TOTAL_MAX) continue;
+        total += buf.length;
+        out.set(a.id ?? a.url, `data:${a.contentType || 'application/octet-stream'};base64,${buf.toString('base64')}`);
+      } catch {
+        // keep the Discord link for this one
+      }
+    }
   }
-  return `<a class="att-file" href="${esc(a.url)}" target="_blank">📎 ${esc(a.name)} <span>(${(a.size / 1024).toFixed(1)} KB)</span></a>`;
+  return out;
+}
+
+function renderAttachment(a, src = a.url) {
+  if (a.contentType?.startsWith('image/')) {
+    return `<a href="${esc(src)}" target="_blank"><img class="att-img" src="${esc(src)}" alt="${esc(a.name)}"></a>`;
+  }
+  return `<a class="att-file" href="${esc(src)}" download="${esc(a.name)}" target="_blank">📎 ${esc(a.name)} <span>(${(a.size / 1024).toFixed(1)} KB)</span></a>`;
 }
 
 async function fetchAllMessages(channel) {
@@ -101,6 +129,7 @@ function markdown(textRaw, message) {
 
 async function createTranscript(channel, ticket, type) {
   const messages = await fetchAllMessages(channel);
+  const inlined = await inlineAttachments(messages);
   const guild = channel.guild;
   const participants = new Map();
   const byId = new Map(messages.map((m) => [m.id, m]));
@@ -133,7 +162,7 @@ async function createTranscript(channel, ticket, type) {
       m.content ? `<div class="text">${markdown(m.content, m)}</div>` : '',
       v2text ? `<div class="card">${markdown(v2text, m)}</div>` : '',
       ...m.embeds.map(renderEmbed),
-      ...[...m.attachments.values()].map(renderAttachment),
+      ...[...m.attachments.values()].map((a) => renderAttachment(a, inlined.get(a.id ?? a.url))),
       ...[...(m.stickers?.values() ?? [])].map((st) => `<img class="sticker" src="${esc(st.url)}" alt="${esc(st.name)}" title="${esc(st.name)}">`),
     ].join('');
 

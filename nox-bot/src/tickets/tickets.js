@@ -299,7 +299,7 @@ async function archiveTranscript(channel, ticket, actor) {
   const target = settings.transcriptChannelId ? await channel.guild.channels.fetch(settings.transcriptChannelId).catch(() => null) : null;
   if (target?.isTextBased?.()) {
     const sent = await target.send({ embeds: [summary], files: [attachment] }).catch(() => null);
-    url = sent?.attachments?.first?.()?.url ?? null;
+    url = sent?.url ?? null; // the #transcripts message – its file link never expires there
     if (url) db.updateTicket(channel.id, { transcriptUrl: url });
   }
   return { attachment, messageCount, url };

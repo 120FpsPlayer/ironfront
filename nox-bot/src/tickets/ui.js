@@ -205,7 +205,7 @@ function closedCard(ticket, actorId, { messageCount, transcriptUrl } = {}) {
     btn('ticket:transcript', 'Transcript', '📄'),
     btn('ticket:delete', 'Delete ticket', '🗑️', ButtonStyle.Danger),
   ];
-  if (transcriptUrl) buttons.push(linkBtn(transcriptUrl, 'Download', '⬇️'));
+  if (transcriptUrl) buttons.push(linkBtn(transcriptUrl, 'Transcript', '📄'));
   c.addActionRowComponents(row(...buttons));
   return v2(c);
 }

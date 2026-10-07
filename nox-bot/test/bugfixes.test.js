@@ -159,3 +159,27 @@ test('verification: the invite credit and welcome code still happen when the "ve
     config.verification.captcha = prev;
   }
 });
+
+test('transcripts keep screenshots after Discord links expire, and the Transcript button opens the #transcripts message', async () => {
+  const path = require('node:path');
+  const { createTranscript } = require('../src/tickets/transcript');
+  const guild = await builtGuild();
+  const author = member(guild);
+  const staff = member(guild, ['member', 'support']);
+  const channel = await t.openTicket(author, config.getType('support'), [{ label: 'Subject', value: 'x' }]);
+  const proof = await channel.send({ files: [{ attachment: path.join(__dirname, '..', 'assets', 'banners', 'proofs.png'), name: 'payment-proof.png' }] });
+  const link = proof.attachments.first().url;
+  const realFetch = global.fetch;
+  global.fetch = async (url) => (url === link ? { ok: true, arrayBuffer: async () => Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]).buffer } : { ok: false });
+  try {
+    const { attachment } = await createTranscript(channel, db.getTicket(channel.id), config.getType('support'));
+    const html = attachment.attachment.toString('utf8');
+    assert.match(html, /<img class="att-img" src="data:image\/png;base64,iVBORwECAw==/, 'the screenshot is inside the transcript');
+    assert.ok(!html.includes(`src="${link}`), 'not the expiring Discord link');
+  } finally {
+    global.fetch = realFetch;
+  }
+  await t.closeTicket(channel, staff, 'done');
+  const url = db.getTicket(channel.id).transcriptUrl;
+  assert.match(url, /^https:\/\/discord\.com\/channels\/\d+\/\d+\/\d+$/, 'a message link, not a file link');
+});
