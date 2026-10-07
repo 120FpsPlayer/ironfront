@@ -48,7 +48,8 @@
     "paymentMethods": [
       { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Send the PIN code only inside your ticket" },
       { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)" },
-      { "name": "PayPal", "emoji": "paypal", "details": "Only to the PayPal address given in your ticket" }
+      { "name": "PayPal", "emoji": "paypal", "details": "Only to the PayPal address given in your ticket" },
+      { "name": "Stripe", "emoji": "card", "details": "Card, Apple Pay or Google Pay – a secure payment link in your ticket", "stripe": true }
     ]
   },
 
@@ -71,6 +72,11 @@
     "enabled": true,
     "bestsellerMinSales": 3,
     "ratingMinVouches": 2
+  },
+
+  "stripe": {
+    "enabled": true,
+    "currency": ""
   },
 
   "staffReminders": {

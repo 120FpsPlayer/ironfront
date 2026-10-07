@@ -68,6 +68,8 @@ const env = {
   discordAdminsAreAdmins: bool('DISCORD_ADMINS_ARE_ADMINS', true),
   staffCanDelete: bool('STAFF_CAN_DELETE', true),
   ownerCanClose: bool('OWNER_CAN_CLOSE', true),
+  /** Stripe secret (or restricted) key – card payment links in order tickets (src/features/stripe.js). */
+  stripeKey: (process.env.STRIPE_SECRET_KEY || '').trim(),
   ids,
 };
 

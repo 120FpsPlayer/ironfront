@@ -14,6 +14,7 @@ const FEATURE_DEFAULTS = {
   orders: { receipts: true, proofs: true, vouchReminderHours: 24, statusDms: true, paymentProofs: true },
   badges: { enabled: true, bestsellerMinSales: 3, ratingMinVouches: 2 },
   staffReminders: { enabled: true, unclaimedMinutes: 15, repeatMinutes: 60 },
+  stripe: { enabled: true, currency: '' },
   promos: { enabled: true },
   welcomeDiscount: { enabled: true, percent: 5, validDays: 7 },
   invites: {

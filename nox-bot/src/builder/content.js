@@ -240,6 +240,7 @@ function payments(x) {
   if (has(/crypto|btc|eth|bitcoin|ethereum/i)) tips.push("> **Crypto:** send the exact amount on the right network and double-check the address – crypto payments can't be reversed.");
   if (has(/paysafe/i)) tips.push('> **PaysafeCard:** only share your PIN inside your ticket – a seller confirms it before delivery.');
   if (has(/paypal/i)) tips.push('> **PayPal:** only pay to the PayPal address a seller gives you in your ticket.');
+  if (has(/stripe/i)) tips.push("> **Stripe:** pay by card, Apple Pay or Google Pay on Stripe's secure page – the link is in your ticket, and we never see your card details.");
   tips.push('> Fraud attempts or payment disputes result in a permanent ban.');
   c.addTextDisplayComponents(text(`${x.E('warning')} **Stay safe**\n${tips.join('\n')}`));
   c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('howToBuy', 'How to buy', 'info')));

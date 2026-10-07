@@ -30,7 +30,13 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   Accounts …; with more than 4 categories the tabs become a menu). Turning pages or switching tabs opens a private copy
   for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
 - **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
-- **Payments:** PaysafeCard, Crypto (BTC, ETH) and PayPal – edit them in `config.json`.
+- **Payments:** PaysafeCard, Crypto (BTC, ETH), PayPal and **Stripe** (card, Apple Pay, Google Pay) – edit them in `config.json`.
+- **Stripe card payments** – put your Stripe key in `.env` (`STRIPE_SECRET_KEY`) and every order paid with Stripe gets a
+  **Pay 24€** link in its ticket right away. Once the customer has paid, the bot sees it within 30 seconds, sets the
+  order to **Paid**, tells the customer and pings the seller – nobody has to check anything by hand. No website or
+  webhook needed, it works on any host. Links last 23 hours (then a **New payment link** button appears); a link stops
+  working when the order is paid another way or the ticket is closed, so nobody pays twice. Without a key Stripe is
+  just a payment method in the list and the seller sends a link by hand.
 - **Buy → order form → private ticket.** The form asks for the option, quantity, a **payment method** from a list and an
   optional **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
 - **Options** – one product, several prices: `/product variants product:Netflix variants:"1 month = 5, 3 months = 12, 12 months = 40"`
@@ -140,6 +146,9 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
    ```
    > 💡 To copy an ID: Discord → Settings → Advanced → **Developer Mode** on. Then right-click your server → **Copy Server ID**.
    > With `GUILD_ID` set, the slash commands appear instantly.
+
+   *Optional – card payments:* `STRIPE_SECRET_KEY=sk_live_…` (Stripe Dashboard → **Developers → API keys → Secret key**;
+   `sk_test_…` to try it with test cards first; a restricted key with **Checkout Sessions: Write** is enough).
 
 ### 3. Start
 You need **Node.js 18.17 or newer** (<https://nodejs.org>).
@@ -265,6 +274,7 @@ Admin commands are hidden from normal members automatically.
 | `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods**, `lowStockAt` (a stock counter at or below this shows "🟠 Only N left", default 3) |
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
 | `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **I've paid** button (`paymentProofs`) |
+| `stripe` | Automatic Stripe payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `STRIPE_SECRET_KEY` in `.env` |
 | `badges` | 🔥 Bestseller and ⭐ rating in the shop on/off (`enabled`), units sold for Bestseller (`bestsellerMinSales`, 3), vouches needed for a rating (`ratingMinVouches`, 2) |
 | `staffReminders` | Unclaimed ticket reminders on/off, after how many minutes (`unclaimedMinutes`, 15) and how often again (`repeatMinutes`, 60 – `0` = once) |
 | `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
@@ -283,7 +293,9 @@ then **restart the bot** and run **`/build only:panels`** – every banner and c
 
 **Payment methods** – each entry has a `name`, `details` and an `emoji`
 (`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…). The default is PaysafeCard,
-Crypto (BTC, ETH) and PayPal.
+Crypto (BTC, ETH), PayPal and Stripe. The entry with `"stripe": true` gets the automatic card payment links
+(only with `STRIPE_SECRET_KEY` in `.env`); `stripe.currency` sets the Stripe currency (`eur`, `usd`, `pln`… – empty =
+from `shop.currency`), `stripe.enabled: false` turns the links off.
 
 **Name style** – `server.channelStyle` (default `{emoji}┃{name}`), `server.categoryStyle` (default `〔 {name} 〕`)
 and `server.smallCaps` (`true` → `📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ`, `false` → `📦┃how-to-buy`). Ticket channels follow `channelNameFormat`
@@ -326,6 +338,7 @@ npm i -D playwright && npm run render-assets
 |---|---|
 | `privileged intents are not enabled` | Developer Portal → Bot → turn on **Server Members Intent** and **Message Content Intent** → restart |
 | `Invalid DISCORD_TOKEN` | Reset the token on the Bot tab and paste it into `.env` again |
+| No Stripe link in Stripe orders | `STRIPE_SECRET_KEY` missing or wrong in `.env` (the console says *"STRIPE_SECRET_KEY was refused"*), or the order has no fixed price (e.g. `from 5€`) – a seller sends a link by hand then. Restart the bot after editing `.env` |
 | Commands don't show up | Set `GUILD_ID` in `.env` and restart. Also check the invite had `applications.commands` (the console link does) |
 | "I need the Administrator permission" | Server Settings → Roles → the bot's role → enable **Administrator** |
 | Some roles weren't removed by Wipe & Build | They are above the bot's role – drag the bot's role to the top and run it again |
@@ -363,7 +376,7 @@ src/
 ├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
 │                            announcements, welcome/logs, stats, sales report, backups, customer profiles,
 │                            Notify me, invites, lockdown, look-alike alerts, housekeeping, flash sales, badges,
-│                            I've paid, order status, My orders, staff reminders
+│                            I've paid, order status, My orders, staff reminders, Stripe
 ├── tickets/                 ticket system, cards, HTML transcripts
 ├── commands/                slash commands
 ├── handlers/interactions.js buttons, menus and forms
@@ -376,10 +389,10 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-264 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+271 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
-order status DMs, My orders, staff reminders, giveaway requirements, promo code limits (also for orders placed at the same moment),
+order status DMs, My orders, staff reminders, Stripe payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
 opening hours across summer/winter time, lockdown, invite rewards, in-place panel updates, verification, giveaways, ratings and more.
 
 ---

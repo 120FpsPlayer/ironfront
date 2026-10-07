@@ -113,6 +113,7 @@ function acceptsPayment(ticket) {
     ticket?.typeId === 'order' &&
     ticket.status === 'open' &&
     !ticket.completedAt &&
+    !ticket.order?.stripe && // a Stripe payment link confirms itself (src/features/stripe.js)
     ['awaiting', 'sent'].includes(statusOf(ticket))
   );
 }

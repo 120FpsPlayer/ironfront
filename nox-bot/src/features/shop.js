@@ -966,10 +966,13 @@ async function submitOrder(interaction, productId) {
   } else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
   if (price.error) lines.push(`${e(interaction.guild, 'warning')} Promo code **${price.code}** – not applied: ${price.error}`);
   lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
-  return interaction.editReply({
+  const answer = await interaction.editReply({
     embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Order started – ${name}`, 256)).setDescription(lines.join('\n'))],
     components: [row(linkBtn(channel.url, 'Go to my order', '🎫'))],
   });
+  // After the answer – e.g. the Stripe payment link (features/stripe.js) takes a call to Stripe.
+  await hooks.emit('orderPlaced', { guild: interaction.guild, channel, ticket: db.getTicket(channel.id), member: interaction.member });
+  return answer;
 }
 
 /** Product suggestions for /product and /sale – filter: only some products (e.g. the ones on sale for /sale stop). */
