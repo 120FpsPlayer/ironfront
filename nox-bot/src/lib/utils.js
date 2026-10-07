@@ -191,7 +191,19 @@ const truncate = (text, max) => {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 };
 
+/** "1234567890123456" → "••••-••••-••••-3456" */
+const maskPin = (pin) => `••••-••••-••••-${String(pin).slice(-4)}`;
+/**
+ * Hides anything in free text that looks like a PaysafeCard PIN – for the log and the archived transcripts (a PIN
+ * works like cash): 16 digits with any spaces, dashes, dots or slashes between them, or several such PINs written
+ * together. Longer numbers like Discord IDs (17–20 digits) stay.
+ */
+const maskPins = (value) =>
+  String(value ?? '').replace(/(?<!\d)(?:\d(?:[\s\-._/]*\d){15})+(?!\d)/g, (m) => m.replace(/\D/g, '').match(/\d{16}/g).map(maskPin).join(' '));
+
 module.exports = {
+  maskPin,
+  maskPins,
   UserError,
   COLORS,
   PRIORITIES,

@@ -50,8 +50,8 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   in `config.json → badges`.
 - **"I've paid"** – the order ticket has an **I've paid** button for the customer: they send their PaysafeCard PIN(s)
   (checked: 16 digits each), screenshots and/or a transaction ID. The seller handling the ticket (or the sellers, while
-  nobody has claimed it) is pinged, the screenshots are kept in the ticket, and the log only shows the last 4 digits of
-  a PIN. A corrected PIN can be sent again after a minute – it only pings the team again after the Call support
+  nobody has claimed it) is pinged, the screenshots are kept in the ticket, and the log and the archived transcripts
+  only show the last 4 digits of a PIN. A corrected PIN can be sent again after a minute – it only pings the team again after the Call support
   cooldown (`defaults.pingStaffCooldownMinutes`), or right away once a seller set the order back to Awaiting payment.
   Turn it off with `orders.paymentProofs`.
 - **Order status** – ⚙️ Manage ticket → **Status: Paid / In progress / Awaiting payment**. The ticket shows the status
@@ -101,7 +101,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 ### 🎫 Tickets (full ticket system)
 - 6 categories: **Purchase** (only through Buy in the shop), **Support, Claim a Reward, Report a User, Staff Application, Punishment Appeal**.
 - Forms, claim/unclaim, priorities, move between categories, add people, canned replies (`/reply`), close requests,
-  auto-close for inactive tickets, **"Call support"** button, blacklist.
+  auto-close for inactive tickets (never for orders that are already paid or in progress), **"Call support"** button, blacklist.
 - **HTML transcripts** that look like Discord, **DM to the author** with the transcript and a **1–5 ⭐ rating**.
 - `/stats` – response times, ratings, staff leaderboard.
 
@@ -376,7 +376,7 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-260 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+264 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
 order status DMs, My orders, staff reminders, giveaway requirements, promo code limits (also for orders placed at the same moment),

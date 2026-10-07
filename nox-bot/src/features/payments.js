@@ -35,7 +35,7 @@ const ui = require('../tickets/ui');
 const orderstatus = require('./orderstatus');
 const { statusOf, statusLabel } = require('../lib/orderStatus');
 const { COLORS } = require('../lib/theme');
-const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog, maskPin, maskPins } = require('../lib/utils');
 const { alertRoleIds } = require('../lib/permissions');
 const { container, text, divider, gallery, linkBtn, row, v2 } = require('../lib/v2');
 
@@ -84,13 +84,8 @@ function parsePins(raw) {
 
 /** "1234567890123456" → "1234-5678-9012-3456" */
 const formatPin = (pin) => pin.match(/.{1,4}/g).join('-');
-/** "1234567890123456" → "••••-••••-••••-3456" (for the log) */
-const maskPin = (pin) => `••••-••••-••••-${String(pin).slice(-4)}`;
-/**
- * Hides anything in free text that looks like a PIN – for the log. 16 digits with any spaces, dashes, dots or
- * slashes between them: at least as loose as parsePins, so no PIN the form takes reaches the log through the note.
- */
-const maskText = (value) => String(value ?? '').replace(/\d(?:[\s\-._/]*\d){15}/g, (m) => maskPin(m.replace(/\D/g, '')));
+// For the log: at least as loose as parsePins, so no PIN the form takes reaches the log through the note.
+const maskText = maskPins;
 
 // ───────────── Checks ─────────────
 

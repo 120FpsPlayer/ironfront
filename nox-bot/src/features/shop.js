@@ -839,6 +839,8 @@ function priceAnswers(p, quantity) {
 function recheckOrderPromo(guildId, ticket) {
   const order = ticket.order;
   if (!order?.promo || ticket.completedAt) return null;
+  // Paid (or being checked) at the discounted total – the code stays, like completeOrder keeps it for orders placed in time.
+  if (['sent', 'paid', 'progress'].includes(order.status)) return null;
   const { error } = promos.check(guildId, order.promo, ticket.ownerId, {
     completedOrders: db.guild(guildId).orders[ticket.ownerId] ?? 0,
     openOrders: promos.openOrdersOf(guildId, ticket.ownerId, { except: ticket.channelId }),

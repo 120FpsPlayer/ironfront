@@ -2,6 +2,7 @@
 
 const { AttachmentBuilder } = require('discord.js');
 const config = require('../lib/config');
+const { maskPins } = require('../lib/utils');
 
 const esc = (s) =>
   String(s ?? '')
@@ -10,8 +11,11 @@ const esc = (s) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+// PaysafeCard PINs (the "I've paid" card, or typed in the chat) never reach the archive in full – it's kept forever.
+const textOf = (s) => esc(maskPins(s));
+
 function formatContent(text, message) {
-  let html = esc(text);
+  let html = textOf(text);
   html = html.replace(/```(?:\w+\n)?([\s\S]*?)```/g, '<pre>$1</pre>');
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
@@ -37,15 +41,15 @@ function formatContent(text, message) {
 function renderEmbed(e) {
   const color = e.hexColor ?? '#202225';
   const fields = (e.fields ?? [])
-    .map((f) => `<div class="field${f.inline ? ' inline' : ''}"><div class="fname">${esc(f.name)}</div><div>${esc(f.value).replace(/\n/g, '<br>')}</div></div>`)
+    .map((f) => `<div class="field${f.inline ? ' inline' : ''}"><div class="fname">${textOf(f.name)}</div><div>${textOf(f.value).replace(/\n/g, '<br>')}</div></div>`)
     .join('');
   return `<div class="embed" style="border-color:${esc(color)}">
-    ${e.author?.name ? `<div class="eauthor">${esc(e.author.name)}</div>` : ''}
-    ${e.title ? `<div class="etitle">${esc(e.title)}</div>` : ''}
-    ${e.description ? `<div class="edesc">${esc(e.description).replace(/\n/g, '<br>')}</div>` : ''}
+    ${e.author?.name ? `<div class="eauthor">${textOf(e.author.name)}</div>` : ''}
+    ${e.title ? `<div class="etitle">${textOf(e.title)}</div>` : ''}
+    ${e.description ? `<div class="edesc">${textOf(e.description).replace(/\n/g, '<br>')}</div>` : ''}
     ${fields ? `<div class="fields">${fields}</div>` : ''}
     ${e.image?.url ? `<img class="eimg" src="${esc(e.image.url)}">` : ''}
-    ${e.footer?.text ? `<div class="efooter">${esc(e.footer.text)}</div>` : ''}
+    ${e.footer?.text ? `<div class="efooter">${textOf(e.footer.text)}</div>` : ''}
   </div>`;
 }
 
@@ -167,7 +171,7 @@ async function createTranscript(channel, ticket, type) {
     ].join('');
 
     const replyHtml = ref
-      ? `<div class="reply">↪ <b>${esc(ref.member?.displayName ?? ref.author.username)}</b> ${esc((ref.content || componentText(ref.components) || '📎 attachment').slice(0, 90))}</div>`
+      ? `<div class="reply">↪ <b>${esc(ref.member?.displayName ?? ref.author.username)}</b> ${textOf((ref.content || componentText(ref.components) || '📎 attachment').slice(0, 90))}</div>`
       : '';
 
     if (grouped) {

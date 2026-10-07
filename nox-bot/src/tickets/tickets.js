@@ -20,6 +20,7 @@ const lockdown = require('../features/lockdown');
 const ui = require('./ui');
 const { createTranscript } = require('./transcript');
 const { openDeniedReason } = require('../lib/permissions');
+const { statusOf } = require('../lib/orderStatus');
 const { numberedCategoryName } = require('../builder/style');
 const {
   UserError,
@@ -753,7 +754,8 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
     channelId: channel.id,
     userId: ticket.ownerId,
     sellerId: staff.id,
-    productId: order.productId ?? null,
+    // Older shop orders have no ticket.order – find their product from the form answer ("Name — 10€").
+    productId: order.productId ?? require('../features/shop').ticketProduct(guild.id, ticket)?.id ?? null,
     product: order.product ?? null,
     variant: order.variant ?? null,
     quantity: order.quantity ?? 1,
@@ -846,6 +848,8 @@ async function runInactivityCheck(client) {
     const settings = db.settings(guild.id);
     if (!settings.autoCloseHours || settings.autoCloseHours <= 0) continue;
     if (ticket.lastMessageBy !== 'staff') continue;
+    // A paid order waits for its delivery, not for the customer – only staff close it.
+    if (['sent', 'paid', 'progress'].includes(statusOf(ticket))) continue;
 
     const idle = now - ticket.lastActivity;
     const closeAfter = settings.autoCloseHours * 3_600_000;
