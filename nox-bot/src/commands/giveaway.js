@@ -2,6 +2,7 @@
 
 const { SlashCommandBuilder, InteractionContextType, ChannelType, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const giveaways = require('../features/giveaways');
+const invites = require('../features/invites');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, replyError, parseDuration, ts, truncate } = require('../lib/utils');
 const { isMod } = require('../lib/permissions');
@@ -22,6 +23,10 @@ module.exports = {
         .addStringOption((o) => o.setName('description').setDescription('Extra info shown on the giveaway').setMaxLength(600))
         .addChannelOption((o) => o.setName('channel').setDescription('Channel (default: #giveaways)').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
         .addRoleOption((o) => o.setName('required_role').setDescription('Only members with this role can enter'))
+        .addBooleanOption((o) => o.setName('buyers_only').setDescription('Only customers (at least one completed order) can enter'))
+        .addIntegerOption((o) =>
+          o.setName('min_invites').setDescription('Only members who invited at least this many members (still on the server)').setMinValue(1).setMaxValue(100),
+        )
         .addBooleanOption((o) => o.setName('ping').setDescription('Ping the Giveaways role? (default: yes)')),
     )
     .addSubcommand((s) =>
@@ -61,9 +66,13 @@ module.exports = {
         description: o.getString('description'),
         channel: o.getChannel('channel'),
         requiredRole: o.getRole('required_role'),
+        buyersOnly: o.getBoolean('buyers_only') ?? false,
+        minInvites: o.getInteger('min_invites'),
         ping: o.getBoolean('ping') ?? true,
       });
-      return reply(interaction, `Giveaway for **${gw.prize}** started in <#${gw.channelId}> – it ends ${ts(gw.endsAt, 'R')}. [Jump](${message.url})`);
+      // Without Manage Server new joins have no inviter – min_invites would only count the invites from before.
+      const blind = gw.minInvites && !invites.isReadable(guild.id) ? "\n⚠️ I can't see this server's invites (I need **Manage Server**) – new invites aren't counted until that's fixed." : '';
+      return reply(interaction, `Giveaway for **${gw.prize}** started in <#${gw.channelId}> – it ends ${ts(gw.endsAt, 'R')}. [Jump](${message.url})${blind}`);
     }
 
     if (sub === 'end' || sub === 'reroll') {

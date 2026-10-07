@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { ButtonStyle, MessageFlags } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
+const invites = require('./invites');
 const { e, ce, COLORS } = require('../lib/theme');
 const { UserError, embed, ts, truncate, sendToChannel } = require('../lib/utils');
 const { container, text, divider, btn, row, header, v2, linkBtn, channelUrl } = require('../lib/v2');
@@ -11,6 +12,12 @@ const { container, text, divider, btn, row, header, v2, linkBtn, channelUrl } = 
 /**
  * Giveaways: /giveaway start posts a card with an "Enter" button. Entries are stored in
  * data/db.json, so a restart doesn't lose anything. A ticker ends giveaways on time.
+ *
+ * Who can enter (all optional – giveaways from before a requirement existed simply don't have it):
+ *   requiredRoleId   members with this role
+ *   buyersOnly       customers: at least one completed order, or the Customer role
+ *   minInvites       members with at least this many valid invites (features/invites.js – verified and still here)
+ * All of them are checked again for whoever is drawn: a role can be taken away, invites drop when invited members leave.
  */
 
 const editTimers = new Map();
@@ -30,6 +37,8 @@ function card(guild, gw) {
     `**Hosted by:** <@${gw.hostId}>`,
   ];
   if (gw.requiredRoleId) lines.push(`**Required role:** <@&${gw.requiredRoleId}>`);
+  if (gw.buyersOnly) lines.push(`${e(guild, 'cart')} Only customers can enter`);
+  if (gw.minInvites) lines.push(`📨 Invited at least **${gw.minInvites}** ${gw.minInvites === 1 ? 'member' : 'members'}`);
   header(c, lines.filter(Boolean).join('\n'), guild.iconURL?.({ size: 256 }));
   c.addSeparatorComponents(divider());
   if (ended) {
@@ -37,7 +46,8 @@ function card(guild, gw) {
       text(gw.winners.length ? `### ${e(guild, 'trophy')} Winners\n${gw.winners.map((id) => `<@${id}>`).join(', ')}` : '### 😢 No valid entries – no winner this time.'),
     );
   } else {
-    c.addTextDisplayComponents(text('-# Click **Enter** to join. Click again to leave. Winners are picked at random when the timer ends.'));
+    const recheck = gw.requiredRoleId || gw.buyersOnly || gw.minInvites ? ' – the requirements are checked again then' : '';
+    c.addTextDisplayComponents(text(`-# Click **Enter** to join. Click again to leave. Winners are picked at random when the timer ends${recheck}.`));
     c.addActionRowComponents(row(btn(`gw:enter:${gw.id}`, 'Enter', ce(guild, 'gift'), ButtonStyle.Primary)));
   }
   return v2(c);
@@ -60,9 +70,12 @@ function scheduleEdit(guild, gw) {
   editTimers.set(gw.id, timer);
 }
 
-async function start(guild, host, { prize, durationMs, winners, description, channel, requiredRole, ping }) {
+async function start(guild, host, { prize, durationMs, winners, description, channel, requiredRole, buyersOnly = false, minInvites = null, ping }) {
   if (durationMs < 60_000) throw new UserError('A giveaway must last at least 1 minute.');
   if (durationMs > 60 * 86_400_000) throw new UserError('A giveaway can last at most 60 days.');
+  if (minInvites && config.invites.enabled === false) {
+    throw new UserError("Invite tracking is turned off (`invites.enabled` in config.json) – a giveaway can't require invites.");
+  }
   const target = channel ?? guild.channels.cache.get(db.channelId(guild.id, 'giveaways'));
   if (!target?.isTextBased?.()) throw new UserError('Pick a channel – there is no giveaways channel yet (run `/build`).');
 
@@ -77,6 +90,8 @@ async function start(guild, host, { prize, durationMs, winners, description, cha
     endsAt: Date.now() + durationMs,
     hostId: host.id,
     requiredRoleId: requiredRole?.id ?? null,
+    buyersOnly: Boolean(buyersOnly),
+    minInvites: minInvites ? Math.max(1, Math.min(100, Math.trunc(minInvites))) : null,
     entries: [],
     winners: [],
     ended: false,
@@ -95,14 +110,55 @@ async function start(guild, host, { prize, durationMs, winners, description, cha
   return { gw, message };
 }
 
-/** Random winners from the entries – only people who are still on the server can win. */
-async function drawWinners(guild, entries, count, exclude = []) {
+// ───────────── Requirements ─────────────
+
+/** Has this member bought something? A completed order – or the Customer role (e.g. given by hand). */
+function isCustomer(member) {
+  if ((db.guild(member.guild.id).orders[member.id] ?? 0) > 0) return true;
+  const role = db.roleId(member.guild.id, 'customer');
+  return Boolean(role && member.roles.cache.has(role));
+}
+
+/** How many valid invites this member still needs for the giveaway (0 = enough, or no min_invites). */
+function invitesMissing(guildId, userId, gw) {
+  if (!gw.minInvites) return 0;
+  return Math.max(0, gw.minInvites - invites.counts(guildId, userId).valid);
+}
+
+/** Why this member can't enter – { reason, buttons } – or null when they can. */
+function entryBlock(member, gw) {
+  const guild = member.guild;
+  if (gw.requiredRoleId && !member.roles.cache.has(gw.requiredRoleId)) {
+    return { reason: `🔒 You need the <@&${gw.requiredRoleId}> role to enter this giveaway.`, buttons: [] };
+  }
+  if (gw.buyersOnly && !isCustomer(member)) {
+    const shop = db.channelId(guild.id, 'shop');
+    return {
+      reason: `${e(guild, 'cart')} Only customers can enter this giveaway – you need at least one completed order. Buy anything in ${shop ? `<#${shop}>` : 'the shop'} and you're in!`,
+      buttons: shop ? [linkBtn(channelUrl(guild.id, shop), 'Shop', ce(guild, 'cart'))] : [],
+    };
+  }
+  const missing = invitesMissing(guild.id, member.id, gw);
+  if (missing) {
+    const have = gw.minInvites - missing;
+    return {
+      reason:
+        `📨 You need at least **${gw.minInvites}** valid ${gw.minInvites === 1 ? 'invite' : 'invites'} to enter this giveaway – you have **${have}**.\n` +
+        '-# Invited members count once they verify and as long as they stay. `/invites stats` shows yours.',
+      buttons: [],
+    };
+  }
+  return null;
+}
+
+/** Random winners from the entries – only people who are still on the server and still meet every requirement can win. */
+async function drawWinners(guild, entries, count, exclude = [], gw = {}) {
   const pool = entries.filter((id) => !exclude.includes(id));
   const winners = [];
   while (pool.length && winners.length < count) {
     const id = pool.splice(crypto.randomInt(pool.length), 1)[0];
     const member = guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => null));
-    if (member) winners.push(id);
+    if (member && !entryBlock(member, gw)) winners.push(id);
   }
   return winners;
 }
@@ -122,7 +178,7 @@ async function end(guild, gw, opts = {}) {
 }
 
 async function draw(guild, gw, { reroll = false, count = null } = {}) {
-  const winners = await drawWinners(guild, gw.entries, count ?? gw.winnersCount, reroll ? gw.winners : []);
+  const winners = await drawWinners(guild, gw.entries, count ?? gw.winnersCount, reroll ? gw.winners : [], gw);
   // A reroll adds the new winners (so they're excluded from the next reroll too).
   gw.winners = reroll ? [...new Set([...gw.winners, ...winners])] : winners;
   gw.ended = true;
@@ -157,17 +213,18 @@ async function draw(guild, gw, { reroll = false, count = null } = {}) {
 async function toggleEntry(interaction) {
   const id = interaction.customId.split(':')[2];
   const gw = db.guild(interaction.guild.id).giveaways[id];
-  const say = (color, msg) => interaction.reply({ embeds: [embed(color).setDescription(msg)], flags: MessageFlags.Ephemeral });
+  const say = (color, msg, buttons = []) =>
+    interaction.reply({ embeds: [embed(color).setDescription(msg)], components: buttons.length ? [row(...buttons)] : [], flags: MessageFlags.Ephemeral });
   if (!gw || gw.ended || Date.now() >= gw.endsAt) return say(COLORS.muted, '⌛ This giveaway has already ended.');
-  if (gw.requiredRoleId && !interaction.member.roles.cache.has(gw.requiredRoleId)) {
-    return say(COLORS.warning, `🔒 You need the <@&${gw.requiredRoleId}> role to enter this giveaway.`);
-  }
+  // Leaving always works – even when a requirement isn't met any more (e.g. invites dropped).
   if (gw.entries.includes(interaction.user.id)) {
     gw.entries = gw.entries.filter((x) => x !== interaction.user.id);
     db.save();
     scheduleEdit(interaction.guild, gw);
     return say(COLORS.muted, `👋 You left the giveaway for **${gw.prize}**. Click **Enter** again if you change your mind.`);
   }
+  const blocked = entryBlock(interaction.member, gw);
+  if (blocked) return say(COLORS.warning, blocked.reason, blocked.buttons);
   gw.entries.push(interaction.user.id);
   db.save();
   scheduleEdit(interaction.guild, gw);
