@@ -16,10 +16,11 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const images = require('../lib/productImages');
 const panels = require('../lib/panels');
+const productBadges = require('./badges');
 const shopstatus = require('./shopstatus');
 const { splitEmoji } = require('../builder/style');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
-const { UserError, embed, truncate, sendToChannel } = require('../lib/utils');
+const { UserError, embed, truncate, sendToChannel, sendLog, logEmbed, parseAmount, money, ts, pad } = require('../lib/utils');
 const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl } = require('../lib/v2');
 
 const STOCK = {
@@ -171,14 +172,105 @@ function groupSummary(group) {
   return `${n} ${n === 1 ? 'product' : 'products'}${out ? ` · ${out} sold out` : ''}`;
 }
 
+// ───────────── Variants, stock counter, flash sales ─────────────
+
+const round = (n) => Math.round(n * 100) / 100;
+
+/** A product's options (e.g. 1 / 3 / 12 months) – products saved before variants existed have none. */
+const variantsOf = (p) => (Array.isArray(p?.variants) ? p.variants : []);
+
+/** The running flash sale (/sale start) or null. It counts only until endsAt – even before the timer clears it. */
+function activeSale(p, now = Date.now()) {
+  const sale = p?.sale;
+  return sale && Number(sale.percent) > 0 && now < sale.endsAt ? sale : null;
+}
+
+/** 20 with −20% → 16. */
+const salePrice = (amount, percent) => round((amount * (100 - percent)) / 100);
+
+/** The cheapest option with a number as its price – null without variants or when no option price is a number. */
+function cheapestVariant(p) {
+  let best = null;
+  for (const v of variantsOf(p)) {
+    const amount = parseAmount(v.price);
+    if (amount != null && (best == null || amount < best.amount)) best = { variant: v, amount };
+  }
+  return best?.variant ?? null;
+}
+
+/** "20€", or "from 5€" for a product with options (falls back to the product price when no option price is a number). */
+function priceLabel(p) {
+  const cheapest = cheapestVariant(p);
+  return cheapest ? `from ${formatPrice(cheapest.price)}` : formatPrice(p.price);
+}
+
+/** The price as shown on a card: **20€** · from **5€** · ~~20€~~ **16€** · −20% during a flash sale. */
+function priceMarkdown(p, now = Date.now()) {
+  const cheapest = cheapestVariant(p);
+  const raw = cheapest ? cheapest.price : p.price;
+  const from = cheapest ? 'from ' : '';
+  const sale = activeSale(p, now);
+  const amount = parseAmount(raw);
+  if (sale && amount != null) return `${from}~~${formatPrice(raw)}~~ **${money(salePrice(amount, sale.percent))}** · −${sale.percent}%`;
+  return `${from}**${formatPrice(raw)}**`;
+}
+
+/** The price of an option v (or of the product itself: v = p) – reduced during a flash sale. */
+function variantPrice(p, v, now = Date.now()) {
+  const sale = activeSale(p, now);
+  const amount = parseAmount(v.price);
+  return sale && amount != null ? money(salePrice(amount, sale.percent)) : formatPrice(v.price);
+}
+
+const OPTIONS_LINE = 140; // characters of the "1 month 5€ · 3 months 12€" line on a card
+
+/** "1 month 5€ · 3 months 12€ · 12 months 40€" – as many options as fit, then "+2 more". */
+function optionsText(p, now = Date.now()) {
+  const parts = variantsOf(p).map((v) => `${v.name} ${variantPrice(p, v, now)}`);
+  if (parts.join(' · ').length <= OPTIONS_LINE) return parts.join(' · ');
+  const shown = [];
+  for (const part of parts) {
+    if ([...shown, part].join(' · ').length > OPTIONS_LINE - 12) break; // room for " · +10 more"
+    shown.push(part);
+  }
+  if (!shown.length) shown.push(truncate(parts[0], OPTIONS_LINE - 12));
+  return `${shown.join(' · ')} · +${parts.length - shown.length} more`;
+}
+
+/** stockCount: a number when the stock is counted (completed orders count it down), null / missing otherwise. */
+const counted = (p) => Number.isInteger(p?.stockCount) && p.stockCount >= 0;
+
+/** The stock status a count means: 0 → sold out, up to config.shop.lowStockAt → low, more → in stock. */
+function stockFor(count) {
+  const low = Number(config.shop.lowStockAt ?? 3);
+  if (count <= 0) return 'out';
+  return count <= (Number.isFinite(low) ? low : 3) ? 'low' : 'in';
+}
+
+/** "🟢 In stock", or with a counter "🟢 In stock · 12 left" / "🟠 Only 2 left" / "🔴 Sold out". */
+function stockText(p) {
+  const stock = STOCK[p.stock] ?? STOCK.in;
+  if (!counted(p) || p.stock === 'out') return `${stock.dot} ${stock.label}`;
+  return p.stock === 'low' ? `${stock.dot} Only ${p.stockCount} left` : `${stock.dot} ${stock.label} · ${p.stockCount} left`;
+}
+
 // ───────────── Product cards ─────────────
 
 const UPLOAD_LIMIT = 8 * 1024 * 1024; // images per message (Discord allows 10 files and 10 MB)
+const CARD_TEXT = 640; // the description gives way above this, so 5 cards with options, a sale and badges still fit one message
 
-function cardText(guild, p, { category = false } = {}) {
-  const stock = STOCK[p.stock] ?? STOCK.in;
-  const where = category ? ` · ${p.category ? `📂 ${p.category}` : '📂 Other'}` : '';
-  return `### ${productEmoji(guild, p)} ${p.name}${SPACER}**${formatPrice(p.price)}**\n${truncate(p.description, 220)}\n-# ${stock.dot} ${stock.label}${where}`;
+/** badges: Map(productId → ['🔥 Bestseller', '⭐ 4.9']) from features/badges.js – worked out once per panel. */
+function cardText(guild, p, { category = false, now = Date.now(), badges = null } = {}) {
+  const where = category ? (p.category ? `📂 ${p.category}` : '📂 Other') : null;
+  const sale = activeSale(p, now);
+  const title = `### ${productEmoji(guild, p)} ${p.name}${SPACER}${priceMarkdown(p, now)}`;
+  const extras = [
+    variantsOf(p).length ? `-# ${optionsText(p, now)}` : null,
+    `-# ${[stockText(p), ...(badges?.get(p.id) ?? []), where].filter(Boolean).join(' · ')}`,
+    sale ? `-# ⏰ Sale ends ${ts(sale.endsAt, 'R')}` : null,
+  ].filter(Boolean);
+  const room = CARD_TEXT - title.length - extras.join('\n').length - 2;
+  return [title, truncate(p.description, Math.max(60, Math.min(220, room))), ...extras].join('\n');
 }
 
 /** Buy – or 🔔 Notify me while it's sold out (features/restock.js). */
@@ -306,7 +398,7 @@ function navRow(guild, value, index, pages) {
   return buttons.length ? row(...buttons) : null;
 }
 
-function buildView(guild, { list, tabs, active, items, index, pages, pictures, now }) {
+function buildView(guild, { list, tabs, active, items, index, pages, pictures, now, badges = null }) {
   const c = container(COLORS.brand);
   const status = shopstatus.statusLine(guild.id, 'shop', now);
   const vs = vouchStats(guild.id);
@@ -331,7 +423,8 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
     );
   } else {
     const showCategory = active === 'all' && tabs.length > 0;
-    for (const p of items) addCard(c, guild, p, pictures.get(p.id), { category: showCategory });
+    const at = now ? new Date(now).getTime() : Date.now();
+    for (const p of items) addCard(c, guild, p, pictures.get(p.id), { category: showCategory, now: at, badges });
   }
 
   c.addSeparatorComponents(divider(true));
@@ -361,8 +454,9 @@ function shopView(guild, { tab = 'all', page = 0, now } = {}) {
   const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
   const index = Math.min(Math.max(0, Math.trunc(Number(page)) || 0), pages - 1);
   const items = all.slice(index * PAGE_SIZE, (index + 1) * PAGE_SIZE);
+  const marks = productBadges.compute(guild.id); // once per render, not per card
   for (let n = items.length; n >= 0; n -= 1) {
-    const payload = buildView(guild, { list, tabs, active, items, index, pages, pictures: pickImages(items, n), now });
+    const payload = buildView(guild, { list, tabs, active, items, index, pages, pictures: pickImages(items, n), now, badges: marks });
     if (fits(payload) || n === 0) return payload;
   }
   return null;
@@ -381,8 +475,40 @@ function assertUniqueName(guildId, name, productId = null) {
   }
 }
 
-/** image: { buffer, ext } from productImages.download() */
-function addProduct(guild, { name, price, description, emoji, stock = 'in', category = null, image = null }) {
+const MAX_COUNT = 100_000;
+
+/**
+ * The stock fields for /product add | edit | stock: a count sets the status (0 → sold out, up to
+ * config.shop.lowStockAt → low, more → in stock); a status alone turns the counter off. {} when neither is given.
+ */
+function stockPatch({ stock = null, count = null } = {}) {
+  if (count != null) {
+    const n = Number(count);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_COUNT) throw new UserError(`The count must be a whole number from 0 to ${MAX_COUNT.toLocaleString('en-US')}.`);
+    return { stockCount: n, stock: stockFor(n) };
+  }
+  if (!stock) return {};
+  if (!STOCK[stock]) throw new UserError('Unknown stock status.');
+  return { stock, stockCount: null };
+}
+
+/** Why a product can't be on a flash sale – its price (or an option's price) is not a plain number – or null. */
+function saleProblem(p) {
+  const options = variantsOf(p);
+  if (!options.length) return parseAmount(p.price) == null ? `its price "${truncate(p.price, 40)}" is not a plain number (like \`20\` or \`19.99\`)` : null;
+  const bad = options.find((v) => parseAmount(v.price) == null);
+  return bad ? `the price of the option **${truncate(bad.name, 50)}** ("${truncate(bad.price, 40)}") is not a plain number (like \`5\` or \`4.99\`)` : null;
+}
+
+/** A change that would leave a product on sale with a price that isn't a number is refused. */
+function assertSaleStillWorks(p, next) {
+  if (!activeSale(p)) return;
+  const problem = saleProblem({ ...p, ...next });
+  if (problem) throw new UserError(`**${p.name}** is on a flash sale right now and ${problem}. Use a number, or stop the sale first with \`/sale stop\`.`);
+}
+
+/** image: { buffer, ext } from productImages.download(); stockCount: how many are left (null = not counted) */
+function addProduct(guild, { name, price, description, emoji, stock = 'in', stockCount = null, category = null, image = null }) {
   const list = products(guild.id);
   if (list.length >= 50) throw new UserError('The catalog is full (50 products). Remove an old product first.');
   assertUniqueName(guild.id, name);
@@ -393,7 +519,9 @@ function addProduct(guild, { name, price, description, emoji, stock = 'in', cate
     description: truncate(description.trim(), 400),
     emoji: parseEmoji(emoji, guild),
     category: resolveCategory(guild.id, category),
-    stock: STOCK[stock] ? stock : 'in',
+    ...stockPatch({ stock: STOCK[stock] ? stock : 'in', count: stockCount }),
+    variants: [],
+    sale: null,
     image: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -413,8 +541,9 @@ async function afterStockChange(guild, product, wasOut) {
 }
 
 /**
- * patch: { name, price, description, emoji, category ('none' removes it), image ({ buffer, ext }), removeImage, stock }
- * – missing / null fields stay as they are.
+ * patch: { name, price, description, emoji, category ('none' removes it), image ({ buffer, ext }), removeImage, stock,
+ * stockCount } – missing / null fields stay as they are. A stockCount sets the stock status; a stock status alone
+ * turns the counter off.
  */
 async function editProduct(guild, query, patch) {
   const p = requireProduct(guild.id, query);
@@ -427,10 +556,8 @@ async function editProduct(guild, query, patch) {
   if (patch.description) next.description = truncate(patch.description.trim(), 400);
   if (patch.emoji != null) next.emoji = parseEmoji(patch.emoji, guild);
   if (patch.category != null) next.category = resolveCategory(guild.id, patch.category, p.id);
-  if (patch.stock) {
-    if (!STOCK[patch.stock]) throw new UserError('Unknown stock status.');
-    next.stock = patch.stock;
-  }
+  Object.assign(next, stockPatch({ stock: patch.stock, count: patch.stockCount }));
+  assertSaleStillWorks(p, next);
   // Files last – only once everything else is valid.
   if (patch.image) next.image = images.save(p.id, patch.image);
   else if (patch.removeImage) {
@@ -456,15 +583,84 @@ function removeProduct(guild, query) {
   return p;
 }
 
-async function setStock(guild, query, stock) {
+/** /product stock: a status, or a count (which sets the status) → { product, restocked, counterOff }. */
+async function setStock(guild, query, stock, { count = null } = {}) {
   const p = requireProduct(guild.id, query);
-  if (!STOCK[stock]) throw new UserError('Unknown stock status.');
+  if (!stock && count == null) throw new UserError('Give a **status**, or a **count** of how many are left.');
+  const next = stockPatch({ stock, count });
   const wasOut = p.stock === 'out';
-  p.stock = stock;
-  p.updatedAt = Date.now();
+  const wasCounted = counted(p);
+  Object.assign(p, next, { updatedAt: Date.now() });
   db.save();
   refreshShop(guild);
-  return { product: p, restocked: await afterStockChange(guild, p, wasOut) };
+  return { product: p, restocked: await afterStockChange(guild, p, wasOut), counterOff: wasCounted && !counted(p) };
+}
+
+/**
+ * A completed order counts the stock down (counted products only). At 0 the product is sold out – the staff
+ * log gets a short note, buyers see Notify me.
+ */
+async function countDown({ guild, sale }) {
+  const p = sale ? productBadges.productOf(products(guild.id), sale) : null;
+  if (!p || !counted(p)) return null;
+  const before = p.stockCount;
+  const left = Math.max(0, before - (Number(sale.quantity) || 1));
+  Object.assign(p, { stockCount: left, stock: stockFor(left), updatedAt: Date.now() });
+  db.save();
+  refreshShop(guild);
+  if (left === 0 && before > 0) {
+    const order = sale.ticketNumber ? ` with order \`#${pad(sale.ticketNumber)}\`` : '';
+    await sendLog(guild, {
+      embeds: [logEmbed(COLORS.danger, '🔴 Sold out').setDescription(`**${p.name}** is sold out – the last one went${order}. Restock it with \`/product stock count:\`.`)],
+    });
+  }
+  return left;
+}
+hooks.on('orderCompleted', countDown);
+
+// ───────────── Variants (/product variants) ─────────────
+
+const MAX_VARIANTS = 10;
+const VARIANT_FORMAT = 'write the options as **name = price**, separated by commas – e.g. `1 month = 5, 3 months = 12, 12 months = 40`.';
+
+/**
+ * "1 month = 5, 3 months = 12; 12 months = 40" → [{ id, name, price }] – separated by , ; or new lines (a comma
+ * between two digits is a decimal comma: "4,99"). "none" or nothing → [] (one price again). An option entered
+ * again with the same name keeps its ID, so order forms that are open right now still find it.
+ */
+function parseVariants(input, existing = []) {
+  const raw = String(input ?? '').trim();
+  if (!raw || /^(none|-)$/i.test(raw)) return [];
+  const out = [];
+  for (const entry of raw.split(/\s*(?:[;\n]|,(?!\d)|(?<!\d),)\s*/).filter(Boolean)) {
+    const at = entry.indexOf('=');
+    const name = entry.slice(0, at).replace(/\s+/g, ' ').trim();
+    const price = entry.slice(at + 1).trim();
+    if (at === -1 || !name || !price || price.includes('=')) throw new UserError(`\`${truncate(entry, 60)}\` – ${VARIANT_FORMAT}`);
+    if (name.length > 50) throw new UserError(`Option names can be up to 50 characters – **${truncate(name, 50)}** has ${name.length}.`);
+    if (price.length > 40) throw new UserError(`Option prices can be up to 40 characters – the price of **${name}** has ${price.length}.`);
+    if (out.some((v) => v.name.toLowerCase() === name.toLowerCase())) throw new UserError(`The option **${name}** is there twice – every option needs its own name.`);
+    out.push({ name, price });
+  }
+  if (out.length > MAX_VARIANTS) throw new UserError(`A product can have up to ${MAX_VARIANTS} options – that's ${out.length}.`);
+  const used = new Set();
+  return out.map((v) => {
+    let id = existing.find((x) => x.name.toLowerCase() === v.name.toLowerCase())?.id;
+    while (!id || used.has(id)) id = crypto.randomBytes(3).toString('hex');
+    used.add(id);
+    return { id, name: v.name, price: v.price };
+  });
+}
+
+/** /product variants – replaces the options of a product ("none" removes them). */
+function setVariants(guild, query, input) {
+  const p = requireProduct(guild.id, query);
+  const variants = parseVariants(input, variantsOf(p));
+  assertSaleStillWorks(p, { variants });
+  Object.assign(p, { variants, updatedAt: Date.now() });
+  db.save();
+  refreshShop(guild);
+  return p;
 }
 
 /** Posts "New product" / "Back in stock" in #restocks and pings the Restocks role. */
@@ -475,7 +671,8 @@ async function announceProduct(guild, p, kind = 'new') {
   const image = images.attachment(p);
   const c = container(kind === 'new' ? COLORS.brand : COLORS.success);
   const title = kind === 'new' ? `${e(guild, 'sparkles')} New product` : `${e(guild, 'box')} Back in stock`;
-  header(c, `## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${formatPrice(p.price)}`, image?.url);
+  const options = variantsOf(p).length ? `\n-# ${optionsText(p)}` : '';
+  header(c, `## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${activeSale(p) ? priceMarkdown(p) : priceLabel(p)}${options}`, image?.url);
   c.addActionRowComponents(row(btn(`shop:buy:${p.id}`, 'Buy now', ce(guild, 'cart'), ButtonStyle.Primary)));
   if (roleId) c.addTextDisplayComponents(text(`-# 🔔 <@&${roleId}>`));
   return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] }, files: image ? [image.file] : [] }));
@@ -499,16 +696,40 @@ function ticketProduct(guildId, ticket) {
 // ───────────── Buying ─────────────
 
 const promos = require('./promos');
-const { parseAmount, money } = require('../lib/utils');
+
+/** "16€ (was 20€ · −20% flash sale)" – an option's price in the order form menu. */
+function optionPrice(product, v, now = Date.now()) {
+  const sale = activeSale(product, now);
+  const reduced = variantPrice(product, v, now);
+  return sale && parseAmount(v.price) != null ? `${reduced} (was ${formatPrice(v.price)} · −${sale.percent}% flash sale)` : reduced;
+}
+
+/** The required "Option" menu of the order form: every option with its price (reduced during a flash sale). */
+function variantField(product) {
+  const field = new LabelBuilder().setLabel('Option').setStringSelectMenuComponent(
+    new StringSelectMenuBuilder()
+      .setCustomId('variant')
+      .setPlaceholder('Choose an option…')
+      .setRequired(true)
+      .addOptions(variantsOf(product).slice(0, 25).map((v) => ({ label: truncate(v.name, 100), value: v.id, description: truncate(optionPrice(product, v), 100) }))),
+  );
+  if (product.description) field.setDescription(truncate(product.description, 100));
+  return field;
+}
 
 function orderModal(product, guild = null) {
   const modal = new ModalBuilder().setCustomId(`shop:order:${product.id}`).setTitle(truncate(`🛒 ${product.name}`, 45));
-  modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${formatPrice(product.price)}\n-# ${truncate(product.description, 300)}`));
-  modal.addLabelComponents(
-    new LabelBuilder()
-      .setLabel('Quantity')
-      .setTextInputComponent(new TextInputBuilder().setCustomId('quantity').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(6).setValue('1')),
-  );
+  // A form holds 5 components: with options, the Option menu takes the place of the intro (its descriptions show the prices).
+  if (variantsOf(product).length) modal.addLabelComponents(variantField(product));
+  else {
+    const price = activeSale(product) ? priceMarkdown(product) : formatPrice(product.price);
+    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n-# ${truncate(product.description, 300)}`));
+  }
+  const quantity = new LabelBuilder()
+    .setLabel('Quantity')
+    .setTextInputComponent(new TextInputBuilder().setCustomId('quantity').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(6).setValue('1'));
+  if (counted(product)) quantity.setDescription(`${product.stockCount} left`);
+  modal.addLabelComponents(quantity);
   const methods = config.shop.paymentMethods.slice(0, 25);
   if (methods.length) {
     modal.addLabelComponents(
@@ -554,22 +775,25 @@ function parseQuantity(raw) {
 }
 
 /**
- * Price maths for an order: unit price × quantity, then the promo code.
- * An invalid code never blocks the order – it is reported as "not applied: <reason>".
+ * Price maths for an order: the unit price (the chosen option's price, a flash sale taken off) × quantity, then
+ * the promo code. An invalid code never blocks the order – it is reported as "not applied: <reason>".
+ * listPrice – the unit price before the sale; salePercent – the sale's percent (null without one).
  */
-function priceOrder(guildId, userId, product, quantity, rawCode) {
-  const round = (n) => Math.round(n * 100) / 100;
-  const unitPrice = parseAmount(product.price);
+function priceOrder(guildId, userId, product, quantity, rawCode, { variant = null, now = Date.now() } = {}) {
+  const listPrice = parseAmount(variant ? variant.price : product.price);
+  const sale = listPrice == null ? null : activeSale(product, now);
+  const unitPrice = sale ? salePrice(listPrice, sale.percent) : listPrice;
+  const salePercent = sale ? Number(sale.percent) : null;
   const subtotal = unitPrice == null ? null : round(unitPrice * quantity);
   const code = rawCode ? promos.normalize(rawCode) : null;
-  if (!code) return { unitPrice, subtotal, total: subtotal, discount: 0, code: null, promo: null, error: null };
+  if (!code) return { unitPrice, listPrice, salePercent, subtotal, total: subtotal, discount: 0, code: null, promo: null, error: null };
   const { promo, error } = promos.check(guildId, code, userId, {
     completedOrders: db.guild(guildId).orders[userId] ?? 0,
     openOrders: promos.openOrdersOf(guildId, userId),
     reserved: promos.reservedBy(guildId, code),
   });
   const { total, discount } = promos.apply(promo, subtotal);
-  return { unitPrice, subtotal, total, discount, code, promo, error };
+  return { unitPrice, listPrice, salePercent, subtotal, total, discount, code, promo, error };
 }
 
 /** The "Price" answer shown in the ticket: subtotal, discount and total (when the price is a number) and the promo result. */
@@ -583,6 +807,10 @@ function priceAnswers(p, quantity) {
     p.discount > 0
       ? [`Subtotal: ${money(p.subtotal)}${each}`, `Discount (${p.code} · ${promos.label(p.promo)}): −${money(p.discount)}`, `**Total to pay: ${money(p.total)}**`]
       : [`**Total to pay: ${money(p.subtotal)}**${each}`];
+  if (p.salePercent) {
+    const was = p.listPrice != null ? `: ${money(p.listPrice)} → ${money(p.unitPrice)}${quantity > 1 ? ' each' : ''}` : '';
+    lines.unshift(`⚡ Flash sale −${p.salePercent}%${was}`);
+  }
   if (promoNote) lines.push(`Promo code ${promoNote}`);
   return [{ label: 'Price', value: lines.join('\n') }];
 }
@@ -603,7 +831,7 @@ function recheckOrderPromo(guildId, ticket) {
   });
   if (!error) return null;
   const subtotal = order.subtotal ?? null;
-  const price = { unitPrice: order.unitPrice ?? null, subtotal, total: subtotal, discount: 0, code: order.promo, promo: null, error };
+  const price = { unitPrice: order.unitPrice ?? null, salePercent: order.salePercent ?? null, subtotal, total: subtotal, discount: 0, code: order.promo, promo: null, error };
   const answers = (ticket.answers ?? []).filter((a) => a.label !== 'Price' && a.label !== 'Promo code');
   return {
     code: order.promo,
@@ -627,6 +855,21 @@ async function startOrder(interaction, productId) {
   return interaction.showModal(orderModal(product, interaction.guild));
 }
 
+/** The option picked in the order form (null for products without options) – a UserError when the options changed meanwhile. */
+function chosenVariant(interaction, product) {
+  let id = null;
+  try {
+    [id] = interaction.fields.getStringSelectValues('variant');
+  } catch {
+    // a form without the Option menu
+  }
+  const options = variantsOf(product);
+  if (!id && !options.length) return null;
+  const variant = options.find((v) => v.id === id);
+  if (!variant) throw new UserError(`The options of **${product.name}** have changed since you opened the form – click **Buy** again to see the current ones.`);
+  return variant;
+}
+
 async function submitOrder(interaction, productId) {
   const tickets = require('../tickets/tickets');
   const product = findProduct(interaction.guild.id, productId);
@@ -643,7 +886,11 @@ async function submitOrder(interaction, productId) {
       return '';
     }
   };
+  const variant = chosenVariant(interaction, product);
   const quantity = parseQuantity(field('quantity'));
+  if (counted(product) && quantity > product.stockCount) {
+    throw new UserError(`Only **${product.stockCount}** left – lower the quantity to ${product.stockCount} or less.`);
+  }
   let payment = field('payment_text');
   let method = payment;
   let methodIndex = null;
@@ -658,9 +905,10 @@ async function submitOrder(interaction, productId) {
   } catch {
     // text fallback already read
   }
-  const price = priceOrder(interaction.guild.id, interaction.user.id, product, quantity, field('promo'));
+  const price = priceOrder(interaction.guild.id, interaction.user.id, product, quantity, field('promo'), { variant });
+  const name = variant ? `${product.name} — ${variant.name}` : product.name;
   const answers = [
-    { label: 'Product', value: `${product.name} — ${formatPrice(product.price)}` },
+    { label: 'Product', value: `${name} — ${formatPrice(variant ? variant.price : product.price)}` },
     { label: 'Quantity', value: String(quantity) },
     { label: 'Payment method', value: payment || '—' },
   ];
@@ -670,7 +918,8 @@ async function submitOrder(interaction, productId) {
 
   const order = {
     productId: product.id,
-    product: product.name,
+    product: name,
+    ...(variant && { variant: variant.name }),
     unitPrice: price.unitPrice,
     quantity,
     method: method || null,
@@ -679,6 +928,7 @@ async function submitOrder(interaction, productId) {
     discount: price.discount,
     subtotal: price.subtotal,
     total: price.total,
+    ...(price.salePercent && { salePercent: price.salePercent }),
   };
 
   // From here on this order holds its code (and counts as an open order of this member) – opening the
@@ -693,34 +943,55 @@ async function submitOrder(interaction, productId) {
     release(); // the saved ticket holds the code now (or opening the ticket failed)
   }
   const lines = [`Your private order ticket is ready: ${channel}`];
-  if (price.total != null) lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${price.discount > 0 ? ` (you save ${money(price.discount)} with **${price.code}**)` : ''}`);
-  else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
+  if (price.total != null) {
+    const savings = [price.salePercent && `⚡ −${price.salePercent}% flash sale`, price.discount > 0 && `you save ${money(price.discount)} with **${price.code}**`].filter(Boolean);
+    lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${savings.length ? ` (${savings.join(' · ')})` : ''}`);
+  } else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
   if (price.error) lines.push(`${e(interaction.guild, 'warning')} Promo code **${price.code}** – not applied: ${price.error}`);
   lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
   return interaction.editReply({
-    embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Order started – ${product.name}`, 256)).setDescription(lines.join('\n'))],
+    embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Order started – ${name}`, 256)).setDescription(lines.join('\n'))],
     components: [row(linkBtn(channel.url, 'Go to my order', '🎫'))],
   });
 }
 
-function autocomplete(interaction) {
+/** Product suggestions for /product and /sale – filter: only some products (e.g. the ones on sale for /sale stop). */
+function autocomplete(interaction, { filter = null } = {}) {
   const focused = interaction.options.getFocused(true);
   if (focused.name === 'category') return categoryAutocomplete(interaction, focused.value);
   const q = String(focused.value ?? '').toLowerCase();
+  const label = (p) => {
+    const sale = activeSale(p);
+    const stock = counted(p) && p.stock !== 'out' ? `${p.stockCount} left` : STOCK[p.stock]?.label ?? '';
+    return `${p.name} · ${priceLabel(p)}${sale ? ` · −${sale.percent}% sale` : ''} · ${stock}`;
+  };
   return interaction.respond(
     products(interaction.guild.id)
-      .filter((p) => !q || p.name.toLowerCase().includes(q))
+      .filter((p) => (!q || p.name.toLowerCase().includes(q)) && (!filter || filter(p)))
       .slice(0, 25)
-      .map((p) => ({ name: truncate(`${p.name} · ${formatPrice(p.price)} · ${STOCK[p.stock]?.label ?? ''}`, 100), value: p.id })),
+      .map((p) => ({ name: truncate(label(p), 100), value: p.id })),
   );
 }
 
 module.exports = {
   STOCK,
   formatPrice,
+  variantsOf,
+  activeSale,
+  salePrice,
+  cheapestVariant,
+  priceLabel,
+  priceMarkdown,
+  variantPrice,
+  optionsText,
+  counted,
+  stockFor,
+  stockText,
+  saleProblem,
   parseEmoji,
   products,
   findProduct,
+  requireProduct,
   productEmoji,
   MAX_CATEGORIES,
   categories,
@@ -746,6 +1017,10 @@ module.exports = {
   editProduct,
   removeProduct,
   setStock,
+  countDown,
+  MAX_VARIANTS,
+  parseVariants,
+  setVariants,
   announceProduct,
   orderModal,
   parseQuantity,
