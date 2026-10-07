@@ -312,7 +312,7 @@ function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1,
 function completeOrderModal(ticket, { promoWarning = null } = {}) {
   const o = ticket.order;
   let summary = o
-    ? `**${o.product}** × ${o.quantity}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
+    ? `**${o.product || 'Custom order'}** × ${o.quantity ?? 1}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
       (o.total != null ? `Total to pay: **${money(o.total)}**` : 'The price was not a fixed number – enter what the customer paid.')
     : 'Custom order – enter what the customer paid.';
   if (o?.promo && promoWarning) {

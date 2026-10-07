@@ -198,7 +198,9 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   assert.match(textOf(lastResponse(soonButton)), /You've just sent your payment/);
 
   // A corrected PIN after the cooldown: a seller has claimed it now – only they are pinged
+  // (re-sends ping only after the Call support cooldown – see orders-review.test.js)
   cool(channel);
+  db.getTicket(channel.id).lastStaffPing -= 31 * 60_000;
   await t.claimTicket(channel, seller);
   await pay(guild, buyer, channel, { fields: { pins: '1234567890123457' } });
   const again = channel.messageList.at(-1);

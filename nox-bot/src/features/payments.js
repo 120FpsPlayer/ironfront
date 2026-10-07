@@ -9,7 +9,7 @@
  * A "📨 Payment sent" card in the ticket shows it (PINs in spoilers, the screenshots uploaded again – links from a
  * form expire) and pings the seller handling the ticket, or the order staff roles while nobody has claimed it.
  * The log channel gets the same without the PINs (all but the last 4 digits hidden). Sending it again (e.g. a
- * corrected PIN) works after a short cooldown.
+ * corrected PIN) works after a short cooldown – it only pings again after the Call support cooldown.
  *
  * Components:
  *   pay:open      "I've paid" button on the order card → form
@@ -53,16 +53,30 @@ const sending = new Set(); // ticket channels with a payment on its way – a do
 
 /**
  * "1234-5678-9012-3456, 1111 2222 3333 4444" → { pins: ['1234567890123456', …], bad: null }.
- * PINs are separated by commas, semicolons or new lines – or spaces, as long as each PIN has its 16 digits.
- * Dashes and spaces inside a PIN are fine. bad: the first part that is not a PIN (null when all are fine).
+ * PINs are separated by commas, semicolons, new lines or spaces. Dashes inside a PIN are fine, and so are spaces
+ * between its groups of 4 digits ("1234 5678 9012 3456") – a group that does not fit (17 digits, 3 digits) is not.
+ * bad: the first part that is not a PIN (null when all are fine).
  */
 function parsePins(raw) {
   const pins = [];
   for (const part of String(raw ?? '').split(/[,;\n]+/)) {
-    const digits = part.replace(/[\s-]+/g, '');
-    if (!digits) continue;
-    if (!/^\d+$/.test(digits) || digits.length % 16 !== 0) return { pins, bad: part.trim() };
-    for (let i = 0; i < digits.length; i += 16) pins.push(digits.slice(i, i + 16));
+    let pending = ''; // the groups of a PIN written with spaces
+    for (const word of part.trim().split(/\s+/)) {
+      const digits = word.replace(/-+/g, '');
+      if (!digits) continue;
+      if (!/^\d+$/.test(digits)) return { pins, bad: part.trim() };
+      if (!pending && digits.length % 16 === 0) {
+        for (let i = 0; i < digits.length; i += 16) pins.push(digits.slice(i, i + 16));
+        continue;
+      }
+      if (digits.length % 4 !== 0 || pending.length + digits.length > 16) return { pins, bad: part.trim() };
+      pending += digits;
+      if (pending.length === 16) {
+        pins.push(pending);
+        pending = '';
+      }
+    }
+    if (pending) return { pins, bad: part.trim() };
   }
   return { pins: [...new Set(pins)], bad: null };
 }
@@ -71,8 +85,11 @@ function parsePins(raw) {
 const formatPin = (pin) => pin.match(/.{1,4}/g).join('-');
 /** "1234567890123456" → "••••-••••-••••-3456" (for the log) */
 const maskPin = (pin) => `••••-••••-••••-${String(pin).slice(-4)}`;
-/** Hides anything in free text that looks like a PIN (16 digits, maybe with dashes or spaces) – for the log. */
-const maskText = (value) => String(value ?? '').replace(/\d(?:[ -]?\d){15}/g, (m) => maskPin(m.replace(/\D/g, '')));
+/**
+ * Hides anything in free text that looks like a PIN – for the log. 16 digits with any spaces, dashes, dots or
+ * slashes between them: at least as loose as parsePins, so no PIN the form takes reaches the log through the note.
+ */
+const maskText = (value) => String(value ?? '').replace(/\d(?:[\s\-._/]*\d){15}/g, (m) => maskPin(m.replace(/\D/g, '')));
 
 // ───────────── Checks ─────────────
 
@@ -196,8 +213,15 @@ async function copyFiles(uploads) {
 
 // ───────────── Card, log ─────────────
 
-/** Who is told: the seller handling the ticket, otherwise the staff roles of order tickets. */
-function whoToPing(guild, ticket) {
+/**
+ * Who is told: the seller handling the ticket, otherwise the staff roles of order tickets. A payment sent again
+ * (status still "sent") only pings when support was not called within defaults.pingStaffCooldownMinutes – the
+ * same cooldown as Call support (ticket.lastStaffPing), so the team isn't pinged every minute. After staff set
+ * the order back to awaiting, the next payment pings right away.
+ */
+function whoToPing(guild, ticket, now = Date.now()) {
+  const cooldown = (config.defaults?.pingStaffCooldownMinutes ?? 30) * 60_000;
+  if (statusOf(ticket) === 'sent' && ticket.lastStaffPing && now - ticket.lastStaffPing < cooldown) return { users: [], roles: [] };
   if (ticket.claimedBy) return { users: [ticket.claimedBy], roles: [] };
   return { users: [], roles: staffRoleIds(guild.id, config.getType(ticket.typeId)).filter((id) => guild.roles.cache.has(id)) };
 }
@@ -274,22 +298,35 @@ async function submit(interaction) {
   sending.add(channel.id);
   try {
     const files = await copyFiles(uploads);
+    // Staff may have confirmed, completed or closed the order while the files were copied – check again.
+    const current = requirePayable(channel, interaction.user.id);
     const now = Date.now();
-    const again = Boolean(ticket.order?.payment);
+    const again = Boolean(current.order?.payment);
     const payment = { at: now, method: order.method ?? null, note: note || null, pins, files: [] };
-    const message = await channel.send(paymentCard(ticket, { payment, files, pings: whoToPing(guild, ticket), again }));
+    const pings = whoToPing(guild, current, now);
+    const message = await channel.send(paymentCard(current, { payment, files, pings, again }));
     // The copies in the ticket keep working – the links from the form expire.
     const sent = [...(message.attachments?.values() ?? [])];
     payment.files = files.map((f) => ({ name: f.name, url: (f.buffer && sent.find((a) => a.name === f.name)?.url) || f.url }));
     payment.messageId = message.id;
 
-    orderstatus.recordStatus(ticket, 'sent', { by: interaction.user.id, now, extra: { payment } });
-    // The customer acted: the ticket waits for the team now (no auto-close).
-    db.updateTicket(channel.id, { lastActivity: now, lastMessageBy: 'owner', warned: false, ...(ticket.lastMessageBy === 'staff' && { waitingSince: now }) });
+    // …or while the card was posted: the payment is kept, but the status staff set stays.
+    const latest = db.getTicket(channel.id);
+    const accepted = ui.acceptsPayment(latest);
+    if (accepted) orderstatus.recordStatus(latest, 'sent', { by: interaction.user.id, now, extra: { payment } });
+    else db.updateTicket(channel.id, { order: { ...tickets.orderDetails(latest), payment } });
+    // The customer acted: the ticket waits for the team now (no auto-close). A ping counts as calling support.
+    db.updateTicket(channel.id, {
+      lastActivity: now,
+      lastMessageBy: 'owner',
+      warned: false,
+      ...(latest.lastMessageBy === 'staff' && { waitingSince: now }),
+      ...((pings.users.length || pings.roles.length) && { lastStaffPing: now }),
+    });
     const updated = db.getTicket(channel.id);
     await tickets.refreshControlMessage(channel, updated);
     await sendLog(guild, logPayload(channel, updated, interaction.member, { payment, files, again, message }));
-    await hooks.emit('orderStatus', { guild, ticket: updated, status: 'sent', staff: null });
+    if (accepted) await hooks.emit('orderStatus', { guild, ticket: updated, status: 'sent', staff: null });
   } finally {
     sending.delete(channel.id);
   }
