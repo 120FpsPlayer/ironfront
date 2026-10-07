@@ -16,7 +16,8 @@ const hooks = require('../lib/hooks');
 const shopstatus = require('./shopstatus');
 const ui = require('../tickets/ui');
 const { COLORS } = require('../lib/theme');
-const { staffRoleIds, duration, pad, truncate, sendToChannel } = require('../lib/utils');
+const { duration, pad, truncate, sendToChannel } = require('../lib/utils');
+const { alertRoleIds } = require('../lib/permissions');
 const { container, text, divider, linkBtn, row, v2, channelUrl } = require('../lib/v2');
 
 const MINUTE = 60_000;
@@ -57,7 +58,7 @@ function dueTickets(guild, now, opts) {
 function pingRoles(guild, list) {
   const ids = new Set();
   for (const t of list) {
-    for (const id of staffRoleIds(guild.id, config.getType(t.typeId))) if (guild.roles.cache.has(id)) ids.add(id);
+    for (const id of alertRoleIds(guild.id, config.getType(t.typeId))) if (guild.roles.cache.has(id)) ids.add(id);
   }
   return [...ids];
 }

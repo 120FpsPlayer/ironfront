@@ -50,6 +50,17 @@ function typeEnvRoleIds(type) {
   return typeEnvCache.get(type.id);
 }
 
+/**
+ * Who to ping about a ticket of this type – a payment, a reminder: its own roles (Seller for purchases), else the
+ * support team, else every role that handles it. Pinging the whole staff list for each payment would be noise.
+ */
+function alertRoleIds(guildId, type) {
+  const own = [...new Set([...(type?.staffRoleIds ?? []), ...builtRoles(guildId, type?.staffRoles ?? []), ...typeEnvRoleIds(type)])];
+  if (own.length) return own;
+  const support = [...new Set([...env.supportRoleIds, ...builtRoles(guildId, ['support', 'trialSupport'])])];
+  return support.length ? support : ticketRoleIds(guildId, type);
+}
+
 /** Every role that can see and handle tickets of this type. */
 function ticketRoleIds(guildId, type) {
   return [
@@ -140,6 +151,7 @@ module.exports = {
   isStaff,
   allStaffRoleIds,
   ticketRoleIds,
+  alertRoleIds,
   openDeniedReason,
   reportRoles,
 };

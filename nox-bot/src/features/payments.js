@@ -35,7 +35,8 @@ const ui = require('../tickets/ui');
 const orderstatus = require('./orderstatus');
 const { statusOf, statusLabel } = require('../lib/orderStatus');
 const { COLORS } = require('../lib/theme');
-const { UserError, reply, logEmbed, staffRoleIds, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { alertRoleIds } = require('../lib/permissions');
 const { container, text, divider, gallery, linkBtn, row, v2 } = require('../lib/v2');
 
 const COOLDOWN = 60_000;
@@ -223,7 +224,7 @@ function whoToPing(guild, ticket, now = Date.now()) {
   const cooldown = (config.defaults?.pingStaffCooldownMinutes ?? 30) * 60_000;
   if (statusOf(ticket) === 'sent' && ticket.lastStaffPing && now - ticket.lastStaffPing < cooldown) return { users: [], roles: [] };
   if (ticket.claimedBy) return { users: [ticket.claimedBy], roles: [] };
-  return { users: [], roles: staffRoleIds(guild.id, config.getType(ticket.typeId)).filter((id) => guild.roles.cache.has(id)) };
+  return { users: [], roles: alertRoleIds(guild.id, config.getType(ticket.typeId)).filter((id) => guild.roles.cache.has(id)) };
 }
 
 const quote = (value) => value.split('\n').map((l) => `> ${l}`).join('\n');

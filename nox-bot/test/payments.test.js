@@ -13,7 +13,6 @@ const shop = require('../src/features/shop');
 const payments = require('../src/features/payments');
 const orderstatus = require('../src/features/orderstatus');
 const t = require('../src/tickets/tickets');
-const { staffRoleIds } = require('../src/lib/utils');
 
 const commands = loadCommands();
 config.defaults.openCooldownSeconds = 0;
@@ -170,9 +169,10 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   assert.ok(out.includes('||1234-5678-9012-3456|| · ||1111-2222-3333-4444||'));
   assert.match(out, /\*\*Method:\*\* PaysafeCard/);
   assert.match(out, /> Bought at the kiosk/);
-  const roles = staffRoleIds(guild.id, config.getType('order')).filter((id) => guild.roles.cache.has(id));
-  assert.ok(roles.includes(role(guild, 'seller')));
+  // Only the sellers (the Purchase type's own role) – not every staff role
+  const roles = [role(guild, 'seller')];
   assert.deepEqual(posted.body.allowedMentions, { users: [], roles });
+  assert.ok(!out.includes(`<@&${role(guild, 'admin')}>`) && !out.includes(`<@&${role(guild, 'support')}>`));
   assert.ok(out.includes(`<@&${role(guild, 'seller')}>`));
   assert.equal(saved.payment.messageId, posted.id);
 

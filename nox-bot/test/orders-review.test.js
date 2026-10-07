@@ -16,7 +16,6 @@ const shop = require('../src/features/shop');
 const payments = require('../src/features/payments');
 const orderstatus = require('../src/features/orderstatus');
 const t = require('../src/tickets/tickets');
-const { staffRoleIds } = require('../src/lib/utils');
 
 const commands = loadCommands();
 config.defaults.openCooldownSeconds = 0;
@@ -51,7 +50,7 @@ async function order(guild, buyer, product, { payment = '0' } = {}) {
 const pay = (guild, who, channel, { fields = {}, uploads = {} } = {}) => run({ guild, member: who, kind: 'modal', customId: 'pay:submit', fields, uploads, channel });
 const card = (channel) => channel.messageList.find((m) => m.id === db.getTicket(channel.id).controlMessageId);
 const logChannel = (guild) => guild.channels.cache.get(db.settings(guild.id).logChannelId);
-const orderRoles = (guild) => staffRoleIds(guild.id, config.getType('order')).filter((id) => guild.roles.cache.has(id));
+const orderRoles = (guild) => [db.roleId(guild.id, 'seller')];
 const nothing = { users: [], roles: [] };
 /** Moves the ticket's clocks back: the last payment (cooldown) and the last staff ping. */
 const later = (channel, { payment = 0, ping = 0 }) => {

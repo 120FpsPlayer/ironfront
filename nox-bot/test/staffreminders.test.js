@@ -9,7 +9,6 @@ const { buildServer } = require('../src/builder/executor');
 const config = require('../src/lib/config');
 const reminders = require('../src/features/staffreminders');
 const t = require('../src/tickets/tickets');
-const { staffRoleIds } = require('../src/lib/utils');
 
 config.defaults.openCooldownSeconds = 0;
 
@@ -72,9 +71,9 @@ test('after unclaimedMinutes: ONE message for all waiting tickets, link buttons,
     [a, b].map((c) => [`#${pad(db.getTicket(c.id).number)}`, c.url]),
   );
 
-  // Pings: the staff roles of those two ticket types – and nothing else (no owners, no @everyone)
-  const expected = new Set(['support', 'order'].flatMap((id) => staffRoleIds(guild.id, config.getType(id))).filter((id) => guild.roles.cache.has(id)));
-  assert.ok(expected.has(role(guild, 'seller')) && expected.has(role(guild, 'support')));
+  // Pings: the team of those two ticket types – Sellers for the purchase, Support for the support ticket – and nothing
+  // else (not every staff role, no owners, no @everyone)
+  const expected = new Set(['seller', 'support', 'trialSupport'].map((k) => role(guild, k)));
   assert.deepEqual(Object.keys(msg.body.allowedMentions), ['roles']);
   assert.deepEqual(new Set(msg.body.allowedMentions.roles), expected);
   for (const id of expected) assert.ok(out.includes(`<@&${id}>`));
