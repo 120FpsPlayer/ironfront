@@ -12,12 +12,14 @@
  * automatically only when every item has something to deliver (otherwise staff send what there is and deliver the
  * rest by hand). A balance top-up (order.topUp – src/features/balance.js) delivers no product: completing it
  * credits the balance.
+ * A gift (order.giftTo – src/features/gifts.js) goes by DM to the member it's for instead of the buyer ("🎁 A gift
+ * from @buyer"); the ticket gets every card as usual, and the buyer is told whether the DM reached them.
  *
  * product.delivery = { files: [{ name, size }], text, updatedAt } – the files are in data/deliveries/<productId>/
- * ticket.order.delivered = { at, by, dm, auto }
+ * ticket.order.delivered = { at, by, dm, auto, giftTo } – dm: the DM reached the buyer (or the gift's recipient)
  */
 
-const { ButtonStyle, FileBuilder, MessageFlags } = require('discord.js');
+const { ButtonStyle, FileBuilder, MessageFlags, escapeMarkdown } = require('discord.js');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const hooks = require('../lib/hooks');
@@ -34,6 +36,7 @@ const TEXT_MAX = 1500;
 // Here – shop.js and tickets.js need this file.
 const shop = () => require('./shop');
 const tickets = () => require('../tickets/tickets');
+const gifts = () => require('./gifts');
 
 /** Does the product have something to deliver (files or text)? */
 const hasDelivery = (product) => Boolean(product?.delivery?.files?.length || product?.delivery?.text);
@@ -108,12 +111,14 @@ function deliverySummary(p) {
 /** "📦 Your product is on the way" – auto: paid by PayPal / Stripe; otherwise after "Pay", while staff check it. */
 function onTheWayCard(ticket, { auto }) {
   if (ticket.order?.topUp) return topUpOnTheWay(ticket, { auto });
+  const giftTo = gifts().recipientOf(ticket);
+  const where = giftTo ? `here and to <@${giftTo}>'s DMs (it's a gift 🎁)` : 'here and in your DMs';
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(
     text(
       auto
-        ? `## 📦 Your product is on the way!\nPayment received for order \`#${pad(ticket.number)}\` – your product is being sent right now, here and in your DMs.`
-        : `## 📦 Your product is on the way!\nWe're checking your payment for order \`#${pad(ticket.number)}\` – as soon as it's confirmed, your product is sent right here and in your DMs.`,
+        ? `## 📦 Your product is on the way!\nPayment received for order \`#${pad(ticket.number)}\` – your product is being sent right now, ${where}.`
+        : `## 📦 Your product is on the way!\nWe're checking your payment for order \`#${pad(ticket.number)}\` – as soon as it's confirmed, your product is sent right ${where}.`,
     ),
   );
   c.addTextDisplayComponents(text("-# Didn't get it after a few minutes? Write here or click **Call support**."));
@@ -137,28 +142,34 @@ function topUpOnTheWay(ticket, { auto }) {
 
 const safeBlock = (s) => String(s).replace(/```/g, 'ʼʼʼ');
 
+/** The heading of the product card – a gift says who it's from (in the DM) or who it's for (in the ticket). */
+function productHeading(guild, ticket, name, { inDm, giftTo, giftFrom }) {
+  if (giftFrom) return `## 🎁 A gift from @${giftFrom} – ${name}\n**@${giftFrom}** bought this for you at **${truncate(guild.name, 80)}** · enjoy! 💜`;
+  if (giftTo) return `## 🎁 Your gift – ${name}\nOrder \`#${pad(ticket.number)}\` · a gift for <@${giftTo}> – it goes to their DMs too. Thank you for your purchase! 💜`;
+  return `## 📦 Your product – ${name}\nOrder \`#${pad(ticket.number)}\`${inDm ? ` at **${truncate(guild.name, 80)}**` : ''} · thank you for your purchase! 💜`;
+}
+
 /**
  * The product itself: its text and files. inDm – the copy sent by DM (with the server name); name – the cart item
- * it is for ("Nitro × 2"; default: the order's product).
+ * it is for ("Nitro × 2"; default: the order's product). giftTo – the ticket copy of a gift; giftFrom – the
+ * buyer's name on the DM copy a gift's recipient gets.
  */
-function productCard(guild, ticket, product, { inDm = false, name = null } = {}) {
+function productCard(guild, ticket, product, { inDm = false, name = null, giftTo = null, giftFrom = null } = {}) {
   const order = tickets().orderDetails(ticket);
   const { files: attached, missing } = files.attachments(product);
   const c = container(COLORS.success);
-  c.addTextDisplayComponents(
-    text(
-      `## 📦 Your product – ${truncate(name || order.product || product.name, 120)}\n` +
-        `Order \`#${pad(ticket.number)}\`${inDm ? ` at **${truncate(guild.name, 80)}**` : ''} · thank you for your purchase! 💜`,
-    ),
-  );
+  c.addTextDisplayComponents(text(productHeading(guild, ticket, truncate(name || order.product || product.name, 120), { inDm, giftTo, giftFrom })));
   if (product.delivery?.text) {
     c.addSeparatorComponents(divider());
     c.addTextDisplayComponents(text(`\`\`\`\n${safeBlock(product.delivery.text)}\n\`\`\``));
   }
   for (const f of attached) c.addFileComponents(new FileBuilder().setURL(`attachment://${f.name}`));
-  c.addTextDisplayComponents(
-    text(`-# ${inDm ? 'Also in your ticket' : 'Also sent to your DMs'} · keep it safe – never share it with anyone. Something wrong? ${inDm ? 'Write in your ticket.' : 'Write here.'}`),
-  );
+  const footer = giftFrom
+    ? 'Keep it safe – never share it with anyone. Something wrong? Ask the friend who gave it to you.'
+    : giftTo
+      ? 'Keep it safe – never share it with anyone. Something wrong? Write here.'
+      : `${inDm ? 'Also in your ticket' : 'Also sent to your DMs'} · keep it safe – never share it with anyone. Something wrong? ${inDm ? 'Write in your ticket.' : 'Write here.'}`;
+  c.addTextDisplayComponents(text(`-# ${footer}`));
   return { payload: v2(c, { files: attached }), missing };
 }
 
@@ -166,10 +177,20 @@ function productCard(guild, ticket, product, { inDm = false, name = null } = {})
 
 const delivering = new Set(); // tickets being delivered right now – one at a time
 
+/** Is the product of this ticket being delivered right now? (A gift can't be changed then.) */
+const isDelivering = (channelId) => delivering.has(channelId);
+
+/** "Alex" – how the buyer is named on a gift's DM (no markdown, no mention: it's read outside the server). */
+async function buyerName(guild, ticket) {
+  const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
+  return escapeMarkdown(truncate(user?.globalName || user?.username || ticket.ownerName || 'a friend', 40));
+}
+
 /**
  * Sends the product – every item of a cart that has files or text, one card each – into the ticket and by DM and
  * records it. → { ok, dm, missing } – ok false when there is nothing to deliver, or when all files of an item are
- * gone (then nothing is sent). again – staff send it once more (also after it was delivered).
+ * gone (then nothing is sent). again – staff send it once more (also after it was delivered). A gift's DMs go to
+ * its recipient (order.giftTo) – the buyer has the cards in the ticket and is told whether the DM got through.
  */
 async function deliver(channel, ticket, { by, auto = false, again = false } = {}) {
   const guild = channel.guild;
@@ -179,7 +200,8 @@ async function deliver(channel, ticket, { by, auto = false, again = false } = {}
   if (!again && db.getTicket(channel.id)?.order?.delivered) return { ok: false, reason: 'done' };
   delivering.add(channel.id);
   try {
-    const cards = parts.map((x) => ({ ...x, card: productCard(guild, ticket, x.product, { name: x.name }) }));
+    const giftTo = gifts().recipientOf(db.getTicket(channel.id) ?? ticket);
+    const cards = parts.map((x) => ({ ...x, card: productCard(guild, ticket, x.product, { name: x.name, giftTo }) }));
     const empty = cards.filter((x) => !x.card.payload.files?.length && !x.product.delivery.text); // no files: payload.files is left out
     if (empty.length) return { ok: false, reason: 'missing', missing: empty.flatMap((x) => x.card.missing) };
     let sent = null;
@@ -187,15 +209,17 @@ async function deliver(channel, ticket, { by, auto = false, again = false } = {}
       const message = await channel.send(x.card.payload);
       sent ??= message;
     }
-    const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
+    const user = await guild.client.users.fetch(giftTo ?? ticket.ownerId).catch(() => null);
+    const giftFrom = giftTo ? await buyerName(guild, ticket) : null;
     let dm = Boolean(user);
     for (const x of cards) {
-      if (dm) dm = await user.send(productCard(guild, ticket, x.product, { inDm: true, name: x.name }).payload).then(() => true).catch(() => false);
+      if (dm) dm = await user.send(productCard(guild, ticket, x.product, { inDm: true, name: x.name, giftFrom }).payload).then(() => true).catch(() => false);
     }
     const what = cards.length > 1 ? 'your products are' : 'your product is';
-    if (!dm) await channel.send(notice(COLORS.warning, `📭 <@${ticket.ownerId}> I couldn't DM you – ${what} right above. Open your DMs for this server to get copies next time.`, { mentions: { users: [ticket.ownerId] } })).catch(() => null);
+    if (giftTo) await channel.send(gifts().deliveredNotice(ticket, giftTo, dm, { many: cards.length > 1 })).catch(() => null);
+    else if (!dm) await channel.send(notice(COLORS.warning, `📭 <@${ticket.ownerId}> I couldn't DM you – ${what} right above. Open your DMs for this server to get copies next time.`, { mentions: { users: [ticket.ownerId] } })).catch(() => null);
     const order = tickets().orderDetails(db.getTicket(channel.id));
-    db.updateTicket(channel.id, { order: { ...order, delivered: { at: Date.now(), by: by?.id ?? null, dm, auto, messageId: sent?.id ?? null } } });
+    db.updateTicket(channel.id, { order: { ...order, delivered: { at: Date.now(), by: by?.id ?? null, dm, auto, messageId: sent?.id ?? null, ...(giftTo && { giftTo }) } } });
     const missing = cards.flatMap((x) => x.card.missing);
     await sendLog(guild, {
       embeds: [
@@ -203,12 +227,13 @@ async function deliver(channel, ticket, { by, auto = false, again = false } = {}
           { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
           { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
           { name: cards.length > 1 ? 'Products' : 'Product', value: truncate(cards.map((x) => x.name || x.product.name).join('\n'), 1024), inline: true },
-          { name: 'DM', value: dm ? 'sent' : "couldn't DM – it's in the ticket", inline: true },
+          ...(giftTo ? [{ name: '🎁 Gift for', value: `<@${giftTo}>`, inline: true }] : []),
+          { name: 'DM', value: dm ? (giftTo ? 'sent to the gift recipient' : 'sent') : giftTo ? "couldn't DM the recipient – the buyer has it in the ticket" : "couldn't DM – it's in the ticket", inline: true },
           ...(missing.length ? [{ name: '⚠️ Missing files', value: truncate(`${missing.join(', ')} – set them again with /product delivery`, 1024) }] : []),
         ),
       ],
     }).catch(() => null);
-    return { ok: true, dm, missing };
+    return { ok: true, dm, missing, giftTo };
   } finally {
     delivering.delete(channel.id);
   }
@@ -253,11 +278,13 @@ async function confirmAndDeliver(channel, member, { again = false } = {}) {
     throw new UserError(`The ${cart ? 'products were' : 'product was'} already delivered ${ts(ticket.order.delivered.at, 'R')}. Need to send ${cart ? 'them' : 'it'} again? ⚙️ → **Send product again**.`);
   }
   if (!ticket.completedAt && ['awaiting', 'sent'].includes(statusOf(ticket))) await require('./orderstatus').setStatus(channel, 'paid', member);
+  const giftTo = gifts().recipientOf(db.getTicket(channel.id));
+  const giftHint = giftTo ? ` 🎁 It's a gift – give it to <@${giftTo}>.` : '';
   if (cart && !canDeliver(channel.guild.id, ticket)) {
-    return 'Payment confirmed – the order is **Paid**. No product in this cart has files or text to deliver – deliver them by hand, then ⚙️ → **Order completed**.';
+    return `Payment confirmed – the order is **Paid**. No product in this cart has files or text to deliver – deliver them by hand, then ⚙️ → **Order completed**.${giftHint}`;
   }
   if (!cart && !hasDelivery(product)) {
-    return `Payment confirmed – the order is **Paid**. ${product ? `**${product.name}** has no files or text to deliver` : 'This is a custom order'} – deliver it by hand, then ⚙️ → **Order completed**.`;
+    return `Payment confirmed – the order is **Paid**. ${product ? `**${product.name}** has no files or text to deliver` : 'This is a custom order'} – deliver it by hand, then ⚙️ → **Order completed**.${giftHint}`;
   }
   const done = await deliver(channel, db.getTicket(channel.id), { by: member, again });
   if (!done.ok) {
@@ -274,11 +301,13 @@ async function confirmAndDeliver(channel, member, { again = false } = {}) {
       .catch((err) => console.warn(`[delivery] Could not complete order ${channel.id}:`, err.message));
   }
   const note = done.missing.length ? ` ⚠️ Missing files: ${done.missing.join(', ')}.` : '';
-  const where = `in the ticket${done.dm ? ' and by DM' : " (the customer's DMs are closed)"}`;
+  const where = done.giftTo
+    ? `in the ticket${done.dm ? ` and to the gift's recipient <@${done.giftTo}> by DM` : ` (couldn't DM the gift's recipient <@${done.giftTo}> – the buyer has it in the ticket)`}`
+    : `in the ticket${done.dm ? ' and by DM' : " (the customer's DMs are closed)"}`;
   if (!cart) return `📦 Delivered **${product.name}** ${where}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
   const count = sendable(channel.guild.id, latest).length;
   const delivered = `📦 Delivered **${count} ${count === 1 ? 'product' : 'products'}** ${where}`;
-  if (byHand.length) return `${delivered}. ⚠️ Deliver by hand: ${truncate(byHand.join(', '), 300)} – then ⚙️ → **Order completed**.${note}`;
+  if (byHand.length) return `${delivered}. ⚠️ Deliver by hand: ${truncate(byHand.join(', '), 300)} – then ⚙️ → **Order completed**.${giftHint}${note}`;
   return `${delivered}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
 }
 
@@ -318,6 +347,7 @@ module.exports = {
   deliverySummary,
   onTheWayCard,
   productCard,
+  isDelivering,
   deliver,
   deliverPaid,
   confirmAndDeliver,

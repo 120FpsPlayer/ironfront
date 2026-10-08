@@ -10,6 +10,8 @@
  *   percent / amount – exactly one is set (10 → 10% off, or 5 → 5€ off)
  *   userId           – personal code: only this member can use it
  *   uses             – recorded when the order is completed (redeem), not when it is placed
+ *   affiliate        – a creator code: { userId, commission } – its creator can't use it, and earns commission on
+ *                      completed sales with it (src/features/affiliates.js)
  *
  * Until then an open order HOLDS its code: the hold counts towards max uses, once per member and
  * first order only (reservedBy / openOrdersOf). A closed order gives its code back – reopening it takes
@@ -17,6 +19,7 @@
  */
 
 const crypto = require('node:crypto');
+const config = require('../lib/config');
 const db = require('../lib/db');
 const { UserError, money } = require('../lib/utils');
 
@@ -27,7 +30,7 @@ const normalize = (code) => String(code ?? '').trim().toUpperCase();
 const list = (guildId) => db.guild(guildId).promos;
 const find = (guildId, code) => list(guildId).find((p) => p.code === normalize(code)) ?? null;
 
-function create(guildId, { code, percent = null, amount = null, expiresAt = null, maxUses = null, userId = null, oncePerUser = true, firstOrderOnly = false, reason = null, createdBy = null }) {
+function create(guildId, { code, percent = null, amount = null, expiresAt = null, maxUses = null, userId = null, oncePerUser = true, firstOrderOnly = false, reason = null, createdBy = null, affiliate = null }) {
   const c = normalize(code);
   if (!CODE.test(c)) throw new UserError('A code has 3–24 characters: letters, numbers, - and _.');
   if (find(guildId, c)) throw new UserError(`The code **${c}** already exists.`);
@@ -51,6 +54,7 @@ function create(guildId, { code, percent = null, amount = null, expiresAt = null
     createdBy,
     createdAt: Date.now(),
     active: true,
+    ...(affiliate && { affiliate }),
   };
   list(guildId).push(promo);
   db.save();
@@ -85,6 +89,8 @@ function remove(guildId, code) {
 function problem(promo, userId, { now = Date.now(), completedOrders = 0, openOrders = 0, reserved = [] } = {}) {
   if (!promo || !promo.active) return "This code doesn't exist.";
   if (promo.expiresAt && now > promo.expiresAt) return 'This code has expired.';
+  if (promo.affiliate && config.affiliates?.enabled === false) return 'Creator codes are turned off right now.';
+  if (promo.affiliate && promo.affiliate.userId === userId) return "This is your own creator code – it's for your audience, you can't use it yourself.";
   if (promo.userId && promo.userId !== userId) return 'This code belongs to someone else.';
   if (promo.oncePerUser && reserved.includes(userId)) return "You're already using this code in another open order.";
   if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return 'This code has been used up.';
