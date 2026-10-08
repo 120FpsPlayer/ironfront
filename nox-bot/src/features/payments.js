@@ -39,6 +39,7 @@ const { statusOf, statusLabel } = require('../lib/orderStatus');
 const { COLORS } = require('../lib/theme');
 const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog, maskPin, maskPins } = require('../lib/utils');
 const { alertRoleIds } = require('../lib/permissions');
+const { quantitySuffix } = require('../lib/orderItems');
 const { container, text, divider, gallery, linkBtn, row, v2 } = require('../lib/v2');
 
 const COOLDOWN = 60_000;
@@ -113,7 +114,7 @@ function requirePayable(channel, userId, now = Date.now()) {
 function paymentModal(ticket) {
   const order = tickets.orderDetails(ticket);
   const summary =
-    `**${truncate(order.product || 'Your order', 100)}** × ${order.quantity ?? 1}` +
+    `**${truncate(order.product || 'Your order', 100)}**${quantitySuffix(order)}` +
     (order.method ? ` · ${truncate(order.method, 60)}` : '') +
     (order.total != null ? ` · Total **${money(order.total)}**` : '');
   const modal = new ModalBuilder()

@@ -17,7 +17,7 @@ const shop = require('./shop');
 const isPrivate = (interaction) => Boolean(interaction.message?.flags?.has?.(MessageFlags.Ephemeral));
 
 async function show(interaction, tab, page = 0) {
-  const payload = shop.shopView(interaction.guild, { tab, page });
+  const payload = shop.shopView(interaction.guild, { tab, page, userId: interaction.user.id }); // a private page: their 🛒 Cart (n)
   if (isPrivate(interaction)) {
     await interaction.deferUpdate();
     return interaction.editReply(panels.forEdit(payload));

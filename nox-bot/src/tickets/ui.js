@@ -19,6 +19,7 @@ const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money } =
 const shop = require('../features/shop'); // used at render time – safe with circular requires
 const productImages = require('../lib/productImages');
 const { ORDER_STATUS, statusOf, statusLabel } = require('../lib/orderStatus');
+const { isCart } = require('../lib/orderItems');
 const { SPACER, text, divider, btn, linkBtn, row, section, buttonSection, container, header, v2, notice, channelUrl } = require('../lib/v2');
 
 /** Custom NØX emoji for a ticket type (falls back to the Unicode emoji from config.json). */
@@ -226,7 +227,7 @@ function manageSelect(ticket, guild) {
     }
   }
   // The product's files / text (src/features/delivery.js) – here, as delivery.js needs this file.
-  if (ticket.typeId === 'order' && guild && require('../features/delivery').deliverable(guild.id, ticket)) {
+  if (ticket.typeId === 'order' && guild && require('../features/delivery').canDeliver(guild.id, ticket)) {
     const sent = ticket.order?.delivered;
     options.push({
       label: sent ? 'Send product again' : 'Deliver product',
@@ -309,6 +310,7 @@ function inactivityWarning(ticket, closeAt) {
 
 /** Shown in the ticket after staff marks an order as completed. */
 function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1, sale = null } = {}) {
+  if (ticket.order?.topUp) return require('../features/balance').topUpDoneCard(guild, ticket, sale); // no vouch for a top-up
   const c = container(COLORS.success);
   c.addTextDisplayComponents(
     text(
@@ -328,12 +330,13 @@ function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1,
 function completeOrderModal(ticket, { promoWarning = null } = {}) {
   const o = ticket.order;
   let summary = o
-    ? `**${o.product || 'Custom order'}** × ${o.quantity ?? 1}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
+    ? `**${o.product || 'Custom order'}**${isCart(o) || o.topUp ? '' : ` × ${o.quantity ?? 1}`}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
       (o.total != null ? `Total to pay: **${money(o.total)}**` : 'The price was not a fixed number – enter what the customer paid.')
     : 'Custom order – enter what the customer paid.';
   if (o?.promo && promoWarning) {
     summary += `\n⚠️ **Code ${o.promo} is over its limit** – ${promoWarning}. ${o.total != null ? 'The total above still includes its discount' : 'Its discount is still on this order'} – enter what the customer actually paid.`;
   }
+  if (o?.topUp) summary += "\n💰 A balance top-up: the amount paid is added to the customer's store balance."; // features/balance.js
   const input = new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(12).setPlaceholder('e.g. 19.99 – leave empty if unknown');
   if (o?.total != null) input.setValue(Number.isInteger(o.total) ? String(o.total) : o.total.toFixed(2));
   return new ModalBuilder()

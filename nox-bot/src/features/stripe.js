@@ -31,6 +31,7 @@ const { COLORS } = require('../lib/theme');
 const { DECIMALS, currencyCode, toUnits, fromUnits } = require('../lib/currency');
 const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, notice, channelUrl } = require('../lib/v2');
+const { orderTitle } = require('../lib/orderItems');
 
 const API = 'https://api.stripe.com/v1';
 const CHECK_EVERY = 30_000;
@@ -111,7 +112,7 @@ function createSession(guild, ticket, order, cur, attempt) {
       'line_items[0][quantity]': 1,
       'line_items[0][price_data][currency]': cur,
       'line_items[0][price_data][unit_amount]': toUnits(order.total, cur),
-      'line_items[0][price_data][product_data][name]': truncate(`${config.brand.name} order #${pad(ticket.number)} – ${order.product || 'Custom order'} × ${order.quantity ?? 1}`, 250),
+      'line_items[0][price_data][product_data][name]': truncate(`${config.brand.name} order #${pad(ticket.number)} – ${orderTitle(order, { max: 200 })}`, 250),
       success_url: back,
       cancel_url: back,
       client_reference_id: ticket.channelId,
@@ -129,7 +130,9 @@ function createSession(guild, ticket, order, cur, attempt) {
 
 /** What the customer is told about getting the product after paying with a link (PayPal / Stripe). */
 const deliveryNote = (ticket) =>
-  require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
+  ticket.order?.topUp
+    ? require('./balance').PAID_NOTE // a balance top-up – no product
+    : require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
     ? "📦 **Instant delivery:** your product arrives right here and in your DMs as soon as you've paid – usually in under 30 seconds, at most 1–5 minutes. Didn't get it? Write here or click **Call support**."
     : "📦 Once you've paid, your order is confirmed here automatically and a seller delivers it right away.";
 

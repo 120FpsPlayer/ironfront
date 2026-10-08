@@ -25,6 +25,7 @@ const vouches = require('./vouches');
 const tickets = require('../tickets/tickets');
 const ui = require('../tickets/ui');
 const { statusLabel } = require('../lib/orderStatus');
+const { isCart } = require('../lib/orderItems');
 const { e, ce, COLORS } = require('../lib/theme');
 const { UserError, reply, isStaff, money, parseAmount, pad, ts, duration, truncate, sendToChannel } = require('../lib/utils');
 const { SPACER, container, text, divider, btn, linkBtn, row, header, v2, channelUrl } = require('../lib/v2');
@@ -32,6 +33,7 @@ const { SPACER, container, text, divider, btn, linkBtn, row, header, v2, channel
 const HOUR = 3_600_000;
 const REMINDER_CHECK = 10 * 60_000;
 const KEEP_SENT_REMINDERS = 30 * 86_400_000;
+const ITEMS_SHOWN = 15; // cart items listed on a receipt / proof
 
 // ───────────── Helpers ─────────────
 
@@ -86,28 +88,35 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
     guild.iconURL?.({ size: 128 }),
   );
   c.addSeparatorComponents(divider());
-  const lines = [
-    `**Order:** \`#${pad(sale.ticketNumber)}\`${SPACER}**Receipt:** \`${sale.id}\``,
-    `**Status:** ${statusLabel('delivered')}`,
-    `**Product:** ${productEmoji(guild, catalogProduct(guild.id, sale))} ${truncate(sale.product ?? 'Custom order', 100)} × ${sale.quantity}`,
-  ];
-  if (order.unitPrice != null) lines.push(`**Unit price:** ${money(order.unitPrice)}`);
+  const lines = [`**Order:** \`#${pad(sale.ticketNumber)}\`${SPACER}**Receipt:** \`${sale.id}\``, `**Status:** ${statusLabel('delivered')}`, ...productLines(guild, sale, order)];
+  if (order.unitPrice != null && !isCart(sale) && !sale.topUp) lines.push(`**Unit price:** ${money(order.unitPrice)}`);
   if (sale.promo) lines.push(`**Discount:** ${sale.discount > 0 ? `−${money(sale.discount)}` : 'applied'} (code \`${sale.promo}\`)`);
   lines.push(`**Total paid:** ${sale.amount != null ? `**${money(sale.amount)}**` : 'as agreed in your ticket'}`);
   if (sale.method) lines.push(`**Payment method:** ${truncate(sale.method, 100)}`);
   lines.push(`**Date:** ${ts(sale.completedAt, 'f')}`);
   if (sellerName) lines.push(`**Seller:** ${truncate(sellerName, 64)}`);
   lines.push(`**Server:** ${truncate(guild.name, 100)}`);
+  if (sale.topUp) lines.push("-# ⚠️ Balance can't be refunded or paid out.");
   c.addTextDisplayComponents(text(lines.join('\n')));
   c.addSeparatorComponents(divider());
+  const vouch = !sale.topUp; // a balance top-up isn't a purchase to vouch for
   c.addTextDisplayComponents(
-    text(`${e(guild, 'star')} **Happy with your order?** A quick vouch helps us a lot.\n-# Questions about this order? Open a ticket on the server. We never ask for payment in DMs.`),
+    text(`${vouch ? `${e(guild, 'star')} **Happy with your order?** A quick vouch helps us a lot.\n` : ''}-# Questions about this order? Open a ticket on the server. We never ask for payment in DMs.`),
   );
   const buttons = [];
-  if (db.channelId(guild.id, 'vouches')) buttons.push(vouchButton(guild, sale.channelId));
+  if (vouch && db.channelId(guild.id, 'vouches')) buttons.push(vouchButton(guild, sale.channelId));
   buttons.push(...linkButtons(guild, ['shop']));
   if (buttons.length) c.addActionRowComponents(row(...buttons));
   return v2(c);
+}
+
+/** "**Product:** 💎 Spotify × 2" – every item of a cart (sale.items), or the amount of a balance top-up. */
+function productLines(guild, sale, order) {
+  if (sale.topUp) return [`**Top-up:** 💰 ${money(order.topUp?.credited ?? sale.amount ?? order.topUp?.amount)} added to your store balance`];
+  if (!isCart(sale)) return [`**Product:** ${productEmoji(guild, catalogProduct(guild.id, sale))} ${truncate(sale.product ?? 'Custom order', 100)} × ${sale.quantity}`];
+  const items = sale.items.slice(0, ITEMS_SHOWN).map((i) => `> ${productEmoji(guild, catalogProduct(guild.id, i))} ${truncate(i.product ?? 'Product', 80)} × ${i.quantity ?? 1}${i.unitPrice != null ? ` · ${money(i.unitPrice)} each` : ''}`);
+  if (sale.items.length > ITEMS_SHOWN) items.push(`> +${sale.items.length - ITEMS_SHOWN} more`);
+  return ['**Products:**', ...items];
 }
 
 async function sendReceipt({ guild, ticket, member, staff, sale }) {
@@ -124,10 +133,12 @@ function proofCard(guild, sale) {
   const product = catalogProduct(guild.id, sale);
   // Shop orders store the catalog name; free-text answers from the ticket form are only shown if they match the catalog.
   const name = sale.productId ? sale.product : product?.name;
+  // A cart lists its items (catalog names, stored when it was ordered).
+  const what = isCart(sale)
+    ? sale.items.slice(0, ITEMS_SHOWN).map((i) => `${productEmoji(guild, catalogProduct(guild.id, i))} **${truncate(i.product || 'Product', 80)}** × ${i.quantity ?? 1}`).join('\n') + (sale.items.length > ITEMS_SHOWN ? `\n+${sale.items.length - ITEMS_SHOWN} more` : '')
+    : `${productEmoji(guild, product)} **${truncate(name || 'Custom order', 100)}** × ${sale.quantity}`;
   const c = container(COLORS.success);
-  c.addTextDisplayComponents(
-    text(`## ${e(guild, 'check')} Order #${pad(sale.ticketNumber)} delivered\n${productEmoji(guild, product)} **${truncate(name || 'Custom order', 100)}** × ${sale.quantity}`),
-  );
+  c.addTextDisplayComponents(text(`## ${e(guild, 'check')} Order #${pad(sale.ticketNumber)} delivered\n${what}`));
   c.addSeparatorComponents(divider());
   const facts = [];
   const method = publicMethod(sale);
@@ -140,7 +151,7 @@ function proofCard(guild, sale) {
 }
 
 async function postProof({ guild, sale }) {
-  if (!config.orders.proofs) return;
+  if (!config.orders.proofs || sale?.topUp) return; // a balance top-up isn't a delivered order
   await sendToChannel(guild, db.channelId(guild.id, 'proofs'), proofCard(guild, sale));
 }
 
@@ -148,7 +159,7 @@ async function postProof({ guild, sale }) {
 
 function scheduleReminder({ guild, ticket, sale }) {
   const hours = Number(config.orders.vouchReminderHours) || 0;
-  if (hours <= 0) return;
+  if (hours <= 0 || sale?.topUp) return; // nothing to vouch for after a balance top-up
   db.guild(guild.id).reminders[ticket.channelId] = {
     userId: sale.userId,
     dueAt: sale.completedAt + hours * HOUR,

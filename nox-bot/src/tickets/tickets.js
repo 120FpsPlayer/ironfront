@@ -745,8 +745,9 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
   // Backstop: the code's limits are checked when the order is placed and when it's reopened. If it went
   // over one anyway, the sale keeps the discount it was sold with, but the seller is told.
   const promoWarning = promoOverLimit(guild.id, ticket);
-  g.orders[ticket.ownerId] = (g.orders[ticket.ownerId] ?? 0) + 1;
-  const orders = g.orders[ticket.ownerId];
+  // A balance top-up (features/balance.js) isn't a purchase – it doesn't count as an order (first-order codes, Loyal).
+  if (!order.topUp) g.orders[ticket.ownerId] = (g.orders[ticket.ownerId] ?? 0) + 1;
+  const orders = g.orders[ticket.ownerId] ?? 0;
   const now = Date.now();
   const sale = db.addSale(guild.id, {
     id: nextSaleId(guild.id),
@@ -766,8 +767,14 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
     discount: order.discount ?? 0,
     createdAt: ticket.createdAt,
     completedAt: now,
+    // A cart's products (features/cart.js), a payment with store balance, a balance top-up (features/balance.js).
+    ...(order.items?.length && { items: order.items.map((i) => ({ productId: i.productId ?? null, product: i.product ?? null, variant: i.variant ?? null, quantity: i.quantity ?? 1, unitPrice: i.unitPrice ?? null })) }),
+    ...(order.paidWith && { paidWith: order.paidWith }),
+    ...(order.topUp && { topUp: true }),
   });
   if (sale.promo) promos.redeem(guild.id, sale.promo, ticket.ownerId, sale.id);
+  // A completed top-up credits the balance right here, with the sale and no await in between – exactly once.
+  if (order.topUp) require('../features/balance').creditTopUp(guild.id, ticket, sale);
   db.updateTicket(channel.id, { completedAt: now, completedBy: staff.id, saleId: sale.id, lastMessageBy: 'staff', lastActivity: now });
 
   const member = await guild.members.fetch(ticket.ownerId).catch(() => null);

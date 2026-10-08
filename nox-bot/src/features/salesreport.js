@@ -18,6 +18,7 @@ const db = require('../lib/db');
 const { e, COLORS } = require('../lib/theme');
 const { money, truncate, sendToChannel, ts } = require('../lib/utils');
 const { container, text, divider, header, v2 } = require('../lib/v2');
+const { isCart } = require('../lib/orderItems');
 
 const DAY = 86_400_000;
 const REPORT_CHECK = 10 * 60_000;
@@ -164,6 +165,7 @@ const completedAt = (s) => s.completedAt ?? s.createdAt ?? 0;
  * An exact name wins, then the longest name inside the answer – so "PaysafeCard" is never counted as "Card".
  */
 function methodName(sale) {
+  if (sale.paidWith === 'balance') return 'Store balance'; // features/balance.js
   const raw = String(sale.method ?? '').trim().toLowerCase();
   if (!raw) return 'Not given';
   const names = config.shop.paymentMethods.map((m) => String(m.name ?? '')).filter(Boolean);
@@ -201,10 +203,33 @@ function promoTally(list) {
   return [...groups.values()].sort((a, b) => b.uses - a.uses || b.discount - a.discount || a.code.localeCompare(b.code));
 }
 
+/**
+ * A sale's rows for "Top products": a cart (sale.items – features/cart.js) counts every item, each with its share
+ * of the amount paid (by the item prices; unknown when a price or the amount is).
+ */
+function productRows(sale) {
+  if (!isCart(sale)) return [sale];
+  const weights = sale.items.map((i) => (isAmount(i.unitPrice) ? i.unitPrice * (Number(i.quantity) || 1) : null));
+  const known = isAmount(sale.amount) && weights.every((w) => w != null);
+  const sum = known ? weights.reduce((a, w) => a + w, 0) : 0;
+  let left = known ? sale.amount : null;
+  return sale.items.map((i, n) => {
+    let amount = null;
+    if (known) {
+      amount = n === sale.items.length - 1 ? round(left) : round(sum > 0 ? (sale.amount * weights[n]) / sum : sale.amount / sale.items.length);
+      left = round(left - amount);
+    }
+    return { productId: i.productId ?? null, product: i.product, variant: i.variant ?? null, amount };
+  });
+}
+
 /** Everything the sales card shows for the sales completed in [from, to). */
 function summarize(guildId, { from, to }) {
   const catalog = db.guild(guildId).products;
-  const list = db.sales(guildId).filter((s) => completedAt(s) >= from && completedAt(s) < to);
+  const all = db.sales(guildId).filter((s) => completedAt(s) >= from && completedAt(s) < to);
+  // Balance top-ups (features/balance.js) aren't sales – what is bought with the balance is, so nothing counts twice.
+  const list = all.filter((s) => !s.topUp);
+  const topUps = all.filter((s) => s.topUp);
   const known = list.filter((s) => isAmount(s.amount));
   const revenue = round(known.reduce((sum, s) => sum + s.amount, 0));
   const discounted = list.filter((s) => s.promo || Number(s.discount) > 0);
@@ -222,12 +247,13 @@ function summarize(guildId, { from, to }) {
     unknown: list.length - known.length,
     average: known.length ? round(revenue / known.length) : null,
     first: list.reduce((min, s) => Math.min(min, completedAt(s)), Infinity),
-    products: tally(list, productKey, productName),
+    products: tally(list.flatMap(productRows), productKey, productName),
     sellers: tally(list.filter((s) => s.sellerId), (s) => s.sellerId, (s) => s.sellerId),
     methods: tally(list, methodName, methodName),
     discount: round(discounted.reduce((sum, s) => sum + (Number(s.discount) || 0), 0)),
     discounted: discounted.length,
     promos: promoTally(list),
+    topUps: { count: topUps.length, amount: round(topUps.reduce((sum, s) => sum + (isAmount(s.amount) ? s.amount : 0), 0)) },
   };
 }
 
@@ -259,6 +285,7 @@ function overview(guild, cur, prev, range) {
   lines.push(`**Orders:** ${cur.orders}${prev ? `${'  '}·${'  '}${changeText(cur.orders, prev.orders)} (${prev.orders} before)` : ''}`);
   lines.push(`**Average order:** ${cur.average === null ? '—' : money(cur.average)}`);
   if (cur.unknown) lines.push(`-# ⚠️ ${plural(cur.unknown, 'order')} without a known amount ${cur.unknown === 1 ? "isn't" : "aren't"} counted in revenue or the average.`);
+  if (cur.topUps?.count) lines.push(`-# 💰 ${plural(cur.topUps.count, 'balance top-up')} (${money(cur.topUps.amount)}) not counted – the orders paid with store balance are.`);
   return lines.join('\n');
 }
 

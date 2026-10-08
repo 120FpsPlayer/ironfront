@@ -31,6 +31,7 @@ const { COLORS, ce } = require('../lib/theme');
 const { currencyCode, decimalString } = require('../lib/currency');
 const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, notice, channelUrl } = require('../lib/v2');
+const { orderTitle } = require('../lib/orderItems');
 
 const CHECK_EVERY = 30_000;
 const WATCH_FOR = 3 * 24 * 3_600_000; // links that never report back stop being checked after this
@@ -130,7 +131,7 @@ function createOrder(guild, ticket, order, cur, attempt) {
         {
           reference_id: ticket.channelId,
           custom_id: ticket.channelId,
-          description: truncate(`${config.brand.name} order #${pad(ticket.number)} – ${order.product || 'Custom order'} × ${order.quantity ?? 1}`, 127),
+          description: truncate(`${config.brand.name} order #${pad(ticket.number)} – ${orderTitle(order, { max: 120 })}`, 127),
           amount: { currency_code: cur.toUpperCase(), value: decimalString(order.total, cur) },
         },
       ],
@@ -168,7 +169,9 @@ const PENDING_REMIND = 24 * 3_600_000;
 
 /** What the customer is told about getting the product after paying with a link (PayPal / Stripe). */
 const deliveryNote = (ticket) =>
-  require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
+  ticket.order?.topUp
+    ? require('./balance').PAID_NOTE // a balance top-up – no product
+    : require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
     ? "📦 **Instant delivery:** your product arrives right here and in your DMs as soon as you've paid – usually in under 30 seconds, at most 1–5 minutes. Didn't get it? Write here or click **Call support**."
     : "📦 Once you've paid, your order is confirmed here automatically and a seller delivers it right away.";
 

@@ -15,6 +15,7 @@ const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
 const { UserError, reply, isStaff, money, pad, truncate, ts } = require('../lib/utils');
 const { container, text, divider, btn, row, header, v2 } = require('../lib/v2');
+const { quantitySuffix } = require('../lib/orderItems');
 
 const MAX_NOTE_LENGTH = 500;
 const MAX_NOTES = 50;
@@ -93,14 +94,15 @@ function inviteInfo(guildId, userId) {
 function profileData(guild, userId) {
   const g = db.guild(guild.id);
   const sales = db.sales(guild.id).filter((s) => s.userId === userId).sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
-  const known = sales.filter((s) => isAmount(s.amount));
+  // A balance top-up isn't spending – what is bought with the balance is (features/balance.js), so nothing counts twice.
+  const known = sales.filter((s) => isAmount(s.amount) && !s.topUp);
   const tickets = db.tickets((t) => t.guildId === guild.id && t.ownerId === userId);
   const vouches = g.vouches.filter((v) => v.userId === userId);
   return {
     orders: g.orders[userId] ?? 0,
     sales,
     spent: Math.round(known.reduce((sum, s) => sum + s.amount, 0) * 100) / 100,
-    unknown: sales.length - known.length,
+    unknown: sales.filter((s) => !isAmount(s.amount)).length,
     openTickets: tickets.filter((t) => t.status === 'open'),
     closedTickets: tickets.filter((t) => t.status !== 'open').length,
     vouches: vouches.length,
@@ -136,7 +138,7 @@ function accountText(guild, user, member, d) {
 }
 
 function orderLine(sale) {
-  const parts = [`\`#${pad(sale.ticketNumber ?? 0)}\``, `**${truncate(sale.product || 'Custom order', 40)}** × ${sale.quantity ?? 1}`, isAmount(sale.amount) ? money(sale.amount) : 'amount unknown'];
+  const parts = [`\`#${pad(sale.ticketNumber ?? 0)}\``, `**${truncate(sale.product || 'Custom order', 40)}**${quantitySuffix(sale)}`, isAmount(sale.amount) ? money(sale.amount) : 'amount unknown'];
   if (sale.promo) parts.push(`🏷️ ${sale.promo}`);
   if (sale.completedAt) parts.push(ts(sale.completedAt, 'd'));
   return `> ${parts.join(' · ')}`;
