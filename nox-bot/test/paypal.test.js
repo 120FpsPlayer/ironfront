@@ -159,7 +159,7 @@ test('with PayPal keys: a PayPal link for the order total; approved → the bot 
   });
 });
 
-test('approved after the ticket was closed, paid another way or with a changed total → the money is never taken', async () => {
+test('approved after the ticket was closed or with a changed total → never taken; paid another way → held for the team', async () => {
   await withKeys(async (api) => {
     const { guild, product, seller } = await shopGuild();
 
@@ -174,13 +174,22 @@ test('approved after the ticket was closed, paid another way or with a changed t
     api.approve('PP2');
     await orderstatus.setStatus(other.channel, 'paid', seller); // paid by PaysafeCard after all
     assert.equal(api.captures().length, 0);
-    assert.equal(other.ticket().order.paypal.status, 'expired');
+    // Not dropped silently: held for the team, who are told – and can take it if the money is missing after all
+    assert.equal(other.ticket().order.paypal.status, 'held');
+    assert.ok(said(other.channel, /approved a PayPal payment of \*\*24€\*\*, but it was \*\*not taken\*\*/));
+    assert.ok(customIds(card(other.channel)).includes('paypal:take'));
+    const buyerTry = await run({ guild, member: guild.members.cache.get(other.ticket().ownerId), kind: 'button', customId: 'paypal:take', channel: other.channel });
+    assert.match(textOf(lastResponse(buyerTry)), /Only the team/);
+    const take = await run({ guild, member: seller, kind: 'button', customId: 'paypal:take', channel: other.channel });
+    assert.match(textOf(lastResponse(take)), /Taken: \*\*24€\*\*/);
+    assert.equal(api.captures().length, 1);
+    assert.equal(other.ticket().order.paypal.status, 'paid');
 
     const changed = await order(guild, member(guild), product);
     db.updateTicket(changed.channel.id, { order: { ...changed.ticket().order, total: 30 } }); // e.g. a promo code dropped on reopen
     api.approve('PP3');
     await paypal.checkPayments(guild.client);
-    assert.equal(api.captures().length, 0);
+    assert.equal(api.captures().length, 1, 'only the payment staff took above');
     assert.equal(changed.ticket().order.paypal.status, 'expired');
     assert.ok(said(changed.channel, /total changed to \*\*30€\*\* – the old PayPal link wasn't charged/));
     assert.ok(customIds(card(changed.channel)).includes('paypal:new'));
@@ -261,5 +270,83 @@ test('PayPal down or a currency PayPal doesn\'t take → the manual PayPal card 
     } finally {
       config.paypal.currency = prev;
     }
+  });
+});
+
+test('a refused capture tells the customer (not charged), retries with a new id later and allows a new link', async () => {
+  await withKeys(async (api) => {
+    const { guild, product } = await shopGuild();
+    const buyer = member(guild);
+    const { channel, ticket } = await order(guild, buyer, product);
+    api.approve('PP1');
+    api.declineCapture();
+    await paypal.checkPayments(guild.client);
+    assert.equal(ticket().order.paypal.status, 'open');
+    assert.equal(ticket().order.paypal.captureError, 'INSTRUMENT_DECLINED');
+    assert.ok(said(channel, /PayPal couldn't take the payment\*\* \(e\.g\. the card was declined\) – you were \*\*not\*\* charged/));
+    const notices = channel.messageList.length;
+    await paypal.checkPayments(guild.client); // within the retry pause – nothing new
+    assert.equal(api.captures().length, 1);
+    assert.equal(channel.messageList.length, notices, 'told once');
+
+    // The customer picks another card on the same link; the next try has a new request id
+    api.declineCapture(false);
+    const prev = Date.now;
+    Date.now = () => prev() + 3 * 60_000;
+    try {
+      await paypal.checkPayments(guild.client);
+    } finally {
+      Date.now = prev;
+    }
+    assert.deepEqual(api.captures().map((c) => c.requestId), ['nox-capture-PP1', 'nox-capture-PP1-1']);
+    assert.equal(ticket().order.paypal.status, 'paid');
+
+    // A refused, approved link can be replaced – nothing was taken
+    const second = await order(guild, member(guild), product);
+    api.approve('PP2');
+    api.declineCapture();
+    await paypal.checkPayments(guild.client);
+    const owner = guild.members.cache.get(second.ticket().ownerId);
+    const i = await run({ guild, member: owner, kind: 'button', customId: 'paypal:new', channel: second.channel });
+    assert.match(textOf(lastResponse(i)), /new PayPal link/);
+    api.declineCapture(false);
+  });
+});
+
+test('a pending capture: the customer is told not to pay again, staff are asked to accept it, then it becomes Paid', async () => {
+  await withKeys(async (api) => {
+    const { guild, product } = await shopGuild();
+    const { channel, ticket } = await order(guild, member(guild), product);
+    api.approve('PP1');
+    await paypal.checkPayments(guild.client); // captured…
+    const o = api.orders.get('PP1');
+    // …but PayPal holds it until the shop accepts the currency
+    db.updateTicket(channel.id, { order: { ...ticket().order, paypal: { ...ticket().order.paypal, status: 'open' } } });
+    o.purchase_units[0].payments.captures[0].status = 'PENDING';
+    o.purchase_units[0].payments.captures[0].status_details = { reason: 'RECEIVING_PREFERENCE_MANDATES_MANUAL_ACTION' };
+    db.updateTicket(channel.id, { order: { ...ticket().order, status: 'awaiting' } });
+    await paypal.checkPayments(guild.client);
+    assert.ok(ticket().order.paypal.pendingSince);
+    assert.match(textOf(card(channel)), /No need to pay again/);
+    assert.ok(said(channel, /Accept it in your PayPal account/));
+    o.purchase_units[0].payments.captures[0].status = 'COMPLETED';
+    await paypal.checkPayments(guild.client);
+    assert.equal(ticket().order.paypal.status, 'paid');
+  });
+});
+
+test('a replaced link that is approved anyway is never charged, and the customer is told to use the newest one', async () => {
+  await withKeys(async (api) => {
+    const { guild, product } = await shopGuild();
+    const buyer = member(guild);
+    const { channel, ticket } = await order(guild, buyer, product);
+    const i = await run({ guild, member: buyer, kind: 'button', customId: 'paypal:new', channel });
+    assert.match(textOf(lastResponse(i)), /An older link isn't charged, even if you approve it/);
+    assert.deepEqual(ticket().order.paypal.previous.map((x) => x.orderId), ['PP1']);
+    api.approve('PP1');
+    await paypal.checkPayments(guild.client);
+    assert.equal(api.captures().length, 0);
+    assert.ok(said(channel, /You approved an \*\*older\*\* PayPal link – it was \*\*not\*\* charged/));
+    assert.deepEqual(ticket().order.paypal.previous, []);
   });
 });

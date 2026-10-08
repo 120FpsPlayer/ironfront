@@ -84,6 +84,10 @@
     "currency": ""
   },
 
+  "crypto": {
+    "currency": ""
+  },
+
   "staffReminders": {
     "enabled": true,
     "unclaimedMinutes": 15,

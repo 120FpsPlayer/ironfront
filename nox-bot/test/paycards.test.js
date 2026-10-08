@@ -126,8 +126,9 @@ test('PayPal without keys: a paypal.me link with the amount – or the seller se
     paypal().paypalMe = prev;
   }
   assert.equal(paycards.paypalMeName('@Nox_Shop'), null, 'paypal.me names are letters and numbers');
-  assert.equal(paycards.paypalMeName('paypal.me/x'), null);
-  assert.equal(paycards.paypalMeName('https://www.paypal.me/NoxShop/10'), 'NoxShop');
+  for (const spelling of ['NoxShop', '@NoxShop', 'paypal.me/NoxShop', 'www.paypal.me/NoxShop', 'https://www.paypal.me/NoxShop/10', 'https://paypal.me/NoxShop?country.x=PL', 'https://www.paypal.com/paypalme/NoxShop']) {
+    assert.equal(paycards.paypalMeName(spelling), 'NoxShop', spelling);
+  }
 });
 
 test('Stripe without a key and prices that aren\'t fixed get a card too; with proofs turned off there is no button', async () => {
@@ -157,4 +158,22 @@ test('payment methods from older config.json files (no "type") are recognised by
   assert.equal(paycards.methodType({ name: 'PayPal' }), 'paypal');
   assert.equal(paycards.methodType({ name: 'Stripe', stripe: true }), 'stripe');
   assert.equal(paycards.methodType({ name: 'Bank transfer' }), 'other');
+});
+
+test('one place decides a method\'s kind: the PIN field and Stripe follow it too', () => {
+  const ui = require('../src/tickets/ui');
+  const stripe = require('../src/features/stripe');
+  const prev = [...config.shop.paymentMethods];
+  try {
+    config.shop.paymentMethods.push({ name: 'PSC', emoji: 'paysafecard', type: 'paysafecard' }, { name: 'PayPal / Karta (Stripe)', emoji: 'paypal' });
+    const psc = { method: 'PSC', methodIndex: config.shop.paymentMethods.length - 2 };
+    assert.equal(ui.takesPins(psc), true, '"PSC" set as PaysafeCard asks for the PIN');
+    assert.equal(ui.takesPins({ method: 'Crypto', methodIndex: 1 }), false);
+    assert.equal(ui.takesPins({ method: null }), true, 'unknown method → the PIN field stays');
+    const mixed = { method: 'PayPal / Karta (Stripe)', methodIndex: config.shop.paymentMethods.length - 1 };
+    assert.equal(paycards.methodType(paycards.methodOf(mixed)), 'paypal');
+    assert.equal(stripe.isStripeOrder(mixed), false, 'never a Stripe link AND a PayPal card for one order');
+  } finally {
+    config.shop.paymentMethods.splice(0, config.shop.paymentMethods.length, ...prev);
+  }
 });

@@ -16,6 +16,7 @@ const FEATURE_DEFAULTS = {
   staffReminders: { enabled: true, unclaimedMinutes: 15, repeatMinutes: 60 },
   stripe: { enabled: true, currency: '' },
   paypal: { enabled: true, currency: '' },
+  crypto: { currency: '' },
   promos: { enabled: true },
   welcomeDiscount: { enabled: true, percent: 5, validDays: 7 },
   invites: {

@@ -17,6 +17,7 @@ const { alertRoleIds } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
 const { logEmbed, money, pad, truncate, sendLog } = require('../lib/utils');
 const { notice } = require('../lib/v2');
+const { DECIMALS } = require('../lib/currency');
 
 const PAID = ['paid', 'progress', 'delivered'];
 
@@ -37,7 +38,9 @@ const pingsFor = (guild, ticket) =>
 async function paymentReceived(guild, ticket, { gateway, paidAmount, paidCurrency, expectedCurrency, reference, before, refreshCard }) {
   let updated = db.getTicket(ticket.channelId) ?? ticket;
   const total = tickets.orderDetails(updated).total;
-  const matches = String(paidCurrency ?? '').toLowerCase() === expectedCurrency && total != null && Math.abs(paidAmount - total) < 0.005;
+  // Within half the currency's smallest unit: the provider charges whole cents (or whole yen for a 1172.3 total).
+  const unit = 10 ** -(DECIMALS[expectedCurrency] ?? 2);
+  const matches = String(paidCurrency ?? '').toLowerCase() === expectedCurrency && total != null && Math.abs(paidAmount - total) <= unit / 2 + 1e-9;
   const twice = PAID.includes(before);
   // A deleted ticket's channel may still be there for a few seconds – the log is the place then.
   const channel = updated.status === 'deleted' ? null : guild.channels.cache.get(updated.channelId) ?? null;

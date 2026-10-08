@@ -55,15 +55,8 @@ const enabled = () => Boolean(env.stripeKey) && config.stripe?.enabled !== false
 /** The order has a Stripe link that confirms itself – "I've paid" isn't needed then. */
 const confirmsItself = (ticket) => ticket?.order?.stripe?.status === 'open' && working();
 
-const isStripeMethod = (m) => m?.type === 'stripe' || m?.stripe === true || /stripe/i.test(String(m?.name ?? ''));
-
-/** Is this order paid with Stripe – the method the customer picked in the order form. */
-function isStripeOrder(order) {
-  if (!order) return false;
-  const picked = config.shop.paymentMethods[order.methodIndex];
-  if (picked && picked.name === order.method) return isStripeMethod(picked);
-  return isStripeMethod({ name: order.method });
-}
+/** Is this order paid with Stripe – one place decides a method's kind for every provider (src/features/paycards.js). */
+const isStripeOrder = (order) => Boolean(order) && require('./paycards').methodType(require('./paycards').methodOf(order)) === 'stripe';
 
 // ───────────── Stripe API (plain HTTPS, no extra package) ─────────────
 
@@ -204,6 +197,8 @@ async function settle(guild, ticket, session) {
   if (!session || session.status === 'expired') {
     const updated = saveStripe(ticket.channelId, { status: 'expired' });
     await editCard(guild, updated);
+    const channel = updated.status === 'open' ? guild.channels.cache.get(updated.channelId) : null;
+    if (channel) await tickets.refreshControlMessage(channel, updated).catch(() => null); // "I've paid" comes back
     return 'expired';
   }
   if (session.payment_status === 'paid' || session.payment_status === 'no_payment_required') {
@@ -286,8 +281,8 @@ const warnedTickets = new Set();
 
 async function warnRefused(client) {
   console.warn('[stripe] STRIPE_SECRET_KEY was refused by Stripe – check the key in .env.');
-  const guildIds = new Set(db.tickets((t) => t.order?.stripe?.status === 'open').map((t) => t.guildId));
-  for (const id of guildIds) {
+  const open = db.tickets((t) => t.order?.stripe?.status === 'open');
+  for (const id of new Set(open.map((t) => t.guildId))) {
     const guild = client.guilds.cache.get(id);
     if (!guild || refusedWarned.has(id)) continue;
     refusedWarned.add(id);
@@ -298,6 +293,11 @@ async function warnRefused(client) {
         ),
       ],
     }).catch(() => null);
+    // The links can't confirm themselves now – "I've paid" comes back on their tickets.
+    for (const t of open.filter((x) => x.guildId === id && x.status === 'open')) {
+      const channel = guild.channels.cache.get(t.channelId);
+      if (channel) await tickets.refreshControlMessage(channel, t).catch(() => null);
+    }
   }
 }
 

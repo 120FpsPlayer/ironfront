@@ -120,7 +120,7 @@ function paymentModal(ticket) {
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(`${summary}\nFill in at least one field – a seller checks your payment right away.\n-# Only send it here, in your ticket – never in DMs.`),
     );
-  if (ui.takesPins(order.method)) {
+  if (ui.takesPins(order)) {
     modal.addLabelComponents(
       new LabelBuilder()
         .setLabel('PaysafeCard PIN(s)')
@@ -281,7 +281,7 @@ async function submit(interaction) {
   const { channel, guild } = interaction;
   const ticket = requirePayable(channel, interaction.user.id);
   const order = tickets.orderDetails(ticket);
-  const { pins, bad } = ui.takesPins(order.method) ? parsePins(field(interaction, 'pins')) : { pins: [], bad: null };
+  const { pins, bad } = ui.takesPins(order) ? parsePins(field(interaction, 'pins')) : { pins: [], bad: null };
   if (bad) {
     throw new UserError(`\`${truncate(bad, 30)}\` is not a PaysafeCard PIN – a PIN has 16 digits, like **1234-5678-9012-3456**. Several PINs? Put a comma between them.`);
   }
@@ -289,7 +289,7 @@ async function submit(interaction) {
   const note = field(interaction, 'note').slice(0, NOTE_MAX);
   const uploads = uploadsOf(interaction).slice(0, MAX_FILES);
   if (!pins.length && !note && !uploads.length) {
-    throw new UserError(`Fill in at least one field: ${ui.takesPins(order.method) ? 'your PaysafeCard PIN, ' : ''}a screenshot or a note / transaction ID.`);
+    throw new UserError(`Fill in at least one field: ${ui.takesPins(order) ? 'your PaysafeCard PIN, ' : ''}a screenshot or a note / transaction ID.`);
   }
   if (sending.has(channel.id)) throw new UserError('Your payment is being sent – one moment…');
   sending.add(channel.id);

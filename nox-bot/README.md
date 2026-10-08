@@ -40,8 +40,10 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 - **PayPal payments that confirm themselves** – put your PayPal app's keys in `.env` (`PAYPAL_CLIENT_ID`,
   `PAYPAL_CLIENT_SECRET`): every PayPal order gets a **Pay 24€ with PayPal** link. When the customer has approved it,
   the bot **takes the money itself** within 30 seconds, sets the order to **Paid** and pings the seller. The money is only
-  taken while the order still wants it – an order that was closed, paid another way or whose total changed is **never
-  charged** (the customer gets a new link instead).
+  taken while the order still wants it – an order that was closed or whose total changed is **never charged** (the
+  customer gets a new link instead). Approved after a seller already set the order to Paid? It's **held**, the team is
+  told and can **Take PayPal payment** if the money is missing. A declined card, a payment PayPal is still processing
+  (e.g. one you have to **accept** in your PayPal account) – the customer and the team are always told what happened.
 - **Stripe card payments** – put your Stripe key in `.env` (`STRIPE_SECRET_KEY`) and every order paid with Stripe gets a
   **Pay 24€** link in its ticket right away. Once the customer has paid, the bot sees it within 30 seconds, sets the
   order to **Paid**, tells the customer and pings the seller – nobody has to check anything by hand. No website or
@@ -293,6 +295,7 @@ Admin commands are hidden from normal members automatically.
 | `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **I've paid** button (`paymentProofs`) |
 | `stripe` | Automatic Stripe payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `STRIPE_SECRET_KEY` in `.env` |
 | `paypal` | Automatic PayPal payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in `.env` |
+| `crypto` | The currency the coin amounts are worked out in (`currency`, empty = from `shop.currency`) – set it when your currency sign isn't clear |
 | `badges` | 🔥 Bestseller and ⭐ rating in the shop on/off (`enabled`), units sold for Bestseller (`bestsellerMinSales`, 3), vouches needed for a rating (`ratingMinVouches`, 2) |
 | `staffReminders` | Unclaimed ticket reminders on/off, after how many minutes (`unclaimedMinutes`, 15) and how often again (`repeatMinutes`, 60 – `0` = once) |
 | `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
@@ -412,7 +415,7 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-291 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+295 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
 order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),

@@ -103,8 +103,13 @@ function statusLine(ticket) {
   );
 }
 
-/** Does the order take PaysafeCard PINs – PaysafeCard, or no payment method known. */
-const takesPins = (method) => !String(method ?? '').trim() || /paysafe/i.test(String(method));
+/** Does the order take PaysafeCard PINs – a PaysafeCard method (by its type or name), or no payment method known. */
+function takesPins(order) {
+  const method = typeof order === 'string' ? order : order?.method;
+  if (!String(method ?? '').trim()) return true;
+  const paycards = require('../features/paycards'); // here – it needs this file
+  return paycards.methodType(typeof order === 'string' ? { name: order } : paycards.methodOf(order)) === 'paysafecard';
+}
 
 /** Can the customer send their payment ("I've paid") – an open order that waits for its payment. */
 function acceptsPayment(ticket) {
@@ -121,8 +126,8 @@ function acceptsPayment(ticket) {
 /** "I've paid" on the order card (src/features/payments.js). */
 function paymentSection(ticket) {
   const sent = statusOf(ticket) === 'sent' ? ticket.order?.payment : null; // not after staff set it back to awaiting
-  const method = ticket.order ? ticket.order.method : require('./tickets').orderDetails(ticket).method; // here – tickets.js needs this file
-  const proof = takesPins(method) ? 'your PaysafeCard PIN, a screenshot or the transaction ID' : 'a screenshot or the transaction ID';
+  const order = ticket.order ?? require('./tickets').orderDetails(ticket); // here – tickets.js needs this file
+  const proof = takesPins(order) ? 'your PaysafeCard PIN, a screenshot or the transaction ID' : 'a screenshot or the transaction ID';
   const content = sent?.at
     ? `📨 **Payment sent ${ts(sent.at, 'R')}** – a seller is checking it.\n-# Made a mistake? Click **I've paid** again to send a correction.`
     : `💳 **Paid already?** Click **I've paid** and send ${proof} – the seller is notified right away.`;

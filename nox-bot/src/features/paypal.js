@@ -11,8 +11,10 @@
  * the seller is pinged (src/features/autopay.js). Without keys the PayPal card shows a paypal.me link
  * (src/features/paycards.js).
  *
- * ticket.order.paypal = { orderId, url, amount, currency, createdAt, attempt, messageId,
- *   status ('open' | 'paid' | 'expired'), paidAt, paidAmount, paidCurrency, captureId }
+ * ticket.order.paypal = { orderId, url, amount, currency, createdAt, attempt, messageId, previous: [{ orderId, createdAt }],
+ *   status ('open' | 'paid' | 'expired' | 'held'), paidAt, paidAmount, paidCurrency, captureId,
+ *   captureTries, captureError, nextCaptureAt, pendingSince, pendingReason, heldAt }
+ *   held – approved after the order was already marked paid: not taken; staff can take it (Take PayPal payment)
  * ticket.paypalAttempts – links made so far (each try gets its own PayPal-Request-Id)
  */
 
@@ -148,19 +150,37 @@ function createOrder(guild, ticket, order, cur, attempt) {
   );
 }
 
-/** Takes the approved money. The same request id every time – PayPal never takes it twice. */
-const captureOrder = (id) => call('POST', `/v2/checkout/orders/${encodeURIComponent(id)}/capture`, {}, { requestId: `nox-capture-${id}` });
+/**
+ * Takes the approved money. Retrying the same try uses the same request id – PayPal never takes it twice; only
+ * after PayPal said no (e.g. a declined card) does the next try get a new id, so a re-approval isn't answered
+ * with the old refusal.
+ */
+const captureOrder = (id, tries = 0) => call('POST', `/v2/checkout/orders/${encodeURIComponent(id)}/capture`, {}, { requestId: `nox-capture-${id}${tries ? `-${tries}` : ''}` });
 
 const approveUrl = (o) => (o?.links ?? []).find((l) => l.rel === 'payer-action' || l.rel === 'approve')?.href ?? null;
 const captureOf = (o) => o?.purchase_units?.[0]?.payments?.captures?.[0] ?? null;
 
+const CAPTURE_RETRY = 2 * 60_000; // after a refused capture
+const MAX_CAPTURE_TRIES = 10;
+const PENDING_REMIND = 24 * 3_600_000;
+
 // ───────────── The card in the ticket ─────────────
 
 function linkCard(guild, ticket, p) {
-  const c = container(p.status === 'paid' ? COLORS.success : p.status === 'expired' ? COLORS.warning : COLORS.brand);
   const total = money(p.amount);
+  const c = container(p.status === 'paid' ? COLORS.success : ['expired', 'held'].includes(p.status) || p.captureError ? COLORS.warning : COLORS.brand);
   if (p.status === 'paid') {
     c.addTextDisplayComponents(text(`## ✅ Paid with PayPal\n**${money(p.paidAmount ?? p.amount)}** for order \`#${pad(ticket.number)}\` – received ${ts(p.paidAt, 'R')}.`));
+    return v2(c);
+  }
+  if (p.status === 'held') {
+    c.addTextDisplayComponents(
+      text(
+        `## ⏸️ PayPal payment not taken\nThe customer approved **${total}** on PayPal, but order \`#${pad(ticket.number)}\` was already marked as paid – so it was **not** taken.\n` +
+          "-# Staff: haven't received the money another way? Take it now.",
+      ),
+    );
+    c.addActionRowComponents(row(btn('paypal:take', 'Take PayPal payment', '💰', ButtonStyle.Primary)));
     return v2(c);
   }
   if (p.status === 'expired') {
@@ -168,9 +188,18 @@ function linkCard(guild, ticket, p) {
     c.addActionRowComponents(row(btn('paypal:new', 'New payment link', '🔄', ButtonStyle.Primary)));
     return v2(c);
   }
+  if (p.pendingSince) {
+    c.addTextDisplayComponents(
+      text(`## ⏳ PayPal is processing your payment\n**${total}** for order \`#${pad(ticket.number)}\` was paid – PayPal is still checking it. **No need to pay again** – it's confirmed here as soon as PayPal releases it.`),
+    );
+    return v2(c);
+  }
   c.addTextDisplayComponents(
     text(`## ${guild ? ce(guild, 'paypal') : '💳'} Pay ${total} – PayPal\n-# Order \`#${pad(ticket.number)}\`\nPay with your PayPal account or a card on PayPal's secure page.`),
   );
+  if (p.captureError) {
+    c.addTextDisplayComponents(text("⚠️ **PayPal couldn't take the payment** – you were **not** charged. Open the link again and choose another card or your PayPal balance, or get a new link."));
+  }
   c.addSeparatorComponents(divider());
   const fits = p.url.length <= 512;
   c.addTextDisplayComponents(
@@ -193,26 +222,48 @@ async function editCard(guild, ticket) {
   if (message) await message.edit(linkCard(guild, ticket, ticket.order.paypal)).catch(() => null);
 }
 
-const expire = async (guild, channelId, why = null) => {
+/**
+ * Tells about a link: `customer` goes into the ticket (when it's open), `staff` into the ticket with a ping of the
+ * claimer / sellers and into the log – the log pings them when the ticket is gone.
+ */
+async function tell(guild, ticket, { customer = null, staff = null, color = COLORS.warning } = {}) {
+  const open = ticket.status === 'open';
+  const channel = ticket.status === 'deleted' ? null : guild.channels.cache.get(ticket.channelId) ?? null;
+  if (customer && channel && open) await channel.send(notice(color, customer)).catch(() => null);
+  if (!staff) return;
+  const pings = autopay.pingsFor(guild, ticket);
+  const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
+  if (channel) await channel.send(notice(color, `${staff}${who ? `\n${who}` : ''}`, { mentions: pings })).catch(() => null);
+  await sendLog(guild, {
+    ...(!channel && who && { content: who, allowedMentions: pings }),
+    embeds: [
+      logEmbed(color, '💳 PayPal', guild.client.user).setDescription(truncate(`${staff}\n**Ticket:** <#${ticket.channelId}> (\`#${pad(ticket.number)}\`) · <@${ticket.ownerId}>`, 4000)),
+    ],
+  }).catch(() => null);
+}
+
+/** The link stops being watched; the ticket card shows "I've paid" again. */
+async function expire(guild, channelId, messages = {}) {
   const updated = savePaypal(channelId, { status: 'expired' });
   await editCard(guild, updated);
-  if (why) {
-    const channel = updated.status === 'open' ? guild.channels.cache.get(channelId) : null;
-    await channel?.send(notice(COLORS.warning, why)).catch(() => null);
-  }
+  const channel = updated.status === 'open' ? guild.channels.cache.get(channelId) : null;
+  if (channel) await tickets.refreshControlMessage(channel, updated).catch(() => null);
+  if (messages.customer || messages.staff) await tell(guild, updated, messages);
   return 'expired';
-};
+}
 
 // ───────────── Settling a link ─────────────
 
-/** Does the ticket still want this money: open, not paid another way, and the same total and currency as the link. */
+/**
+ * Does the ticket still want this money → { ok } or { ok: false, reason }:
+ * 'paid' – completed or paid another way · 'closed' – closed or deleted · 'total' – the total or currency changed.
+ */
 function wantsPayment(ticket) {
   const p = ticket.order?.paypal;
   const total = tickets.orderDetails(ticket).total;
-  if (ticket.status !== 'open' || ticket.completedAt || PAID.includes(statusOf(ticket))) return { ok: false, why: null };
-  if (total == null || Math.abs(total - p.amount) >= 0.005 || p.currency !== currency()) {
-    return { ok: false, why: `💳 The order total changed to **${total == null ? 'a new price' : money(total)}** – the old PayPal link wasn't charged. Click **New payment link** for the new amount.` };
-  }
+  if (ticket.completedAt || PAID.includes(ticket.order?.status)) return { ok: false, reason: 'paid' };
+  if (ticket.status !== 'open') return { ok: false, reason: 'closed' };
+  if (total == null || Math.abs(total - p.amount) >= 0.005 || p.currency !== currency()) return { ok: false, reason: 'total', total }; // p.amount is the total the link was made for
   return { ok: true };
 }
 
@@ -220,7 +271,7 @@ async function markPaid(guild, ticket, cap) {
   const before = autopay.statusBefore(ticket);
   const cur = String(cap?.amount?.currency_code ?? ticket.order.paypal.currency).toLowerCase();
   const paidAmount = cap?.amount?.value != null ? Number(cap.amount.value) : ticket.order.paypal.amount;
-  const updated = savePaypal(ticket.channelId, { status: 'paid', paidAt: Date.now(), paidAmount, paidCurrency: cur, captureId: cap?.id ?? null });
+  const updated = savePaypal(ticket.channelId, { status: 'paid', paidAt: Date.now(), paidAmount, paidCurrency: cur, captureId: cap?.id ?? null, pendingSince: null });
   await autopay.paymentReceived(guild, updated, {
     gateway: 'PayPal',
     paidAmount,
@@ -230,47 +281,120 @@ async function markPaid(guild, ticket, cap) {
     before,
     refreshCard: (t) => editCard(guild, t),
   });
+  return 'paid';
+}
+
+const declined = (guild, channelId) =>
+  expire(guild, channelId, {
+    customer: '💳 PayPal declined the payment – you were **not** charged. Get a new link, or pay another way.',
+    staff: '💳 A PayPal payment for this order was declined by PayPal – nothing was taken.',
+  });
+
+/** The money was taken – or PayPal is still processing it (pending: the customer is charged, the shop has to wait). */
+async function captured(guild, channelId, o) {
+  const ticket = db.getTicket(channelId);
+  const cap = captureOf(o);
+  if (cap?.status === 'COMPLETED') return markPaid(guild, ticket, cap);
+  if (cap && ['DECLINED', 'FAILED', 'REFUNDED'].includes(cap.status)) return declined(guild, channelId);
+  const p = ticket.order.paypal;
+  const reason = cap?.status_details?.reason ?? null;
+  const manual = reason === 'RECEIVING_PREFERENCE_MANDATES_MANUAL_ACTION';
+  const what =
+    `⏳ The PayPal payment of **${money(p.amount)}** is **pending**${reason ? ` (\`${truncate(reason, 60)}\`)` : ''} – the customer has paid, PayPal hasn't released it yet.` +
+    (manual ? ' **Accept it in your PayPal account** (Activity → the payment → Accept) – otherwise PayPal sends it back.' : ' The order is set to Paid here as soon as PayPal releases it.');
+  if (!p.pendingSince) {
+    const updated = savePaypal(channelId, { pendingSince: Date.now(), pendingReason: reason });
+    await editCard(guild, updated);
+    await tell(guild, updated, { staff: what });
+  } else if (!p.pendingReminded && Date.now() - p.pendingSince > PENDING_REMIND) {
+    const updated = savePaypal(channelId, { pendingReminded: true });
+    await tell(guild, updated, { staff: `Still waiting: ${what}` });
+  }
+  return 'open';
+}
+
+/** Approved by the customer: taken if the order still wants it – otherwise never taken, and everyone is told why. */
+async function approved(guild, channelId) {
+  const ticket = db.getTicket(channelId);
+  const p = ticket.order.paypal;
+  const want = wantsPayment(ticket);
+  if (!want.ok && want.reason === 'paid') {
+    // The order was marked paid / completed first – the team decides (Take PayPal payment), nothing is lost silently.
+    const updated = savePaypal(channelId, { status: 'held', heldAt: Date.now() });
+    await editCard(guild, updated);
+    await tell(guild, updated, {
+      staff: `⏸️ The customer approved a PayPal payment of **${money(p.amount)}**, but it was **not taken** because the order was already ${ticket.completedAt ? 'completed' : 'marked as paid'}. Haven't received the money another way? Click **Take PayPal payment**.`,
+    });
+    if (updated.status === 'open') await tickets.refreshControlMessage(guild.channels.cache.get(channelId), updated).catch(() => null);
+    return 'held';
+  }
+  if (!want.ok && want.reason === 'closed') {
+    return expire(guild, channelId, { staff: `💳 The customer approved a PayPal payment of **${money(p.amount)}** after the ticket was ${ticket.status === 'deleted' ? 'deleted' : 'closed'} – it was **not taken**, the customer wasn't charged.` });
+  }
+  if (!want.ok) {
+    return expire(guild, channelId, {
+      customer: `💳 The order total changed to **${want.total == null ? 'a new price' : money(want.total)}** – the old PayPal link wasn't charged. Click **New payment link** for the new amount.`,
+    });
+  }
+  if (p.nextCaptureAt && Date.now() < p.nextCaptureAt) return 'open'; // PayPal said no a moment ago – the customer may re-approve
+  let done;
+  try {
+    done = await captureOrder(p.orderId, p.captureTries ?? 0);
+  } catch (err) {
+    if (err.issue === 'ORDER_ALREADY_CAPTURED') done = await getOrder(p.orderId);
+    else if (err.status >= 400 && err.status < 500 && ![401, 408, 429].includes(err.status)) {
+      // A definite no (declined card, payer action needed…) – nothing was taken.
+      const tries = (p.captureTries ?? 0) + 1;
+      if (tries >= MAX_CAPTURE_TRIES) return declined(guild, channelId);
+      const updated = savePaypal(channelId, { captureTries: tries, captureError: err.issue ?? `HTTP ${err.status}`, nextCaptureAt: Date.now() + CAPTURE_RETRY });
+      if (tries === 1) {
+        await editCard(guild, updated);
+        await tell(guild, updated, {
+          customer: "💳 **PayPal couldn't take the payment** (e.g. the card was declined) – you were **not** charged. Open the PayPal link again and pick another card or your PayPal balance – or get a new link.",
+          staff: `💳 PayPal refused to take the approved payment (\`${truncate(err.issue ?? String(err.status), 60)}\`) – nothing was taken, the customer was asked to try again.`,
+        });
+      }
+      return 'open';
+    } else throw err;
+  }
+  return captured(guild, channelId, done);
+}
+
+/** Links replaced by "New link" – an approval on one of them is never taken; the customer is told to use the newest link. */
+async function checkPrevious(guild, channelId) {
+  const p = db.getTicket(channelId)?.order?.paypal;
+  const previous = p?.previous ?? [];
+  if (!previous.length) return;
+  const keep = [];
+  for (const old of previous) {
+    const o = await getOrder(old.orderId).catch(() => undefined);
+    if (o === undefined) keep.push(old); // PayPal unreachable – ask again next time
+    else if (o?.status === 'APPROVED') {
+      await tell(guild, db.getTicket(channelId), { customer: '💳 You approved an **older** PayPal link – it was **not** charged. Please pay with the newest PayPal link in this ticket.' });
+    } else if (o && !['VOIDED', 'COMPLETED'].includes(o.status) && Date.now() - (old.createdAt ?? 0) < WATCH_FOR) keep.push(old);
+  }
+  if (keep.length !== previous.length) savePaypal(channelId, { previous: keep });
 }
 
 const busy = new Set(); // tickets being settled right now – one at a time, so nothing is taken or recorded twice
 
 /**
- * Looks at the ticket's current link and does what PayPal's answer calls for → 'paid' | 'expired' | 'open' | 'busy'.
- * Approved money is only taken while the ticket still wants it.
+ * Looks at the ticket's current link and does what PayPal's answer calls for →
+ * 'paid' | 'expired' | 'held' | 'open' | 'busy'. Approved money is only taken while the ticket still wants it.
  */
 async function settle(guild, channelId) {
   if (busy.has(channelId)) return 'busy';
   busy.add(channelId);
   try {
-    const ticket = db.getTicket(channelId);
-    const p = ticket?.order?.paypal;
+    const p = db.getTicket(channelId)?.order?.paypal;
     if (!p || p.status !== 'open') return p?.status ?? 'expired';
+    await checkPrevious(guild, channelId);
     const o = await getOrder(p.orderId);
     if (!o || o.status === 'VOIDED') return expire(guild, channelId);
     const latest = db.getTicket(channelId);
     if (latest.order?.paypal?.orderId !== p.orderId || latest.order.paypal.status !== 'open') return latest.order?.paypal?.status ?? 'expired';
-    if (o.status === 'COMPLETED') {
-      const cap = captureOf(o);
-      if (cap?.status === 'COMPLETED') return markPaid(guild, latest, cap).then(() => 'paid');
-      if (cap && ['DECLINED', 'FAILED', 'REFUNDED'].includes(cap.status)) return expire(guild, channelId, '💳 The PayPal payment was declined – try again with a new link, or pay another way.');
-      return 'open'; // PENDING – PayPal still checks it
-    }
-    if (o.status === 'APPROVED') {
-      const want = wantsPayment(latest);
-      if (!want.ok) return expire(guild, channelId, want.why); // never taken – the customer isn't charged
-      let done;
-      try {
-        done = await captureOrder(p.orderId);
-      } catch (err) {
-        if (err.issue === 'ORDER_ALREADY_CAPTURED') done = await getOrder(p.orderId);
-        else if (err.status === 422) return 'open'; // e.g. INSTRUMENT_DECLINED – the customer can pick another way on the same link
-        else throw err;
-      }
-      const cap = captureOf(done);
-      if (cap?.status === 'COMPLETED') return markPaid(guild, db.getTicket(channelId), cap).then(() => 'paid');
-      if (cap && ['DECLINED', 'FAILED'].includes(cap.status)) return expire(guild, channelId, '💳 The PayPal payment was declined – try again with a new link, or pay another way.');
-      return 'open';
-    }
+    if (o.status === 'COMPLETED') return captured(guild, channelId, o);
+    if (o.status === 'APPROVED') return approved(guild, channelId);
     // CREATED / PAYER_ACTION_REQUIRED / SAVED – not approved yet
     if (!wantsPayment(latest).ok || Date.now() - (p.createdAt ?? 0) > WATCH_FOR) return expire(guild, channelId);
     return 'open';
@@ -292,12 +416,16 @@ async function postLink(channel, ticket) {
     const state = await settle(guild, ticket.channelId);
     if (state === 'paid') return { result: 'paid' };
     if (state === 'busy') throw new UserError('Your PayPal payment is being checked right now – give it a minute.');
+    if (state === 'held') throw new UserError('This order is already paid.');
     if (state === 'open') {
       const fresh = db.getTicket(ticket.channelId).order?.paypal;
-      // Approved but still processing (pending) – keep it rather than risk a second payment.
+      if (fresh?.pendingSince) throw new UserError('Your PayPal payment is being processed by PayPal – no need to pay again, it shows up here as soon as PayPal releases it.');
+      // Approved and not refused – being taken right now; keep it rather than risk a second payment.
       const o = fresh?.status === 'open' ? await getOrder(fresh.orderId) : null;
-      if (o && ['APPROVED', 'COMPLETED'].includes(o.status)) throw new UserError('Your PayPal payment is still being processed – it shows up here as soon as PayPal confirms it.');
-      // Never approved – it's simply replaced: an order nobody approved can't be charged.
+      if (o?.status === 'COMPLETED' || (o?.status === 'APPROVED' && !fresh.captureError)) {
+        throw new UserError('Your PayPal payment is being processed – it shows up here within a minute.');
+      }
+      // Never approved, or PayPal refused to take it – nothing was taken, so it's simply replaced.
     }
   }
   const attempt = (db.getTicket(ticket.channelId).paypalAttempts ?? 0) + 1;
@@ -307,7 +435,9 @@ async function postLink(channel, ticket) {
   if (!url) throw new Error('PayPal sent no payment link');
   const latest = db.getTicket(ticket.channelId);
   if (latest.status !== 'open' || latest.completedAt || !['awaiting', 'sent'].includes(statusOf(latest))) return { result: 'none' }; // never approved → never charged
-  const p = { orderId: created.id, url, amount: order.total, currency: cur, createdAt: Date.now(), attempt, status: 'open', messageId: null };
+  // Replaced links are still watched for a while – an approval there is never taken, and the customer is told.
+  const previous = [...(old?.previous ?? []), ...(old?.orderId && old.status !== 'paid' ? [{ orderId: old.orderId, createdAt: old.createdAt }] : [])].slice(-5);
+  const p = { orderId: created.id, url, amount: order.total, currency: cur, createdAt: Date.now(), attempt, status: 'open', messageId: null, previous };
   savePaypal(ticket.channelId, p, { replace: true }); // saved before the card – a link that exists is always watched
   const sent = await channel.send(linkCard(guild, latest, p)).catch(() => null);
   const updated = savePaypal(ticket.channelId, { messageId: sent?.id ?? null });
@@ -347,18 +477,23 @@ const warnedTickets = new Set();
 
 async function warnRefused(client) {
   console.warn('[paypal] PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET were refused by PayPal – check them in .env.');
-  const guildIds = new Set(db.tickets((t) => t.order?.paypal?.status === 'open').map((t) => t.guildId));
-  for (const id of guildIds) {
+  const open = db.tickets((t) => t.order?.paypal?.status === 'open');
+  for (const id of new Set(open.map((t) => t.guildId))) {
     const guild = client.guilds.cache.get(id);
     if (!guild || refusedWarned.has(id)) continue;
     refusedWarned.add(id);
     await sendLog(guild, {
       embeds: [
         logEmbed(COLORS.danger, '⚠️ PayPal refused the keys', client.user).setDescription(
-          "PayPal payments **can't be confirmed automatically** right now – approved payments are not taken until this is fixed. Fix `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` in `.env` and restart the bot.",
+          "PayPal payments **can't be confirmed automatically** right now. Approved payments are taken as soon as the keys work again (if the order still wants them) – check open PayPal orders in your PayPal account meanwhile. Fix `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` in `.env` and restart the bot.",
         ),
       ],
     }).catch(() => null);
+    // The links can't confirm themselves now – "I've paid" comes back on their tickets.
+    for (const t of open.filter((x) => x.guildId === id && x.status === 'open')) {
+      const channel = guild.channels.cache.get(t.channelId);
+      if (channel) await tickets.refreshControlMessage(channel, t).catch(() => null);
+    }
   }
 }
 
@@ -386,7 +521,7 @@ async function checkPayments(client) {
   }
 }
 
-/** Paid another way or completed: the open link is settled right away – approved money is never taken then. */
+/** Paid another way or completed: the open link is settled right away – an approval waiting there is held for the team. */
 async function onOrderStatus({ guild, ticket, status }) {
   if (!PAID.includes(status) || !guild || !working() || ticket?.order?.paypal?.status !== 'open') return;
   await settle(guild, ticket.channelId).catch(() => null); // unreachable → checkPayments tries again
@@ -418,12 +553,61 @@ async function newLink(interaction) {
   }
   if (done.result === 'paid') return interaction.editReply({ content: '✅ Your payment just came in – no new link needed.' });
   if (done.result === 'none') throw new UserError('This order has no fixed total yet – a seller confirms the price first.');
-  return interaction.editReply({ content: `💳 Here's a new PayPal link for **${money(done.ticket.order.paypal.amount)}** – the old one can't be paid any more.` });
+  return interaction.editReply({ content: `💳 Here's a new PayPal link for **${money(done.ticket.order.paypal.amount)}** – use this one. An older link isn't charged, even if you approve it.` });
+}
+
+// ───────────── "Take PayPal payment" (staff) ─────────────
+
+/** An approval that wasn't taken because the order was already marked paid – staff take it if the money is still missing. */
+async function takeHeld(interaction) {
+  const { channel } = interaction;
+  const ticket = db.getTicket(channel?.id);
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('This button only works in an order ticket.');
+  if (!isStaff(interaction.member, config.getType('order'))) throw new UserError('Only the team can take a PayPal payment.');
+  const p = ticket.order?.paypal;
+  if (p?.status !== 'held') throw new UserError('There is no PayPal payment waiting to be taken.');
+  if (busy.has(ticket.channelId)) throw new UserError('This PayPal payment is being handled right now – try again in a moment.');
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  busy.add(ticket.channelId);
+  try {
+    const o = await getOrder(p.orderId);
+    let done = o;
+    if (o?.status === 'APPROVED') done = await captureOrder(p.orderId, p.captureTries ?? 0);
+    else if (o?.status !== 'COMPLETED') {
+      const updated = savePaypal(ticket.channelId, { status: 'expired' });
+      await editCard(channel.guild, updated);
+      throw new UserError(`PayPal no longer allows taking this payment (${o ? `status ${o.status}` : 'not found'}) – ask the customer to pay again.`);
+    }
+    const cap = captureOf(done);
+    if (cap?.status !== 'COMPLETED') throw new UserError(`PayPal didn't take it (${cap?.status ?? 'no capture'}) – check your PayPal account.`);
+    const paidAmount = Number(cap.amount?.value ?? p.amount);
+    const updated = savePaypal(ticket.channelId, { status: 'paid', paidAt: Date.now(), paidAmount, paidCurrency: String(cap.amount?.currency_code ?? p.currency).toLowerCase(), captureId: cap.id ?? null });
+    await editCard(channel.guild, updated);
+    await channel.send(notice(COLORS.success, `💰 PayPal payment of **${money(paidAmount)}** taken by <@${interaction.user.id}>.`)).catch(() => null);
+    await sendLog(channel.guild, {
+      embeds: [
+        logEmbed(COLORS.success, '💰 Held PayPal payment taken', interaction.user).addFields(
+          { name: 'Ticket', value: `<#${ticket.channelId}> (\`#${pad(ticket.number)}\`)`, inline: true },
+          { name: 'Amount', value: money(paidAmount), inline: true },
+          { name: 'PayPal', value: `\`${truncate(cap.id ?? p.orderId, 100)}\``, inline: true },
+        ),
+      ],
+    }).catch(() => null);
+    return interaction.editReply({ content: `✅ Taken: **${money(paidAmount)}**.` });
+  } catch (err) {
+    if (err instanceof UserError) throw err;
+    console.warn(`[paypal] Take held payment for ticket ${ticket.channelId}:`, err.message);
+    throw new UserError("PayPal couldn't be reached – try again in a minute.");
+  } finally {
+    busy.delete(ticket.channelId);
+  }
 }
 
 hooks.on('orderPlaced', onOrderPlaced);
 hooks.on('orderStatus', onOrderStatus);
 hooks.every('paypalPayments', CHECK_EVERY, (client) => checkPayments(client), 25_000);
-hooks.route('paypal', { button: (interaction, action) => (action === 'new' ? newLink(interaction) : null) });
+hooks.route('paypal', {
+  button: (interaction, action) => (action === 'new' ? newLink(interaction) : action === 'take' ? takeHeld(interaction) : null),
+});
 
 module.exports = { currency, enabled, working, confirmsItself, isPaypalOrder, linkCard, postLink, settle, checkPayments, SUPPORTED };

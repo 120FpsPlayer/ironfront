@@ -70,7 +70,8 @@ function wallets(m) {
 
 /** { BTC: 61234.5, … } – the price of one coin in the shop currency (CoinGecko, cached 5 min); {} when unknown. */
 async function cryptoRates(codes, now = Date.now()) {
-  const cur = currencyCode(config.crypto?.currency);
+  // The shop's currency – set crypto.currency (or paypal / stripe .currency) when its sign isn't clear ("kr", "$" for CAD…).
+  const cur = currencyCode(config.crypto?.currency || config.paypal?.currency || config.stripe?.currency);
   const known = codes.filter((c) => COINS[c]);
   if (!cur || !known.length) return {};
   const key = `${cur}:${known.sort().join(',')}`;
@@ -101,11 +102,21 @@ function coinAmount(total, rate, code) {
 
 // ───────────── PayPal.me ─────────────
 
-/** "https://paypal.me/NoxShop" / "@NoxShop" / "NoxShop" → "NoxShop" (null when it isn't a valid name). */
+/**
+ * "NoxShop", "@NoxShop", "paypal.me/NoxShop", "https://www.paypal.me/NoxShop?country.x=PL" or
+ * "https://www.paypal.com/paypalme/NoxShop" → "NoxShop" (null when it isn't a valid name).
+ */
 function paypalMeName(raw) {
-  const s = String(raw ?? '').trim().replace(/^https?:\/\/(www\.)?paypal\.me\//i, '').replace(/^@/, '').replace(/\/.*$/, '');
+  const s = String(raw ?? '')
+    .trim()
+    .replace(/[?#].*$/, '')
+    .replace(/^(https?:\/\/)?(www\.)?(paypal\.me\/|paypal\.com\/paypalme\/)/i, '')
+    .replace(/^@/, '')
+    .replace(/\/.*$/, '');
   return /^[A-Za-z0-9]{1,20}$/.test(s) ? s : null;
 }
+
+let paypalMeWarned = false;
 
 /** paypal.me/NoxShop/24EUR – the amount filled in for the customer. */
 function paypalMeUrl(name, total) {
@@ -169,6 +180,10 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
     paid();
   } else if (type === 'paypal') {
     const name = paypalMeName(m.paypalMe);
+    if (!name && String(m.paypalMe ?? '').trim() && !paypalMeWarned) {
+      paypalMeWarned = true;
+      console.warn(`[paycards] "paypalMe": "${m.paypalMe}" isn't a paypal.me name – use just the name, e.g. "NoxShop".`);
+    }
     if (name) {
       c.addTextDisplayComponents(text(`Pay ${amount} with the PayPal button below, ${proofText('a screenshot of the payment')}.`));
       buttons.push(linkBtn(paypalMeUrl(name, total), truncate(total != null ? `Pay ${money(total)} with PayPal` : 'Pay with PayPal', 80), ce(guild, 'paypal')));
