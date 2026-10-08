@@ -359,10 +359,11 @@ test('currency: an unclear shop currency makes no links; zero-decimal currencies
       assert.equal(stripe.currency(), 'sek');
       config.shop.currency = '¥';
       config.stripe.currency = '';
-      await order(guild, member(guild), product, { quantity: '1' });
+      const yen = shop.addProduct(guild, { name: 'Yen product', price: '120', description: 'Priced in yen.' });
+      await order(guild, member(guild), yen, { quantity: '1' });
       const create = api.calls.find((c) => c.path === '/v1/checkout/sessions');
       assert.equal(create.params['line_items[0][price_data][currency]'], 'jpy');
-      assert.equal(create.params['line_items[0][price_data][unit_amount]'], '12', '¥12 is 12, not 1200');
+      assert.equal(create.params['line_items[0][price_data][unit_amount]'], '120', '¥120 is 120, not 12000');
     } finally {
       config.shop.currency = prev.shop;
       config.stripe.currency = prev.stripe;
@@ -427,5 +428,19 @@ test('a link Stripe no longer knows (test key → live key) stops being checked;
     const card = stripeCard(channel).body ?? stripeCard(channel);
     validateMessage(card, guild);
     assert.match(textOf(card), /\[💳 Pay 24€\]\(https:\/\/checkout\.stripe\.com/);
+  });
+});
+
+test('below Stripe\'s smallest charge (0.50€): no link, and the customer is told why', async () => {
+  await withKey(async (api) => {
+    const { guild } = await shopGuild();
+    const tiny = shop.addProduct(guild, { name: 'Tiny', price: '0.1', description: 'Ten cents.' });
+    const { channel, ticket } = await order(guild, member(guild), tiny, { quantity: '1' });
+    assert.equal(api.calls.length, 0, 'not even asked – Stripe would refuse it');
+    assert.equal(ticket().order.stripe, undefined);
+    assert.ok(channel.messageList.some((m) => /Stripe takes card payments from \*\*0\.50€\*\* – this order is \*\*0\.10€\*\*/.test(textOf(m.body ?? m))));
+    const fifty = shop.addProduct(guild, { name: 'Fifty', price: '0.5', description: 'Fifty cents.' });
+    await order(guild, member(guild), fifty, { quantity: '1' });
+    assert.equal(api.calls.filter((c) => c.path === '/v1/checkout/sessions').length, 1, '0.50€ works');
   });
 });

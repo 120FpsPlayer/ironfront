@@ -39,6 +39,9 @@ const WATCH_AFTER_EXPIRY = 3 * 24 * 3_600_000; // links that never report back s
 const NEW_LINK_COOLDOWN = 60_000;
 const { PAID } = autopay;
 
+/** Stripe's smallest charge per currency – below it Stripe refuses the payment (stripe.com/docs/currencies#minimum-and-maximum-charge-amounts). */
+const MINIMUM = { eur: 0.5, usd: 0.5, gbp: 0.3, pln: 2, chf: 0.5, sek: 3, nok: 3, dkk: 2.5, czk: 15, ron: 2, bgn: 1, cad: 0.5, aud: 0.5, nzd: 0.5, jpy: 50 };
+
 /** "eur" – config.json → stripe.currency, or from shop.currency; null when unclear (no links then – see lib/currency.js). */
 const currency = () => currencyCode(config.stripe?.currency);
 
@@ -217,13 +220,15 @@ async function settle(guild, ticket, session) {
 
 /**
  * Makes a payment link for the order and posts it in the ticket (the old link is stopped first).
- * → { result: 'created', ticket } · { result: 'paid' } (the old link was just paid) · { result: 'none' } (no fixed total).
+ * → { result: 'created', ticket } · { result: 'paid' } (the old link was just paid) · { result: 'none' } (no fixed total)
+ * · { result: 'small', min } (below Stripe's smallest charge).
  */
 async function postLink(channel, ticket) {
   const guild = channel.guild;
   const cur = currency();
   const order = tickets.orderDetails(ticket);
-  if (!cur || !(order.total > 0) || (DECIMALS[cur] === 2 && toUnits(order.total, cur) < 50)) return { result: 'none' };
+  if (!cur || !(order.total > 0)) return { result: 'none' };
+  if (order.total < (MINIMUM[cur] ?? 0)) return { result: 'small', min: MINIMUM[cur] };
   const old = order.stripe;
   if (old?.status === 'open') {
     const state = await settle(guild, ticket, await stopSession(old.sessionId));
@@ -262,6 +267,10 @@ async function postLink(channel, ticket) {
   return { result: 'created', ticket: updated };
 }
 
+/** Stripe can't take payments this small – the customer is told what to do instead. */
+const tooSmall = (total) =>
+  `💳 Stripe takes card payments from **${money(MINIMUM[currency()])}** – this order is **${money(total)}**. Please pay another way (e.g. PayPal or PaysafeCard), or a seller helps you here.`;
+
 /** A new order with Stripe as its payment method → its payment link, right away. */
 async function onOrderPlaced({ channel, ticket }) {
   if (!channel || !isStripeOrder(ticket?.order) || !env.stripeKey) return;
@@ -275,6 +284,7 @@ async function onOrderPlaced({ channel, ticket }) {
   try {
     const { result } = await postLink(channel, ticket);
     if (result === 'none') await channel.send(notice(COLORS.brand, '💳 A seller sends you the Stripe payment link once the final price is confirmed.'));
+    if (result === 'small') await channel.send(notice(COLORS.warning, tooSmall(tickets.orderDetails(ticket).total)));
   } catch (err) {
     console.warn(`[stripe] Could not make a payment link for ticket ${ticket.channelId}:`, err.message);
     await channel.send(notice(COLORS.warning, "💳 The card payment link couldn't be made right now – a seller sends you one shortly.")).catch(() => null);
@@ -378,6 +388,7 @@ async function newLink(interaction) {
   }
   if (done.result === 'paid') return interaction.editReply({ content: '✅ Your payment just came in – no new link needed.' });
   if (done.result === 'none') throw new UserError('This order has no fixed total yet – a seller confirms the price first.');
+  if (done.result === 'small') throw new UserError(tooSmall(tickets.orderDetails(ticket).total));
   return interaction.editReply({ content: `💳 Here's a new payment link for **${money(done.ticket.order.stripe.amount)}** – the old one no longer works.` });
 }
 
@@ -386,4 +397,4 @@ hooks.on('orderStatus', onOrderStatus);
 hooks.every('stripePayments', CHECK_EVERY, (client) => checkPayments(client), 20_000);
 hooks.route('stripe', { button: (interaction, action) => (action === 'new' ? newLink(interaction) : null) });
 
-module.exports = { currency, enabled, working, confirmsItself, isStripeOrder, linkCard, postLink, checkPayments, LINK_HOURS, DECIMALS };
+module.exports = { MINIMUM, currency, enabled, working, confirmsItself, isStripeOrder, linkCard, postLink, checkPayments, LINK_HOURS, DECIMALS };

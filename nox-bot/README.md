@@ -370,7 +370,7 @@ npm i -D playwright && npm run render-assets
 | `privileged intents are not enabled` | Developer Portal → Bot → turn on **Server Members Intent** and **Message Content Intent** → restart |
 | `Invalid DISCORD_TOKEN` | Reset the token on the Bot tab and paste it into `.env` again |
 | No PayPal link in PayPal orders | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` missing or wrong (the console says *"refused by PayPal"*; Sandbox keys need `PAYPAL_SANDBOX=true`), or the currency isn't taken by PayPal – set `paypal.currency`. The card shows the paypal.me link instead |
-| No Stripe link in Stripe orders | `STRIPE_SECRET_KEY` missing or wrong in `.env` (the console says *"STRIPE_SECRET_KEY was refused"*), or the order has no fixed price (e.g. `from 5€`) – a seller sends a link by hand then. Restart the bot after editing `.env` |
+| No Stripe link in Stripe orders | `STRIPE_SECRET_KEY` missing or wrong in `.env` (the console says *"STRIPE_SECRET_KEY was refused"*), the order has no fixed price (e.g. `from 5€`) – a seller sends a link by hand then – or it's **below Stripe's smallest charge** (0.50€ / $0.50 / £0.30 / 2 zł): the customer is asked to pay another way. Restart the bot after editing `.env` |
 | Commands don't show up | Set `GUILD_ID` in `.env` and restart. Also check the invite had `applications.commands` (the console link does) |
 | "I need the Administrator permission" | Server Settings → Roles → the bot's role → enable **Administrator** |
 | Some roles weren't removed by Wipe & Build | They are above the bot's role – drag the bot's role to the top and run it again |
@@ -421,7 +421,7 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-300 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+301 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
 order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
