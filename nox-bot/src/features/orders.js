@@ -89,6 +89,7 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
   );
   c.addSeparatorComponents(divider());
   const lines = [`**Order:** \`#${pad(sale.ticketNumber)}\`${SPACER}**Receipt:** \`${sale.id}\``, `**Status:** ${statusLabel('delivered')}`, ...productLines(guild, sale, order)];
+  if (order.giftTo && !sale.topUp) lines.push(`**Gift for:** <@${order.giftTo}> – they got the product`);
   if (order.unitPrice != null && !isCart(sale) && !sale.topUp) lines.push(`**Unit price:** ${money(order.unitPrice)}`);
   if (sale.promo) lines.push(`**Discount:** ${sale.discount > 0 ? `−${money(sale.discount)}` : 'applied'} (code \`${sale.promo}\`)`);
   lines.push(`**Total paid:** ${sale.amount != null ? `**${money(sale.amount)}**` : 'as agreed in your ticket'}`);
