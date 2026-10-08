@@ -96,6 +96,12 @@ function guild(guildId) {
   g.shopStatus ??= { mode: 'auto' }; // 'auto' (working hours) | 'open' | 'closed'
   g.security ??= {}; // lockdown state, ignored impersonation alerts
   g.reminders ??= {}; // vouch reminders: { [ticketChannelId]: { userId, dueAt, sent } }
+  g.balances ??= {}; // store balance: { [userId]: { amount, history: [{ at, change, reason, by, ref }] } } – src/features/balance.js
+  g.affiliates ??= []; // creator codes: [{ code, userId, discount, commission, createdAt, earned, paidOut }] – src/features/affiliates.js
+  g.carts ??= {}; // shopping carts: { [userId]: { items: [{ productId, variantId, quantity }], updatedAt } } – src/features/cart.js
+  g.usedTxs ??= {}; // crypto transactions already used for an order: { [txid]: ticketChannelId } – src/features/cryptoverify.js
+  g.deals ??= {}; // the deal of the week: { week, days: [dayKeys], current: { productId, percent, endsAt } } – src/features/deals.js
+  g.abandoned ??= {}; // abandoned-order codes sent: { [ticketChannelId]: { userId, sentAt, code } } – src/features/abandoned.js
   return g;
 }
 
@@ -192,6 +198,13 @@ module.exports = {
    *             listPrice – the unit price before that sale (both only when a sale applied)
    *   status  – see src/lib/orderStatus.js; history – the last 20 changes
    *   payment – what "Pay" sent: { at, method, note, pins, files: [{ name, url }], messageId } (src/features/payments.js)
+   *   items   – a cart order: [{ productId, product, variant, quantity, unitPrice }] (product / productId of the order
+   *             then describe the whole cart: product = "Netflix × 1, Nitro × 2", productId = null) – src/features/cart.js
+   *   giftTo  – a gift: the user ID who gets the product (src/features/gifts.js)
+   *   paidWith – 'balance' when paid with store balance (src/features/balance.js); topUp – { amount } for a balance top-up
+   *   affiliate – the creator code used: { code, userId, commission } (src/features/affiliates.js)
+   *   crypto  – automatic crypto check: { coin, txid, amount, status ('checking' | 'confirmed' | 'short' | 'failed'),
+   *             confirmations, checkedAt } (src/features/cryptoverify.js)
    *
    * Order and other tickets also keep unclaimedAt (when staff last unclaimed it) and unclaimedRemindedAt (the last
    * "nobody has claimed this" reminder in the staff chat – src/features/staffreminders.js).

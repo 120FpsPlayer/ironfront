@@ -42,12 +42,12 @@
     "currency": "€",
     "currencyPosition": "after",
     "deliveryTime": "Usually within 5–30 minutes",
-    "refundPolicy": "Refunds are only possible if we can't deliver your product. Once delivery has started, all sales are final.",
+    "refundPolicy": "All sales are final – we do not offer refunds. Store balance can't be paid out or refunded.",
     "loyalAfterOrders": 5,
     "lowStockAt": 3,
     "paymentMethods": [
       { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Send the PIN code only inside your ticket", "type": "paysafecard" },
-      { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)", "type": "crypto", "addresses": { "BTC": "", "ETH": "" } },
+      { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)", "type": "crypto", "addresses": { "BTC": "bc1qmrgmhzq5v0ynr4fdwepp8yk5mrs64cl2g8vnkm", "ETH": "0x57A092596977975FdB6988dcB9Ce6aE84aDc4d0d" } },
       { "name": "PayPal", "emoji": "paypal", "details": "A PayPal payment link in your ticket", "type": "paypal", "paypalMe": "" },
       { "name": "Stripe", "emoji": "card", "details": "Card, Apple Pay or Google Pay – a secure payment link in your ticket", "type": "stripe" }
     ]
@@ -85,7 +85,45 @@
   },
 
   "crypto": {
-    "currency": ""
+    "currency": "",
+    "autoVerify": true,
+    "confirmations": { "BTC": 1, "ETH": 12 }
+  },
+
+  "cart": {
+    "enabled": true,
+    "maxItems": 10
+  },
+
+  "gifts": {
+    "enabled": true
+  },
+
+  "balance": {
+    "enabled": true,
+    "topUpMin": 5,
+    "topUpMax": 500
+  },
+
+  "affiliates": {
+    "enabled": true,
+    "discountPercent": 5,
+    "commissionPercent": 10
+  },
+
+  "abandonedOrders": {
+    "enabled": true,
+    "afterHours": 24,
+    "percent": 5,
+    "validDays": 3
+  },
+
+  "deals": {
+    "enabled": true,
+    "minPercent": 25,
+    "maxPercent": 50,
+    "daysPerWeek": [1, 2],
+    "hours": 24
   },
 
   "staffReminders": {
