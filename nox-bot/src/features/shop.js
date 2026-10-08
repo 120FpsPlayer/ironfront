@@ -274,7 +274,8 @@ function cardText(guild, p, { category = false, now = Date.now(), badges = null 
     sale ? `-# ⏰ Sale ends ${ts(sale.endsAt, 'R')}` : null,
   ].filter(Boolean);
   const room = CARD_TEXT - title.length - extras.join('\n').length - 2;
-  return [title, truncate(p.description, Math.max(60, Math.min(220, room))), ...extras].join('\n');
+  // A blank line between the title, the description and the stock line – easier to read than one block.
+  return [title, '', truncate(p.description, Math.max(60, Math.min(220, room - 4))), '', ...extras].join('\n');
 }
 
 /** Buy – or 🔔 Notify me while it's sold out (features/restock.js). */

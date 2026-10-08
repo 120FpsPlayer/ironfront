@@ -172,6 +172,7 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
   c.addTextDisplayComponents(text(statusLine(ticket)));
   if (acceptsPayment(ticket)) c.addSectionComponents(paymentSection(ticket));
   if (type?.id === 'order') require('../features/gifts').addToCard(c, ticket); // "🎁 Make it a gift" – here, as gifts.js needs this file
+  if (type?.id === 'order') require('../features/ticketpromo').addToCard(c, ticket); // "🏷️ Add promo code" while it waits for payment
 
   if (ticket.participants?.length) {
     c.addTextDisplayComponents(text(`**Added members:** ${ticket.participants.map((id) => `<@${id}>`).join(', ')}`));

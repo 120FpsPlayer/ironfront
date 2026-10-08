@@ -99,7 +99,7 @@ test('/product variants: preview reply, stable IDs, "none" removes them; the car
   // The card: "from 5€" and one line with every option.
   await panels.refresh(guild, 'shop');
   const card = textOf(shopMessage(guild).body);
-  assert.match(card, /🎬 Netflix\u2002{2}from \*\*5€\*\*\nPremium account, 4K\.\n-# 1 month 5€ · 3 months 12€ · 12 months 40€\n-# 🟢 In stock/);
+  assert.match(card, /🎬 Netflix\u2002{2}from \*\*5€\*\*\n\nPremium account, 4K\.\n\n-# 1 month 5€ · 3 months 12€ · 12 months 40€\n-# 🟢 In stock/);
 
   // Autocomplete, /product list and the restock announcement.
   const ac = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'edit', focusedOption: 'product', focused: 'net' });
@@ -125,14 +125,14 @@ test('/product variants: preview reply, stable IDs, "none" removes them; the car
 
   // A long list is cut after whole options with "+N more".
   await set(Array.from({ length: 10 }, (_, i) => `${i + 1} month${i ? 's' : ''} of Premium Ultra HD = ${(i + 1) * 5}`).join(', '));
-  const options = shop.cardText(guild, netflix).split('\n')[2];
+  const options = shop.cardText(guild, netflix).split('\n')[4];
   assert.match(options, /^-# 1 month of Premium Ultra HD 5€ · .* · \+\d+ more$/);
   assert.ok(options.length <= 150);
 
   const none = await set('none');
   assert.match(textOf(lastResponse(none)), /\*\*Netflix\*\* has no options any more – it is sold for one price again: \*\*20€\*\*/);
   assert.deepEqual(netflix.variants, []);
-  assert.match(shop.cardText(guild, netflix), /Netflix\u2002{2}\*\*20€\*\*\nPremium account, 4K\.\n-# 🟢 In stock$/);
+  assert.match(shop.cardText(guild, netflix), /Netflix\u2002{2}\*\*20€\*\*\n\nPremium account, 4K\.\n\n-# 🟢 In stock$/);
 
   // Errors are shown to the seller, nothing changes.
   const wrong = await set('1 month: 5');
@@ -145,7 +145,7 @@ test('/product variants: preview reply, stable IDs, "none" removes them; the car
 test('old products without the new fields work exactly as before', async () => {
   const { guild, netflix } = await shopGuild();
   for (const key of ['variants', 'stockCount', 'sale']) delete netflix[key];
-  assert.equal(shop.cardText(guild, netflix), '### 🎬 Netflix\u2002\u2002**20€**\nPremium account, 4K.\n-# 🟢 In stock');
+  assert.equal(shop.cardText(guild, netflix), '### 🎬 Netflix\u2002\u2002**20€**\n\nPremium account, 4K.\n\n-# 🟢 In stock');
   const modal = validateModal(shop.orderModal(netflix, guild), guild);
   assert.equal(modal.components[0].type, 10, 'the intro text');
   assert.match(modal.components[0].content, /\*\*Netflix\*\* — 20€/);

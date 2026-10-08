@@ -116,7 +116,7 @@ test('the card: crossed-out old price, the new price and a live countdown – ev
   const { product: p } = flash.startSale(guild, nitro.id, { percent: 20, durationMs: 2 * HOUR });
   const end = Math.floor(p.sale.endsAt / 1000);
   const card = shop.cardText(guild, nitro);
-  assert.equal(card, `### 💎 Nitro\u2002\u2002~~20€~~ **16€** · −20%\nInstant delivery.\n-# 🟢 In stock\n-# ⏰ Sale ends <t:${end}:R>`);
+  assert.equal(card, `### 💎 Nitro\u2002\u2002~~20€~~ **16€** · −20%\n\nInstant delivery.\n\n-# 🟢 In stock\n-# ⏰ Sale ends <t:${end}:R>`);
   await panels.refresh(guild, 'shop');
   assert.match(textOf(shopMessage(guild).body), /~~20€~~ \*\*16€\*\* · −20%[\s\S]*⏰ Sale ends <t:\d+:R>/);
 
@@ -129,13 +129,13 @@ test('the card: crossed-out old price, the new price and a live countdown – ev
   flash.startSale(guild, netflix.id, { percent: 20, durationMs: HOUR });
   const lines = shop.cardText(guild, netflix).split('\n');
   assert.equal(lines[0], '### 🎬 Netflix\u2002\u2002from ~~5€~~ **4€** · −20%');
-  assert.equal(lines[2], '-# 1 month 4€ · 3 months 9.60€ · 12 months 32€');
+  assert.equal(lines[4], '-# 1 month 4€ · 3 months 9.60€ · 12 months 32€');
   const options = validateModal(shop.orderModal(netflix, guild), guild).components[0].component.options;
   assert.deepEqual(options.map((o) => o.description), ['4€ (was 5€ · −20% flash sale)', '9.60€ (was 12€ · −20% flash sale)', '32€ (was 40€ · −20% flash sale)']);
 
   // Over: the card is back to normal, even before the timer clears it.
   nitro.sale.endsAt = Date.now() - 1;
-  assert.equal(shop.cardText(guild, nitro), '### 💎 Nitro\u2002\u2002**20€**\nInstant delivery.\n-# 🟢 In stock');
+  assert.equal(shop.cardText(guild, nitro), '### 💎 Nitro\u2002\u2002**20€**\n\nInstant delivery.\n\n-# 🟢 In stock');
 });
 
 test('price maths: the sale comes off the unit price before the quantity and the promo code', async () => {
