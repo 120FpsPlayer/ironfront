@@ -50,7 +50,9 @@ function rulesCard(x) {
         '> **1.3** Keep public channels in English so everyone can follow.\n' +
         '> **1.4** No NSFW, gore or otherwise disturbing content – anywhere.\n' +
         '> **1.5** No advertising or self-promotion, including in DMs to our members.\n' +
-        '> **1.6** No impersonating staff or other members.',
+        '> **1.6** No impersonating staff or other members.\n' +
+        '> **1.7** No swearing, slurs or hate speech – in any language.\n' +
+        '> **1.8** No links in the chat (GIFs are fine).',
     ),
   );
   c.addTextDisplayComponents(

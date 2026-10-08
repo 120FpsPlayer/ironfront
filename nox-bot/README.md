@@ -126,6 +126,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   (`repeatMinutes: 0` = only once).
 
 ### 🛡️ Security & growth
+- **Chat filter** – no links in #chat (GIFs are fine) and no swearing or slurs in many languages (English, Polish, Swedish, German, French, Spanish, Russian…), also written as `sh1t`, `k u r w a`, `ᴋᴜʀᴡᴀ` or with Cyrillic letters. The message is deleted, the member gets a short notice, #automod-logs gets the details; 3 blocked messages in 10 minutes → 10 min timeout. Staff are never filtered. Settings: `chatFilter` in `config.json` (`noLinks`, `allowedDomains`, `extraWords`, `allowedWords`, `profanity: "public"` = not in tickets).
 - **Look-alike alerts** – someone joins as "supp0rt_nox" or copies a staff member's avatar? Staff get an alert in
   #automod-logs with **Ban / Kick / Timeout / Ignore** buttons.
 - **`/lockdown`** – during a raid everyone except the team can't chat, react or use voice, new tickets, orders and vouches

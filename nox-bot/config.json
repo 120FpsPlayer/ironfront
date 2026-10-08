@@ -118,6 +118,19 @@
     "validDays": 3
   },
 
+  "chatFilter": {
+    "enabled": true,
+    "noLinks": ["chat"],
+    "allowGifs": true,
+    "allowedDomains": [],
+    "slurs": "everywhere",
+    "profanity": "public",
+    "extraWords": [],
+    "allowedWords": [],
+    "strikes": 3,
+    "strikeMinutes": 10,
+    "timeoutMinutes": 10
+  },
   "deals": {
     "enabled": true,
     "minPercent": 25,

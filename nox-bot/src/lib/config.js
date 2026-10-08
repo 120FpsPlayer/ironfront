@@ -11,6 +11,7 @@ const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
  * what the shipped config.json has, so updating the bot never turns a feature off without anyone noticing.
  */
 const FEATURE_DEFAULTS = {
+  chatFilter: { enabled: true, noLinks: ['chat'], allowGifs: true, allowedDomains: [], slurs: 'everywhere', profanity: 'public', extraWords: [], allowedWords: [], strikes: 3, strikeMinutes: 10, timeoutMinutes: 10 },
   orders: { receipts: true, proofs: true, vouchReminderHours: 24, statusDms: true, paymentProofs: true },
   badges: { enabled: true, bestsellerMinSales: 3, ratingMinVouches: 2 },
   staffReminders: { enabled: true, unclaimedMinutes: 15, repeatMinutes: 60 },

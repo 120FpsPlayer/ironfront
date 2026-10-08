@@ -137,9 +137,9 @@ function automodRules(alertChannelId, exemptRoleIds) {
     },
     {
       ...base,
-      name: 'NØX · Slurs & sexual content',
+      name: 'NØX · Profanity, slurs & sexual content',
       triggerType: AutoModerationRuleTriggerType.KeywordPreset,
-      triggerMetadata: { presets: [AutoModerationRuleKeywordPresetType.Slurs, AutoModerationRuleKeywordPresetType.SexualContent] },
+      triggerMetadata: { presets: [AutoModerationRuleKeywordPresetType.Profanity, AutoModerationRuleKeywordPresetType.Slurs, AutoModerationRuleKeywordPresetType.SexualContent] },
       actions: msg(),
     },
     {
