@@ -111,7 +111,7 @@ function takesPins(order) {
   return paycards.methodType(typeof order === 'string' ? { name: order } : paycards.methodOf(order)) === 'paysafecard';
 }
 
-/** Can the customer send their payment ("I've paid") – an open order that waits for its payment. */
+/** Can the customer send their payment ("Pay") – an open order that waits for its payment. */
 function acceptsPayment(ticket) {
   return (
     config.orders?.paymentProofs !== false &&
@@ -123,15 +123,15 @@ function acceptsPayment(ticket) {
   );
 }
 
-/** "I've paid" on the order card (src/features/payments.js). */
+/** "Pay" on the order card (src/features/payments.js). */
 function paymentSection(ticket) {
   const sent = statusOf(ticket) === 'sent' ? ticket.order?.payment : null; // not after staff set it back to awaiting
   const order = ticket.order ?? require('./tickets').orderDetails(ticket); // here – tickets.js needs this file
   const proof = takesPins(order) ? 'your PaysafeCard PIN, a screenshot or the transaction ID' : 'a screenshot or the transaction ID';
   const content = sent?.at
-    ? `📨 **Payment sent ${ts(sent.at, 'R')}** – a seller is checking it.\n-# Made a mistake? Click **I've paid** again to send a correction.`
-    : `💳 **Paid already?** Click **I've paid** and send ${proof} – the seller is notified right away.`;
-  return buttonSection(content, btn('pay:open', "I've paid", '💳', ButtonStyle.Success));
+    ? `📨 **Payment sent ${ts(sent.at, 'R')}** – a seller is checking it.\n-# Made a mistake? Click **Pay** again to send a correction.`
+    : `💳 **Ready to pay?** Click **Pay** and send ${proof} – the seller is notified right away.`;
+  return buttonSection(content, btn('pay:open', 'Pay', '💳', ButtonStyle.Success));
 }
 
 function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [], previousCount = 0 } = {}) {

@@ -209,7 +209,7 @@ function howToBuy(x) {
         `> **3.** A private ticket opens – a ${x.role('seller', 'Seller')} confirms the price and sends payment details\n` +
         (config.orders.paymentProofs === false
           ? '> **4.** Pay and receive your product right in the ticket\n'
-          : "> **4.** Pay, click **I've paid** in the ticket (PIN, screenshot or transaction ID) and receive your product right there\n") +
+          : '> **4.** Click **Pay** in the ticket (PaysafeCard PIN, crypto transaction ID or a screenshot) – with PayPal or Stripe your product arrives instantly\n') +
         `> **5.** Enjoy – and leave a vouch in ${x.ch('vouches')} ${x.E('star')}\n` +
         `-# ${config.orders.statusDms === false ? '' : 'You get a DM when your payment is confirmed and when your order is on its way · '}**My orders** in ${x.ch('shop')} shows your orders and receipts`,
     ),

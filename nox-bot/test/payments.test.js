@@ -69,7 +69,7 @@ test('"I\'ve paid" sits on the order card while the payment is awaited – only 
   const { ticket, channel } = await order(guild, buyer, product, { quantity: '2' });
   const first = card(channel);
   assert.ok(customIds(first.body).includes('pay:open'));
-  assert.match(textOf(first.body), /Paid already\?\*\* Click \*\*I've paid\*\* and send your PaysafeCard PIN, a screenshot or the transaction ID/);
+  assert.match(textOf(first.body), /Ready to pay\?\*\* Click \*\*Pay\*\* and send your PaysafeCard PIN, a screenshot or the transaction ID/);
   assert.match(textOf(first.body), /\*\*Order:\*\* ⏳ Awaiting payment/);
 
   // Other tickets have no such button
@@ -86,7 +86,7 @@ test('"I\'ve paid" sits on the order card while the payment is awaited – only 
   const click = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
   const form = click.state.modals[0];
   assert.equal(form.custom_id, 'pay:submit');
-  assert.equal(form.title, `💳 I've paid · order #${String(ticket.number).padStart(4, '0')}`);
+  assert.equal(form.title, `💳 Pay · order #${String(ticket.number).padStart(4, '0')}`);
   assert.ok(form.components.length <= 5);
   assert.match(form.components[0].content, /\*\*Nitro Boost\*\* × 2 · PaysafeCard · Total \*\*20€\*\*/);
   assert.deepEqual(form.components.slice(1).map((c) => [c.label, c.component.type, c.component.custom_id, c.component.required]), [
@@ -214,7 +214,7 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
 
   // Set back to "Awaiting payment" (e.g. a wrong PIN): the card asks for the payment again
   await orderstatus.setStatus(channel, 'awaiting', seller);
-  assert.match(textOf(card(channel).body), /Paid already\?\*\* Click \*\*I've paid\*\*/);
+  assert.match(textOf(card(channel).body), /Ready to pay\?\*\* Click \*\*Pay\*\*/);
   assert.ok(customIds(card(channel).body).includes('pay:open'));
 
   // Once the seller confirms it, the button is gone

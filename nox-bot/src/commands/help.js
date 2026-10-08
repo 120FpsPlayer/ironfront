@@ -25,7 +25,7 @@ module.exports = {
           inviteLine,
           '`/ticket info` · `/ticket close` – inside your ticket',
           '🔔 **Call support** – a button in your ticket if you have been waiting a while',
-          config.orders.paymentProofs === false ? null : "💳 **I've paid** – a button in your order ticket: send your PIN, a screenshot or the transaction ID",
+          config.orders.paymentProofs === false ? null : '💳 **Pay** – a button in your order ticket: send your PaysafeCard PIN, the crypto transaction ID or a screenshot',
           '🧾 **My orders** – a button in the shop: your open orders, their status and all your receipts',
         ]
           .filter(Boolean)

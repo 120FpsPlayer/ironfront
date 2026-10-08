@@ -111,7 +111,7 @@ test('PaysafeCard: I\'ve paid → "on the way"; staff click Payment OK – deliv
   const { guild, product, seller } = await setup();
   const buyer = member(guild);
   const { channel, ticket } = await order(guild, buyer, product, 'paysafecard');
-  assert.match(texts(channel), /After you click \*\*I've paid\*\*, we check your payment and send your product/);
+  assert.match(texts(channel), /After you click \*\*Pay\*\*, we check your payment and send your product/);
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
   assert.match(texts(channel), /Your product is on the way![\s\S]*We're checking your payment/);
   const card = channel.messageList.at(-1);

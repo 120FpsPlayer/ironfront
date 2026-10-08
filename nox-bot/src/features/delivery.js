@@ -5,7 +5,7 @@
  *
  *   PayPal / Stripe: once the payment is confirmed (src/features/autopay.js) → "📦 Your product is on the way"
  *     → the product, in the ticket and by DM → the order is completed (sale, receipt, Customer role…)
- *   Other methods (PaysafeCard, crypto…): "I've paid" → "📦 Your product is on the way" → staff check the payment
+ *   Other methods (PaysafeCard, crypto…): "Pay" → "📦 Your product is on the way" → staff check the payment
  *     and click "Payment OK – deliver" (or ⚙️ → Deliver product) → the product → the order is completed
  * Products without files or text are delivered by hand, like before.
  *
@@ -77,7 +77,7 @@ function deliverySummary(p) {
 
 // ───────────── Cards ─────────────
 
-/** "📦 Your product is on the way" – auto: paid by PayPal / Stripe; otherwise after "I've paid", while staff check it. */
+/** "📦 Your product is on the way" – auto: paid by PayPal / Stripe; otherwise after "Pay", while staff check it. */
 function onTheWayCard(ticket, { auto }) {
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(

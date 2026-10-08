@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * "I've paid" – the customer sends their payment from the order ticket (config.orders.paymentProofs).
+ * "Pay" – the customer sends their payment from the order ticket (config.orders.paymentProofs).
  * The button sits on the ticket's main card while the order waits for its payment (status awaiting or sent).
  * The form takes PaysafeCard PINs (PaysafeCard orders, or no method known), screenshots and a note / transaction ID.
  *
@@ -12,7 +12,7 @@
  * corrected PIN) works after a short cooldown – it only pings again after the Call support cooldown.
  *
  * Components:
- *   pay:open      "I've paid" button on the order card → form
+ *   pay:open      "Pay" button on the order card → form
  *   pay:submit    the form
  */
 
@@ -116,7 +116,7 @@ function paymentModal(ticket) {
     (order.total != null ? ` · Total **${money(order.total)}**` : '');
   const modal = new ModalBuilder()
     .setCustomId('pay:submit')
-    .setTitle(`💳 I've paid · order #${pad(ticket.number)}`.slice(0, 45))
+    .setTitle(`💳 Pay · order #${pad(ticket.number)}`.slice(0, 45))
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(`${summary}\nFill in at least one field – a seller checks your payment right away.\n-# Only send it here, in your ticket – never in DMs.`),
     );

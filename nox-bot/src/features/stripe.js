@@ -55,7 +55,7 @@ const working = () => Boolean(env.stripeKey) && !keyRefused;
 /** New links are made: a key, a clear currency and config.json → stripe.enabled isn't false (a refused key is tried again). */
 const enabled = () => Boolean(env.stripeKey) && config.stripe?.enabled !== false && currency() != null;
 
-/** The order has a Stripe link that confirms itself – "I've paid" isn't needed then. */
+/** The order has a Stripe link that confirms itself – "Pay" isn't needed then. */
 const confirmsItself = (ticket) => ticket?.order?.stripe?.status === 'open' && working();
 
 /** Is this order paid with Stripe – one place decides a method's kind for every provider (src/features/paycards.js). */
@@ -208,7 +208,7 @@ async function settle(guild, ticket, session) {
     const updated = saveStripe(ticket.channelId, { status: 'expired' });
     await editCard(guild, updated);
     const channel = updated.status === 'open' ? guild.channels.cache.get(updated.channelId) : null;
-    if (channel) await tickets.refreshControlMessage(channel, updated).catch(() => null); // "I've paid" comes back
+    if (channel) await tickets.refreshControlMessage(channel, updated).catch(() => null); // "Pay" comes back
     return 'expired';
   }
   if (session.payment_status === 'paid' || session.payment_status === 'no_payment_required') {
@@ -263,7 +263,7 @@ async function postLink(channel, ticket) {
     const before = await channel.messages.fetch(old.messageId).catch(() => null);
     await before?.delete().catch(() => null);
   }
-  await tickets.refreshControlMessage(channel, updated); // the "I've paid" button isn't needed with a link
+  await tickets.refreshControlMessage(channel, updated); // the "Pay" button isn't needed with a link
   return { result: 'created', ticket: updated };
 }
 
@@ -310,7 +310,7 @@ async function warnRefused(client) {
         ),
       ],
     }).catch(() => null);
-    // The links can't confirm themselves now – "I've paid" comes back on their tickets.
+    // The links can't confirm themselves now – "Pay" comes back on their tickets.
     for (const t of open.filter((x) => x.guildId === id && x.status === 'open')) {
       const channel = guild.channels.cache.get(t.channelId);
       if (channel) await tickets.refreshControlMessage(channel, t).catch(() => null);

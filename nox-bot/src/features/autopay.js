@@ -2,7 +2,7 @@
 
 /**
  * Automatic payments – Stripe (src/features/stripe.js) and PayPal (src/features/paypal.js). What both do when
- * money comes in, and whether an order has a link that confirms itself (then "I've paid" isn't needed).
+ * money comes in, and whether an order has a link that confirms itself (then "Pay" isn't needed).
  *
  * An order is only set to Paid when the amount and currency match its total and it wasn't paid already –
  * otherwise the team is asked to check it (a changed total, a second payment). A payment on a closed or deleted
@@ -83,7 +83,7 @@ async function paymentReceived(guild, ticket, { gateway, paidAmount, paidCurrenc
   if (instant) await delivery.deliverPaid(channel, db.getTicket(updated.channelId), { amount: paidAmount }).catch((err) => console.warn(`[${gateway}] delivery:`, err.message));
 }
 
-/** The order has a payment link that confirms itself – "I've paid" isn't needed then. Here – stripe.js and paypal.js need this file. */
+/** The order has a payment link that confirms itself – "Pay" isn't needed then. Here – stripe.js and paypal.js need this file. */
 const confirmsItself = (ticket) => require('./stripe').confirmsItself(ticket) || require('./paypal').confirmsItself(ticket);
 
 module.exports = { PAID, statusBefore, pingsFor, paymentReceived, confirmsItself };

@@ -56,7 +56,7 @@ test('PaysafeCard: "Pay 24€" with the steps and an Enter PIN button that opens
   const out = textOf(card);
   assert.match(out, /Pay 24€ – PaysafeCard/);
   assert.match(out, /Buy a \*\*PaysafeCard\*\* worth \*\*24€\*\*/);
-  assert.match(out, /Click \*\*Enter PIN\*\*/);
+  assert.match(out, /Click \*\*Pay\*\* and enter the 16-digit PIN/);
   assert.ok(customIds(card).includes('pay:open'));
   const i = createInteraction({ guild, member: guild.members.cache.get(db.getTicket(channel.id).ownerId), kind: 'button', customId: 'pay:open', channel });
   await handle(i, commands);
@@ -82,7 +82,7 @@ test('Crypto: the wallets from config.json with the amount in coins (rounded up)
     assert.match(out, /Ethereum \(ETH\)\*\* – \*\*≈ 0\.009600 ETH\*\*/);
     assert.ok(out.includes('bc1qnoxexamplewallet000000000000000000'));
     assert.ok(out.includes('0x1234567890abcdef1234567890abcdef12345678'));
-    assert.match(out, /Then click \*\*I've paid\*\* and send the transaction ID/);
+    assert.match(out, /Then click \*\*Pay\*\* and send the transaction ID/);
     assert.ok(customIds(card).includes('pay:open'));
     assert.equal(paycards.coinAmount(10, 3, 'BTC'), '3.33333334', 'never less than the price');
   } finally {
@@ -116,7 +116,7 @@ test('PayPal without keys: a paypal.me link with the amount – or the seller se
     const { card } = await cardFor(guild, product, 'paypal');
     validateMessage(card, guild);
     assert.ok(JSON.stringify(card.components.map((c) => c.toJSON?.() ?? c)).includes('https://paypal.me/NoxShop/24.00EUR'));
-    assert.match(textOf(card), /Then click|then click \*\*I've paid\*\* and send a screenshot/);
+    assert.match(textOf(card), /then click \*\*Pay\*\* and send a screenshot/);
     assert.ok(customIds(card).includes('pay:open'));
 
     paypal().paypalMe = '';

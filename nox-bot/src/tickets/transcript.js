@@ -11,7 +11,7 @@ const esc = (s) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-// PaysafeCard PINs (the "I've paid" card, or typed in the chat) never reach the archive in full – it's kept forever.
+// PaysafeCard PINs (the "Pay" card, or typed in the chat) never reach the archive in full – it's kept forever.
 const textOf = (s) => esc(maskPins(s));
 
 function formatContent(text, message) {

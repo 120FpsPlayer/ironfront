@@ -53,7 +53,7 @@ const refusedWarned = new Set();
 const working = () => hasKeys() && !keyRefused;
 /** New links are made: keys, a currency PayPal takes and config.json → paypal.enabled isn't false. */
 const enabled = () => hasKeys() && config.paypal?.enabled !== false && currency() != null;
-/** The order has a PayPal link that confirms itself – "I've paid" isn't needed then. */
+/** The order has a PayPal link that confirms itself – "Pay" isn't needed then. */
 const confirmsItself = (ticket) => ticket?.order?.paypal?.status === 'open' && working();
 
 const isPaypalOrder = (order) => require('./paycards').methodType(require('./paycards').methodOf(order)) === 'paypal';
@@ -249,7 +249,7 @@ async function tell(guild, ticket, { customer = null, staff = null, color = COLO
   }).catch(() => null);
 }
 
-/** The link stops being watched; the ticket card shows "I've paid" again. */
+/** The link stops being watched; the ticket card shows "Pay" again. */
 async function expire(guild, channelId, messages = {}) {
   const updated = savePaypal(channelId, { status: 'expired' });
   await editCard(guild, updated);
@@ -496,7 +496,7 @@ async function warnRefused(client) {
         ),
       ],
     }).catch(() => null);
-    // The links can't confirm themselves now – "I've paid" comes back on their tickets.
+    // The links can't confirm themselves now – "Pay" comes back on their tickets.
     for (const t of open.filter((x) => x.guildId === id && x.status === 'open')) {
       const channel = guild.channels.cache.get(t.channelId);
       if (channel) await tickets.refreshControlMessage(channel, t).catch(() => null);

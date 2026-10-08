@@ -35,14 +35,14 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   product:Netflix file:account.txt text:…` (up to 5 files, 9 MB together) or `file:` / `delivery_text:` on `/product add`.
   Paid with **PayPal or Stripe** → *"📦 Your product is on the way"*, then the product arrives in the ticket **and by DM**
   right away (usually under 30 seconds) and the order is completed by itself. Paid with **PaysafeCard or Crypto** → after
-  **I've paid** the customer sees *"📦 Your product is on the way"*; you check the payment and click **Payment OK – deliver**
+  **Pay** the customer sees *"📦 Your product is on the way"*; you check the payment and click **Payment OK – deliver**
   (or ⚙️ → **Deliver product** / **Send product again**). Products without files are delivered by hand, as before.
 - **Payment card in every order** – right after the order the ticket shows **💳 Pay 24€** for the chosen method:
-  - **PaysafeCard** – what to do, and an **Enter PIN** button (PIN + screenshot form).
+  - **PaysafeCard** – what to do, and an **Pay** button (PIN + screenshot form).
   - **Crypto** – your **BTC / ETH wallet addresses** (`config.json` → the Crypto payment method → `"addresses"`) with
-    the amount in coins at today's rate (e.g. *≈ 0.00040000 BTC*), and **I've paid** for the transaction ID or a screenshot.
+    the amount in coins at today's rate (e.g. *≈ 0.00040000 BTC*), and **Pay** for the transaction ID or a screenshot.
   - **PayPal** – with PayPal keys in `.env` a **PayPal link that confirms itself** (like Stripe, below); without keys a
-    **paypal.me** link with the amount filled in (`"paypalMe": "yourname"`), then **I've paid** with a screenshot.
+    **paypal.me** link with the amount filled in (`"paypalMe": "yourname"`), then **Pay** with a screenshot.
 - **PayPal payments that confirm themselves** – put your PayPal app's keys in `.env` (`PAYPAL_CLIENT_ID`,
   `PAYPAL_CLIENT_SECRET`): every PayPal order gets a **Pay 24€ with PayPal** link. When the customer has approved it,
   the bot **takes the money itself** within 30 seconds, sets the order to **Paid** and pings the seller. The money is only
@@ -75,7 +75,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 - **Badges** – 🔥 **Bestseller** on the product with the most units sold (at least 3) and ⭐ **4.9** – the average vouch
   rating of a product (from 2 vouches). The shop updates after every completed order. Turn them off or change the limits
   in `config.json → badges`.
-- **"I've paid"** – the order ticket has an **I've paid** button for the customer: they send their PaysafeCard PIN(s)
+- **"Pay"** – the order ticket has an **Pay** button for the customer: they send their PaysafeCard PIN(s)
   (checked: 16 digits each), screenshots and/or a transaction ID. The seller handling the ticket (or the sellers, while
   nobody has claimed it) is pinged, the screenshots are kept in the ticket, and the log and the archived transcripts
   only show the last 4 digits of a PIN. A corrected PIN can be sent again after a minute – it only pings the team again after the Call support
@@ -277,7 +277,7 @@ Admin commands are hidden from normal members automatically.
    total to pay (with the flash sale price, if one is running). Sellers and support are pinged. Outside the opening hours
    the ticket says when you're back. Nobody claims it within 15 minutes? The team is reminded in #staff-chat.
 3. A seller claims it and sends the payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
-   The customer pays and clicks **I've paid** (PIN / screenshot / transaction ID) – the seller is pinged, checks it and sets
+   The customer pays and clicks **Pay** (PIN / screenshot / transaction ID) – the seller is pinged, checks it and sets
    **⚙️ → Status: Paid**, later **Status: In progress**; the customer gets a DM for each step.
 4. After delivery the seller picks **⚙️ Manage ticket → Order completed** and confirms the amount paid:
    the sale is recorded for `/sales`, the stock counter goes down, the customer gets a **receipt by DM** (✅ Delivered),
@@ -298,7 +298,7 @@ Admin commands are hidden from normal members automatically.
 | `verification` | Math question on/off, minimum account age in days |
 | `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods**, `lowStockAt` (a stock counter at or below this shows "🟠 Only N left", default 3) |
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
-| `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **I've paid** button (`paymentProofs`) |
+| `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **Pay** button (`paymentProofs`) |
 | `stripe` | Automatic Stripe payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `STRIPE_SECRET_KEY` in `.env` |
 | `paypal` | Automatic PayPal payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in `.env` |
 | `crypto` | The currency the coin amounts are worked out in (`currency`, empty = from `shop.currency`) – set it when your currency sign isn't clear |
@@ -408,7 +408,7 @@ src/
 ├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
 │                            announcements, welcome/logs, stats, sales report, backups, customer profiles,
 │                            Notify me, invites, lockdown, look-alike alerts, housekeeping, flash sales, badges,
-│                            I've paid, order status, My orders, staff reminders, payment cards, Stripe, PayPal
+│                            Pay, order status, My orders, staff reminders, payment cards, Stripe, PayPal
 ├── tickets/                 ticket system, cards, HTML transcripts
 ├── commands/                slash commands
 ├── handlers/interactions.js buttons, menus and forms
@@ -423,7 +423,7 @@ npm test
 ```
 301 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
-every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
+every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, Pay,
 order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
 opening hours across summer/winter time, lockdown, invite rewards, in-place panel updates, verification, giveaways, ratings and more.
 

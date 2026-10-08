@@ -4,7 +4,7 @@
  * Where an order is – ticket.order.status. Shown in the order ticket, in "My orders" and in the DMs.
  *
  *   awaiting  – placed, waiting for the payment (orders without a status are this too)
- *   sent      – the customer clicked "I've paid" and sent proof – a seller checks it
+ *   sent      – the customer clicked "Pay" and sent proof – a seller checks it
  *   paid      – a seller confirmed the payment
  *   progress  – the seller is preparing / delivering it
  *   delivered – Order completed (the ticket has completedAt)

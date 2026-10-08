@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Order status (src/lib/orderStatus.js): awaiting payment → payment sent ("I've paid", features/payments.js)
+ * Order status (src/lib/orderStatus.js): awaiting payment → payment sent ("Pay", features/payments.js)
  * → paid → in progress → delivered (Order completed).
  *
  *   Staff set it from the ⚙️ menu of an open order ticket: "Status: Paid", "Status: In progress" and "Status:
@@ -36,7 +36,7 @@ const COLOR = {
 };
 
 const HINTS = {
-  awaiting: "We're waiting for your payment – the payment details are in your ticket. Already paid? Click **I've paid** there.",
+  awaiting: "We're waiting for your payment – the payment details are in your ticket. Click **Pay** there to send it.",
   sent: 'A seller is checking your payment right now.',
   paid: 'Your payment is confirmed – thank you! A seller starts on your order shortly.',
   progress: 'A seller is preparing your order right now – it is delivered in your ticket.',
@@ -58,7 +58,7 @@ function requireOpenOrder(channel) {
 /**
  * Stores a new status on the ticket's order → the ticket. Order tickets from older versions have no ticket.order –
  * it is built from their form answers first (orderDetails), so their product and quantity are kept.
- * extra: more order fields saved with it (the payment of "I've paid").
+ * extra: more order fields saved with it (the payment of "Pay").
  */
 function recordStatus(ticket, status, { by = null, now = Date.now(), extra = {} } = {}) {
   const order = { ...tickets.orderDetails(ticket) };

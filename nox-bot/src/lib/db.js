@@ -191,7 +191,7 @@ module.exports = {
    *   variant – the variant's name (product = "Name — variant"); salePercent – the flash sale it was bought in,
    *             listPrice – the unit price before that sale (both only when a sale applied)
    *   status  – see src/lib/orderStatus.js; history – the last 20 changes
-   *   payment – what "I've paid" sent: { at, method, note, pins, files: [{ name, url }], messageId } (src/features/payments.js)
+   *   payment – what "Pay" sent: { at, method, note, pins, files: [{ name, url }], messageId } (src/features/payments.js)
    *
    * Order and other tickets also keep unclaimedAt (when staff last unclaimed it) and unclaimedRemindedAt (the last
    * "nobody has claimed this" reminder in the staff chat – src/features/staffreminders.js).

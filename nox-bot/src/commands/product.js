@@ -261,7 +261,7 @@ module.exports = {
             .setDescription(
               `${delivery.deliverySummary(p)}\n\n` +
                 '**PayPal / Stripe:** sent automatically right after the payment – in the ticket and by DM – and the order is completed.\n' +
-                "**PaysafeCard / Crypto:** after the customer clicks **I've paid**, check the payment and click **Payment OK – deliver**.\n" +
+                '**PaysafeCard / Crypto:** after the customer clicks **Pay**, check the payment and click **Payment OK – deliver**.\n' +
                 '-# Run it again to add files (same name = replaced), `text:none` removes the text, `clear:True` starts over.',
             ),
         ],

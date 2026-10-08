@@ -3,11 +3,11 @@
 /**
  * The payment card: right after an order is placed in the shop, its ticket gets a card "💳 Pay 24€" with
  * what to do for the payment method the customer picked (config.json → shop.paymentMethods):
- *   paysafecard – buy a PaysafeCard for the total, then "Enter PIN" (the "I've paid" form with the PIN field)
+ *   paysafecard – buy a PaysafeCard for the total, then "Pay" (the payment form with the PIN field)
  *   crypto      – the wallet addresses ("addresses": { "BTC": "…", "ETH": "…" }) with the amount in coins at
- *                 today's rate, then "I've paid" with the transaction ID or a screenshot
+ *                 today's rate, then "Pay" with the transaction ID or a screenshot
  *   paypal      – with PayPal keys in .env a link that confirms itself (src/features/paypal.js); else a
- *                 paypal.me link with the amount ("paypalMe": "yourname"), then "I've paid" with a screenshot
+ *                 paypal.me link with the amount ("paypalMe": "yourname"), then "Pay" with a screenshot
  *   stripe      – a Stripe link (src/features/stripe.js); without a key the seller sends one
  * A method's kind is its "type", or guessed from its name for configs from older versions.
  */
@@ -145,19 +145,19 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
   );
   c.addSeparatorComponents(divider());
   const buttons = [];
-  const paid = (label = "I've paid", emoji = '💳') => proofsOn() && buttons.push(btn('pay:open', label, emoji, ButtonStyle.Success));
-  const proofText = (what) => (proofsOn() ? `then click **I've paid** and send ${what}` : `then send ${what} here in the ticket`);
-  const proofSentence = (what) => (proofsOn() ? `Then click **I've paid** and send ${what}.` : `Then send ${what} here in the ticket.`);
+  const paid = (label = 'Pay', emoji = '💳') => proofsOn() && buttons.push(btn('pay:open', label, emoji, ButtonStyle.Success));
+  const proofText = (what) => (proofsOn() ? `then click **Pay** and send ${what}` : `then send ${what} here in the ticket`);
+  const proofSentence = (what) => (proofsOn() ? `Then click **Pay** and send ${what}.` : `Then send ${what} here in the ticket.`);
 
   if (type === 'paysafecard') {
     c.addTextDisplayComponents(
       text(
         `**1.** Buy a **PaysafeCard** worth ${amount} – at a kiosk, petrol station or online.\n` +
-          `**2.** ${proofsOn() ? 'Click **Enter PIN** and send' : 'Send'} the 16-digit PIN – a photo of the receipt helps.\n` +
+          `**2.** ${proofsOn() ? 'Click **Pay** and enter' : 'Send'} the 16-digit PIN – a photo of the receipt helps.\n` +
           '-# 🔒 Only send the PIN here in your ticket – never in DMs.',
       ),
     );
-    paid('Enter PIN', '🔑');
+    paid();
   } else if (type === 'crypto') {
     const list = wallets(m);
     if (!list.length) {
@@ -196,7 +196,7 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
     paid();
   }
   c.addTextDisplayComponents(
-    text(`-# 📦 ${proofsOn() ? "After you click **I've paid**, we" : 'We'} check your payment and send your product right here and in your DMs.`),
+    text(`-# 📦 ${proofsOn() ? 'After you click **Pay**, we' : 'We'} check your payment and send your product right here and in your DMs.`),
   );
   if (buttons.length) c.addActionRowComponents(row(...buttons.slice(0, 5)));
   return v2(c);
