@@ -147,4 +147,4 @@ function problem(wh) {
   return null;
 }
 
-module.exports = { zoned, toMinutes, inHours, nextOpening, nextClosing, whenText, zoneLabel, daysText, hoursText, problem };
+module.exports = { zoned, toMinutes, wallTime, inHours, nextOpening, nextClosing, whenText, zoneLabel, daysText, hoursText, problem };

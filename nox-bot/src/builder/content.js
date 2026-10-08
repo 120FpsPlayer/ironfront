@@ -26,6 +26,9 @@ function context(guild) {
 }
 
 const card = (c) => ({ payload: v2(c) });
+
+/** config.shop.refundPolicy – "All sales are final – we do not offer refunds. …" */
+const noRefunds = () => config.shop.refundPolicy ?? "All sales are final – we do not offer refunds. Store balance can't be paid out or refunded.";
 const buttons = (...list) => row(...list.filter(Boolean));
 
 // ───────────── WELCOME category ─────────────
@@ -55,7 +58,7 @@ function rulesCard(x) {
       `### ${x.E('cart')} 2 · Shop & payments\n` +
         `> **2.1** Every purchase happens **only inside a ticket** (${x.ch('tickets')}) – never in DMs.\n` +
         '> **2.2** Staff will **never DM you first** asking for payment. Anyone who does is a scammer – report them.\n' +
-        '> **2.3** Read the product description before buying. Payments are final once delivery has started.\n' +
+        "> **2.3** **No refunds** – all sales of digital products are final, so read the product description before buying. Store balance can't be refunded or paid out. A problem with a product? Open a support ticket – we fix or replace it.\n" +
         '> **2.4** Chargebacks, payment disputes or fraud attempts = permanent ban and blacklist.\n' +
         '> **2.5** Report problems with an order within **48 hours** through a ticket.\n' +
         '> **2.6** Reselling or sharing purchased products without permission is not allowed.',
@@ -219,7 +222,7 @@ function howToBuy(x) {
     text(
       `${x.E('clock')} **Delivery:** ${config.shop.deliveryTime ?? '—'}\n` +
         `${x.E('chat')} **Support:** ${config.shop.supportHours ?? '—'}\n` +
-        `${x.E('info')} **Refunds:** ${config.shop.refundPolicy ?? 'See the rules.'}`,
+        `${x.E('info')} **No refunds:** ${noRefunds()} A problem with a product? Open a support ticket – we fix or replace it.`,
     ),
   );
   c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('payments', 'Payments', 'card')));
@@ -241,6 +244,7 @@ function payments(x) {
   if (has(/paysafe/i)) tips.push('> **PaysafeCard:** only share your PIN inside your ticket – a seller confirms it before delivery.');
   if (has(/paypal/i)) tips.push('> **PayPal:** only pay with the PayPal link or address in your ticket.');
   if (has(/stripe/i)) tips.push("> **Stripe:** pay by card, Apple Pay or Google Pay on Stripe's secure page – the link is in your ticket, and we never see your card details.");
+  tips.push(`> **No refunds:** ${noRefunds()} Check the product and the price before you pay.`);
   tips.push('> Fraud attempts or payment disputes result in a permanent ban.');
   c.addTextDisplayComponents(text(`${x.E('warning')} **Stay safe**\n${tips.join('\n')}`));
   c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('howToBuy', 'How to buy', 'info')));
@@ -279,7 +283,11 @@ function faq(x) {
     ['How fast is delivery?', `${config.shop.deliveryTime ?? 'Usually very fast'}. You receive everything inside your ticket.`],
     ['Is it safe to buy here?', `Yes – payments only happen in private tickets with our team, and you can read real reviews in ${x.ch('vouches')}. We never DM you first.`],
     ["I didn't get my order / something is wrong", `Open a **Support** ticket in ${x.ch('tickets')} within 48 hours and include your order details.`],
-    ['Can I get a refund?', config.shop.refundPolicy ?? 'Open a support ticket and we will look at your case.'],
+    [
+      'Can I get a refund?',
+      `No – all sales of digital products are final, so we don't offer refunds. Store balance can't be refunded or paid out either. ` +
+        `A problem with a product? Open a **Support** ticket in ${x.ch('tickets')} – we fix or replace it.`,
+    ],
     ['How do I win giveaways?', `Click **Enter** on giveaways in ${x.ch('giveaways')} and turn on the giveaway ping in ${x.ch('roles')}.`],
     ['Can I join the team?', `Sure – open a **Staff Application** ticket in ${x.ch('tickets')}.`],
   ];
@@ -314,7 +322,8 @@ function staffHandbook(x) {
         '> In a **Purchase** ticket set **Status: Paid** / **In progress** in the ⚙️ menu (the customer gets a DM) and choose **Order completed** after delivery – the customer gets the Customer role and a vouch request\n' +
         `> Transcripts land in ${x.ch('transcripts')}, every action in ${x.ch('ticketLogs')}\n` +
         `### ${x.E('cart')} Shop\n> \`/product add\` · \`/product edit\` · \`/product stock\` · \`/product variants\` · \`/product remove\` – the ${x.ch('shop')} panel updates by itself\n` +
-        '> `/sale start` – a flash sale with a countdown · `/product stock count:` – a stock counter that counts down by itself\n' +
+        '> `/sale start` – a flash sale with a countdown · `/sale deal` – the automatic deal of the week · `/product stock count:` – a stock counter that counts down by itself\n' +
+        "> **No refunds** – all sales are final and store balance can't be refunded or paid out. A product doesn't work? Fix or replace it – never send money back\n" +
         `> New products and restocks are announced in ${x.ch('restocks')} automatically\n` +
         `### ${x.E('gift')} Community\n> \`/giveaway start\` (optional: customers only, minimum invites) · \`/giveaway end\` · \`/giveaway reroll\`\n> \`/announce\` – a styled announcement with an optional banner and ping\n` +
         `### ${x.E('refresh')} Changing the texts\n> Edit \`config.json\` (texts, payments), restart the bot and run \`/build only:panels\` – every card updates in place · new name style → \`/build only:names\`\n` +
