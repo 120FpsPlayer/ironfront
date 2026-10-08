@@ -54,14 +54,25 @@ function openForm(interaction) {
   return interaction.showModal(new ModalBuilder().setCustomId('tpromo:submit').setTitle('Add a promo code').addComponents(new ActionRowBuilder().addComponents(input)));
 }
 
-/** Removes the bot's payment cards (the manual "Pay X€" card) from the ticket – links are replaced by stripe.js / paypal.js. */
-async function removePaymentCards(channel) {
+/**
+ * Removes only the "Pay X€ – …" payment card(s) posted after the ticket's main card – never the main card itself
+ * (it has a Pay button too) or anything else. Stripe / PayPal links are replaced by stripe.js / paypal.js.
+ */
+async function removePaymentCards(channel, ticket) {
   const recent = await channel.messages?.fetch?.({ limit: 50 }).catch(() => null);
   const me = channel.client?.user?.id;
+  const after = (id) => {
+    if (!ticket.controlMessageId) return true;
+    try {
+      return BigInt(id) > BigInt(ticket.controlMessageId);
+    } catch {
+      return id !== ticket.controlMessageId;
+    }
+  };
   for (const m of recent?.values?.() ?? []) {
-    if (me && m.author?.id !== me) continue;
+    if (m.id === ticket.controlMessageId || !after(m.id) || (me && m.author?.id !== me)) continue;
     const json = JSON.stringify(m.components ?? []);
-    if (json.includes('"pay:open"') || /## [^"]*(Pay \d|Payment – )/.test(json)) await m.delete().catch(() => null);
+    if (/"content":"## [^"]*?(?:Pay [^"]*? – |Payment – )/.test(json)) await m.delete().catch(() => null);
   }
 }
 
@@ -88,7 +99,7 @@ async function submit(interaction) {
   if (order.cryptoQuote) delete order.cryptoQuote;
   let updated = db.updateTicket(ticket.channelId, { order, answers });
   const channel = interaction.channel;
-  await removePaymentCards(channel);
+  await removePaymentCards(channel, ticket);
   await tickets().refreshControlMessage(channel, updated).catch(() => null);
   await channel.send(notice(COLORS.success, `🏷️ Code **${code}** added – **−${money(discount)}**. New total: **${money(total)}**.`)).catch(() => null);
   // A new payment card / link for the new amount – the same way a new order gets one.

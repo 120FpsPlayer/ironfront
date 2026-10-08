@@ -42,4 +42,5 @@ test('a promo code added in the ticket: new total, the old payment card replaced
   const cards = all().filter((b) => /Pay \d/.test(textOf(b)));
   assert.equal(cards.length, 1, 'only the new payment card is left');
   assert.match(textOf(cards[0]), /Pay 18€/);
+  assert.ok(channel.messageList.some((m) => m.id === t.controlMessageId), 'the big ticket card stays');
 });
