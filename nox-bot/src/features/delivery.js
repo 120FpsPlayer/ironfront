@@ -132,7 +132,7 @@ async function deliver(channel, ticket, { by, auto = false, again = false } = {}
   delivering.add(channel.id);
   try {
     const card = productCard(guild, ticket, product);
-    if (!card.payload.files.length && !product.delivery.text) return { ok: false, reason: 'missing', missing: card.missing };
+    if (!card.payload.files?.length && !product.delivery.text) return { ok: false, reason: 'missing', missing: card.missing };
     const sent = await channel.send(card.payload);
     const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
     const dm = user ? await user.send(productCard(guild, ticket, product, { inDm: true }).payload).then(() => true).catch(() => false) : false;

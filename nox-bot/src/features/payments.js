@@ -10,6 +10,8 @@
  * form expire) and pings the seller handling the ticket, or the order staff roles while nobody has claimed it.
  * The log channel gets the same without the PINs (all but the last 4 digits hidden). Sending it again (e.g. a
  * corrected PIN) works after a short cooldown – it only pings again after the Call support cooldown.
+ * A BTC / ETH transaction ID in the note of a crypto order is checked on the blockchain instead (nobody is pinged
+ * unless it needs a hand) – the order confirms itself (src/features/cryptoverify.js).
  *
  * Components:
  *   pay:open      "Pay" button on the order card → form
@@ -130,13 +132,15 @@ function paymentModal(ticket) {
         ),
     );
   }
+  const note = new LabelBuilder().setLabel('Note or transaction ID');
+  // BTC / ETH: the transaction ID is checked on the blockchain (src/features/cryptoverify.js) – here, it needs this file's neighbours.
+  if (require('./cryptoverify').checksOrder(ticket.order)) note.setDescription('Paste the transaction ID (hash) – your order is then confirmed automatically.');
   modal.addLabelComponents(
     new LabelBuilder()
       .setLabel('Screenshots')
       .setDescription(`Up to ${MAX_FILES} pictures of your payment (optional).`)
       .setFileUploadComponent(new FileUploadBuilder().setCustomId('files').setMinValues(0).setMaxValues(MAX_FILES).setRequired(false)),
-    new LabelBuilder()
-      .setLabel('Note or transaction ID')
+    note
       .setTextInputComponent(
         new TextInputBuilder()
           .setCustomId('note')
@@ -225,14 +229,15 @@ function whoToPing(guild, ticket, now = Date.now()) {
 
 const quote = (value) => value.split('\n').map((l) => `> ${l}`).join('\n');
 
-function paymentCard(ticket, { payment, files, pings, again }) {
+/** auto – a crypto transaction ID the bot checks on the blockchain itself (src/features/cryptoverify.js). */
+function paymentCard(ticket, { payment, files, pings, again, auto = false }) {
   const c = container(COLORS.warning);
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
   c.addTextDisplayComponents(
     text(
       `## 📨 Payment sent${again ? ' again' : ''}\n` +
         `<@${ticket.ownerId}> sent the payment for order \`#${pad(ticket.number)}\`` +
-        (who ? ` – ${who}, please check it.` : ' – a seller checks it shortly.'),
+        (auto ? ' – 🔎 the transaction is checked on the blockchain automatically.' : who ? ` – ${who}, please check it.` : ' – a seller checks it shortly.'),
     ),
   );
   c.addSeparatorComponents(divider());
@@ -246,7 +251,8 @@ function paymentCard(ticket, { payment, files, pings, again }) {
   const images = files.filter((f) => f.buffer && f.image);
   if (images.length) c.addMediaGalleryComponents(gallery(...images.map((f) => `attachment://${f.name}`)));
   for (const f of files.filter((x) => x.buffer && !x.image)) c.addFileComponents(new FileBuilder().setURL(`attachment://${f.name}`));
-  c.addTextDisplayComponents(text(`-# ${statusLabel('sent')} · ${ts(payment.at, 'f')} · Staff: check the payment, then click **Payment OK**`));
+  const next = auto ? 'Confirmed by the bot once the blockchain does – staff are pinged if it needs a hand' : 'Staff: check the payment, then click **Payment OK**';
+  c.addTextDisplayComponents(text(`-# ${statusLabel('sent')} · ${ts(payment.at, 'f')} · ${next}`));
   c.addActionRowComponents(row(require('./delivery').confirmButtonFor(ticket.guildId, ticket))); // here – delivery.js needs this file's neighbours
   return v2(c, {
     mentions: { users: pings.users, roles: pings.roles },
@@ -293,6 +299,8 @@ async function submit(interaction) {
     throw new UserError(`Fill in at least one field: ${ui.takesPins(order) ? 'your PaysafeCard PIN, ' : ''}a screenshot or a note / transaction ID.`);
   }
   if (sending.has(channel.id)) throw new UserError('Your payment is being sent – one moment…');
+  const cryptoverify = require('./cryptoverify'); // here – it needs this file's neighbours
+  let tx = null;
   sending.add(channel.id);
   try {
     const files = await copyFiles(uploads);
@@ -301,10 +309,11 @@ async function submit(interaction) {
     const now = Date.now();
     const again = Boolean(current.order?.payment);
     const payment = { at: now, method: order.method ?? null, note: note || null, pins, files: [] };
-    const pings = whoToPing(guild, current, now);
+    tx = cryptoverify.txFor(current, note); // a BTC / ETH transaction ID – the bot checks it, the team isn't pinged
+    const pings = tx ? { users: [], roles: [] } : whoToPing(guild, current, now);
     // The customer sees what happens next (once per order), the team gets the payment card below it.
     if (!again) await channel.send(require('./delivery').onTheWayCard(current, { auto: false })).catch(() => null);
-    const message = await channel.send(paymentCard(current, { payment, files, pings, again }));
+    const message = await channel.send(paymentCard(current, { payment, files, pings, again, auto: Boolean(tx) }));
     // The copies in the ticket keep working – the links from the form expire.
     const sent = [...(message.attachments?.values() ?? [])];
     payment.files = files.map((f) => ({ name: f.name, url: (f.buffer && sent.find((a) => a.name === f.name)?.url) || f.url }));
@@ -329,6 +338,10 @@ async function submit(interaction) {
     if (accepted) await hooks.emit('orderStatus', { guild, ticket: updated, status: 'sent', staff: null });
   } finally {
     sending.delete(channel.id);
+  }
+  if (tx) {
+    const crypto = await cryptoverify.start(guild, channel.id, tx).catch((err) => console.warn(`[pay] crypto check ${channel.id}:`, err.message));
+    return reply(interaction, cryptoverify.replyFor(crypto));
   }
   return reply(interaction, "Thanks! Your payment was sent to the seller – they'll check it and confirm it in your ticket.");
 }
