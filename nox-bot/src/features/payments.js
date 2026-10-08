@@ -246,7 +246,8 @@ function paymentCard(ticket, { payment, files, pings, again }) {
   const images = files.filter((f) => f.buffer && f.image);
   if (images.length) c.addMediaGalleryComponents(gallery(...images.map((f) => `attachment://${f.name}`)));
   for (const f of files.filter((x) => x.buffer && !x.image)) c.addFileComponents(new FileBuilder().setURL(`attachment://${f.name}`));
-  c.addTextDisplayComponents(text(`-# ${statusLabel('sent')} · ${ts(payment.at, 'f')} · Staff: confirm it in the ⚙️ menu (Status: Paid)`));
+  c.addTextDisplayComponents(text(`-# ${statusLabel('sent')} · ${ts(payment.at, 'f')} · Staff: check the payment, then click **Payment OK**`));
+  c.addActionRowComponents(row(require('./delivery').confirmButtonFor(ticket.guildId, ticket))); // here – delivery.js needs this file's neighbours
   return v2(c, {
     mentions: { users: pings.users, roles: pings.roles },
     files: files.filter((f) => f.buffer).map((f) => new AttachmentBuilder(f.buffer, { name: f.name })),
@@ -301,6 +302,8 @@ async function submit(interaction) {
     const again = Boolean(current.order?.payment);
     const payment = { at: now, method: order.method ?? null, note: note || null, pins, files: [] };
     const pings = whoToPing(guild, current, now);
+    // The customer sees what happens next (once per order), the team gets the payment card below it.
+    if (!again) await channel.send(require('./delivery').onTheWayCard(current, { auto: false })).catch(() => null);
     const message = await channel.send(paymentCard(current, { payment, files, pings, again }));
     // The copies in the ticket keep working – the links from the form expire.
     const sent = [...(message.attachments?.values() ?? [])];

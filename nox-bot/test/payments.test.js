@@ -161,8 +161,9 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   assert.ok(Math.abs(saved.payment.at - Date.now()) < 5000);
   assert.deepEqual({ ...saved.history.at(-1), at: 0 }, { status: 'sent', at: 0, by: buyer.id });
 
-  // The card in the ticket: PINs in spoilers, the order staff roles pinged (nobody has claimed it)
-  assert.equal(channel.messageList.length, before + 1);
+  // "Your product is on the way" for the customer, then the card for the team: PINs in spoilers, the order staff roles pinged
+  assert.equal(channel.messageList.length, before + 2);
+  assert.match(textOf(channel.messageList.at(-2).body), /Your product is on the way/);
   const posted = channel.messageList.at(-1);
   const out = textOf(posted.body);
   assert.match(out, /## 📨 Payment sent\n/);

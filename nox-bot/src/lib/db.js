@@ -182,7 +182,8 @@ module.exports = {
    *   variants:   [{ id, name, price }] – options with their own price (e.g. 1 / 3 / 12 months); empty = one price
    *   stockCount: number | null – how many are left; null = not counted (only the stock status). Completed
    *               orders count it down; 0 → Sold out
-   *   sale:       { percent, endsAt, startedBy, startedAt } | null – a flash sale (/sale start) }
+   *   sale:       { percent, endsAt, startedBy, startedAt } | null – a flash sale (/sale start)
+   *   delivery:   { files: [{ name, size }], text, updatedAt } | null – what the buyer gets (src/features/delivery.js) }
    *
    * ORDER – ticket.order of an order ticket placed in the shop:
    * { productId, product, variant, unitPrice, quantity, method, methodIndex, promo, discount, subtotal, total,

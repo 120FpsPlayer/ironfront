@@ -31,6 +31,12 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
 - **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
 - **Payments:** PaysafeCard, Crypto (BTC, ETH), PayPal and **Stripe** (card, Apple Pay, Google Pay) – edit them in `config.json`.
+- **Automatic product delivery** – give a product its files and/or text (a key, a login…): `/product delivery
+  product:Netflix file:account.txt text:…` (up to 5 files, 9 MB together) or `file:` / `delivery_text:` on `/product add`.
+  Paid with **PayPal or Stripe** → *"📦 Your product is on the way"*, then the product arrives in the ticket **and by DM**
+  right away (usually under 30 seconds) and the order is completed by itself. Paid with **PaysafeCard or Crypto** → after
+  **I've paid** the customer sees *"📦 Your product is on the way"*; you check the payment and click **Payment OK – deliver**
+  (or ⚙️ → **Deliver product** / **Send product again**). Products without files are delivered by hand, as before.
 - **Payment card in every order** – right after the order the ticket shows **💳 Pay 24€** for the chosen method:
   - **PaysafeCard** – what to do, and an **Enter PIN** button (PIN + screenshot form).
   - **Crypto** – your **BTC / ETH wallet addresses** (`config.json` → the Crypto payment method → `"addresses"`) with
@@ -238,7 +244,7 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
 | `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
 | `/build only:names` | Rename all channels & categories to the name style from `config.json` (e.g. after an update) – nothing else changes | Owner, admins |
-| `/product add / edit / stock / variants / remove / list` | Manage the shop (categories, images, options, stock counter) – the #shop panel updates by itself | Admins, sellers |
+| `/product add / edit / stock / variants / delivery / remove / list` | Manage the shop (categories, images, options, stock counter, files the buyer gets) – the #shop panel updates by itself | Admins, sellers |
 | `/sale start / stop / list` | Flash sales – a percentage off a product for a while, with a countdown in the shop | Admins, sellers |
 | `/promo create / list / info / delete` | Discount codes | Admins, sellers |
 | `/shop open / close / auto / status` | Open or close the shop by hand, or follow the opening hours again | Admins, sellers |
@@ -415,7 +421,7 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-295 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+299 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
 order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),

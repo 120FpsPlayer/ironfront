@@ -195,6 +195,9 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
     c.addTextDisplayComponents(text(`A seller sends you the payment details here – pay ${amount}, ${proofText('a screenshot or the transaction ID')}.`));
     paid();
   }
+  c.addTextDisplayComponents(
+    text(`-# 📦 ${proofsOn() ? "After you click **I've paid**, we" : 'We'} check your payment and send your product right here and in your DMs.`),
+  );
   if (buttons.length) c.addActionRowComponents(row(...buttons.slice(0, 5)));
   return v2(c);
 }

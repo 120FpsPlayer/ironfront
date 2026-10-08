@@ -259,6 +259,9 @@ function stockText(p) {
 const UPLOAD_LIMIT = 8 * 1024 * 1024; // images per message (Discord allows 10 files and 10 MB)
 const CARD_TEXT = 640; // the description gives way above this, so 5 cards with options, a sale and badges still fit one message
 
+/** Delivered automatically right after a PayPal / Stripe payment (features/delivery.js) – here, as those need this file. */
+const instantDelivery = (p) => require('./delivery').hasDelivery(p) && (require('./stripe').enabled() || require('./paypal').enabled());
+
 /** badges: Map(productId → ['🔥 Bestseller', '⭐ 4.9']) from features/badges.js – worked out once per panel. */
 function cardText(guild, p, { category = false, now = Date.now(), badges = null } = {}) {
   const where = category ? (p.category ? `📂 ${p.category}` : '📂 Other') : null;
@@ -266,7 +269,7 @@ function cardText(guild, p, { category = false, now = Date.now(), badges = null 
   const title = `### ${productEmoji(guild, p)} ${p.name}${SPACER}${priceMarkdown(p, now)}`;
   const extras = [
     variantsOf(p).length ? `-# ${optionsText(p, now)}` : null,
-    `-# ${[stockText(p), ...(badges?.get(p.id) ?? []), where].filter(Boolean).join(' · ')}`,
+    `-# ${[stockText(p), instantDelivery(p) ? '⚡ Instant delivery' : null, ...(badges?.get(p.id) ?? []), where].filter(Boolean).join(' · ')}`,
     sale ? `-# ⏰ Sale ends ${ts(sale.endsAt, 'R')}` : null,
   ].filter(Boolean);
   const room = CARD_TEXT - title.length - extras.join('\n').length - 2;
@@ -587,6 +590,7 @@ function removeProduct(guild, query) {
   g.products = g.products.filter((x) => x.id !== p.id);
   delete g.notify[p.id];
   images.remove(p.id);
+  require('../lib/deliveryFiles').remove(p.id); // the files a buyer got
   db.save();
   refreshShop(guild);
   return p;

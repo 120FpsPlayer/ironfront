@@ -5,6 +5,7 @@ const db = require('../lib/db');
 const images = require('../lib/productImages');
 const restock = require('../features/restock');
 const shop = require('../features/shop');
+const delivery = require('../features/delivery');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, replyError, truncate, ts } = require('../lib/utils');
 const { isShopManager } = require('../lib/permissions');
@@ -65,6 +66,7 @@ function listEmbed(guild) {
       options && `${options} ${options === 1 ? 'option' : 'options'}`,
       sale && `⚡ −${sale.percent}% until ${ts(sale.endsAt, 'R')}`,
       p.image && '🖼️',
+      delivery.hasDelivery(p) && '📦 instant delivery',
       waiting[p.id]?.length && `🔔 ${waiting[p.id].length} waiting`,
     ].filter(Boolean);
     return `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.priceLabel(p)}${extras.map((x) => ` · ${x}`).join('')}\n-# ${truncate(p.description, 90)}`;
@@ -94,7 +96,9 @@ module.exports = {
         .addBooleanOption((o) => o.setName('announce').setDescription('Announce it in #restocks with a ping? (default: yes)'))
         .addStringOption((o) => categoryOption(o, 'Category in the shop, e.g. Games or 🎮 Games (pick one or type a new one)'))
         .addAttachmentOption((o) => imageOption(o, 'Product image – PNG, JPG, WEBP or GIF, up to 1 MB'))
-        .addIntegerOption((o) => countOption(o, 'How many you have – shown as "12 left", counted down per completed order')),
+        .addIntegerOption((o) => countOption(o, 'How many you have – shown as "12 left", counted down per completed order'))
+        .addAttachmentOption((o) => o.setName('file').setDescription('The product itself – sent to the buyer after payment (more: /product delivery)'))
+        .addStringOption((o) => o.setName('delivery_text').setDescription('Text sent to the buyer after payment, e.g. a key or a login').setMaxLength(1500)),
     )
     .addSubcommand((s) =>
       s
@@ -135,6 +139,19 @@ module.exports = {
     )
     .addSubcommand((s) =>
       s
+        .setName('delivery')
+        .setDescription('What the buyer gets after paying: files and/or text – sent automatically')
+        .addStringOption((o) => o.setName('product').setDescription('Product').setRequired(true).setAutocomplete(true))
+        .addAttachmentOption((o) => o.setName('file').setDescription('A file the buyer gets (same name = replaced)'))
+        .addAttachmentOption((o) => o.setName('file2').setDescription('Another file'))
+        .addAttachmentOption((o) => o.setName('file3').setDescription('Another file'))
+        .addAttachmentOption((o) => o.setName('file4').setDescription('Another file'))
+        .addAttachmentOption((o) => o.setName('file5').setDescription('Another file'))
+        .addStringOption((o) => o.setName('text').setDescription('Text the buyer gets, e.g. a key or login – "none" removes it').setMaxLength(1500))
+        .addBooleanOption((o) => o.setName('clear').setDescription('Remove all files and text first')),
+    )
+    .addSubcommand((s) =>
+      s
         .setName('remove')
         .setDescription('Remove a product')
         .addStringOption((o) => o.setName('product').setDescription('Product').setRequired(true).setAutocomplete(true)),
@@ -165,9 +182,16 @@ module.exports = {
         if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await shop.announceProduct(guild, product, 'new').catch(() => null);
       }
+      const file = o.getAttachment('file');
+      const deliveryText = o.getString('delivery_text');
+      if (file || deliveryText) {
+        if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await delivery.setDelivery(guild, product.id, { attachments: [file], text: deliveryText });
+      }
       const extras = [product.category && ` in **${product.category}**`, product.image && ' with its image'].filter(Boolean).join('');
       const counter = shop.counted(product) ? ` It is ${stockState(product)}.` : '';
-      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop${extras}.${counter} The shop panel updates in a few seconds.`);
+      const delivers = file || deliveryText ? `\n📦 Delivered after payment: ${delivery.deliverySummary(shop.findProduct(guild.id, product.id))}.` : '';
+      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop${extras}.${counter} The shop panel updates in a few seconds.${delivers}`);
     }
 
     if (sub === 'edit') {
@@ -217,6 +241,28 @@ module.exports = {
             .setDescription(
               `${variantPreview(p)}\n\nThe shop shows **${shop.priceLabel(p)}**, and buyers pick an option in the order form. ` +
                 'The shop panel updates in a few seconds.\n-# Run the command again to change them – an option that keeps its name stays valid in order forms that are already open.',
+            ),
+        ],
+      });
+    }
+
+    if (sub === 'delivery') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const p = await delivery.setDelivery(guild, o.getString('product'), {
+        attachments: ['file', 'file2', 'file3', 'file4', 'file5'].map((n) => o.getAttachment(n)),
+        text: o.getString('text'),
+        clear: o.getBoolean('clear') ?? false,
+      });
+      if (!delivery.hasDelivery(p)) return reply(interaction, `**${p.name}** delivers nothing automatically now – a seller delivers it by hand.`);
+      return reply(interaction, {
+        embeds: [
+          embed(COLORS.success)
+            .setTitle(truncate(`📦 ${p.name} – delivery`, 256))
+            .setDescription(
+              `${delivery.deliverySummary(p)}\n\n` +
+                '**PayPal / Stripe:** sent automatically right after the payment – in the ticket and by DM – and the order is completed.\n' +
+                "**PaysafeCard / Crypto:** after the customer clicks **I've paid**, check the payment and click **Payment OK – deliver**.\n" +
+                '-# Run it again to add files (same name = replaced), `text:none` removes the text, `clear:True` starts over.',
             ),
         ],
       });

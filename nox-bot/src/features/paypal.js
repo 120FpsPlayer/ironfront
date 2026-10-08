@@ -166,6 +166,12 @@ const PENDING_REMIND = 24 * 3_600_000;
 
 // ───────────── The card in the ticket ─────────────
 
+/** What the customer is told about getting the product after paying with a link (PayPal / Stripe). */
+const deliveryNote = (ticket) =>
+  require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
+    ? "📦 **Instant delivery:** your product arrives right here and in your DMs as soon as you've paid – usually in under 30 seconds, at most 1–5 minutes. Didn't get it? Write here or click **Call support**."
+    : "📦 Once you've paid, your order is confirmed here automatically and a seller delivers it right away.";
+
 function linkCard(guild, ticket, p) {
   const total = money(p.amount);
   const c = container(p.status === 'paid' ? COLORS.success : ['expired', 'held'].includes(p.status) || p.captureError ? COLORS.warning : COLORS.brand);
@@ -197,6 +203,7 @@ function linkCard(guild, ticket, p) {
   c.addTextDisplayComponents(
     text(`## ${guild ? ce(guild, 'paypal') : '💳'} Pay ${total} – PayPal\n-# Order \`#${pad(ticket.number)}\`\nPay with your PayPal account or a card on PayPal's secure page.`),
   );
+  c.addTextDisplayComponents(text(deliveryNote(ticket)));
   if (p.captureError) {
     c.addTextDisplayComponents(text("⚠️ **PayPal couldn't take the payment** – you were **not** charged. Open the link again and choose another card or your PayPal balance, or get a new link."));
   }

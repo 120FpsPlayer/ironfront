@@ -229,6 +229,10 @@ async function handleManage(interaction) {
       await t.refreshControlMessage(channel, ticket);
       return await reply(interaction, 'Close request sent to the author.');
     }
+    if (kind === 'deliver') {
+      const done = await require('../features/delivery').confirmAndDeliver(channel, member, { again: Boolean(db.getTicket(channel.id)?.order?.delivered) });
+      return await reply(interaction, done);
+    }
     if (kind === 'status') {
       const { dm } = await orderstatus.setStatus(channel, value, member);
       return await reply(interaction, `Order status set to **${statusLabel(value)}**${dm ? ' – the customer got a DM.' : '.'}`);

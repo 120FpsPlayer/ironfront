@@ -124,6 +124,12 @@ function createSession(guild, ticket, order, cur, attempt) {
 
 // ───────────── The card in the ticket ─────────────
 
+/** What the customer is told about getting the product after paying with a link (PayPal / Stripe). */
+const deliveryNote = (ticket) =>
+  require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
+    ? "📦 **Instant delivery:** your product arrives right here and in your DMs as soon as you've paid – usually in under 30 seconds, at most 1–5 minutes. Didn't get it? Write here or click **Call support**."
+    : "📦 Once you've paid, your order is confirmed here automatically and a seller delivers it right away.";
+
 function linkCard(ticket, s) {
   const c = container(s.status === 'paid' ? COLORS.success : s.status === 'expired' ? COLORS.warning : COLORS.brand);
   const total = money(s.amount);
@@ -142,6 +148,7 @@ function linkCard(ticket, s) {
         "Card, Apple Pay or Google Pay on Stripe's secure page – we never see your card details.",
     ),
   );
+  c.addTextDisplayComponents(text(deliveryNote(ticket)));
   c.addSeparatorComponents(divider());
   // Link buttons take URLs up to 512 characters – a longer Checkout link goes into the text instead.
   const fits = s.url.length <= 512;

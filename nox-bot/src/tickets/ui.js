@@ -225,6 +225,16 @@ function manageSelect(ticket, guild) {
       options.push({ label: `Status: ${ORDER_STATUS[key].label}`, value: `status:${key}`, emoji: ORDER_STATUS[key].emoji, description: `${what}${dm}` });
     }
   }
+  // The product's files / text (src/features/delivery.js) – here, as delivery.js needs this file.
+  if (ticket.typeId === 'order' && guild && require('../features/delivery').deliverable(guild.id, ticket)) {
+    const sent = ticket.order?.delivered;
+    options.push({
+      label: sent ? 'Send product again' : 'Deliver product',
+      value: 'deliver',
+      emoji: '📦',
+      description: sent ? 'Sends the product files / text to the customer again' : 'Payment OK → sends the product and completes the order',
+    });
+  }
   for (const [value, p] of Object.entries(PRIORITIES)) {
     if (value === ticket.priority) continue;
     options.push({ label: `Priority: ${p.label}`, value: `prio:${value}`, emoji: p.emoji, description: 'Change the ticket priority' });
