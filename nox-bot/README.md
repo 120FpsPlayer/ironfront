@@ -31,6 +31,17 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
 - **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
 - **Payments:** PaysafeCard, Crypto (BTC, ETH), PayPal and **Stripe** (card, Apple Pay, Google Pay) – edit them in `config.json`.
+- **Payment card in every order** – right after the order the ticket shows **💳 Pay 24€** for the chosen method:
+  - **PaysafeCard** – what to do, and an **Enter PIN** button (PIN + screenshot form).
+  - **Crypto** – your **BTC / ETH wallet addresses** (`config.json` → the Crypto payment method → `"addresses"`) with
+    the amount in coins at today's rate (e.g. *≈ 0.00040000 BTC*), and **I've paid** for the transaction ID or a screenshot.
+  - **PayPal** – with PayPal keys in `.env` a **PayPal link that confirms itself** (like Stripe, below); without keys a
+    **paypal.me** link with the amount filled in (`"paypalMe": "yourname"`), then **I've paid** with a screenshot.
+- **PayPal payments that confirm themselves** – put your PayPal app's keys in `.env` (`PAYPAL_CLIENT_ID`,
+  `PAYPAL_CLIENT_SECRET`): every PayPal order gets a **Pay 24€ with PayPal** link. When the customer has approved it,
+  the bot **takes the money itself** within 30 seconds, sets the order to **Paid** and pings the seller. The money is only
+  taken while the order still wants it – an order that was closed, paid another way or whose total changed is **never
+  charged** (the customer gets a new link instead).
 - **Stripe card payments** – put your Stripe key in `.env` (`STRIPE_SECRET_KEY`) and every order paid with Stripe gets a
   **Pay 24€** link in its ticket right away. Once the customer has paid, the bot sees it within 30 seconds, sets the
   order to **Paid**, tells the customer and pings the seller – nobody has to check anything by hand. No website or
@@ -151,6 +162,10 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
 
    *Optional – card payments:* `STRIPE_SECRET_KEY=sk_live_…` (Stripe Dashboard → **Developers → API keys → Secret key**;
    `sk_test_…` to try it with test cards first; a restricted key with **Checkout Sessions: Write** is enough).
+
+   *Optional – PayPal:* `PAYPAL_CLIENT_ID=…` and `PAYPAL_CLIENT_SECRET=…` (<https://developer.paypal.com> → **Apps &
+   Credentials** → **Live** → **Create App** → copy the Client ID and Secret; `PAYPAL_SANDBOX=true` with Sandbox keys to
+   try it with test accounts first).
 
 ### 3. Start
 You need **Node.js 18.17 or newer** (<https://nodejs.org>).
@@ -277,6 +292,7 @@ Admin commands are hidden from normal members automatically.
 | `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
 | `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **I've paid** button (`paymentProofs`) |
 | `stripe` | Automatic Stripe payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `STRIPE_SECRET_KEY` in `.env` |
+| `paypal` | Automatic PayPal payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in `.env` |
 | `badges` | 🔥 Bestseller and ⭐ rating in the shop on/off (`enabled`), units sold for Bestseller (`bestsellerMinSales`, 3), vouches needed for a rating (`ratingMinVouches`, 2) |
 | `staffReminders` | Unclaimed ticket reminders on/off, after how many minutes (`unclaimedMinutes`, 15) and how often again (`repeatMinutes`, 60 – `0` = once) |
 | `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
@@ -293,10 +309,13 @@ npm run check          # validates config.json against Discord's limits
 then **restart the bot** and run **`/build only:panels`** – every banner and card is updated in place
 (nothing moves, and your vouches, giveaways and announcements are never touched).
 
-**Payment methods** – each entry has a `name`, `details` and an `emoji`
-(`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…). The default is PaysafeCard,
-Crypto (BTC, ETH), PayPal and Stripe. The entry with `"stripe": true` gets the automatic card payment links
-(only with `STRIPE_SECRET_KEY` in `.env`); `stripe.currency` sets the Stripe currency (`eur`, `usd`, `pln`… – empty =
+**Payment methods** – each entry has a `name`, `details`, an `emoji`
+(`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…) and a `type` – `paysafecard`,
+`crypto`, `paypal` or `stripe` – that decides the payment card in the ticket. The default is PaysafeCard, Crypto (BTC, ETH),
+PayPal and Stripe. **Fill in your wallets** in the Crypto entry: `"addresses": { "BTC": "bc1…", "ETH": "0x…" }` (LTC, SOL,
+USDT, USDC, XMR, DOGE, TRX and BNB work too – the amount in coins is shown for them). The PayPal entry takes
+`"paypalMe": "yourname"` for the paypal.me link when there are no PayPal keys. The `stripe` entry gets the automatic card
+payment links (only with `STRIPE_SECRET_KEY` in `.env`); `stripe.currency` sets the Stripe currency (`eur`, `usd`, `pln`… – empty =
 from `shop.currency`: € → eur, $ → usd, £ → gbp, zł → pln; for `kr` and other unclear signs set it, otherwise no
 links are made), `stripe.enabled: false` turns the links off.
 
@@ -341,6 +360,7 @@ npm i -D playwright && npm run render-assets
 |---|---|
 | `privileged intents are not enabled` | Developer Portal → Bot → turn on **Server Members Intent** and **Message Content Intent** → restart |
 | `Invalid DISCORD_TOKEN` | Reset the token on the Bot tab and paste it into `.env` again |
+| No PayPal link in PayPal orders | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` missing or wrong (the console says *"refused by PayPal"*; Sandbox keys need `PAYPAL_SANDBOX=true`), or the currency isn't taken by PayPal – set `paypal.currency`. The card shows the paypal.me link instead |
 | No Stripe link in Stripe orders | `STRIPE_SECRET_KEY` missing or wrong in `.env` (the console says *"STRIPE_SECRET_KEY was refused"*), or the order has no fixed price (e.g. `from 5€`) – a seller sends a link by hand then. Restart the bot after editing `.env` |
 | Commands don't show up | Set `GUILD_ID` in `.env` and restart. Also check the invite had `applications.commands` (the console link does) |
 | "I need the Administrator permission" | Server Settings → Roles → the bot's role → enable **Administrator** |
@@ -379,7 +399,7 @@ src/
 ├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
 │                            announcements, welcome/logs, stats, sales report, backups, customer profiles,
 │                            Notify me, invites, lockdown, look-alike alerts, housekeeping, flash sales, badges,
-│                            I've paid, order status, My orders, staff reminders, Stripe
+│                            I've paid, order status, My orders, staff reminders, payment cards, Stripe, PayPal
 ├── tickets/                 ticket system, cards, HTML transcripts
 ├── commands/                slash commands
 ├── handlers/interactions.js buttons, menus and forms
@@ -392,10 +412,10 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-280 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+291 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
-order status DMs, My orders, staff reminders, Stripe payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
+order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
 opening hours across summer/winter time, lockdown, invite rewards, in-place panel updates, verification, giveaways, ratings and more.
 
 ---

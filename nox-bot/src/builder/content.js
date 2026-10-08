@@ -237,9 +237,9 @@ function payments(x) {
   c.addSeparatorComponents(divider());
   const has = (re) => methods.some((m) => re.test(`${m.name} ${m.emoji ?? ''}`));
   const tips = ['> Only pay to the details a seller gives you **inside your ticket** – never in DMs. We never ask for passwords.'];
-  if (has(/crypto|btc|eth|bitcoin|ethereum/i)) tips.push("> **Crypto:** send the exact amount on the right network and double-check the address – crypto payments can't be reversed.");
+  if (has(/crypto|btc|eth|bitcoin|ethereum/i)) tips.push("> **Crypto:** send at least the amount shown in your ticket, on the right network, to the address shown there – crypto payments can't be reversed.");
   if (has(/paysafe/i)) tips.push('> **PaysafeCard:** only share your PIN inside your ticket – a seller confirms it before delivery.');
-  if (has(/paypal/i)) tips.push('> **PayPal:** only pay to the PayPal address a seller gives you in your ticket.');
+  if (has(/paypal/i)) tips.push('> **PayPal:** only pay with the PayPal link or address in your ticket.');
   if (has(/stripe/i)) tips.push("> **Stripe:** pay by card, Apple Pay or Google Pay on Stripe's secure page – the link is in your ticket, and we never see your card details.");
   tips.push('> Fraud attempts or payment disputes result in a permanent ban.');
   c.addTextDisplayComponents(text(`${x.E('warning')} **Stay safe**\n${tips.join('\n')}`));
