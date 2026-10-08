@@ -259,6 +259,7 @@ Want different channels or roles? Edit `src/builder/layout.js` – it's one read
 | `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
 | `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
 | `/build only:names` | Rename all channels & categories to the name style from `config.json` (e.g. after an update) – nothing else changes | Owner, admins |
+| `/disable method [reason]` · `/enable method` | Switch a payment method off for a while (e.g. while fixing PayPal) and back on – it disappears from the order, cart and top-up forms, and #payments, the FAQ and the shop panel show "temporarily unavailable". Orders already placed keep working | Admins, sellers |
 | `/product add / edit / stock / variants / delivery / remove / list` | Manage the shop (categories, images, options, stock counter, files the buyer gets) – the #shop panel updates by itself | Admins, sellers |
 | `/sale start / stop / list` | Flash sales – a percentage off a product for a while, with a countdown in the shop | Admins, sellers |
 | `/promo create / list / info / delete` | Discount codes | Admins, sellers |

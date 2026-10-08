@@ -100,6 +100,7 @@ function guild(guildId) {
   g.affiliates ??= []; // creator codes: [{ code, userId, discount, commission, createdAt, earned, paidOut }] – src/features/affiliates.js
   g.carts ??= {}; // shopping carts: { [userId]: { items: [{ productId, variantId, quantity }], updatedAt } } – src/features/cart.js
   g.usedTxs ??= {}; // crypto transactions already used for an order: { [txid]: ticketChannelId } – src/features/cryptoverify.js
+  g.disabledMethods ??= {}; // payment methods switched off with /disable: { [name]: { by, at, reason } } – src/lib/paymentState.js
   g.deals ??= {}; // the deal of the week: { week, days: [dayKeys], current: { productId, percent, endsAt } } – src/features/deals.js
   g.abandoned ??= {}; // abandoned-order codes sent: { [ticketChannelId]: { userId, sentAt, code } } – src/features/abandoned.js
   return g;

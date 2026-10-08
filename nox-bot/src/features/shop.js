@@ -449,7 +449,7 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
   }
 
   if (!compact) c.addSeparatorComponents(divider(true));
-  const methods = config.shop.paymentMethods.map((m) => m.name);
+  const methods = config.shop.paymentMethods.map((m) => (require('../lib/paymentState').isOff(guild.id, m) ? `~~${m.name}~~ (paused)` : m.name));
   const links = pages > 1 ? ['howToBuy', 'vouches'].map((k) => db.channelId(guild.id, k)).filter(Boolean).map((id) => `<#${id}>`) : [];
   c.addTextDisplayComponents(
     text(
@@ -795,9 +795,11 @@ function orderModal(product, guild = null, { userId = null } = {}) {
   if (counted(product)) quantity.setDescription(`${product.stockCount} left`);
   modal.addLabelComponents(quantity);
   const fromBalance = guild && userId ? storeBalance().paymentOption(guild.id, userId, lowestPrice(product)) : null;
-  const methods = config.shop.paymentMethods.slice(0, fromBalance ? 24 : 25);
-  if (methods.length) {
-    const options = methods.map((m, i) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }));
+  // Methods switched off with /disable are left out – the option value stays the method's index in config.json.
+  const methods = require('../lib/paymentState').activeMethods(guild?.id).slice(0, fromBalance ? 24 : 25);
+  if (!methods.length && !fromBalance && require('../lib/paymentState').allOff(guild?.id)) throw new UserError('Payments are paused for a moment – please try again a bit later.');
+  if (methods.length || fromBalance) {
+    const options = methods.map(({ m, index: i }) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }));
     modal.addLabelComponents(
       new LabelBuilder()
         .setLabel('Payment method')
@@ -977,6 +979,7 @@ async function submitOrder(interaction, productId) {
   } catch {
     // text fallback already read
   }
+  if (methodIndex != null) require('../lib/paymentState').assertOn(interaction.guild.id, method); // an old form with a method switched off since
   const price = priceOrder(interaction.guild.id, interaction.user.id, product, quantity, field('promo'), { variant });
   // Money taken at once must be exactly what the buyer expects – a code that doesn't work stops it.
   if (withBalance && price.error) throw new UserError(`Promo code **${price.code}** can't be used: ${price.error} Remove it (or fix it) to pay with store balance.`);

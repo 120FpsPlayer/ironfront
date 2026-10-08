@@ -48,6 +48,7 @@ module.exports = {
       e.addFields({
         name: '🛒 Shop',
         value: [
+          '`/disable` · `/enable` – switch a payment method off for a while (e.g. while fixing PayPal) and back on',
           '`/product add` · `/product edit` · `/product stock` · `/product variants` · `/product delivery` · `/product remove` · `/product list` – categories, images, options, stock, files the buyer gets',
           '`/sale start` · `/sale stop` · `/sale list` – flash sales with a countdown in the shop',
           '`/promo create` · `/promo list` · `/promo info` · `/promo delete` – discount codes',

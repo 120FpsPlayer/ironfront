@@ -154,7 +154,8 @@ function topUpModal(guild) {
         .setDescription(`From ${money(min)} to ${money(max)}.`)
         .setTextInputComponent(new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(10).setPlaceholder(`e.g. ${Math.max(min, Math.min(25, max))}`)),
     );
-  const methods = config.shop.paymentMethods.slice(0, 25);
+  const methods = require('../lib/paymentState').activeMethods(guild?.id).slice(0, 25); // without methods switched off (/disable)
+  if (!methods.length && require('../lib/paymentState').allOff(guild?.id)) throw new UserError('Payments are paused for a moment – please try again a bit later.');
   if (methods.length) {
     modal.addLabelComponents(
       new LabelBuilder()
@@ -164,7 +165,7 @@ function topUpModal(guild) {
           new StringSelectMenuBuilder()
             .setCustomId('payment')
             .setPlaceholder('Choose a payment method…')
-            .addOptions(methods.map((m, i) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }))),
+            .addOptions(methods.map(({ m, index: i }) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }))),
         ),
     );
   } else {
@@ -186,6 +187,12 @@ function field(interaction, id) {
 
 /** The payment method picked in a form → { method, methodIndex, payment } (payment: what the ticket shows). */
 function pickedMethod(interaction) {
+  const picked = pickedRaw(interaction);
+  if (picked.methodIndex != null) require('../lib/paymentState').assertOn(interaction.guild.id, picked.method); // switched off since the form opened
+  return picked;
+}
+
+function pickedRaw(interaction) {
   const typed = field(interaction, 'payment_text');
   try {
     const [index] = interaction.fields.getStringSelectValues('payment');

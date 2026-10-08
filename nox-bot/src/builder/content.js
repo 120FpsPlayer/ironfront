@@ -2,6 +2,7 @@
 
 const { ButtonStyle } = require('discord.js');
 const config = require('../lib/config');
+const paymentState = require('../lib/paymentState');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
 const { ts } = require('../lib/utils');
@@ -237,7 +238,16 @@ function payments(x) {
   c.addSeparatorComponents(divider());
   const methods = config.shop.paymentMethods;
   c.addTextDisplayComponents(
-    text(methods.length ? methods.map((m) => `### ${x.E(m.emoji ?? 'wallet')} ${m.name}\n-# ${m.details ?? ''}`).join('\n') : 'Payment methods will be listed here soon.'),
+    text(
+      methods.length
+        ? methods
+            .map((m) => {
+              const off = paymentState.offNote(x.guild.id, m); // switched off with /disable
+              return off ? `### ${x.E(m.emoji ?? 'wallet')} ~~${m.name}~~\n-# **${off}** – please pick another method for now.` : `### ${x.E(m.emoji ?? 'wallet')} ${m.name}\n-# ${m.details ?? ''}`;
+            })
+            .join('\n')
+        : 'Payment methods will be listed here soon.',
+    ),
   );
   c.addSeparatorComponents(divider());
   const has = (re) => methods.some((m) => re.test(`${m.name} ${m.emoji ?? ''}`));
@@ -281,7 +291,7 @@ function proofsIntro(x) {
 function faq(x) {
   const qa = [
     ['How do I buy something?', `Click **Buy** next to a product in ${x.ch('shop')} – your private order ticket opens right away. Full guide: ${x.ch('howToBuy')}.`],
-    ['Which payment methods do you accept?', `${config.shop.paymentMethods.map((m) => m.name).join(', ') || 'See'} – details in ${x.ch('payments')}.`],
+    ['Which payment methods do you accept?', `${config.shop.paymentMethods.map((m) => (paymentState.isOff(x.guild.id, m) ? `${m.name} (temporarily unavailable)` : m.name)).join(', ') || 'See'} – details in ${x.ch('payments')}.`],
     ['How fast is delivery?', `${config.shop.deliveryTime ?? 'Usually very fast'}. You receive everything inside your ticket.`],
     ['Is it safe to buy here?', `Yes – payments only happen in private tickets with our team, and you can read real reviews in ${x.ch('vouches')}. We never DM you first.`],
     ["I didn't get my order / something is wrong", `Open a **Support** ticket in ${x.ch('tickets')} within 48 hours and include your order details.`],

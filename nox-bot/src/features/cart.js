@@ -340,12 +340,13 @@ const cents = (amount) => (amount == null ? 'x' : String(Math.round(amount * 100
 
 /** "Store balance (30€ available)" joins the methods when it covers the whole cart. */
 function paymentField(guild, userId, subtotal) {
-  const methods = config.shop.paymentMethods.slice(0, 24);
+  const methods = require('../lib/paymentState').activeMethods(guild.id).slice(0, 24); // without methods switched off (/disable)
   const extra = balance.paymentOption(guild.id, userId, subtotal);
+  if (!methods.length && !extra && require('../lib/paymentState').allOff(guild.id)) throw new UserError('Payments are paused for a moment – please try again a bit later.');
   if (!methods.length && !extra) {
     return new LabelBuilder().setLabel('Payment method').setTextInputComponent(new TextInputBuilder().setCustomId('payment_text').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60));
   }
-  const options = methods.map((m, i) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: ce(guild, m.emoji) }));
+  const options = methods.map(({ m, index: i }) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: ce(guild, m.emoji) }));
   if (extra) options.push(extra);
   return new LabelBuilder()
     .setLabel('Payment method')
@@ -398,6 +399,12 @@ async function openCheckout(interaction) {
 
 /** The payment method picked at checkout → { method, methodIndex, payment, withBalance }. */
 function pickedMethod(interaction) {
+  const picked = pickedRaw(interaction);
+  if (picked.methodIndex != null) require('../lib/paymentState').assertOn(interaction.guild.id, picked.method); // switched off since the form opened
+  return picked;
+}
+
+function pickedRaw(interaction) {
   const typed = field(interaction, 'payment_text');
   try {
     const [value] = interaction.fields.getStringSelectValues('payment');
