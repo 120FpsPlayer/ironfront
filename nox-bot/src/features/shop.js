@@ -22,6 +22,7 @@ const { splitEmoji } = require('../builder/style');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
 const { UserError, embed, truncate, sendToChannel, sendLog, logEmbed, parseAmount, money, ts, pad } = require('../lib/utils');
 const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl } = require('../lib/v2');
+const { isCart, linesOf } = require('../lib/orderItems');
 
 const STOCK = {
   in: { label: 'In stock', dot: '🟢' },
@@ -283,11 +284,19 @@ function cardButton(guild, p) {
     : btn(`shop:buy:${p.id}`, 'Buy', ce(guild, 'cart'), ButtonStyle.Primary);
 }
 
-/** A product card: the button on the right – or, with an image, the image on the right and the button below. */
+/** The card's buttons: Buy (+ ➕ Add to cart with opts.cart – features/cart.js) or Notify me. */
+const cardButtons = (guild, p, opts = {}) => (opts.cart && p.stock !== 'out' ? [cardButton(guild, p), btn(`cart:add:${p.id}`, 'Add to cart', '➕')] : [cardButton(guild, p)]);
+
+/**
+ * A product card: the button on the right – or, with an image, the image on the right and the button below.
+ * With Add to cart (opts.cart) both buttons sit in one row below the text.
+ */
 function addCard(c, guild, p, image = null, opts = {}) {
-  if (!image) return c.addSectionComponents(buttonSection(cardText(guild, p, opts), cardButton(guild, p)));
-  c.addSectionComponents(section(cardText(guild, p, opts), image.url));
-  return c.addActionRowComponents(row(cardButton(guild, p)));
+  const buttons = cardButtons(guild, p, opts);
+  if (!image && buttons.length === 1) return c.addSectionComponents(buttonSection(cardText(guild, p, opts), buttons[0]));
+  if (image) c.addSectionComponents(section(cardText(guild, p, opts), image.url));
+  else c.addTextDisplayComponents(text(cardText(guild, p, opts)));
+  return c.addActionRowComponents(row(...buttons));
 }
 
 /** One sold-out product with its Notify me button – the answer to a menu pick or an older Buy button. */
@@ -381,10 +390,14 @@ function tabProducts(list, value) {
   return groups(list).find((g) => g.value === value)?.products ?? null;
 }
 
-/** ◀ Page x/y · ▶ Next – or the How to buy / Vouches links – and My orders (features/myorders.js) in one row. */
-function navRow(guild, value, index, pages) {
+/**
+ * ◀ Page x/y · ▶ Next – or the How to buy / Vouches links – then 🛒 Cart (features/cart.js; "Cart (3)" on a
+ * private page) and My orders (features/myorders.js) in one row.
+ */
+function navRow(guild, value, index, pages, userId = null) {
   const buttons = [];
-  // The page number sits on ◀ (no separate page button), so 5 tabs + 5 products with images + My orders still fit 40 components.
+  // The page number sits on ◀ (no separate page button), so 5 tabs + 5 products with images + Cart + My orders still fit 40
+  // components (without the line above the footer – see shopView).
   if (pages > 1) {
     buttons.push(
       btn(`shopview:page:${index - 1}:${value}`, `Page ${index + 1} / ${pages}`, '◀️').setDisabled(index <= 0),
@@ -398,11 +411,14 @@ function navRow(guild, value, index, pages) {
     if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
     if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
   }
+  const cart = require('./cart').cartButton(guild, userId); // here – cart.js needs this file
+  if (cart) buttons.push(cart);
   buttons.push(btn('myorders:open', 'My orders', ce(guild, 'box')));
   return row(...buttons);
 }
 
-function buildView(guild, { list, tabs, active, items, index, pages, pictures, now, badges = null }) {
+/** cart – ➕ Add to cart on the cards; compact – no line above the footer (one component less). */
+function buildView(guild, { list, tabs, active, items, index, pages, pictures, now, badges = null, cart = false, compact = false, userId = null }) {
   const c = container(COLORS.brand);
   const status = shopstatus.statusLine(guild.id, 'shop', now);
   const vs = vouchStats(guild.id);
@@ -428,10 +444,10 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
   } else {
     const showCategory = active === 'all' && tabs.length > 0;
     const at = now ? new Date(now).getTime() : Date.now();
-    for (const p of items) addCard(c, guild, p, pictures.get(p.id), { category: showCategory, now: at, badges });
+    for (const p of items) addCard(c, guild, p, pictures.get(p.id), { category: showCategory, now: at, badges, cart });
   }
 
-  c.addSeparatorComponents(divider(true));
+  if (!compact) c.addSeparatorComponents(divider(true));
   const methods = config.shop.paymentMethods.map((m) => m.name);
   const links = pages > 1 ? ['howToBuy', 'vouches'].map((k) => db.channelId(guild.id, k)).filter(Boolean).map((id) => `<#${id}>`) : [];
   c.addTextDisplayComponents(
@@ -440,7 +456,7 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
         (links.length ? `\n-# ${links.join(' · ')}` : ''),
     ),
   );
-  const nav = navRow(guild, active, index, pages);
+  const nav = navRow(guild, active, index, pages, userId);
   if (nav) c.addActionRowComponents(nav);
   return v2(c, { files: items.map((p) => pictures.get(p.id)?.file).filter(Boolean) });
 }
@@ -448,9 +464,11 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
 /**
  * The shop: tabs per category on top, 5 products per page, ◀ ▶ to turn pages. The panel in #shop always
  * shows the first page of "All"; tabs and pages answer privately (features/catalog.js), so browsing never
- * changes the panel for anyone else. Images are dropped from the bottom up if a page wouldn't fit Discord's limits.
+ * changes the panel for anyone else. If a page wouldn't fit Discord's limits, it gives up – in this order – the
+ * ➕ Add to cart buttons on the cards (the cart has its own product menu), the line above the footer, and then
+ * images from the bottom up. userId – who sees the page (privately): their cart count is on 🛒 Cart.
  */
-function shopView(guild, { tab = 'all', page = 0, now } = {}) {
+function shopView(guild, { tab = 'all', page = 0, now, userId = null } = {}) {
   const list = products(guild.id);
   const tabs = shopTabs(list);
   const active = tabs.some((t) => t.value === tab) ? tab : 'all';
@@ -459,11 +477,17 @@ function shopView(guild, { tab = 'all', page = 0, now } = {}) {
   const index = Math.min(Math.max(0, Math.trunc(Number(page)) || 0), pages - 1);
   const items = all.slice(index * PAGE_SIZE, (index + 1) * PAGE_SIZE);
   const marks = productBadges.compute(guild.id); // once per render, not per card
-  for (let n = items.length; n >= 0; n -= 1) {
-    const payload = buildView(guild, { list, tabs, active, items, index, pages, pictures: pickImages(items, n), now, badges: marks });
+  const view = (n, layout) => buildView(guild, { list, tabs, active, items, index, pages, pictures: pickImages(items, n), now, badges: marks, userId, ...layout });
+  const cartOn = config.cart?.enabled !== false && items.some((p) => p.stock !== 'out');
+  for (const layout of [...(cartOn ? [{ cart: true }] : []), {}, { compact: true }]) {
+    const payload = view(items.length, layout);
+    if (fits(payload)) return payload;
+  }
+  for (let n = items.length - 1; n >= 0; n -= 1) {
+    const payload = view(n, { compact: true });
     if (fits(payload) || n === 0) return payload;
   }
-  return null;
+  return view(0, { compact: true });
 }
 
 const shopPanel = (guild, { now } = {}) => shopView(guild, { now });
@@ -610,14 +634,22 @@ async function setStock(guild, query, stock, { count = null } = {}) {
 }
 
 /**
- * A completed order counts the stock down (counted products only). At 0 the product is sold out – the staff
- * log gets a short note, buyers see Notify me.
+ * A completed order counts the stock down (counted products only) – every item of a cart. At 0 the product is
+ * sold out – the staff log gets a short note, buyers see Notify me. → what is left (a list for a cart).
  */
 async function countDown({ guild, sale }) {
-  const p = sale ? productBadges.productOf(products(guild.id), sale) : null;
+  if (!sale) return null;
+  const left = [];
+  for (const line of linesOf(sale)) left.push(await countDownLine(guild, sale, line));
+  return isCart(sale) ? left : left[0];
+}
+
+/** One product line of a sale: its stock goes down by the line's quantity. */
+async function countDownLine(guild, sale, line) {
+  const p = productBadges.productOf(products(guild.id), line);
   if (!p || !counted(p)) return null;
   const before = p.stockCount;
-  const left = Math.max(0, before - (Number(sale.quantity) || 1));
+  const left = Math.max(0, before - (Number(line.quantity) || 1));
   Object.assign(p, { stockCount: left, stock: stockFor(left), updatedAt: Date.now() });
   db.save();
   refreshShop(guild);
@@ -633,7 +665,7 @@ hooks.on('orderCompleted', countDown);
 
 /** Every sale of a catalog product can move the 🔥 Bestseller badge – the panel is refreshed even when the stock isn't counted. */
 function afterSale({ guild, sale }) {
-  if (sale && productBadges.enabled() && productBadges.productOf(products(guild.id), sale)) refreshShop(guild);
+  if (sale && productBadges.enabled() && linesOf(sale).some((line) => productBadges.productOf(products(guild.id), line))) refreshShop(guild);
 }
 hooks.on('orderCompleted', afterSale);
 
@@ -697,9 +729,12 @@ async function announceProduct(guild, p, kind = 'new') {
   return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] }, files: image ? [image.file] : [] }));
 }
 
-/** The product an order ticket is about: ticket.order.productId, or the product answer ("GTA V — 20€" / "GTA V"). */
+/**
+ * The product an order ticket is about: ticket.order.productId, or the product answer ("GTA V — 20€" / "GTA V").
+ * null for a cart (several products – order.items, features/cart.js) and a balance top-up (none).
+ */
 function ticketProduct(guildId, ticket) {
-  if (!guildId || !ticket) return null;
+  if (!guildId || !ticket || isCart(ticket.order) || ticket.order?.topUp) return null;
   const id = ticket.order?.productId;
   if (id) return products(guildId).find((p) => p.id === id) ?? null;
   const values = (ticket.answers ?? []).filter((a) => /product|buy/i.test(a.label ?? '')).map((a) => String(a.value ?? '').trim().toLowerCase());
@@ -715,6 +750,7 @@ function ticketProduct(guildId, ticket) {
 // ───────────── Buying ─────────────
 
 const promos = require('./promos');
+const storeBalance = () => require('./balance'); // features/balance.js – loaded with the other features
 
 /** "16€ (was 20€ · −20% flash sale)" – an option's price in the order form menu. */
 function optionPrice(product, v, now = Date.now()) {
@@ -736,7 +772,15 @@ function variantField(product) {
   return field;
 }
 
-function orderModal(product, guild = null) {
+/** The lowest price this product can be bought for (one of the cheapest option, flash sale taken off) – null when not a number. */
+function lowestPrice(product, now = Date.now()) {
+  const amount = parseAmount(cheapestVariant(product)?.price ?? product.price);
+  const sale = amount == null ? null : activeSale(product, now);
+  return sale ? salePrice(amount, sale.percent) : amount;
+}
+
+/** userId – who opens the form: "Store balance (X€ available)" joins the payment methods when it's enough (features/balance.js). */
+function orderModal(product, guild = null, { userId = null } = {}) {
   const modal = new ModalBuilder().setCustomId(`shop:order:${product.id}`).setTitle(truncate(`🛒 ${product.name}`, 45));
   // A form holds 5 components: with options, the Option menu takes the place of the intro (its descriptions show the prices).
   if (variantsOf(product).length) modal.addLabelComponents(variantField(product));
@@ -749,8 +793,10 @@ function orderModal(product, guild = null) {
     .setTextInputComponent(new TextInputBuilder().setCustomId('quantity').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(6).setValue('1'));
   if (counted(product)) quantity.setDescription(`${product.stockCount} left`);
   modal.addLabelComponents(quantity);
-  const methods = config.shop.paymentMethods.slice(0, 25);
+  const fromBalance = guild && userId ? storeBalance().paymentOption(guild.id, userId, lowestPrice(product)) : null;
+  const methods = config.shop.paymentMethods.slice(0, fromBalance ? 24 : 25);
   if (methods.length) {
+    const options = methods.map((m, i) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }));
     modal.addLabelComponents(
       new LabelBuilder()
         .setLabel('Payment method')
@@ -759,7 +805,7 @@ function orderModal(product, guild = null) {
           new StringSelectMenuBuilder()
             .setCustomId('payment')
             .setPlaceholder('Choose a payment method…')
-            .addOptions(methods.map((m, i) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }))),
+            .addOptions(fromBalance ? [...options, fromBalance] : options),
         ),
     );
   } else {
@@ -873,7 +919,7 @@ async function startOrder(interaction, productId) {
   }
   const error = tickets.checkCanOpen(interaction.member);
   if (error) throw new UserError(error);
-  return interaction.showModal(orderModal(product, interaction.guild));
+  return interaction.showModal(orderModal(product, interaction.guild, { userId: interaction.user.id }));
 }
 
 /** The option picked in the order form (null for products without options) – a UserError when the options changed meanwhile. */
@@ -915,10 +961,14 @@ async function submitOrder(interaction, productId) {
   let payment = field('payment_text');
   let method = payment;
   let methodIndex = null;
+  let withBalance = false; // "Store balance" – paid right away (features/balance.js)
   try {
     const [index] = interaction.fields.getStringSelectValues('payment');
     const m = config.shop.paymentMethods[Number(index)];
-    if (m) {
+    if (index === 'balance') {
+      withBalance = true;
+      payment = method = storeBalance().METHOD;
+    } else if (m) {
       payment = m.details ? `${m.name} (${m.details})` : m.name;
       method = m.name;
       methodIndex = Number(index);
@@ -927,6 +977,8 @@ async function submitOrder(interaction, productId) {
     // text fallback already read
   }
   const price = priceOrder(interaction.guild.id, interaction.user.id, product, quantity, field('promo'), { variant });
+  // Money taken at once must be exactly what the buyer expects – a code that doesn't work stops it.
+  if (withBalance && price.error) throw new UserError(`Promo code **${price.code}** can't be used: ${price.error} Remove it (or fix it) to pay with store balance.`);
   const name = variant ? `${product.name} — ${variant.name}` : product.name;
   const answers = [
     { label: 'Product', value: `${name} — ${formatPrice(variant ? variant.price : product.price)}` },
@@ -936,6 +988,7 @@ async function submitOrder(interaction, productId) {
   const notes = field('notes');
   if (notes) answers.push({ label: 'Notes', value: notes });
   answers.push(...priceAnswers(price, quantity));
+  if (withBalance) answers.push({ label: 'Paid', value: `💰 With store balance – ${storeBalance().NON_REFUNDABLE}` });
 
   const order = {
     productId: product.id,
@@ -950,26 +1003,36 @@ async function submitOrder(interaction, productId) {
     subtotal: price.subtotal,
     total: price.total,
     ...(price.salePercent && { salePercent: price.salePercent, listPrice: price.listPrice }), // listPrice: the unit price before the sale
+    ...(withBalance && storeBalance().paidFields()), // Paid from the start
   };
 
   // From here on this order holds its code (and counts as an open order of this member) – opening the
   // ticket takes several Discord calls, and a buyer submitting at the same time must not get the same use.
+  // Store balance is taken here too, before the first await: a second order at the same moment sees the rest.
   const release = promos.hold(interaction.guild.id, interaction.user.id, order.promo);
+  let spent = null;
   let channel;
   try {
+    if (withBalance) spent = storeBalance().takeForOrder(interaction.guild.id, interaction.user.id, price.total);
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     // The order is part of the new ticket, so its first card already shows this product (and its image).
     channel = await tickets.openTicket(interaction.member, config.getType('order'), answers, { order });
+  } catch (err) {
+    if (spent) storeBalance().giveBack(interaction.guild.id, interaction.user.id, spent); // not placed – nothing is kept
+    throw err;
   } finally {
     release(); // the saved ticket holds the code now (or opening the ticket failed)
   }
+  if (spent) storeBalance().linkOrder(spent, db.getTicket(channel.id));
   const lines = [`Your private order ticket is ready: ${channel}`];
-  if (price.total != null) {
+  if (withBalance) {
+    lines.push(`💰 Paid with store balance: **${money(price.total)}** – ${money(storeBalance().get(interaction.guild.id, interaction.user.id))} left. Your order is handled in the ticket.`);
+  } else if (price.total != null) {
     const savings = [price.salePercent && `⚡ −${price.salePercent}% flash sale`, price.discount > 0 && `you save ${money(price.discount)} with **${price.code}**`].filter(Boolean);
     lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${savings.length ? ` (${savings.join(' · ')})` : ''}`);
   } else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
   if (price.error) lines.push(`${e(interaction.guild, 'warning')} Promo code **${price.code}** – not applied: ${price.error}`);
-  lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
+  if (!withBalance) lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
   const answer = await interaction.editReply({
     embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Order started – ${name}`, 256)).setDescription(lines.join('\n'))],
     components: [row(linkBtn(channel.url, 'Go to my order', '🎫'))],
@@ -1047,6 +1110,8 @@ module.exports = {
   setVariants,
   announceProduct,
   orderModal,
+  variantField,
+  chosenVariant,
   parseQuantity,
   priceOrder,
   priceAnswers,

@@ -64,7 +64,8 @@ async function paymentReceived(guild, ticket, { gateway, paidAmount, paidCurrenc
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
   const head = `💳 **${gateway} payment received – ${money(paidAmount)}** for order \`#${pad(updated.number)}\`.`;
   if (channel) {
-    const ask = instant ? ' 📦 The product is delivered automatically.' : matches && !twice && who ? ` ${who}, please deliver it.` : who ? ` ${who}` : '';
+    const done = updated.order?.topUp ? ' 💰 The balance is credited automatically.' : ' 📦 The product is delivered automatically.'; // a top-up: features/balance.js
+    const ask = instant ? done : matches && !twice && who ? ` ${who}, please deliver it.` : who ? ` ${who}` : '';
     await channel.send(notice(warnings.length ? COLORS.warning : COLORS.success, `${head}${ask}${warnings.length ? `\n${warnings.join('\n')}` : ''}`, { mentions: pings })).catch(() => null);
   }
   await sendLog(guild, {

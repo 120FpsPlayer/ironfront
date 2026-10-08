@@ -13,6 +13,7 @@
 
 const config = require('../lib/config');
 const db = require('../lib/db');
+const { linesOf } = require('../lib/orderItems');
 
 const setting = (key, fallback) => {
   const n = Number(config.badges?.[key]);
@@ -40,8 +41,11 @@ function bestseller(guildId) {
   const find = finder(list);
   const units = new Map();
   for (const sale of db.sales(guildId)) {
-    const p = find(sale);
-    if (p) units.set(p.id, (units.get(p.id) ?? 0) + (Number(sale.quantity) || 1));
+    // A cart counts every item (sale.items – src/lib/orderItems.js).
+    for (const line of linesOf(sale)) {
+      const p = find(line);
+      if (p) units.set(p.id, (units.get(p.id) ?? 0) + (Number(line.quantity) || 1));
+    }
   }
   let best = null;
   for (const p of list) if ((units.get(p.id) ?? 0) > (best ? units.get(best.id) : 0)) best = p;

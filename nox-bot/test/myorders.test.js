@@ -88,7 +88,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
   for (let i = 1; i <= 3; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.' });
   const one = shop.shopPanel(guild);
   validateMessage(one, guild);
-  assert.deepEqual(navLabels(one), ['How to buy', 'Vouches', 'My orders']);
+  assert.deepEqual(navLabels(one), ['How to buy', 'Vouches', 'Cart', 'My orders']);
 
   for (let i = 4; i <= 12; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.', category: i % 2 ? 'Games' : 'Keys' });
   await panels.refresh(guild, 'shop');
@@ -96,7 +96,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
   const message = guild.channels.cache.get(panelInfo.channelId).messageList.find((m) => m.id === panelInfo.messageId);
   const panel = message.body;
   validateMessage(panel, guild);
-  assert.deepEqual(navLabels(panel), ['Page 1 / 3', 'Next', 'My orders']);
+  assert.deepEqual(navLabels(panel), ['Page 1 / 3', 'Next', 'Cart', 'My orders']);
 
   // Private copies: a page turned from the panel, a page inside the copy, a tab.
   const copies = [
@@ -108,7 +108,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
     validateMessage(copy, guild);
     assert.ok(customIds(copy).includes('myorders:open'));
   }
-  assert.deepEqual(navLabels(copies[1]), ['Page 3 / 3', 'Next', 'My orders']);
+  assert.deepEqual(navLabels(copies[1]), ['Page 3 / 3', 'Next', 'Cart', 'My orders']);
   assert.equal(navRow(copies[1]).components[0].custom_id, 'shopview:page:1:all', '◀ goes back a page');
   assert.ok(navRow(copies[1]).components[1].disabled, 'Next is off on the last page');
   for (const payload of [one, panel, ...copies]) {
@@ -118,7 +118,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
   // Without the How to buy / Vouches channels the row is just My orders.
   db.build(guild.id).channels.howToBuy = null;
   db.build(guild.id).channels.vouches = null;
-  assert.deepEqual(navLabels(shop.shopView(guild, { tab: 'c:keys', page: 1 })), ['My orders']);
+  assert.deepEqual(navLabels(shop.shopView(guild, { tab: 'c:keys', page: 1 })), ['Cart', 'My orders']);
 });
 
 test('the shop still fits 40 components with 5 tabs, pages and 5 products with images – with every image', async () => {

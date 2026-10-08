@@ -18,6 +18,7 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const tickets = require('../tickets/tickets');
 const { ORDER_STATUS, statusOf, statusLabel } = require('../lib/orderStatus');
+const { orderTitle } = require('../lib/orderItems');
 const { COLORS } = require('../lib/theme');
 const { UserError, pad, ts, truncate } = require('../lib/utils');
 const { container, text, divider, linkBtn, row, header, v2, notice, channelUrl } = require('../lib/v2');
@@ -77,7 +78,7 @@ function statusCard(guild, ticket, status) {
     text(
       [
         `**Order:** \`#${pad(ticket.number)}\``,
-        `**Product:** ${truncate(order.product || 'Custom order', 100)} × ${order.quantity ?? 1}`,
+        `**Product:** ${orderTitle(order)}`,
         `**Status:** ${statusLabel(status)}`,
       ].join('\n'),
     ),

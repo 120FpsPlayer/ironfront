@@ -8,6 +8,10 @@
  *   Other methods (PaysafeCard, crypto…): "Pay" → "📦 Your product is on the way" → staff check the payment
  *     and click "Payment OK – deliver" (or ⚙️ → Deliver product) → the product → the order is completed
  * Products without files or text are delivered by hand, like before.
+ * A cart (order.items – src/features/cart.js) gets every item's files / text, one card per item; it is delivered
+ * automatically only when every item has something to deliver (otherwise staff send what there is and deliver the
+ * rest by hand). A balance top-up (order.topUp – src/features/balance.js) delivers no product: completing it
+ * credits the balance.
  *
  * product.delivery = { files: [{ name, size }], text, updatedAt } – the files are in data/deliveries/<productId>/
  * ticket.order.delivered = { at, by, dm, auto }
@@ -21,7 +25,8 @@ const files = require('../lib/deliveryFiles');
 const { statusOf } = require('../lib/orderStatus');
 const { isStaff } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
-const { UserError, logEmbed, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { isCart, lineText } = require('../lib/orderItems');
 const { container, text, divider, btn, v2, notice } = require('../lib/v2');
 
 const TEXT_MAX = 1500;
@@ -33,11 +38,34 @@ const tickets = () => require('../tickets/tickets');
 /** Does the product have something to deliver (files or text)? */
 const hasDelivery = (product) => Boolean(product?.delivery?.files?.length || product?.delivery?.text);
 
-/** The catalog product of an order ticket (null for custom orders). */
+/** The catalog product of an order ticket (null for custom orders and carts). */
 const productFor = (guildId, ticket) => shop().ticketProduct(guildId, ticket);
 
-/** Can this order be delivered automatically (the product has files or text)? */
-const deliverable = (guildId, ticket) => hasDelivery(productFor(guildId, ticket));
+/**
+ * What the order is made of → [{ product, name }] – one entry per cart item (product null when it was deleted),
+ * or the order's product (name undefined: the card shows the order's product).
+ */
+function orderParts(guildId, ticket) {
+  if (!isCart(ticket?.order)) return [{ product: productFor(guildId, ticket) }];
+  const catalog = shop().products(guildId);
+  return ticket.order.items.map((item) => ({ product: catalog.find((p) => p.id === item.productId) ?? null, name: lineText(item) }));
+}
+
+/** The parts that have files or text to send. */
+const sendable = (guildId, ticket) => orderParts(guildId, ticket).filter((x) => hasDelivery(x.product));
+
+/**
+ * Can this order be delivered automatically after the payment – the product (every item of a cart) has files or
+ * text? A balance top-up too: "delivering" it completes it, which credits the balance.
+ */
+function deliverable(guildId, ticket) {
+  if (ticket?.order?.topUp) return true;
+  const parts = orderParts(guildId, ticket);
+  return parts.length > 0 && parts.every((x) => hasDelivery(x.product));
+}
+
+/** Is there anything to send for ⚙️ → Deliver product (a part of a cart is enough – never for a top-up)? */
+const canDeliver = (guildId, ticket) => !ticket?.order?.topUp && sendable(guildId, ticket).length > 0;
 
 // ───────────── /product delivery ─────────────
 
@@ -79,6 +107,7 @@ function deliverySummary(p) {
 
 /** "📦 Your product is on the way" – auto: paid by PayPal / Stripe; otherwise after "Pay", while staff check it. */
 function onTheWayCard(ticket, { auto }) {
+  if (ticket.order?.topUp) return topUpOnTheWay(ticket, { auto });
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(
     text(
@@ -91,16 +120,34 @@ function onTheWayCard(ticket, { auto }) {
   return v2(c);
 }
 
+/** The same for a balance top-up: the amount is added to the balance once the payment is confirmed. */
+function topUpOnTheWay(ticket, { auto }) {
+  const amount = money(ticket.order.topUp.amount);
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      auto
+        ? `## 💰 Topping up your balance\nPayment received for order \`#${pad(ticket.number)}\` – **${amount}** is being added to your store balance right now.`
+        : `## 💰 Your top-up is on its way!\nWe're checking your payment for order \`#${pad(ticket.number)}\` – as soon as it's confirmed, **${amount}** is added to your store balance.`,
+    ),
+  );
+  c.addTextDisplayComponents(text("-# Balance can't be refunded or paid out. Something wrong? Write here or click **Call support**."));
+  return v2(c);
+}
+
 const safeBlock = (s) => String(s).replace(/```/g, 'ʼʼʼ');
 
-/** The product itself: its text and files. inDm – the copy sent by DM (with the server name). */
-function productCard(guild, ticket, product, { inDm = false } = {}) {
+/**
+ * The product itself: its text and files. inDm – the copy sent by DM (with the server name); name – the cart item
+ * it is for ("Nitro × 2"; default: the order's product).
+ */
+function productCard(guild, ticket, product, { inDm = false, name = null } = {}) {
   const order = tickets().orderDetails(ticket);
   const { files: attached, missing } = files.attachments(product);
   const c = container(COLORS.success);
   c.addTextDisplayComponents(
     text(
-      `## 📦 Your product – ${truncate(order.product || product.name, 120)}\n` +
+      `## 📦 Your product – ${truncate(name || order.product || product.name, 120)}\n` +
         `Order \`#${pad(ticket.number)}\`${inDm ? ` at **${truncate(guild.name, 80)}**` : ''} · thank you for your purchase! 💜`,
     ),
   );
@@ -120,32 +167,42 @@ function productCard(guild, ticket, product, { inDm = false } = {}) {
 const delivering = new Set(); // tickets being delivered right now – one at a time
 
 /**
- * Sends the product into the ticket and by DM and records it. → { ok, dm, missing } – ok false when the
- * product has nothing to deliver. again – staff send it once more (also after it was delivered).
+ * Sends the product – every item of a cart that has files or text, one card each – into the ticket and by DM and
+ * records it. → { ok, dm, missing } – ok false when there is nothing to deliver, or when all files of an item are
+ * gone (then nothing is sent). again – staff send it once more (also after it was delivered).
  */
 async function deliver(channel, ticket, { by, auto = false, again = false } = {}) {
   const guild = channel.guild;
-  const product = productFor(guild.id, ticket);
-  if (!hasDelivery(product)) return { ok: false, reason: 'none' };
+  const parts = sendable(guild.id, ticket);
+  if (!parts.length) return { ok: false, reason: 'none' };
   if (delivering.has(channel.id)) return { ok: false, reason: 'busy' };
   if (!again && db.getTicket(channel.id)?.order?.delivered) return { ok: false, reason: 'done' };
   delivering.add(channel.id);
   try {
-    const card = productCard(guild, ticket, product);
-    if (!card.payload.files.length && !product.delivery.text) return { ok: false, reason: 'missing', missing: card.missing };
-    const sent = await channel.send(card.payload);
+    const cards = parts.map((x) => ({ ...x, card: productCard(guild, ticket, x.product, { name: x.name }) }));
+    const empty = cards.filter((x) => !x.card.payload.files?.length && !x.product.delivery.text); // no files: payload.files is left out
+    if (empty.length) return { ok: false, reason: 'missing', missing: empty.flatMap((x) => x.card.missing) };
+    let sent = null;
+    for (const x of cards) {
+      const message = await channel.send(x.card.payload);
+      sent ??= message;
+    }
     const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
-    const dm = user ? await user.send(productCard(guild, ticket, product, { inDm: true }).payload).then(() => true).catch(() => false) : false;
-    if (!dm) await channel.send(notice(COLORS.warning, `📭 <@${ticket.ownerId}> I couldn't DM you – your product is right above. Open your DMs for this server to get copies next time.`, { mentions: { users: [ticket.ownerId] } })).catch(() => null);
+    let dm = Boolean(user);
+    for (const x of cards) {
+      if (dm) dm = await user.send(productCard(guild, ticket, x.product, { inDm: true, name: x.name }).payload).then(() => true).catch(() => false);
+    }
+    const what = cards.length > 1 ? 'your products are' : 'your product is';
+    if (!dm) await channel.send(notice(COLORS.warning, `📭 <@${ticket.ownerId}> I couldn't DM you – ${what} right above. Open your DMs for this server to get copies next time.`, { mentions: { users: [ticket.ownerId] } })).catch(() => null);
     const order = tickets().orderDetails(db.getTicket(channel.id));
     db.updateTicket(channel.id, { order: { ...order, delivered: { at: Date.now(), by: by?.id ?? null, dm, auto, messageId: sent?.id ?? null } } });
-    const missing = card.missing;
+    const missing = cards.flatMap((x) => x.card.missing);
     await sendLog(guild, {
       embeds: [
         logEmbed(missing.length ? COLORS.warning : COLORS.success, auto ? '📦 Product delivered automatically' : '📦 Product delivered', by?.user ?? by ?? guild.client.user).addFields(
           { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
           { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
-          { name: 'Product', value: truncate(product.name, 1024), inline: true },
+          { name: cards.length > 1 ? 'Products' : 'Product', value: truncate(cards.map((x) => x.name || x.product.name).join('\n'), 1024), inline: true },
           { name: 'DM', value: dm ? 'sent' : "couldn't DM – it's in the ticket", inline: true },
           ...(missing.length ? [{ name: '⚠️ Missing files', value: truncate(`${missing.join(', ')} – set them again with /product delivery`, 1024) }] : []),
         ),
@@ -163,12 +220,13 @@ const botMember = (guild) => guild.members.me ?? guild.client.user;
 /**
  * PayPal / Stripe confirmed the full payment of an open order (src/features/autopay.js) → "on the way", the product,
  * and the order is completed with the amount paid. Returns true when it delivered (false: delivered by hand).
+ * A balance top-up has no product: it is completed right away, which credits the balance (features/balance.js).
  */
 async function deliverPaid(channel, ticket, { amount }) {
   if (!deliverable(channel.guild.id, ticket) || ticket.order?.delivered || ticket.completedAt) return false;
   await channel.send(onTheWayCard(ticket, { auto: true })).catch(() => null);
   const bot = botMember(channel.guild);
-  const done = await deliver(channel, db.getTicket(channel.id), { by: bot, auto: true });
+  const done = ticket.order?.topUp ? { ok: true } : await deliver(channel, db.getTicket(channel.id), { by: bot, auto: true });
   if (!done.ok) return false;
   await tickets()
     .completeOrder(channel, bot, { amount })
@@ -180,19 +238,25 @@ async function deliverPaid(channel, ticket, { amount }) {
 
 /**
  * Staff confirmed the payment: the order is set to Paid, the product is delivered and the order completed.
- * Without files or text only the status changes – the seller delivers by hand.
+ * Without files or text only the status changes – the seller delivers by hand. A cart sends what has files or
+ * text; it is completed only when every item was sent (otherwise the seller delivers the rest and completes it).
  */
 async function confirmAndDeliver(channel, member, { again = false } = {}) {
   const ticket = db.getTicket(channel?.id);
   if (!ticket || ticket.typeId !== 'order') throw new UserError('This only works in an order ticket.');
   if (!isStaff(member, config.getType('order'))) throw new UserError('Only the team can confirm payments and deliver products.');
   if (ticket.status !== 'open') throw new UserError('This ticket is closed – reopen it first.');
-  const product = productFor(channel.guild.id, ticket);
+  if (ticket.order?.topUp) return confirmTopUp(channel, ticket, member);
+  const cart = isCart(ticket.order);
+  const product = cart ? null : productFor(channel.guild.id, ticket);
   if (ticket.order?.delivered && !again) {
-    throw new UserError(`The product was already delivered ${ts(ticket.order.delivered.at, 'R')}. Need to send it again? ⚙️ → **Send product again**.`);
+    throw new UserError(`The ${cart ? 'products were' : 'product was'} already delivered ${ts(ticket.order.delivered.at, 'R')}. Need to send ${cart ? 'them' : 'it'} again? ⚙️ → **Send product again**.`);
   }
   if (!ticket.completedAt && ['awaiting', 'sent'].includes(statusOf(ticket))) await require('./orderstatus').setStatus(channel, 'paid', member);
-  if (!hasDelivery(product)) {
+  if (cart && !canDeliver(channel.guild.id, ticket)) {
+    return 'Payment confirmed – the order is **Paid**. No product in this cart has files or text to deliver – deliver them by hand, then ⚙️ → **Order completed**.';
+  }
+  if (!cart && !hasDelivery(product)) {
     return `Payment confirmed – the order is **Paid**. ${product ? `**${product.name}** has no files or text to deliver` : 'This is a custom order'} – deliver it by hand, then ⚙️ → **Order completed**.`;
   }
   const done = await deliver(channel, db.getTicket(channel.id), { by: member, again });
@@ -202,13 +266,29 @@ async function confirmAndDeliver(channel, member, { again = false } = {}) {
     throw new UserError('The product was already delivered.');
   }
   const latest = db.getTicket(channel.id);
-  if (!latest.completedAt) {
+  // Cart items with nothing to send are delivered by hand – the seller completes the order after that.
+  const byHand = cart ? orderParts(channel.guild.id, latest).filter((x) => !hasDelivery(x.product)).map((x) => x.name) : [];
+  if (!latest.completedAt && !byHand.length) {
     await tickets()
       .completeOrder(channel, member)
       .catch((err) => console.warn(`[delivery] Could not complete order ${channel.id}:`, err.message));
   }
   const note = done.missing.length ? ` ⚠️ Missing files: ${done.missing.join(', ')}.` : '';
-  return `📦 Delivered **${product.name}** in the ticket${done.dm ? ' and by DM' : " (the customer's DMs are closed)"}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
+  const where = `in the ticket${done.dm ? ' and by DM' : " (the customer's DMs are closed)"}`;
+  if (!cart) return `📦 Delivered **${product.name}** ${where}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
+  const count = sendable(channel.guild.id, latest).length;
+  const delivered = `📦 Delivered **${count} ${count === 1 ? 'product' : 'products'}** ${where}`;
+  if (byHand.length) return `${delivered}. ⚠️ Deliver by hand: ${truncate(byHand.join(', '), 300)} – then ⚙️ → **Order completed**.${note}`;
+  return `${delivered}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
+}
+
+/** Staff confirmed the payment of a balance top-up: Paid, then completed – which credits the balance once. */
+async function confirmTopUp(channel, ticket, member) {
+  if (ticket.completedAt) throw new UserError('This top-up is already completed – the balance was credited.');
+  if (['awaiting', 'sent'].includes(statusOf(ticket))) await require('./orderstatus').setStatus(channel, 'paid', member);
+  const result = await tickets().completeOrder(channel, member);
+  const credited = db.getTicket(channel.id)?.order?.topUp?.credited ?? result.sale.amount;
+  return `💰 Payment confirmed – **${money(credited)}** was added to <@${ticket.ownerId}>'s store balance and the top-up is completed.`;
 }
 
 /** The button on the "Payment sent" card (src/features/payments.js). */
@@ -219,9 +299,11 @@ async function confirmButton(interaction) {
   return interaction.editReply({ content: result });
 }
 
-/** "✅ Payment OK – deliver" – or "✅ Payment OK" when the product is delivered by hand. */
-const confirmButtonFor = (guildId, ticket) =>
-  btn('deliver:confirm', deliverable(guildId, ticket) ? 'Payment OK – deliver' : 'Payment OK', '✅', ButtonStyle.Success);
+/** "✅ Payment OK – deliver" – "Payment OK – credit balance" for a top-up, "Payment OK" when it's delivered by hand. */
+function confirmButtonFor(guildId, ticket) {
+  if (ticket?.order?.topUp) return btn('deliver:confirm', 'Payment OK – credit balance', '✅', ButtonStyle.Success);
+  return btn('deliver:confirm', canDeliver(guildId, ticket) ? 'Payment OK – deliver' : 'Payment OK', '✅', ButtonStyle.Success);
+}
 
 hooks.route('deliver', { button: (interaction, action) => (action === 'confirm' ? confirmButton(interaction) : null) });
 
@@ -229,7 +311,9 @@ module.exports = {
   TEXT_MAX,
   hasDelivery,
   productFor,
+  orderParts,
   deliverable,
+  canDeliver,
   setDelivery,
   deliverySummary,
   onTheWayCard,

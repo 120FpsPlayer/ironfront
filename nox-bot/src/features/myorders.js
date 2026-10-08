@@ -23,6 +23,10 @@ const { statusOf, statusLabel } = require('../lib/orderStatus');
 const { e, ce, COLORS } = require('../lib/theme');
 const { UserError, money, pad, ts, truncate } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, buttonSection, v2, channelUrl } = require('../lib/v2');
+const { quantitySuffix } = require('../lib/orderItems');
+
+/** 🛒 Cart and 💰 Balance under the list (features/cart.js, features/balance.js) – here, as cart.js needs shop.js. */
+const shortcuts = (guild, userId) => require('./cart').shortcuts(guild, userId);
 
 const SHOWN_OPEN = 5; // open orders with their own ticket button – more are only linked
 const SHOWN_SALES = 10; // completed orders per page (and in the receipt menu – Discord allows 25 options)
@@ -55,12 +59,12 @@ function openLine(ticket) {
   const order = tickets.orderDetails(ticket);
   const total = order.total != null ? ` · **${money(order.total)}**` : '';
   const placed = ticket.createdAt ? ` · placed ${ts(ticket.createdAt, 'R')}` : '';
-  return `**Order #${pad(ticket.number)}** · ${productName(order.product)} × ${order.quantity ?? 1}${total}\n${statusLabel(statusOf(ticket))}${placed}`;
+  return `**Order #${pad(ticket.number)}** · ${productName(order.product)}${quantitySuffix(order)}${total}\n${statusLabel(statusOf(ticket))}${placed}`;
 }
 
 /** "`S-0003` · Spotify × 1 · 40€ · <date> · ✅ Delivered" – with a link while its ticket is still open. */
 function saleLine(sale) {
-  const parts = [`\`${sale.id}\``, `${productName(sale.product)} × ${sale.quantity ?? 1}`];
+  const parts = [`\`${sale.id}\``, `${productName(sale.product)}${quantitySuffix(sale)}`];
   if (sale.amount != null) parts.push(`**${money(sale.amount)}**`);
   if (sale.completedAt) parts.push(ts(sale.completedAt, 'd'));
   parts.push(statusLabel('delivered'));
@@ -75,7 +79,7 @@ function receiptMenu(sales, page) {
     .setPlaceholder('🧾 View a receipt…')
     .addOptions(
       unique.map((s) => ({
-        label: truncate(`${s.id} · ${s.product || 'Custom order'} × ${s.quantity ?? 1}`, 100),
+        label: truncate(`${s.id} · ${s.product || 'Custom order'}${quantitySuffix(s)}`, 100),
         value: s.id,
         description: truncate([s.amount != null ? money(s.amount) : null, s.completedAt ? `delivered ${day(s.completedAt)}` : null].filter(Boolean).join(' · ') || 'Completed order', 100),
         emoji: '🧾',
@@ -97,7 +101,8 @@ function ordersView(guild, userId, { page = 0 } = {}) {
           'your orders and receipts will show up right here.',
       ),
     );
-    if (shop) c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, shop), 'Shop', ce(guild, 'cart'))));
+    const buttons = [...(shop ? [linkBtn(channelUrl(guild.id, shop), 'Shop', ce(guild, 'cart'))] : []), ...shortcuts(guild, userId)];
+    if (buttons.length) c.addActionRowComponents(row(...buttons));
     return v2(c);
   }
 
@@ -129,6 +134,8 @@ function ordersView(guild, userId, { page = 0 } = {}) {
       );
     }
   }
+  const more = shortcuts(guild, userId);
+  if (more.length) c.addActionRowComponents(row(...more));
   return v2(c);
 }
 

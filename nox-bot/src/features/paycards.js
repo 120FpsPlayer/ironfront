@@ -18,6 +18,7 @@ const hooks = require('../lib/hooks');
 const { COLORS, e, ce } = require('../lib/theme');
 const { currencyCode } = require('../lib/currency');
 const { money, pad, ts, truncate } = require('../lib/utils');
+const { orderTitle } = require('../lib/orderItems');
 const { container, text, divider, btn, linkBtn, row, v2 } = require('../lib/v2');
 
 const TYPES = ['paysafecard', 'crypto', 'paypal', 'stripe'];
@@ -140,7 +141,7 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
   c.addTextDisplayComponents(
     text(
       `## ${e(guild, m.emoji ?? 'card')} ${total != null ? `Pay ${money(total)}` : 'Payment'} – ${truncate(m.name, 60)}\n` +
-        `-# Order \`#${pad(ticket.number)}\` · ${truncate(order.product || 'Custom order', 80)} × ${order.quantity ?? 1}`,
+        `-# Order \`#${pad(ticket.number)}\` · ${orderTitle(order, { max: 80 })}`,
     ),
   );
   c.addSeparatorComponents(divider());
@@ -196,7 +197,11 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
     paid();
   }
   c.addTextDisplayComponents(
-    text(`-# 📦 ${proofsOn() ? 'After you click **Pay**, we' : 'We'} check your payment and send your product right here and in your DMs.`),
+    text(
+      order.topUp // a balance top-up (features/balance.js) has no product
+        ? `-# 💰 ${proofsOn() ? 'After you click **Pay**, we' : 'We'} check your payment and add it to your store balance. Balance can't be refunded or paid out.`
+        : `-# 📦 ${proofsOn() ? 'After you click **Pay**, we' : 'We'} check your payment and send your product right here and in your DMs.`,
+    ),
   );
   if (buttons.length) c.addActionRowComponents(row(...buttons.slice(0, 5)));
   return v2(c);
@@ -211,7 +216,7 @@ async function postCard(channel, ticket) {
 
 /** A new order → its payment card, unless an automatic link (Stripe / PayPal) takes care of it. */
 async function onOrderPlaced({ channel, ticket }) {
-  if (!channel || !ticket?.order) return;
+  if (!channel || !ticket?.order || ticket.order.paidWith === 'balance') return; // paid with store balance already (features/balance.js)
   const type = methodType(methodOf(ticket.order));
   if (type === 'stripe' && require('./stripe').enabled()) return; // stripe.js posts its link
   if (type === 'paypal' && require('./paypal').enabled()) return; // paypal.js posts its link
