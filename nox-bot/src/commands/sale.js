@@ -1,6 +1,7 @@
 'use strict';
 
 const { SlashCommandBuilder, InteractionContextType, MessageFlags } = require('discord.js');
+const deals = require('../features/deals');
 const flash = require('../features/flashsales');
 const shop = require('../features/shop');
 const { COLORS } = require('../lib/theme');
@@ -28,6 +29,34 @@ function listEmbed(guildId) {
     .setDescription(lines.join('\n') || 'Nothing is on sale right now – start a sale with `/sale start`.');
 }
 
+const DEAL_STATE = {
+  planned: (slot) => `⏳ ${ts(slot.at, 'F')} (${ts(slot.at, 'R')})`,
+  started: (slot, guildId) => {
+    const p = shop.products(guildId).find((x) => x.id === slot.productId);
+    return `✅ ${ts(slot.at, 'F')} – started${p ? `: **${truncate(p.name, 80)}** −${slot.percent}%` : ''}`;
+  },
+  skipped: (slot) => `⏭️ ${ts(slot.at, 'F')} – skipped, no product could go on sale`,
+  missed: (slot) => `⌛ ${ts(slot.at, 'F')} – missed (the bot was offline or the shop was closed)`,
+};
+
+/** This week's plan, the deal running now and the settings. */
+function dealEmbed(guildId) {
+  const opts = deals.settings();
+  const plan = deals.plan(guildId);
+  const days = plan.days.filter((day) => plan.slots[day]);
+  const running = deals.activeDeal(guildId);
+  const perWeek = opts.minDays === opts.maxDays ? `${opts.minDays}` : `${opts.minDays}–${opts.maxDays}`;
+  const parts = [
+    `**This week (${plan.week}):** ${days.length ? `${days.length} deal${days.length === 1 ? '' : 's'}` : 'no deal days left'}`,
+    ...days.map((day) => `> ${(DEAL_STATE[plan.slots[day].state] ?? DEAL_STATE.planned)(plan.slots[day], guildId)}`),
+    running ? `\n🔥 **Running now:** **${truncate(running.product.name, 80)}** · ${until(running.product.sale)}` : null,
+    `\n-# ${opts.minPercent}–${opts.maxPercent}% off for ${Math.round(opts.durationMs / 3_600_000)}h on a random product (plain number price, in stock, not on sale) · ` +
+      `${perWeek} day(s) a week at a random time inside the opening hours · announced in #restocks · start one now with \`/sale deal now:True\``,
+  ];
+  if (!opts.enabled) parts.unshift('⚠️ Automatic deals are turned off in `config.json` (`deals.enabled`) – `/sale deal now:True` still starts one.\n');
+  return embed(COLORS.brand).setTitle(deals.TITLE).setDescription(truncate(parts.filter(Boolean).join('\n'), 4000));
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('sale')
@@ -48,7 +77,13 @@ module.exports = {
         .setDescription('End a sale now')
         .addStringOption((o) => o.setName('product').setDescription('Product on sale').setRequired(true).setAutocomplete(true)),
     )
-    .addSubcommand((s) => s.setName('list').setDescription('The products on sale right now')),
+    .addSubcommand((s) => s.setName('list').setDescription('The products on sale right now'))
+    .addSubcommand((s) =>
+      s
+        .setName('deal')
+        .setDescription("Deal of the week – this week's plan, or start one now")
+        .addBooleanOption((o) => o.setName('now').setDescription('Start a deal right now on a random product? (default: only show the plan)')),
+    ),
 
   /** start: every product · stop: only the ones on sale */
   autocomplete: (interaction) =>
@@ -61,6 +96,25 @@ module.exports = {
     const guild = interaction.guild;
 
     if (sub === 'list') return reply(interaction, { embeds: [listEmbed(guild.id)] });
+
+    if (sub === 'deal') {
+      if (!o.getBoolean('now')) return reply(interaction, { embeds: [dealEmbed(guild.id)] });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const { product, announced } = await deals.startDeal(guild, { by: interaction.user.id });
+      await reply(interaction, {
+        embeds: [
+          embed(COLORS.success)
+            .setTitle(truncate(`🔥 ${product.name} is the deal of the week`, 256))
+            .setDescription(
+              `${until(product.sale)}\n${truncate(flash.salePrices(product), 1500)}${announced ? '\n\nDeal announced in #restocks 📣' : ''}\n` +
+                '-# The shop panel updates in a few seconds. End it early with `/sale stop`.',
+            ),
+        ],
+      });
+      return sendLog(guild, {
+        embeds: [logEmbed(COLORS.brand, '🔥 Deal of the week started', interaction.user).setDescription(`${interaction.user} started a deal: **${product.name}** ${until(product.sale)}`)],
+      });
+    }
 
     if (sub === 'stop') {
       const p = flash.stopSale(guild, o.getString('product'));

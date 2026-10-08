@@ -73,8 +73,8 @@ function salePrices(p, now = Date.now()) {
   return options.map((v) => `${v.name} ~~${shop.formatPrice(v.price)}~~ **${shop.variantPrice(p, v, now)}**`).join(' · ');
 }
 
-/** Posts "⚡ Flash sale" in #restocks and pings the Restocks role (like shop.announceProduct). */
-async function announceSale(guild, p, now = Date.now()) {
+/** Posts "⚡ Flash sale" (or another title, e.g. "🔥 Deal of the week") in #restocks and pings the Restocks role (like shop.announceProduct). */
+async function announceSale(guild, p, now = Date.now(), { title = '⚡ Flash sale' } = {}) {
   const sale = shop.activeSale(p, now);
   const channelId = db.channelId(guild.id, 'restocks');
   if (!sale || !channelId) return null;
@@ -83,7 +83,7 @@ async function announceSale(guild, p, now = Date.now()) {
   const c = container(COLORS.warning);
   header(
     c,
-    `## ⚡ Flash sale: ${shop.productEmoji(guild, p)} ${p.name} −${sale.percent}%\n${truncate(p.description, 400)}\n\n` +
+    `## ${title}: ${shop.productEmoji(guild, p)} ${p.name} −${sale.percent}%\n${truncate(p.description, 400)}\n\n` +
       `**Price:** ${truncate(salePrices(p, now), 1500)}\n${e(guild, 'clock')} Ends ${ts(sale.endsAt, 'R')} (${ts(sale.endsAt, 'f')})`,
     image?.url,
   );
