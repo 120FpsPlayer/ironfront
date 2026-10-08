@@ -99,6 +99,20 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   `/shop open` · `/shop close` override it until `/shop auto`.
 - **Restock pings** – new products and restocks are announced in #restocks and ping the Restocks role.
 - **Payment methods, How to buy, FAQ** – ready-made cards, edit them in `config.json`.
+- **Automatic crypto check** – the buyer clicks **Pay** and pastes the transaction ID; the bot checks it on the
+  blockchain (BTC: mempool.space, ETH: Blockscout) – right wallet, ≥ 99% of the amount, not older than the order, used
+  only once, enough confirmations – and then sets the order to Paid and delivers it. ETH only on the **Ethereum**
+  network. Without a transaction ID a seller checks it by hand. Off: `crypto.autoVerify: false`.
+- **🛒 Cart** – add several products and pay for them in one order (`cart.maxItems`, default 10).
+- **💰 Store balance** – `/balance` shows it; top-ups (`balance.topUpMin`–`topUpMax`) are paid like an order and the
+  balance pays for later orders. **Balance can't be paid out or refunded.**
+- **🎁 Gifts** – in the order ticket: **Make it a gift** → the product goes to a friend's DMs, the buyer keeps the receipt.
+- **🎥 Creator codes** – `/affiliate create · list · remove · payout · stats`: a promo code for a creator (default −5%
+  for buyers, 10% commission for the creator, recorded per completed sale; you pay it out by hand).
+- **Comeback codes** – a ticket closed without paying → after 24 h the buyer gets a personal one-time −5% code by DM.
+- **🔥 Deal of the week** – 1–2 random days a week one product is 25–50% off for 24 h (`deals` in `config.json`,
+  `/sale deal` to start or stop one by hand).
+- **No refunds** – the rules, FAQ and order cards say all sales are final (`shop.refundPolicy`).
 
 ### 📈 For you and your team
 - **`/sales`** – revenue, orders, average order, top products, sellers, payment methods and discounts for today,
