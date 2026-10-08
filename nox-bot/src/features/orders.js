@@ -91,6 +91,7 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
     `**Status:** ${statusLabel('delivered')}`,
     `**Product:** ${productEmoji(guild, catalogProduct(guild.id, sale))} ${truncate(sale.product ?? 'Custom order', 100)} × ${sale.quantity}`,
   ];
+  if (order.giftTo) lines.push(`**Gift for:** <@${order.giftTo}> – they got the product`);
   if (order.unitPrice != null) lines.push(`**Unit price:** ${money(order.unitPrice)}`);
   if (sale.promo) lines.push(`**Discount:** ${sale.discount > 0 ? `−${money(sale.discount)}` : 'applied'} (code \`${sale.promo}\`)`);
   lines.push(`**Total paid:** ${sale.amount != null ? `**${money(sale.amount)}**` : 'as agreed in your ticket'}`);

@@ -30,7 +30,11 @@ function line(p, held = 0) {
   const flags = [];
   if (p.firstOrderOnly) flags.push('first order only');
   if (!p.oncePerUser) flags.push('reusable');
-  const owner = p.userId ? ` · 👤 personal: <@${p.userId}>${p.reason ? ` (${p.reason})` : ''}` : '';
+  const owner = p.userId
+    ? ` · 👤 personal: <@${p.userId}>${p.reason ? ` (${p.reason})` : ''}`
+    : p.affiliate
+      ? ` · 🎥 creator code of <@${p.affiliate.userId}> (${p.affiliate.commission}% commission)`
+      : '';
   return `${DOT[s]} \`${p.code}\` · **${promos.label(p)}** · ${uses(p, held)} · ${expiry(p)}${flags.length ? ` · ${flags.join(', ')}` : ''}${owner}`;
 }
 
