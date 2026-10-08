@@ -421,7 +421,7 @@ test/                        tests with a simulated Discord server (npm test)
 ```bash
 npm test
 ```
-299 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
+300 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
 characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
 every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, I've paid,
 order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),

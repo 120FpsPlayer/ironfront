@@ -71,6 +71,9 @@ function discordLocale(value) {
   return LOCALE_ALIASES[base] ?? LOCALES.find((l) => l.toLowerCase() === base) ?? null;
 }
 
+/** "Unknown channel / rule / role" – something we wanted gone is already gone. */
+const gone = (err) => err?.status === 404 || [10003, 10011, 10066].includes(err?.code);
+
 function describeError(err) {
   if (!err) return 'unknown error';
   const known = API_ERRORS[err.code];
@@ -335,7 +338,8 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       const keep = new Set(keepChannelIds.filter(Boolean));
       const rules = await guild.autoModerationRules.fetch().catch(() => null);
       for (const rule of rules?.values() ?? []) {
-        const ok = await attempt(`Deleting AutoMod rule "${rule.name}"`, () => rule.delete(reason), { warn: true });
+        // Already gone (deleted by hand, or by Discord with Community mode) – that's what we wanted.
+        const ok = await attempt(`Deleting AutoMod rule "${rule.name}"`, () => rule.delete(reason).catch((err) => (gone(err) ? null : Promise.reject(err))), { warn: true });
         if (ok !== null) R.deleted.automod += 1;
       }
       const channels = [...guild.channels.cache.values()].filter((c) => !c.isThread?.() && !keep.has(c.id));
@@ -371,6 +375,12 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
         R.warnings.push(`The server was locked with /lockdown – the wipe ended the lockdown${locked.invitesPaused ? ' and resumed invites' : ''}. Run /lockdown again if the raid isn't over.`);
       }
       db.save();
+    }
+
+    // The wipe can switch Community mode off (Discord turns it off when its channels go) – ask again.
+    if (wipe) {
+      await guild.fetch().catch(() => null);
+      communityOn = guild.features.includes('COMMUNITY');
     }
 
     // ───────────── Roles ─────────────
@@ -419,7 +429,15 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       for (const ch of cat.channels.filter(channelWanted)) {
         const { opts, convert } = channelOptions(cat, ch, { parentId: category.id, resolve, communityOn, reason });
         if (convert) toConvert.push(ch.key);
-        const channel = await attempt(`Channel ${opts.name}`, () => guild.channels.create(opts));
+        const channel = await attempt(`Channel ${opts.name}`, () =>
+          guild.channels.create(opts).catch((err) => {
+            // Discord only takes announcement channels in Community servers – it's off: a text channel now, converted later.
+            if (opts.type !== ChannelType.GuildAnnouncement || ![50024, 50035].includes(err.code)) throw err;
+            communityOn = false;
+            toConvert.push(ch.key);
+            return guild.channels.create({ ...opts, type: ChannelType.GuildText });
+          }),
+        );
         if (channel) {
           R.channels[ch.key] = channel.id;
           R.created.channels += 1;
@@ -463,6 +481,8 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       startPhase('Community mode');
       if (id('rules') && id('discordUpdates')) {
         const payload = { rulesChannel: id('rules'), publicUpdatesChannel: id('discordUpdates'), reason };
+        await guild.fetch().catch(() => null); // the real state – not what it was when the build started
+        communityOn = guild.features.includes('COMMUNITY');
         if (!communityOn) {
           payload.features = [...new Set([...guild.features, 'COMMUNITY'])];
           payload.verificationLevel = Math.max(1, settings.verificationLevel);
@@ -556,7 +576,15 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
         }
         keywordRules += 1;
       }
-      const created = await attempt(`AutoMod "${rule.name}"`, () => guild.autoModerationRules.create({ ...rule, reason }), { warn: true });
+      const created = await attempt(`AutoMod "${rule.name}"`, () =>
+        guild.autoModerationRules.create({ ...rule, reason }).catch((err) => {
+          // Discord doesn't offer AutoMod for member names and profiles to every server (or bot) yet.
+          if (rule.triggerType === AutoModerationRuleTriggerType.MemberProfile && [50001, 50013, 50035].includes(err.code)) {
+            R.warnings.push(`AutoMod "${rule.name}" skipped – Discord doesn't offer it to this server yet. The look-alike staff alerts still work.`);
+            return null;
+          }
+          throw err;
+        }), { warn: true });
       if (created) R.created.automod += 1;
     }
     tick('AutoMod');
@@ -585,8 +613,12 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     // Channels Community mode protected during the wipe can go now.
     for (const channel of deferredDeletes) {
       await attempt(`Deleting #${channel.name}`, async () => {
-        await channel.delete(reason);
-        R.deleted.channels += 1;
+        try {
+          await channel.delete(reason);
+          R.deleted.channels += 1;
+        } catch (err) {
+          if (!gone(err)) throw err; // already gone – that's what we wanted
+        }
       }, { warn: true });
     }
 

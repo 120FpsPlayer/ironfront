@@ -311,3 +311,35 @@ test('servers built before #welcome was public get it opened once on startup', a
   assert.ok(!welcome.permissionsFor(visitor).has(P.SendMessages), 'still read-only');
   assert.equal(await migrateWelcomeVisibility(guild), false, 'only once');
 });
+
+test('wipe & build when Community mode switches off during the wipe: no type errors, it is turned on again, announcements converted', async () => {
+  const { ChannelType } = require('discord.js');
+  const guild = new FakeGuild({ community: true, existingChannels: 3 });
+  const old = [...guild.channels.cache.values()];
+  Object.assign(guild.settings, { rulesChannel: old[1].id, publicUpdatesChannel: old[2].id });
+  // An AutoMod rule Discord removes by itself, and a member-profile rule this server doesn't get
+  const vanishing = await guild.autoModerationRules.create({ name: 'Block Mention Spam', triggerType: 5, eventType: 1, actions: [{ type: 1 }], triggerMetadata: { mentionTotalLimit: 5 } });
+  vanishing.delete = async () => {
+    throw Object.assign(new Error('404: Not Found'), { status: 404, code: 0 });
+  };
+  const create = guild.autoModerationRules.create.bind(guild.autoModerationRules);
+  guild.autoModerationRules.create = async (data) => {
+    if (data.triggerType === 6) throw Object.assign(new Error('Missing Access'), { code: 50001 });
+    return create(data);
+  };
+  // Community mode goes off in the middle of the wipe – and the old rules / updates channels disappear with it
+  const firstDelete = old[0].delete.bind(old[0]);
+  old[0].delete = async (...args) => {
+    guild.features = guild.features.filter((f) => f !== 'COMMUNITY');
+    guild.channels.cache.delete(old[1].id);
+    guild.channels.cache.delete(old[2].id);
+    return firstDelete(...args);
+  };
+  const R = await buildServer({ guild, mode: 'wipe', invokerId: guild.ownerId });
+  const all = [...R.errors, ...R.warnings].join('\n');
+  assert.doesNotMatch(all, /invalid data|BASE_TYPE_CHOICES|404|no longer exists|could not be enabled|has no access/, all);
+  assert.match(all, /Scam names & profiles" skipped – Discord doesn't offer it to this server yet/);
+  assert.ok(R.community, 'Community mode is on again');
+  const announcements = guild.channels.cache.get(db.channelId(guild.id, 'announcements'));
+  assert.equal(announcements.type, ChannelType.GuildAnnouncement);
+});
