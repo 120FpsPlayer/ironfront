@@ -5,7 +5,8 @@
  * what to do for the payment method the customer picked (config.json → shop.paymentMethods):
  *   paysafecard – buy a PaysafeCard for the total, then "Pay" (the payment form with the PIN field)
  *   crypto      – the wallet addresses ("addresses": { "BTC": "…", "ETH": "…" }) with the amount in coins at
- *                 today's rate, then "Pay" with the transaction ID or a screenshot
+ *                 today's rate (kept as order.cryptoQuote), which network to use, then "Pay" with the transaction
+ *                 ID – BTC / ETH payments are confirmed automatically (src/features/cryptoverify.js) – or a screenshot
  *   paypal      – with PayPal keys in .env a link that confirms itself (src/features/paypal.js); else a
  *                 paypal.me link with the amount ("paypalMe": "yourname"), then "Pay" with a screenshot
  *   stripe      – a Stripe link (src/features/stripe.js); without a key the seller sends one
@@ -14,6 +15,7 @@
 
 const { ButtonStyle } = require('discord.js');
 const config = require('../lib/config');
+const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const { COLORS, e, ce } = require('../lib/theme');
 const { currencyCode } = require('../lib/currency');
@@ -68,10 +70,13 @@ function wallets(m) {
     .map((w) => ({ ...w, name: COINS[w.code]?.name ?? w.code }));
 }
 
+/** "eur" – the currency crypto rates are in: crypto.currency (or paypal / stripe .currency), else from shop.currency; null when unclear. */
+const rateCurrency = () => currencyCode(config.crypto?.currency || config.paypal?.currency || config.stripe?.currency);
+
 /** { BTC: 61234.5, … } – the price of one coin in the shop currency (CoinGecko, cached 5 min); {} when unknown. */
 async function cryptoRates(codes, now = Date.now()) {
   // The shop's currency – set crypto.currency (or paypal / stripe .currency) when its sign isn't clear ("kr", "$" for CAD…).
-  const cur = currencyCode(config.crypto?.currency || config.paypal?.currency || config.stripe?.currency);
+  const cur = rateCurrency();
   const known = codes.filter((c) => COINS[c]);
   if (!cur || !known.length) return {};
   const key = `${cur}:${known.sort().join(',')}`;
@@ -99,6 +104,24 @@ function coinAmount(total, rate, code) {
   const factor = 10 ** digits;
   return (Math.ceil((total / rate) * factor) / factor).toFixed(digits);
 }
+
+/**
+ * What the card asks for in coins → order.cryptoQuote = { at, total, rates: { BTC: 60000 }, amounts: { BTC: '0.00040000' } }
+ * (amounts only for coins with a rate). The automatic check compares the payment with it (src/features/cryptoverify.js).
+ */
+async function cryptoQuote(m, total, now = Date.now()) {
+  const list = wallets(m);
+  const rates = total > 0 && list.length ? await cryptoRates(list.map((w) => w.code), now) : {};
+  const amounts = {};
+  for (const w of list) if (rates[w.code]) amounts[w.code] = coinAmount(total, rates[w.code], w.code);
+  return { at: now, total, rates: { ...rates }, amounts };
+}
+
+/** Which network each coin must be sent on – a wrong network can't be checked (or refunded). */
+const NETWORKS = {
+  BTC: 'Only on the **Bitcoin** network – not Lightning, BEP-20 or wrapped BTC.',
+  ETH: 'Only on the **Ethereum** network (ERC-20) – not Arbitrum, Base, Optimism, BSC or Polygon.',
+};
 
 // ───────────── PayPal.me ─────────────
 
@@ -130,7 +153,7 @@ function paypalMeUrl(name, total) {
 const proofsOn = () => config.orders?.paymentProofs !== false;
 
 /** The payment card for an order – null for nothing to show. */
-async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
+async function paymentCard(guild, ticket, order, { now = Date.now(), quote = null } = {}) {
   const m = methodOf(order);
   if (!m) return null;
   const type = methodType(m);
@@ -163,17 +186,20 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
     if (!list.length) {
       c.addTextDisplayComponents(text(`A seller sends you the wallet address here – send ${amount}, ${proofText('the transaction ID or a screenshot')}.`));
     } else {
-      const rates = total != null ? await cryptoRates(list.map((w) => w.code), now) : {};
+      const q = quote ?? (total != null ? await cryptoQuote(m, total, now) : null);
       const lines = list.map((w) => {
-        const coins = rates[w.code] ? ` – **≈ ${coinAmount(total, rates[w.code], w.code)} ${w.code}**` : '';
-        return `**${w.name} (${w.code})**${coins}\n\`\`\`\n${w.address}\n\`\`\``;
+        const coins = q?.amounts?.[w.code] ? ` – **≈ ${q.amounts[w.code]} ${w.code}**` : '';
+        const network = NETWORKS[w.code] ? `\n-# ${NETWORKS[w.code]}` : '';
+        return `**${w.name} (${w.code})**${coins}${network}\n\`\`\`\n${w.address}\n\`\`\``;
       });
       c.addTextDisplayComponents(text(`Send ${amount} to one of these wallets:\n${lines.join('\n')}`));
-      const rated = Object.keys(rates).length > 0;
+      const rated = Object.keys(q?.amounts ?? {}).length > 0;
+      // BTC / ETH with the transaction ID: confirmed by the bot (src/features/cryptoverify.js) – here, it needs this file.
+      const auto = proofsOn() && total != null ? require('./cryptoverify').autoText(list) : null;
       c.addTextDisplayComponents(
         text(
-          `${proofSentence('the transaction ID (hash) or a screenshot')}\n` +
-            `-# ${rated ? `Rates from CoinGecko ${ts(now, 'R')} – send at least this; network fees are on you. ` : ''}Double-check the network – crypto payments can't be reversed.`,
+          `${auto ?? proofSentence('the transaction ID (hash) or a screenshot')}\n` +
+            `-# ${rated ? `Rates from CoinGecko ${ts(now, 'R')} – send at least this, in full: fees are on you. ` : ''}Double-check the network – crypto payments can't be reversed.`,
         ),
       );
     }
@@ -202,10 +228,19 @@ async function paymentCard(guild, ticket, order, { now = Date.now() } = {}) {
   return v2(c);
 }
 
+/** Keeps the coin amounts the card shows on the order (the current one – a status set meanwhile stays). */
+function saveQuote(channelId, quote) {
+  const latest = db.getTicket(channelId);
+  if (latest?.order) db.updateTicket(channelId, { order: { ...latest.order, cryptoQuote: quote } });
+}
+
 /** Posts the payment card – used for every method without an automatic link, and as the fallback when one fails. */
 async function postCard(channel, ticket) {
   const order = ticket.order;
-  const card = await paymentCard(channel.guild, ticket, order);
+  const m = methodOf(order);
+  const quote = methodType(m) === 'crypto' && order.total > 0 && wallets(m).length ? await cryptoQuote(m, order.total) : null;
+  if (quote) saveQuote(ticket.channelId, quote);
+  const card = await paymentCard(channel.guild, ticket, order, { quote });
   if (card) await channel.send(card).catch((err) => console.warn(`[paycards] ticket ${ticket.channelId}:`, err.message));
 }
 
@@ -220,4 +255,4 @@ async function onOrderPlaced({ channel, ticket }) {
 
 hooks.on('orderPlaced', onOrderPlaced);
 
-module.exports = { methodType, methodOf, wallets, cryptoRates, coinAmount, paypalMeName, paypalMeUrl, paymentCard, postCard, COINS };
+module.exports = { methodType, methodOf, wallets, rateCurrency, cryptoRates, coinAmount, cryptoQuote, NETWORKS, paypalMeName, paypalMeUrl, paymentCard, postCard, COINS };
