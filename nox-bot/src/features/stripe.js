@@ -23,11 +23,12 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const tickets = require('../tickets/tickets');
-const orderstatus = require('./orderstatus');
+const autopay = require('./autopay');
 const { env } = require('../env');
 const { statusOf } = require('../lib/orderStatus');
-const { isStaff, alertRoleIds } = require('../lib/permissions');
+const { isStaff } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
+const { DECIMALS, currencyCode, toUnits, fromUnits } = require('../lib/currency');
 const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, notice, channelUrl } = require('../lib/v2');
 
@@ -36,25 +37,10 @@ const CHECK_EVERY = 30_000;
 const LINK_HOURS = 23; // Stripe allows Checkout links for 30 minutes to 24 hours
 const WATCH_AFTER_EXPIRY = 3 * 24 * 3_600_000; // links that never report back stop being checked after this
 const NEW_LINK_COOLDOWN = 60_000;
-const PAID = ['paid', 'progress', 'delivered'];
+const { PAID } = autopay;
 
-/** Currencies with their decimals (Stripe amounts are in the smallest unit: 12.50€ → 1250, ¥1200 → 1200). */
-const DECIMALS = { eur: 2, usd: 2, gbp: 2, pln: 2, chf: 2, sek: 2, nok: 2, dkk: 2, czk: 2, ron: 2, bgn: 2, cad: 2, aud: 2, nzd: 2, jpy: 0, krw: 0 };
-const SYMBOLS = { '€': 'eur', $: 'usd', '£': 'gbp', zł: 'pln', kč: 'czk', '¥': 'jpy', '₩': 'krw' };
-
-/**
- * "eur" – config.json → stripe.currency, or worked out from shop.currency (€ → eur, $ → usd, zł → pln).
- * null when it isn't clear (e.g. "kr" – SEK, NOK or DKK?): then no links are made rather than charging the wrong currency.
- */
-function currency() {
-  const set = String(config.stripe?.currency ?? '').trim().toLowerCase();
-  if (set) return set in DECIMALS ? set : null;
-  const shop = String(config.shop.currency ?? '€').trim().toLowerCase();
-  return SYMBOLS[shop] ?? (shop in DECIMALS ? shop : null);
-}
-
-const toUnits = (amount, cur) => Math.round(amount * 10 ** DECIMALS[cur]);
-const fromUnits = (units, cur) => units / 10 ** (DECIMALS[cur] ?? 2);
+/** "eur" – config.json → stripe.currency, or from shop.currency; null when unclear (no links then – see lib/currency.js). */
+const currency = () => currencyCode(config.stripe?.currency);
 
 let keyRefused = false; // Stripe answered 401/403 – until a call works again
 const refusedWarned = new Set(); // guilds told about it in their log channel
@@ -69,7 +55,7 @@ const enabled = () => Boolean(env.stripeKey) && config.stripe?.enabled !== false
 /** The order has a Stripe link that confirms itself – "I've paid" isn't needed then. */
 const confirmsItself = (ticket) => ticket?.order?.stripe?.status === 'open' && working();
 
-const isStripeMethod = (m) => m?.stripe === true || /stripe/i.test(String(m?.name ?? ''));
+const isStripeMethod = (m) => m?.type === 'stripe' || m?.stripe === true || /stripe/i.test(String(m?.name ?? ''));
 
 /** Is this order paid with Stripe – the method the customer picked in the order form. */
 function isStripeOrder(order) {
@@ -189,66 +175,28 @@ async function editCard(guild, ticket) {
 
 // ───────────── Recording what Stripe says ─────────────
 
-const pingsFor = (guild, ticket) =>
-  ticket.claimedBy
-    ? { users: [ticket.claimedBy], roles: [] }
-    : { users: [], roles: alertRoleIds(guild.id, config.getType(ticket.typeId)).filter((id) => guild.roles.cache.has(id)) };
-
-/**
- * Stripe says the link is paid. The order is set to Paid only when amount and currency match its total and it
- * wasn't paid already – otherwise the team is asked to check it (a changed total, a second payment).
- */
+/** Stripe says the link is paid → recorded; Paid only when amount and currency match (src/features/autopay.js). */
 async function markPaid(guild, ticket, session) {
   const s = ticket.order.stripe;
   const cur = String(session.currency ?? s.currency ?? '').toLowerCase();
   const paidAmount = session.amount_total != null ? fromUnits(session.amount_total, cur) : s.amount;
-  const before = ticket.completedAt ? 'delivered' : ticket.order?.status ?? 'awaiting';
-  let updated = saveStripe(ticket.channelId, {
+  const before = autopay.statusBefore(ticket);
+  const updated = saveStripe(ticket.channelId, {
     status: 'paid',
     paidAt: Date.now(),
     paidAmount,
     paidCurrency: cur,
     paymentIntent: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null,
   });
-  const total = tickets.orderDetails(updated).total;
-  const matches = cur === currency() && total != null && Math.abs(paidAmount - total) < 0.005;
-  const twice = PAID.includes(before);
-  // A deleted ticket's channel may still be there for a few seconds – the log is the place then.
-  const channel = updated.status === 'deleted' ? null : guild.channels.cache.get(updated.channelId) ?? null;
-  const bot = guild.client.user;
-  if (matches && !twice) {
-    // Open ticket → the usual status change (notice, card, DM); closed ticket → recorded, so reopening shows it.
-    if (channel && updated.status === 'open') await orderstatus.setStatus(channel, 'paid', bot).catch((err) => console.warn('[stripe] status:', err.message));
-    else orderstatus.recordStatus(updated, 'paid', { by: bot?.id ?? null });
-    updated = db.getTicket(updated.channelId);
-  }
-  await editCard(guild, updated);
-
-  const s2 = updated.order.stripe;
-  const warnings = [];
-  if (twice) warnings.push(`⚠️ This order was already **${before === 'delivered' ? 'completed' : 'marked as paid'}** – the customer may have paid twice. Check it (refunds: Stripe Dashboard).`);
-  else if (!matches) warnings.push(`⚠️ The order total is **${total == null ? 'not fixed' : money(total)}** – it was **not** set to Paid. Check the difference first.`);
-  if (updated.status !== 'open') warnings.push(`⚠️ The ticket was ${channel ? 'closed' : 'deleted'} when the payment came in${channel ? ' – reopen it to deliver' : ' – contact the customer'}.`);
-  const pings = pingsFor(guild, updated);
-  const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
-  const head = `💳 **Stripe payment received – ${money(paidAmount)}** for order \`#${pad(updated.number)}\`.`;
-  if (channel) {
-    const ask = matches && !twice && who ? ` ${who}, please deliver it.` : who ? ` ${who}` : '';
-    await channel.send(notice(warnings.length ? COLORS.warning : COLORS.success, `${head}${ask}${warnings.length ? `\n${warnings.join('\n')}` : ''}`, { mentions: pings })).catch(() => null);
-  }
-  await sendLog(guild, {
-    // Without a ticket channel the log is the only place the team hears about it – ping them there.
-    ...(!channel && who && { content: who, allowedMentions: pings }),
-    embeds: [
-      logEmbed(warnings.length ? COLORS.warning : COLORS.success, '💳 Stripe payment received', bot).addFields(
-        { name: 'Ticket', value: `<#${updated.channelId}> (\`#${pad(updated.number)}\`)`, inline: true },
-        { name: 'Customer', value: `<@${updated.ownerId}>`, inline: true },
-        { name: 'Amount', value: money(paidAmount), inline: true },
-        { name: 'Stripe', value: `\`${truncate(s2.paymentIntent ?? s2.sessionId, 100)}\``, inline: true },
-        ...(warnings.length ? [{ name: 'Check', value: truncate(warnings.join('\n'), 1024) }] : []),
-      ),
-    ],
-  }).catch(() => null);
+  await autopay.paymentReceived(guild, updated, {
+    gateway: 'Stripe',
+    paidAmount,
+    paidCurrency: cur,
+    expectedCurrency: currency(),
+    reference: updated.order.stripe.paymentIntent ?? updated.order.stripe.sessionId,
+    before,
+    refreshCard: (t) => editCard(guild, t),
+  });
 }
 
 /** Records what Stripe says about the ticket's current link → 'paid' | 'expired' | 'open' (still open, or being paid). */

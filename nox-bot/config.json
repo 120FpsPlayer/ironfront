@@ -46,10 +46,10 @@
     "loyalAfterOrders": 5,
     "lowStockAt": 3,
     "paymentMethods": [
-      { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Send the PIN code only inside your ticket" },
-      { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)" },
-      { "name": "PayPal", "emoji": "paypal", "details": "Only to the PayPal address given in your ticket" },
-      { "name": "Stripe", "emoji": "card", "details": "Card, Apple Pay or Google Pay – a secure payment link in your ticket", "stripe": true }
+      { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Send the PIN code only inside your ticket", "type": "paysafecard" },
+      { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)", "type": "crypto", "addresses": { "BTC": "", "ETH": "" } },
+      { "name": "PayPal", "emoji": "paypal", "details": "A PayPal payment link in your ticket", "type": "paypal", "paypalMe": "" },
+      { "name": "Stripe", "emoji": "card", "details": "Card, Apple Pay or Google Pay – a secure payment link in your ticket", "type": "stripe" }
     ]
   },
 
@@ -75,6 +75,11 @@
   },
 
   "stripe": {
+    "enabled": true,
+    "currency": ""
+  },
+
+  "paypal": {
     "enabled": true,
     "currency": ""
   },

@@ -15,6 +15,7 @@ const FEATURE_DEFAULTS = {
   badges: { enabled: true, bestsellerMinSales: 3, ratingMinVouches: 2 },
   staffReminders: { enabled: true, unclaimedMinutes: 15, repeatMinutes: 60 },
   stripe: { enabled: true, currency: '' },
+  paypal: { enabled: true, currency: '' },
   promos: { enabled: true },
   welcomeDiscount: { enabled: true, percent: 5, validDays: 7 },
   invites: {

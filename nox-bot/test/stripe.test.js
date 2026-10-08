@@ -27,7 +27,7 @@ const run = async (args) => {
   await handle(i, commands);
   return i;
 };
-const STRIPE = String(config.shop.paymentMethods.findIndex((m) => m.stripe));
+const STRIPE = String(config.shop.paymentMethods.findIndex((m) => m.type === 'stripe'));
 const KEY = 'sk_test_nox';
 
 /** A pretend Stripe API: Checkout Sessions you can pay or let expire. */

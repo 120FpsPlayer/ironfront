@@ -113,7 +113,7 @@ function acceptsPayment(ticket) {
     ticket?.typeId === 'order' &&
     ticket.status === 'open' &&
     !ticket.completedAt &&
-    !require('../features/stripe').confirmsItself(ticket) && // an open Stripe link confirms itself – here, as stripe.js needs this file
+    !require('../features/autopay').confirmsItself(ticket) && // an open Stripe / PayPal link confirms itself – here, as those need this file
     ['awaiting', 'sent'].includes(statusOf(ticket))
   );
 }

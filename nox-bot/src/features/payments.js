@@ -99,7 +99,7 @@ function requirePayable(channel, userId, now = Date.now()) {
   if (config.orders?.paymentProofs === false) throw new UserError('Please write your payment details in the ticket – a seller checks them there.');
   if (ticket.status !== 'open') throw new UserError('This ticket is closed.');
   if (ticket.completedAt) throw new UserError('This order is already completed.');
-  if (require('./stripe').confirmsItself(ticket)) throw new UserError('Pay with the **Stripe** link in this ticket – your order is confirmed here automatically once you\'ve paid.');
+  if (require('./autopay').confirmsItself(ticket)) throw new UserError('Pay with the payment link in this ticket – your order is confirmed here automatically once you\'ve paid.');
   if (!ui.acceptsPayment(ticket)) throw new UserError(`Your payment is already confirmed (${statusLabel(statusOf(ticket))}) – no need to send it again.`);
   const last = ticket.order?.payment?.at;
   if (last && now - last < COOLDOWN) throw new UserError(`You've just sent your payment. You can send a correction ${ts(last + COOLDOWN, 'R')}.`);

@@ -8,6 +8,11 @@ const path = require('node:path');
 process.env.NOX_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-test-'));
 process.env.DISCORD_TOKEN ??= 'test.token.value';
 
+// Tests never reach the internet (Stripe, PayPal, crypto rates…) – a test that needs it fakes global.fetch.
+global.fetch = async (url) => {
+  throw new Error(`No network in tests: ${url}`);
+};
+
 const db = require('../../src/lib/db');
 
 db.load();

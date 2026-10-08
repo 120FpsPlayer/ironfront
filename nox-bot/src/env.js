@@ -70,6 +70,10 @@ const env = {
   ownerCanClose: bool('OWNER_CAN_CLOSE', true),
   /** Stripe secret (or restricted) key – card payment links in order tickets (src/features/stripe.js). */
   stripeKey: (process.env.STRIPE_SECRET_KEY || '').trim(),
+  /** PayPal REST app – PayPal payment links that confirm themselves (src/features/paypal.js). */
+  paypalClientId: (process.env.PAYPAL_CLIENT_ID || '').trim(),
+  paypalSecret: (process.env.PAYPAL_CLIENT_SECRET || '').trim(),
+  paypalSandbox: bool('PAYPAL_SANDBOX', false),
   ids,
 };
 
