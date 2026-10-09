@@ -214,7 +214,8 @@ test('the log masks PINs written with several spaces, spaced dashes or dots – 
   const raw = JSON.stringify(logChannel(guild).messageList.at(-1).body);
   assert.ok(raw.includes('••••-••••-••••-3456'));
   for (const secret of ['5678', '9012']) assert.ok(!raw.includes(secret), `the log must not contain ${secret}`);
-  assert.ok(textOf(channel.messageList.at(-1).body).includes('1234 - 5678 - 9012 - 3456'), 'the ticket shows the note as it is');
+  assert.ok(textOf(channel.messageList.at(-1).body).includes('••••-••••-••••-3456'), 'the ticket hides a PIN in the note too (Show PIN for the owner)');
+  assert.ok(!textOf(channel.messageList.at(-1).body).includes('5678'));
 });
 
 // ───────────── PIN validation ─────────────

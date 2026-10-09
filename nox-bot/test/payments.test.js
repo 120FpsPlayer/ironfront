@@ -167,7 +167,10 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   const posted = channel.messageList.at(-1);
   const out = textOf(posted.body);
   assert.match(out, /## 📨 Payment sent\n/);
-  assert.ok(out.includes('||1234-5678-9012-3456|| · ||1111-2222-3333-4444||'));
+  // PINs hidden – only the last 4 digits; the whole PIN only for config.orders.pinViewers (Show PINs)
+  assert.ok(out.includes('••••-••••-••••-3456 · ••••-••••-••••-4444'));
+  for (const secret of ['1234-5678', '5678-9012', '1111-2222']) assert.ok(!out.includes(secret), `the ticket must not show ${secret}`);
+  assert.ok(customIds(posted.body).some((id) => id.startsWith('pay:pin:')), 'a Show PINs button');
   assert.match(out, /\*\*Method:\*\* PaysafeCard/);
   assert.match(out, /> Bought at the kiosk/);
   // Only the sellers (the Purchase type's own role) – not every staff role
@@ -223,6 +226,22 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   const late = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
   assert.match(textOf(lastResponse(late)), /already confirmed \(💳 Paid\)/);
   assert.equal(ticket.number, db.getTicket(channel.id).number);
+
+  // Show PINs: only the PIN viewers (config.orders.pinViewers – the owner) see the whole PINs
+  const pinId = customIds(posted.body).find((id) => id.startsWith('pay:pin:'));
+  const pinSeller = member(guild, ['member', 'seller']);
+  const notYou = await run({ guild, member: pinSeller, kind: 'button', customId: pinId, channel });
+  assert.match(textOf(lastResponse(notYou)), /Only the owner can see/);
+  const viewers = config.orders.pinViewers;
+  config.orders.pinViewers = [pinSeller.id];
+  try {
+    const shown = await run({ guild, member: pinSeller, kind: 'button', customId: pinId, channel });
+    const pins = db.getTicket(channel.id).order.payment.pins; // the newest payment in the ticket
+    assert.ok(pins.length);
+    for (const pin of pins) assert.ok(textOf(lastResponse(shown)).includes(payments.formatPin(pin)), pin);
+  } finally {
+    config.orders.pinViewers = viewers;
+  }
 });
 
 test('"I\'ve paid": screenshots are downloaded and uploaded again with the card – too big files keep their link', async () => {

@@ -31,6 +31,7 @@ Type **`/build`**, click **Build**, wait about two minutes – done. 💜
   for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
 - **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
 - **Payments:** PaysafeCard, Crypto (BTC, ETH), PayPal and **Stripe** (card, Apple Pay, Google Pay) – edit them in `config.json`.
+- **PaysafeCard PINs are hidden** – the ticket only shows `••••-••••-••••-1234`; only the owner (`config.json` → `orders.pinViewers`, user IDs) can click **🔑 Show PIN** to see the whole PIN (only for them, and it is logged).
 - **Automatic product delivery** – give a product its files and/or text (a key, a login…): `/product delivery
   product:Netflix file:account.txt text:…` (up to 5 files, 9 MB together) or `file:` / `delivery_text:` on `/product add`.
   Paid with **PayPal or Stripe** → *"📦 Your product is on the way"*, then the product arrives in the ticket **and by DM**

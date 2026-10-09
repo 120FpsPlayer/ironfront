@@ -6,7 +6,7 @@
  * The form takes PaysafeCard PINs (PaysafeCard orders, or no method known), screenshots and a note / transaction ID.
  *
  * On submit the order gets payment = { at, method, note, pins, files: [{ name, url }] } and the status "sent".
- * A "📨 Payment sent" card in the ticket shows it (PINs in spoilers, the screenshots uploaded again – links from a
+ * A "📨 Payment sent" card in the ticket shows it (PINs as ••••-••••-••••-1234 – the whole PIN only for config.orders.pinViewers via Show PIN, the screenshots uploaded again – links from a
  * form expire) and pings the seller handling the ticket, or the order staff roles while nobody has claimed it.
  * The log channel gets the same without the PINs (all but the last 4 digits hidden). Sending it again (e.g. a
  * corrected PIN) works after a short cooldown – it only pings again after the Call support cooldown.
@@ -20,6 +20,7 @@
 
 const {
   AttachmentBuilder,
+  ButtonStyle,
   FileBuilder,
   FileUploadBuilder,
   LabelBuilder,
@@ -40,7 +41,7 @@ const { COLORS } = require('../lib/theme');
 const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog, maskPin, maskPins } = require('../lib/utils');
 const { alertRoleIds } = require('../lib/permissions');
 const { quantitySuffix } = require('../lib/orderItems');
-const { container, text, divider, gallery, linkBtn, row, v2 } = require('../lib/v2');
+const { container, text, divider, gallery, linkBtn, btn, row, v2 } = require('../lib/v2');
 
 const COOLDOWN = 60_000;
 const MAX_PINS = 10;
@@ -243,8 +244,9 @@ function paymentCard(ticket, { payment, files, pings, again, auto = false }) {
   );
   c.addSeparatorComponents(divider());
   const facts = [`**Method:** ${payment.method ? truncate(payment.method, 100) : '—'}`];
-  if (payment.pins.length) facts.push(`**${payment.pins.length === 1 ? 'PIN' : 'PINs'}:** ${payment.pins.map((p) => `||${formatPin(p)}||`).join(' · ')}`);
-  if (payment.note) facts.push(`**Note:**\n${quote(payment.note)}`);
+  // PINs only as the last 4 digits – the whole PIN only for config.orders.pinViewers (Show PIN).
+  if (payment.pins.length) facts.push(`**${payment.pins.length === 1 ? 'PIN' : 'PINs'}:** ${payment.pins.map(maskPin).join(' · ')}`);
+  if (payment.note) facts.push(`**Note:**\n${quote(maskText(payment.note))}`);
   const lost = files.filter((f) => !f.buffer);
   if (files.length) facts.push(`**Screenshots:** ${files.length}`);
   if (lost.length) facts.push(`-# Too big to keep (the link expires): ${lost.map((f) => (f.url ? `[${f.name}](${f.url})` : f.name)).join(', ')}`);
@@ -254,7 +256,8 @@ function paymentCard(ticket, { payment, files, pings, again, auto = false }) {
   for (const f of files.filter((x) => x.buffer && !x.image)) c.addFileComponents(new FileBuilder().setURL(`attachment://${f.name}`));
   const next = auto ? 'Confirmed by the bot once the blockchain does – staff are pinged if it needs a hand' : 'Staff: check the payment, then click **Payment OK**';
   c.addTextDisplayComponents(text(`-# ${statusLabel('sent')} · ${ts(payment.at, 'f')} · ${next}`));
-  c.addActionRowComponents(row(require('./delivery').confirmButtonFor(ticket.guildId, ticket))); // here – delivery.js needs this file's neighbours
+  const showPin = payment.pins.length || maskText(payment.note) !== (payment.note ?? '') ? [btn(`pay:pin:${payment.at}`, payment.pins.length > 1 ? 'Show PINs' : 'Show PIN', '🔑', ButtonStyle.Secondary)] : [];
+  c.addActionRowComponents(row(require('./delivery').confirmButtonFor(ticket.guildId, ticket), ...showPin)); // here – delivery.js needs this file's neighbours
   return v2(c, {
     mentions: { users: pings.users, roles: pings.roles },
     files: files.filter((f) => f.buffer).map((f) => new AttachmentBuilder(f.buffer, { name: f.name })),
@@ -347,9 +350,32 @@ async function submit(interaction) {
   return reply(interaction, "Thanks! Your payment was sent to the seller – they'll check it and confirm it in your ticket.");
 }
 
+/** Who may see whole PINs: config.orders.pinViewers (user IDs), or the bot owners when that list is empty. */
+function canSeePins(member) {
+  const viewers = (config.orders?.pinViewers ?? []).map(String).filter(Boolean);
+  return viewers.length ? viewers.includes(member?.id) : require('../lib/permissions').isOwner(member);
+}
+
+/** Show PIN – the whole PINs, only to the PIN viewers, only for them (ephemeral), and logged. */
+async function showPins(interaction, at) {
+  if (!canSeePins(interaction.member)) throw new UserError('Only the owner can see the PaysafeCard PINs.');
+  const ticket = db.getTicket(interaction.channel?.id);
+  const payment = ticket?.order?.payment;
+  if (!payment) throw new UserError('No payment with a PIN in this ticket.');
+  const old = String(payment.at) !== String(at);
+  const lines = [
+    ...(payment.pins ?? []).map((p) => `🔑 \`${formatPin(p)}\``),
+    ...(payment.note && maskText(payment.note) !== payment.note ? [`**Note:**\n${quote(payment.note)}`] : []),
+  ];
+  await sendLog(interaction.guild, {
+    embeds: [logEmbed(COLORS.warning, '🔑 PaysafeCard PIN viewed', interaction.user).setDescription(`Order \`#${pad(ticket.number)}\` in <#${ticket.channelId}>`)],
+  }).catch(() => null);
+  return reply(interaction, `${old ? '-# This is the newest payment sent in this ticket.\n' : ''}${lines.join('\n') || 'No PIN in this payment.'}`);
+}
+
 hooks.route('pay', {
-  button: (interaction, action) => (action === 'open' ? openForm(interaction) : null),
+  button: (interaction, action, args) => (action === 'open' ? openForm(interaction) : action === 'pin' ? showPins(interaction, args?.[0]) : null),
   modal: (interaction, action) => (action === 'submit' ? submit(interaction) : null),
 });
 
-module.exports = { COOLDOWN, MAX_PINS, parsePins, formatPin, maskPin, maskText, paymentModal, paymentCard, copyFiles };
+module.exports = { COOLDOWN, MAX_PINS, parsePins, formatPin, maskPin, maskText, paymentModal, paymentCard, copyFiles, canSeePins };

@@ -21,6 +21,18 @@ function render(kind, guild, panel = {}) {
   return fn(guild, panel);
 }
 
+// Network hiccups (Discord unreachable, DNS down) – one short line a minute instead of one per panel; the next refresh retries.
+const NETWORK = new Set(['EAI_AGAIN', 'ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET']);
+let networkWarnedAt = 0;
+function warnRefresh(panelKind, channel, err) {
+  if (NETWORK.has(err?.code) || NETWORK.has(err?.cause?.code)) {
+    if (Date.now() - networkWarnedAt > 60_000) console.warn(`[panel] Discord can't be reached right now (${err.code ?? err.cause?.code}) – panels refresh again on the next run.`);
+    networkWarnedAt = Date.now();
+    return;
+  }
+  console.warn(`[panel] Failed to refresh the ${panelKind} panel in #${channel.name}:`, err.message);
+}
+
 /**
  * A renderer returns the whole message, so an edit replaces the files too: images (e.g. product pictures shown
  * with attachment://) are uploaded again and files that are no longer used are removed.
@@ -44,7 +56,7 @@ async function refresh(guild, kind = null) {
     }
     if (!message) continue;
     const payload = forEdit(await render(panelKind, guild, panel));
-    await message.edit(payload).catch((err) => console.warn(`[panel] Failed to refresh the ${panelKind} panel in #${channel.name}:`, err.message));
+    await message.edit(payload).catch((err) => warnRefresh(panelKind, channel, err));
   }
 }
 

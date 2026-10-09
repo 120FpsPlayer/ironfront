@@ -65,7 +65,8 @@
     "proofs": true,
     "vouchReminderHours": 24,
     "statusDms": true,
-    "paymentProofs": true
+    "paymentProofs": true,
+    "pinViewers": ["731478953222602822"]
   },
 
   "badges": {
