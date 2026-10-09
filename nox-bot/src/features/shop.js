@@ -21,7 +21,7 @@ const shopstatus = require('./shopstatus');
 const { splitEmoji } = require('../builder/style');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
 const { UserError, embed, truncate, sendToChannel, sendLog, logEmbed, parseAmount, money, ts, pad } = require('../lib/utils');
-const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl } = require('../lib/v2');
+const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl, subtext } = require('../lib/v2');
 const { isCart, linesOf } = require('../lib/orderItems');
 
 const STOCK = {
@@ -789,7 +789,7 @@ function orderModal(product, guild = null, { userId = null } = {}) {
   if (variantsOf(product).length) modal.addLabelComponents(variantField(product));
   else {
     const price = activeSale(product) ? priceMarkdown(product) : formatPrice(product.price);
-    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n-# ${truncate(product.description, 300)}`));
+    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n${subtext(truncate(product.description, 300))}`));
   }
   const quantity = new LabelBuilder()
     .setLabel('Quantity')

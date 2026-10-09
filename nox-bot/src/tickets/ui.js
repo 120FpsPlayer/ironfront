@@ -20,7 +20,7 @@ const shop = require('../features/shop'); // used at render time – safe with c
 const productImages = require('../lib/productImages');
 const { ORDER_STATUS, statusOf, statusLabel } = require('../lib/orderStatus');
 const { isCart } = require('../lib/orderItems');
-const { SPACER, text, divider, btn, linkBtn, row, section, buttonSection, container, header, v2, notice, channelUrl } = require('../lib/v2');
+const { SPACER, text, divider, btn, linkBtn, row, section, buttonSection, container, header, v2, notice, channelUrl, subtext } = require('../lib/v2');
 
 /** Custom NØX emoji for a ticket type (falls back to the Unicode emoji from config.json). */
 const typeEmoji = (guild, type) => (type?.icon && guild ? ce(guild, type.icon) : type?.emoji ?? '🎫');
@@ -54,7 +54,7 @@ function panelPayload(guild, style = 'buttons') {
               .setEmoji(typeEmoji(guild, t))
               .setStyle(t.id === 'order' ? ButtonStyle.Primary : ButtonStyle.Secondary);
       c.addSectionComponents(
-        new SectionBuilder().addTextDisplayComponents(text(`### ${typeText(guild, t)} ${t.label}\n-# ${t.description ?? '​'}`)).setButtonAccessory(button),
+        new SectionBuilder().addTextDisplayComponents(text(`### ${typeText(guild, t)} ${t.label}\n${subtext(t.description) || '-# ​'}`)).setButtonAccessory(button),
       );
     }
   } else {

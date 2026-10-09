@@ -86,8 +86,17 @@ function notice(color, content, { thumbnail, buttons, mentions } = {}) {
 /** Link to a channel (works in link buttons). */
 const channelUrl = (guildId, channelId) => `https://discord.com/channels/${guildId}/${channelId}`;
 
+/** Small grey text ("-# ") on every line – Discord only shrinks the line that starts with it. */
+const subtext = (value) =>
+  String(value ?? '')
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => `-# ${l}`)
+    .join('\n');
+
 module.exports = {
   SPACER,
+  subtext,
   text,
   divider,
   gap,

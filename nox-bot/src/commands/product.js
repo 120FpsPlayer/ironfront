@@ -69,7 +69,7 @@ function listEmbed(guild) {
       delivery.hasDelivery(p) && '📦 instant delivery',
       waiting[p.id]?.length && `🔔 ${waiting[p.id].length} waiting`,
     ].filter(Boolean);
-    return `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.priceLabel(p)}${extras.map((x) => ` · ${x}`).join('')}\n-# ${truncate(p.description, 90)}`;
+    return `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.priceLabel(p)}${extras.map((x) => ` · ${x}`).join('')}\n${require('../lib/v2').subtext(truncate(p.description, 90))}`;
   };
   const gs = shop.groups(list);
   const titled = gs.some((g) => g.name);

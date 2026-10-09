@@ -36,7 +36,7 @@ const balance = require('./balance');
 const { cartTitle } = require('../lib/orderItems');
 const { e, ce, COLORS } = require('../lib/theme');
 const { UserError, money, parseAmount, truncate } = require('../lib/utils');
-const { container, text, divider, btn, linkBtn, row, v2 } = require('../lib/v2');
+const { container, text, divider, btn, linkBtn, row, v2, subtext } = require('../lib/v2');
 
 const MAX_QUANTITY = 999;
 const ADD_MENU = 25; // products in the "Add a product" menu (Discord allows 25 options)
@@ -298,7 +298,7 @@ function addModal(product, origin = 's') {
   if (shop.variantsOf(product).length) modal.addLabelComponents(shop.variantField(product));
   else {
     const price = shop.activeSale(product) ? shop.priceMarkdown(product) : shop.formatPrice(product.price);
-    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n-# ${truncate(product.description || 'Added to your cart – check out everything in one order.', 300)}`));
+    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n${subtext(truncate(product.description || 'Added to your cart – check out everything in one order.', 300))}`));
   }
   const quantity = new LabelBuilder()
     .setLabel('Quantity')
