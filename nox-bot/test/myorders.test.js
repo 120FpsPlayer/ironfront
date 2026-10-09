@@ -88,7 +88,7 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
   for (let i = 1; i <= 3; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.' });
   const one = shop.shopPanel(guild);
   validateMessage(one, guild);
-  assert.deepEqual(navLabels(one), ['How to buy', 'Vouches', 'Cart', 'My orders']);
+  assert.deepEqual(navLabels(one), ['How to buy', 'Balance', 'Cart', 'My orders']);
 
   for (let i = 4; i <= 12; i += 1) shop.addProduct(guild, { name: `Product ${i}`, price: '10', description: 'Instant delivery.', category: i % 2 ? 'Games' : 'Keys' });
   await panels.refresh(guild, 'shop');
@@ -115,10 +115,10 @@ test('My orders is in the shop row: How to buy · Vouches · My orders on one pa
     for (const r of actionRows(payload)) assert.ok(r.components.length <= 5, 'at most 5 buttons in a row');
   }
 
-  // Without the How to buy / Vouches channels the row is just My orders.
+  // Without the How to buy channel the row is Balance (no channel needed), Cart and My orders.
   db.build(guild.id).channels.howToBuy = null;
   db.build(guild.id).channels.vouches = null;
-  assert.deepEqual(navLabels(shop.shopView(guild, { tab: 'c:keys', page: 1 })), ['Cart', 'My orders']);
+  assert.deepEqual(navLabels(shop.shopView(guild, { tab: 'c:keys', page: 1 })), ['Balance', 'Cart', 'My orders']);
 });
 
 test('the shop still fits 40 components with 5 tabs, pages and 5 products with images – with every image', async () => {

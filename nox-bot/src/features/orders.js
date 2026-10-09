@@ -147,9 +147,7 @@ function proofCard(guild, sale) {
   const took = sale.completedAt - sale.createdAt;
   facts.push(took < 60_000 ? `${e(guild, 'clock')} Delivered **directly**` : `${e(guild, 'clock')} Delivered in **${duration(took)}**`);
   c.addTextDisplayComponents(text(`${facts.join(SPACER)}\n-# ${ts(sale.completedAt, 'R')} · Verified purchase at ${config.brand.name}`));
-  // Shop + Balance (store balance – top up and pay instantly), or Vouches when the balance is off.
-  const links = linkButtons(guild, config.balance?.enabled === false ? ['shop', 'vouches'] : ['shop']);
-  if (config.balance?.enabled !== false) links.push(btn('balance:open', 'Balance', ce(guild, 'wallet')));
+  const links = linkButtons(guild, ['shop', 'vouches']);
   if (links.length) c.addActionRowComponents(row(...links));
   return v2(c);
 }

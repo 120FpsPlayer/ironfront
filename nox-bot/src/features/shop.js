@@ -410,7 +410,9 @@ function navRow(guild, value, index, pages, userId = null) {
     const howTo = db.channelId(guild.id, 'howToBuy');
     const vouches = db.channelId(guild.id, 'vouches');
     if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
-    if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
+    // Balance instead of Vouches – everyone sees they can top up and pay instantly (Vouches when the balance is off).
+    if (config.balance?.enabled !== false) buttons.push(btn('balance:open', 'Balance', ce(guild, 'wallet')));
+    else if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
   }
   const cart = require('./cart').cartButton(guild, userId); // here – cart.js needs this file
   if (cart) buttons.push(cart);

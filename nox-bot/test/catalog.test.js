@@ -514,10 +514,10 @@ test('buying only works through Buy in #shop: no Purchase button, the ticket pan
   const json = (payload) => JSON.stringify((payload.components ?? []).map((c) => (c.toJSON ? c.toJSON() : c)));
   const shopUrl = `https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'shop')}`;
 
-  // Shop panel: only "How to buy", "Vouches" and "My orders" under the products.
+  // Shop panel: only "How to buy", "Balance" and "My orders" under the products.
   const shopPanel = json(await panels.render('shop', guild));
   assert.ok(!shopPanel.includes('ticket:open:order') && !shopPanel.includes('"label":"Purchase"'), 'no Purchase button in the shop');
-  assert.ok(shopPanel.includes('"label":"How to buy"') && shopPanel.includes('"label":"Vouches"') && shopPanel.includes('"custom_id":"myorders:open"'));
+  assert.ok(shopPanel.includes('"label":"How to buy"') && shopPanel.includes('"custom_id":"balance:open"') && shopPanel.includes('"custom_id":"myorders:open"'));
 
   // Ticket panel: Purchase has a "Go to shop" link instead of "Open".
   const ticketPanel = json(await panels.render('tickets', guild, { style: 'buttons' }));
