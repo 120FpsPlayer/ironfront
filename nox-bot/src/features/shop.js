@@ -263,6 +263,14 @@ const CARD_TEXT = 640; // the description gives way above this, so 5 cards with 
 /** Delivered automatically right after a PayPal / Stripe payment (features/delivery.js) – here, as those need this file. */
 const instantDelivery = (p) => require('./delivery').hasDelivery(p) && (require('./stripe').enabled() || require('./paypal').enabled());
 
+/** Delivery time picked in /product add | edit (delivery_time) – otherwise "Instant delivery" when it's automatic. */
+const DELIVERY_TIMES = {
+  instant: '⚡ Instant delivery',
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [String(d), `🕒 Delivery: ${d} day${d === 1 ? '' : 's'}`])),
+  14: '🕒 Delivery: up to 14 days',
+};
+const deliveryLabel = (p) => DELIVERY_TIMES[p.deliveryTime] ?? (instantDelivery(p) ? DELIVERY_TIMES.instant : null);
+
 /** badges: Map(productId → ['🔥 Bestseller', '⭐ 4.9']) from features/badges.js – worked out once per panel. */
 function cardText(guild, p, { category = false, now = Date.now(), badges = null } = {}) {
   const where = category ? (p.category ? `📂 ${p.category}` : '📂 Other') : null;
@@ -270,7 +278,7 @@ function cardText(guild, p, { category = false, now = Date.now(), badges = null 
   const title = `### ${productEmoji(guild, p)} ${p.name}${SPACER}${priceMarkdown(p, now)}`;
   const extras = [
     variantsOf(p).length ? `-# ${optionsText(p, now)}` : null,
-    `-# ${[stockText(p), instantDelivery(p) ? '⚡ Instant delivery' : null, ...(badges?.get(p.id) ?? []), where].filter(Boolean).join(' · ')}`,
+    `-# ${[stockText(p), deliveryLabel(p), ...(badges?.get(p.id) ?? []), where].filter(Boolean).join(' · ')}`,
     sale ? `-# ⏰ Sale ends ${ts(sale.endsAt, 'R')}` : null,
   ].filter(Boolean);
   const room = CARD_TEXT - title.length - extras.join('\n').length - 2;
@@ -547,7 +555,7 @@ function assertSaleStillWorks(p, next) {
 }
 
 /** image: { buffer, ext } from productImages.download(); stockCount: how many are left (null = not counted) */
-function addProduct(guild, { name, price, description, emoji, stock = 'in', stockCount = null, category = null, image = null }) {
+function addProduct(guild, { name, price, description, emoji, stock = 'in', stockCount = null, category = null, image = null, deliveryTime = null }) {
   const list = products(guild.id);
   if (list.length >= 50) throw new UserError('The catalog is full (50 products). Remove an old product first.');
   assertUniqueName(guild.id, name);
@@ -562,6 +570,7 @@ function addProduct(guild, { name, price, description, emoji, stock = 'in', stoc
     variants: [],
     sale: null,
     image: null,
+    deliveryTime: DELIVERY_TIMES[deliveryTime] ? String(deliveryTime) : null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -595,6 +604,7 @@ async function editProduct(guild, query, patch) {
   if (patch.description) next.description = truncate(patch.description.trim(), 400);
   if (patch.emoji != null) next.emoji = parseEmoji(patch.emoji, guild);
   if (patch.category != null) next.category = resolveCategory(guild.id, patch.category, p.id);
+  if (patch.deliveryTime) next.deliveryTime = patch.deliveryTime === 'auto' ? null : DELIVERY_TIMES[patch.deliveryTime] ? String(patch.deliveryTime) : p.deliveryTime ?? null;
   Object.assign(next, stockPatch({ stock: patch.stock, count: patch.stockCount }));
   assertSaleStillWorks(p, next);
   // Files last – only once everything else is valid.
@@ -789,7 +799,8 @@ function orderModal(product, guild = null, { userId = null } = {}) {
   if (variantsOf(product).length) modal.addLabelComponents(variantField(product));
   else {
     const price = activeSale(product) ? priceMarkdown(product) : formatPrice(product.price);
-    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n${subtext(truncate(product.description, 300))}`));
+    const when = deliveryLabel(product);
+    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}${when ? ` · ${when}` : ''}\n${subtext(truncate(product.description, 300))}`));
   }
   const quantity = new LabelBuilder()
     .setLabel('Quantity')
@@ -1068,6 +1079,8 @@ function autocomplete(interaction, { filter = null } = {}) {
 
 module.exports = {
   STOCK,
+  DELIVERY_TIMES,
+  deliveryLabel,
   formatPrice,
   variantsOf,
   activeSale,

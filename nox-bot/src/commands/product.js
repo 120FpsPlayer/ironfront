@@ -79,6 +79,12 @@ function listEmbed(guild) {
     .setDescription(truncate(text || 'No products yet – add one with `/product add`.', 4000));
 }
 
+const DELIVERY_CHOICES = [
+  { name: '⚡ Instant delivery', value: 'instant' },
+  ...[1, 2, 3, 4, 5, 6, 7].map((d) => ({ name: `🕒 ${d} day${d === 1 ? '' : 's'}`, value: String(d) })),
+  { name: '🕒 Up to 14 days', value: '14' },
+];
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('product')
@@ -98,7 +104,8 @@ module.exports = {
         .addAttachmentOption((o) => imageOption(o, 'Product image – PNG, JPG, WEBP or GIF, up to 1 MB'))
         .addIntegerOption((o) => countOption(o, 'How many you have – shown as "12 left", counted down per completed order'))
         .addAttachmentOption((o) => o.setName('file').setDescription('The product itself – sent to the buyer after payment (more: /product delivery)'))
-        .addStringOption((o) => o.setName('delivery_text').setDescription('Text sent to the buyer after payment, e.g. a key or a login').setMaxLength(1500)),
+        .addStringOption((o) => o.setName('delivery_text').setDescription('Text sent to the buyer after payment, e.g. a key or a login').setMaxLength(1500))
+        .addStringOption((o) => o.setName('delivery_time').setDescription('How long the buyer waits: instant, 1–7 days or up to 14 days').addChoices(...DELIVERY_CHOICES)),
     )
     .addSubcommand((s) =>
       s
@@ -113,7 +120,8 @@ module.exports = {
         .addAttachmentOption((o) => imageOption(o, 'New product image – PNG, JPG, WEBP or GIF, up to 1 MB'))
         .addBooleanOption((o) => o.setName('remove_image').setDescription('Remove the product image'))
         .addStringOption((o) => o.setName('stock').setDescription('New stock status – on its own it turns the stock counter off').addChoices(...STOCK_CHOICES))
-        .addIntegerOption((o) => countOption(o, 'How many are left – sets the stock status, counted down per completed order')),
+        .addIntegerOption((o) => countOption(o, 'How many are left – sets the stock status, counted down per completed order'))
+        .addStringOption((o) => o.setName('delivery_time').setDescription('How long the buyer waits: instant, 1–7 days or up to 14 days').addChoices(...DELIVERY_CHOICES, { name: '↩️ Automatic (default)', value: 'auto' })),
     )
     .addSubcommand((s) =>
       s
@@ -177,6 +185,7 @@ module.exports = {
         stockCount: o.getInteger('count'),
         category: o.getString('category'),
         image,
+        deliveryTime: o.getString('delivery_time'),
       });
       if ((o.getBoolean('announce') ?? true) && product.stock !== 'out') {
         if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -208,6 +217,7 @@ module.exports = {
         category: o.getString('category'),
         stock: o.getString('stock'),
         stockCount: o.getInteger('count'),
+        deliveryTime: o.getString('delivery_time'),
         image,
         removeImage: o.getBoolean('remove_image') ?? false,
       });
