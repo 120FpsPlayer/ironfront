@@ -230,7 +230,8 @@ The bot also runs your NØX store website, in the same program on the same serve
 - The buyer fills the bag (it works before signing in, too) and pays by card on **Stripe** (the same `STRIPE_SECRET_KEY`).
 - **Paid** opens the buyer's order ticket on Discord (paid with "Website", nothing more to pay). Products with files or text (`/product delivery`) are delivered right away in the ticket and by DM, like any paid order, and everything else pings the sellers.
 - A buyer who isn't on the server yet gets their ticket as soon as they join.
-- After paying, the buyer sees a **receipt**: the order reference, what was bought, the total, the ticket with a button straight to it, and whether it's delivered already. **My orders** shows the same for every order.
+- Product cards show the real description and the delivery time (**⚡ Instant delivery** for products with files or text). The Stripe payment page says where the order goes next.
+- After paying, the buyer sees a **receipt**: the order reference (with a Copy button), what was bought, the total, the ticket with a button straight to it, and whether it's delivered already. The same confirmation arrives **by DM** on Discord (with *Open ticket* and *My orders* buttons). **My orders** shows every order.
 - Every payment is posted in the log channel. The Support buttons use `DISCORD_INVITE_URL`, or a permanent invite the bot makes itself.
 
 **Setup:**

@@ -87,6 +87,9 @@ test('the website sells the bot\'s shop: fixed prices only, every option, sale p
   const byName = Object.fromEntries(s.products.map((p) => [p.name, p]));
   assert.equal(byName['Game Keys'].price, 990);
   assert.equal(byName['Game Keys'].category, 'Games', '"🎮 Games" → the Games tab');
+  assert.equal(byName['Game Keys'].eta, 'Instant delivery', 'files/text to deliver → instant delivery on the card');
+  assert.equal(byName['Game Keys'].instant, true);
+  assert.equal(byName['5 Game Combo'].eta, null);
   assert.equal(byName['5 Game Combo'].art, 'bundle');
   assert.equal(byName['Netflix – 1 month'].price, 500);
   assert.equal(byName['Netflix – 3 months'].price, 1200);
@@ -153,6 +156,12 @@ test('paid on the website → the order ticket opens on Discord, paid, and the p
   assert.match(texts, /Paid on the website – 9\.90€/);
   assert.doesNotMatch(texts, /## .*Pay 9\.90€/, 'no "Pay" card – it is paid already');
   assert.ok(guild.dms.some((d) => d.to === buyer.id && /KEY-ABC-123/.test(textOf(d.payload))), 'delivered by DM');
+  const receipt = guild.dms.find((d) => d.to === buyer.id && /Order confirmed/.test(textOf(d.payload)));
+  assert.ok(receipt, 'an order confirmation by DM');
+  assert.match(textOf(receipt.payload), /Game Keys[\s\S]*Total paid: 9\.90€[\s\S]*Order reference `NOX-[0-9A-F]{10}`/);
+  assert.equal(fakes.state.lastCheckout.get('submit_type'), 'pay');
+  assert.match(fakes.state.lastCheckout.get('custom_text[submit][message]'), /private ticket on the NØX Discord/);
+  assert.equal(fakes.state.lastCheckout.get('line_items[0][price_data][product_data][description]'), 'Instant delivery · delivered on Discord');
   assert.ok(db.getTicket(ticket.channelId).completedAt, 'completed like any paid Discord order');
 
   const order = (await (await get('/api/nox/orders', sid)).json()).orders[0];
@@ -288,6 +297,9 @@ test('the real page in a browser: bag → sign in → checkout → Stripe → re
       await page.locator('#how').scrollIntoViewIfNeeded();
       await page.screenshot({ path: `${process.env.NOX_SHOTS}/how.png` });
     }
+    // The "My orders" button in the Discord DM: /?view=orders opens My orders.
+    await page.goto(`${base}/?view=orders`);
+    await page.locator('.order-top b', { hasText: 'DELIVERED' }).first().waitFor();
     assert.deepEqual(problems, []);
   } finally {
     await browser.close();

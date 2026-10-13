@@ -34,11 +34,13 @@ const { createWebServer, authReady, paymentsReady } = require('../web/server');
 const { currencyCode, DECIMALS } = require('../lib/currency');
 const { cartTitle } = require('../lib/orderItems');
 const { COLORS } = require('../lib/theme');
-const { logEmbed, money, pad, parseAmount, sendLog, truncate } = require('../lib/utils');
-const { notice } = require('../lib/v2');
+const { logEmbed, money, pad, parseAmount, sendLog, truncate, ts } = require('../lib/utils');
+const { notice, container, header, text, divider, linkBtn, row, v2, channelUrl } = require('../lib/v2');
+const { e, ce } = require('../lib/theme');
 const { isSafeSelfRole } = require('../lib/guards');
 
 const shop = () => require('./shop');
+const delivery = () => require('./delivery');
 const METHOD = 'Website';
 const TABS = ['Games', 'Discord Bots', 'Discord Servers']; // the page's filter tabs
 let client = null;
@@ -74,6 +76,16 @@ function artOf(p, tab) {
   return /bundle|combo|pack/i.test(`${p.name} ${p.category ?? ''}`) ? 'bundle' : 'games';
 }
 
+/**
+ * What the product card says about delivery: the delivery time picked in /product add | edit, or "Instant delivery"
+ * when the product has files or text to send (a website order is paid by card, so it goes out right away).
+ */
+function etaOf(p) {
+  const label = shop().DELIVERY_TIMES[p.deliveryTime];
+  if (label) return { instant: p.deliveryTime === 'instant', eta: label.replace(/^[^\p{L}]+/u, '') };
+  return require('./delivery').hasDelivery(p) ? { instant: true, eta: 'Instant delivery' } : { instant: false, eta: null };
+}
+
 /** The bot's shop as website products – prices in cents, every option its own entry. */
 function catalog() {
   const guild = guildOf();
@@ -90,7 +102,7 @@ function catalog() {
     };
     const tab = tabOf(p);
     const imagePath = images.file(p);
-    const base = { category: tab, description: plain(p.description), art: artOf(p, tab), imagePath, productId: p.id };
+    const base = { category: tab, description: plain(p.description), art: artOf(p, tab), imagePath, productId: p.id, ...etaOf(p) };
     const variants = s.variantsOf(p);
     const entries = variants.length
       ? variants.map((v) => ({ ...base, id: `${p.id}~${v.id}`, name: plain(`${p.name} – ${v.name}`), price: cents(v.price), variant: v.name }))
@@ -204,6 +216,26 @@ function ticketAnswers(order) {
 
 const setDelivery = (order, patch) => webStore.updateOrder(order.id, patch);
 
+/** The buyer's order confirmation by DM – the same order reference, items and total as the receipt on the website. */
+function receiptDm(guild, order, ticket, channel) {
+  const c = container(COLORS.success);
+  const instant = delivery().deliverable(guild.id, ticket);
+  const items = order.items.map((i) => `\`${i.quantity}×\` ${i.name} — **${money((i.price * i.quantity) / unit())}**`).join('\n');
+  header(c, `## ${e(guild, 'check')} Order confirmed – thank you!\nYour payment on the **NØX** website went through. Here's your receipt:`, guild.iconURL?.({ size: 128 }));
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(
+    text(`${items}\n\n**Total paid: ${money(order.amount / unit())}** · card (Stripe)\n-# Order reference \`${order.id}\` · ${ts(order.paidAt ?? Date.now(), 'f')}`),
+  );
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(
+    text(instant ? `📦 Your order is in ticket **#${pad(ticket.number)}** – the product is delivered there and in this DM right away.` : `🎫 Your order is in ticket **#${pad(ticket.number)}** – a seller delivers it there. You'll be pinged.`),
+  );
+  const buttons = [linkBtn(channelUrl(guild.id, channel.id), `Open ticket #${pad(ticket.number)}`, ce(guild, 'ticket'))];
+  if (env.web.publicUrl) buttons.push(linkBtn(`${env.web.publicUrl}/?view=orders`, 'My orders', ce(guild, 'cart')));
+  c.addActionRowComponents(row(...buttons));
+  return v2(c);
+}
+
 /** Opens the buyer's (paid) order ticket – or waits until they join the server. Never throws. */
 async function handOver(order) {
   if (order.kind !== 'products' || order.status !== 'paid' || order.handedOver || handing.has(order.id)) return;
@@ -241,6 +273,7 @@ async function handOver(order) {
       ticketUrl: `https://discord.com/channels/${guild.id}/${channel.id}`,
       delivery: `Your order is in ticket #${pad(ticket.number)} on the NØX Discord – a seller delivers it there.`,
     });
+    await member.send(receiptDm(guild, webStore.getOrder(order.id) ?? order, ticket, channel)).catch(() => null);
     await hooks.emit('orderPlaced', { guild, channel, ticket, member });
   } finally {
     handing.delete(order.id);

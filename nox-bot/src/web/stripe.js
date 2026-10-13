@@ -39,7 +39,7 @@ async function call(method, path, body = null, { idempotencyKey } = {}) {
 }
 
 /**
- * A Checkout Session for an order. lines: [{ name, amount (cents, each), quantity }].
+ * A Checkout Session for an order. lines: [{ name, amount (cents, each), quantity, description? }].
  * Returns { id, url }.
  */
 function createCheckout({ order, user, lines, currency, idempotencyKey }) {
@@ -49,12 +49,14 @@ function createCheckout({ order, user, lines, currency, idempotencyKey }) {
     '/checkout/sessions',
     {
       mode: 'payment',
+      submit_type: 'pay',
+      custom_text: { submit: { message: 'Right after payment, your order opens in a private ticket on the NØX Discord – instant products are delivered there and by DM.' } },
       success_url: `${back}/?payment=return&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${back}/?payment=cancelled`,
       client_reference_id: user.id,
       line_items: lines.map((l) => ({
         quantity: l.quantity,
-        price_data: { currency, unit_amount: l.amount, product_data: { name: l.name } },
+        price_data: { currency, unit_amount: l.amount, product_data: { name: l.name, ...(l.description && { description: l.description }) } },
       })),
       metadata: { order_id: order.id, user_id: user.id, kind: order.kind },
       payment_intent_data: { metadata: { order_id: order.id, user_id: user.id, kind: order.kind } },

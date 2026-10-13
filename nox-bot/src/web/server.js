@@ -41,7 +41,7 @@ const paymentsReady = () => Boolean(env.stripeKey && web().publicUrl);
 /** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency }. */
 let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, onLogin: async () => null, isMember: () => null, currency: () => 'eur' };
 const products = () => hooks.catalog();
-const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, published: true });
+const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, eta: p.eta ?? null, instant: Boolean(p.instant), published: true });
 
 // ───────────── HTTP helpers ─────────────
 const HEADERS = {
@@ -188,10 +188,10 @@ async function checkout(req, res, user) {
   for (const [id, quantity] of wanted) {
     const p = list.find((x) => x.id === id);
     if (!p) return fail(res, 400, 'Something in your bag is no longer available. Remove it and try again.');
-    items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity), productId: p.productId ?? null, variant: p.variant ?? null });
+    items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity), productId: p.productId ?? null, variant: p.variant ?? null, eta: p.eta ?? null });
   }
   if (!items.length) return fail(res, 400, 'Your bag is empty.');
-  const lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity }));
+  const lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity, description: i.eta ? `${i.eta} · delivered on Discord` : 'Delivered on Discord' }));
   const amount = items.reduce((s, i) => s + i.price * i.quantity, 0);
   if (amount < STRIPE_MIN) return fail(res, 400, 'The total is below the smallest card payment (0.50 €).');
 
