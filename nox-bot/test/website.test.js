@@ -206,6 +206,8 @@ test('the real page in a browser: sign in → bag → Stripe → back → My ord
   const problems = [];
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`));
+  // Like a plain http://IP:port site: no crypto.randomUUID (browsers only give it on https / localhost).
+  await page.addInitScript(() => Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined, configurable: true }));
   await page.route((u) => u.hostname === 'checkout.stripe.com', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Stripe</h1>' }));
   try {
     await page.goto(base);

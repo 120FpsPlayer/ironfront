@@ -67,7 +67,12 @@ html = html.replace(/a\.art==="games"\?\(0,d\.jsx\)\("div",\{className:"art game
   `a.art==="games"||a.image?(0,d.jsx)("div",{className:"art game-art",children:(0,d.jsx)("img",{src:a.image||"${src}"`,
 );
 
-// 5. Layout fixes on top of the design's own CSS.
+// 5. crypto.randomUUID only exists on https (or localhost) – on a plain http://IP:port the checkout button failed with
+// "crypto.randomUUID is not a function". getRandomValues works everywhere, so the page gets its own.
+const UUID = '<script>if(window.crypto&&!crypto.randomUUID){crypto.randomUUID=function(){var b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;var h=Array.prototype.map.call(b,function(x){return(x+256).toString(16).slice(1)}).join("");return h.slice(0,8)+"-"+h.slice(8,12)+"-"+h.slice(12,16)+"-"+h.slice(16,20)+"-"+h.slice(20)}}</script>';
+html = html.replace(/<head>/i, (h) => `${h}${UUID}`);
+
+// 6. Layout fixes on top of the design's own CSS.
 const FIXES = `
 /* Phones: the hero picture sat on top of the buttons once the title wrapped to three lines – now it follows them. */
 @media (max-width:650px){
