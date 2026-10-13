@@ -79,14 +79,6 @@ const env = {
   ids,
 };
 
-/** "9.90" / "9,90" → 990 (cents); empty → fallback. */
-function cents(raw, fallback) {
-  const t = String(raw ?? '').trim();
-  if (!t) return fallback;
-  const n = Number(t.replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : fallback;
-}
-
 function webSettings() {
   const str = (name) => (process.env[name] || '').trim();
   // WEB_PORT, or the port a hosting panel gives the server (Pterodactyl: SERVER_PORT, most others: PORT).
@@ -101,8 +93,6 @@ function webSettings() {
     clientId: str('DISCORD_CLIENT_ID'),
     clientSecret: str('DISCORD_CLIENT_SECRET'),
     stripeWebhookSecret: str('STRIPE_WEBHOOK_SECRET'),
-    /** The one-time NØX Access price (0 = free – signing in with Discord is enough). */
-    accessPrice: cents(process.env.WEB_ACCESS_PRICE, 990),
     /** The server whose shop the website sells (default: GUILD_ID, or the one server the bot is in). */
     guildId: str('WEB_GUILD_ID') || null,
     /** Invite for the Support / community buttons – empty: the bot makes a permanent one itself. */

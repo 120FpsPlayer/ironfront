@@ -7,15 +7,18 @@
  *   - products   the website sells the bot's shop (the server in WEB_GUILD_ID / GUILD_ID, or the one server the bot
  *                is in): numeric prices, flash sales included, every option of a product as its own entry, sold-out
  *                products hidden, product pictures shown. /product add | edit | stock shows on the website at once.
- *   - sign-in    "Continue with Discord" uses the bot's own application (DISCORD_CLIENT_SECRET in .env).
+ *   - sign-in    "Continue with Discord" uses the bot's own application (DISCORD_CLIENT_SECRET in .env). Signing in is
+ *                all it takes to buy. Someone who isn't on the server yet is added right away (OAuth2 guilds.join) with
+ *                the Member role – the same role verification gives – and a member without it gets it.
  *   - paid order the buyer's order ticket opens on Discord (paid with "Website", nothing to pay there), and the product
  *                is delivered right away when it has files or text (/product delivery) – in the ticket and by DM –
  *                exactly like a paid Discord order. Buyers who aren't on the server yet get it as soon as they join.
- *   - NØX Access the buyer gets a DM; every payment is logged in the log channel.
+ *                Every payment is logged in the log channel.
  *   - invite     the Support / community buttons use DISCORD_INVITE_URL, or a permanent invite the bot makes itself.
  *
  * Bot side: ticket.order.paidWith = 'website', order.web = { orderId, stripe }.
- * Website side (data/web.json): order.handedOver, ticketChannelId, waitingForMember, delivery (the text in My orders).
+ * Website side (data/web.json): order.handedOver, ticketChannelId, ticketNumber, ticketUrl, waitingForMember, delivered,
+ * delivery (the text in My orders and on the receipt).
  */
 
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
@@ -33,6 +36,7 @@ const { cartTitle } = require('../lib/orderItems');
 const { COLORS } = require('../lib/theme');
 const { logEmbed, money, pad, parseAmount, sendLog, truncate } = require('../lib/utils');
 const { notice } = require('../lib/v2');
+const { isSafeSelfRole } = require('../lib/guards');
 
 const shop = () => require('./shop');
 const METHOD = 'Website';
@@ -132,6 +136,45 @@ async function ensureInvite(guild) {
   }
 }
 
+// ───────────── Sign-in → on the server, with the Member role ─────────────
+/**
+ * Website sign-in → the user is on the NØX Discord with the Member role. Not a member yet: the bot adds them with the
+ * OAuth2 token (scope guilds.join) and the role in one step. Already a member without the role: it's given.
+ * Returns { added, member } – never throws for Discord errors (banned, server full, missing permissions…).
+ */
+async function onLogin(user, accessToken) {
+  const guild = guildOf();
+  if (!guild || !user?.id) return { added: false, member: null };
+  const role = require('./verification').memberRole(guild);
+  const roleOk = role && isSafeSelfRole(role);
+  let member = await guild.members.fetch(user.id).catch(() => null);
+  if (member) {
+    if (roleOk && !member.roles.cache.has(role.id)) {
+      await member.roles.add(role, 'Signed in on the NØX website');
+      await hooks.emit('verified', member);
+    }
+    return { added: false, member: true };
+  }
+  if (!accessToken) return { added: false, member: false };
+  try {
+    member = await guild.members.add(user.id, { accessToken, ...(roleOk && { roles: [role.id] }) });
+  } catch (err) {
+    console.warn(`[website] couldn't add ${user.username ?? user.id} to the server:`, err.message);
+    return { added: false, member: false };
+  }
+  member ??= await guild.members.fetch(user.id).catch(() => null);
+  if (!member) return { added: false, member: false };
+  if (roleOk && !member.roles.cache.has(role.id)) await member.roles.add(role, 'Signed in on the NØX website').catch(() => null);
+  await sendLog(guild, { embeds: [logEmbed(COLORS.success, '🌐 Joined through the website', guild.client.user).setDescription(`<@${user.id}>${user.username ? ` (${user.username})` : ''} signed in on the website and was added to the server${roleOk ? ` with ${role}` : ''}.`)] }).catch(() => null);
+  if (roleOk) await hooks.emit('verified', member);
+  return { added: true, member: true };
+}
+
+const isMember = (userId) => {
+  const guild = guildOf();
+  return guild ? guild.members.cache.has(userId) : null;
+};
+
 // ───────────── A paid website order → the bot ─────────────
 /** The order the ticket holds, in the same shape as a cart / single order placed on Discord – already paid. */
 function ticketOrder(order, guildId) {
@@ -168,14 +211,14 @@ async function handOver(order) {
   try {
     const guild = guildOf();
     if (!guild) {
-      setDelivery(order, { delivery: `Payment confirmed! The NØX team delivers your order on Discord – keep your order reference ${order.id}.` });
+      setDelivery(order, { delivery: `The NØX team delivers your order on Discord – keep your order reference ${order.id}.` });
       return;
     }
     const member = await guild.members.fetch(order.userId).catch(() => null);
     if (!member) {
       setDelivery(order, {
         waitingForMember: true,
-        delivery: `Payment confirmed! Join the NØX Discord server with the account you signed in with – your order opens there automatically (reference ${order.id}).`,
+        delivery: `Join the NØX Discord server with the account you signed in with – your order opens there automatically (reference ${order.id}).`,
       });
       await sendLog(guild, { embeds: [logEmbed(COLORS.warning, '🌐 Website order waiting', guild.client.user).setDescription(`Order \`${order.id}\` (${money(order.amount / unit())}) is paid – <@${order.userId}> isn't on the server yet. It opens as soon as they join.`)] }).catch(() => null);
       return;
@@ -185,7 +228,7 @@ async function handOver(order) {
       channel = await tickets.openTicket(member, config.getType('order'), ticketAnswers(order), { order: ticketOrder(order, guild.id) }, { force: true });
     } catch (err) {
       console.warn(`[website] ticket for ${order.id}:`, err.message);
-      setDelivery(order, { delivery: `Payment confirmed! The NØX team contacts you on Discord to deliver it (reference ${order.id}).` });
+      setDelivery(order, { delivery: `The NØX team contacts you on Discord to deliver it (reference ${order.id}).` });
       await sendLog(guild, { embeds: [logEmbed(COLORS.danger ?? COLORS.warning, '🌐 Website order – no ticket', guild.client.user).setDescription(`Order \`${order.id}\` of <@${order.userId}> is **paid** (${money(order.amount / unit())}) but its ticket couldn't open: ${truncate(err.message, 300)}\nDeliver it by hand.`)] }).catch(() => null);
       return;
     }
@@ -194,7 +237,9 @@ async function handOver(order) {
       handedOver: true,
       waitingForMember: false,
       ticketChannelId: channel.id,
-      delivery: `Payment confirmed! Your order is in ticket #${pad(ticket.number)} on the NØX Discord – products with instant delivery arrive there and in your DMs right away.`,
+      ticketNumber: pad(ticket.number),
+      ticketUrl: `https://discord.com/channels/${guild.id}/${channel.id}`,
+      delivery: `Your order is in ticket #${pad(ticket.number)} on the NØX Discord – a seller delivers it there.`,
     });
     await hooks.emit('orderPlaced', { guild, channel, ticket, member });
   } finally {
@@ -203,14 +248,7 @@ async function handOver(order) {
 }
 
 /** Website → bot: a paid order (once per order). */
-async function onPaid(order, user) {
-  const guild = guildOf();
-  if (order.kind === 'access') {
-    const u = await client?.users.fetch(order.userId).catch(() => null);
-    await u?.send(`🔓 **Your NØX Access is active!** You can now buy everything in the store${env.web.publicUrl ? `: ${env.web.publicUrl}` : '.'}`).catch(() => null);
-    if (guild) await sendLog(guild, { embeds: [logEmbed(COLORS.success, '🔓 NØX Access bought on the website', guild.client.user).setDescription(`<@${order.userId}>${user ? ` (${user.username})` : ''} – ${money(order.amount / unit())} · \`${order.id}\``)] }).catch(() => null);
-    return;
-  }
+async function onPaid(order) {
   await handOver(webStore.getOrder(order.id) ?? order);
 }
 
@@ -240,6 +278,9 @@ async function onOrderPlaced({ guild, channel, ticket }) {
     console.warn('[website] delivery:', err.message);
     return false;
   });
+  if (done && order.web?.orderId) {
+    webStore.updateOrder(order.web.orderId, { delivered: true, delivery: `Delivered! Your product is in ticket #${pad(ticket.number)} on the NØX Discord and in your DMs.` });
+  }
   if (!done) {
     const team = autopay.pingsFor(guild, ticket);
     const mention = [...team.users.map((id) => `<@${id}>`), ...team.roles.map((id) => `<@&${id}>`)].join(' ');
@@ -260,7 +301,7 @@ function start(c) {
   webStore.load();
   process.once('exit', () => webStore.flush());
   webAuth.setClientId(c.application?.id ?? c.user?.id);
-  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, currency });
+  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, onLogin, isMember, currency });
   server.on('error', (err) => {
     console.warn(`🌐 Website: can't use port ${env.web.port} (${err.code ?? err.message}) – the bot keeps running without it.`);
     server = null;
@@ -286,4 +327,4 @@ hooks.on('inviteDelete', (invite) => {
   }
 });
 
-module.exports = { catalog, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, start, stop: () => server?.close(), _setClient: (c) => (client = c) };
+module.exports = { catalog, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c) };

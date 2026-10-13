@@ -69,7 +69,6 @@ function useFakes(env, base, site, extra = {}) {
     clientId: '123',
     clientSecret: 'secret',
     stripeWebhookSecret: 'whsec_test',
-    accessPrice: 990,
     invite: 'https://discord.gg/nox',
     discordApi: `${base}/discord`,
     discordAuthorize: `${base}/discord/authorize`,

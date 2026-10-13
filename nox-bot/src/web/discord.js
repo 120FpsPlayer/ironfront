@@ -1,6 +1,9 @@
 'use strict';
 
-/** Website sign-in – "Continue with Discord" (OAuth2, scope identify) with the bot's own application. */
+/**
+ * Website sign-in – "Continue with Discord" with the bot's own application. Scopes: identify (who you are) and
+ * guilds.join (the bot adds you to the NØX server – src/features/website.js joinServer).
+ */
 
 const { env } = require('../env');
 
@@ -17,14 +20,17 @@ function authorizeUrl(state) {
     client_id: clientId(),
     response_type: 'code',
     redirect_uri: redirectUri(),
-    scope: 'identify',
+    scope: 'identify guilds.join',
     state,
     prompt: 'none',
   });
   return `${web().discordAuthorize}?${q}`;
 }
 
-/** The code from Discord → the signed-in user ({ id, username, global_name, avatar }). */
+/**
+ * The code from Discord → { me: the signed-in user ({ id, username, global_name, avatar }), accessToken }. The token is
+ * only used right away to add the user to the server – it is never stored.
+ */
 async function userFromCode(code) {
   const tokenRes = await fetch(`${web().discordApi}/oauth2/token`, {
     method: 'POST',
@@ -43,7 +49,7 @@ async function userFromCode(code) {
   const meRes = await fetch(`${web().discordApi}/users/@me`, { headers: { authorization: `Bearer ${token.access_token}` }, signal: AbortSignal.timeout(15_000) });
   const me = await meRes.json().catch(() => ({}));
   if (!meRes.ok || !me.id) throw new Error(`Discord didn't return the account (${meRes.status})`);
-  return me;
+  return { me, accessToken: token.access_token };
 }
 
 module.exports = { authorizeUrl, userFromCode, redirectUri, clientId, setClientId };

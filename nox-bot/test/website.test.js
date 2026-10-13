@@ -47,7 +47,7 @@ test.before(async () => {
   website._setClient(guild.client);
   webAuth.setClientId('123');
   webStore.load();
-  site = createWebServer({ catalog: website.catalog, info: () => ({ invite: 'https://discord.gg/nox' }), onPaid: website.onPaid, currency: () => 'eur' });
+  site = createWebServer({ catalog: website.catalog, info: () => ({ invite: 'https://discord.gg/nox' }), onPaid: website.onPaid, onLogin: website.onLogin, isMember: website.isMember, currency: () => 'eur' });
   await new Promise((r) => site.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${site.address().port}`;
   fakes.state.siteBase = base;
@@ -62,12 +62,13 @@ const get = (p, cookie = '') => fetch(base + p, { headers: { cookie }, redirect:
 const post = (p, body, cookie = '', headers = {}) => fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', cookie, ...headers }, body: JSON.stringify(body), redirect: 'manual' });
 const cookieOf = (res, name) => (res.headers.getSetCookie?.() ?? [res.headers.get('set-cookie') ?? '']).flatMap((c) => c.split(/,(?=\s*\w+=)/)).map((c) => c.split(';')[0].trim()).find((c) => c.startsWith(`${name}=`)) ?? '';
 
-async function signIn(user = fakes.state.user) {
+async function signIn(user = fakes.state.user, landing = '/?connected=1') {
   fakes.state.user = user;
   const start = await get('/api/nox/auth/start');
-  const state = new URL(start.headers.get('location')).searchParams.get('state');
-  const back = await get(`/api/nox/auth/callback?code=good&state=${state}`, cookieOf(start, 'nox_oauth'));
-  assert.equal(back.headers.get('location'), '/?connected=1');
+  const authorize = new URL(start.headers.get('location'));
+  assert.equal(authorize.searchParams.get('scope'), 'identify guilds.join');
+  const back = await get(`/api/nox/auth/callback?code=good&state=${authorize.searchParams.get('state')}`, cookieOf(start, 'nox_oauth'));
+  assert.equal(back.headers.get('location'), landing);
   return cookieOf(back, 'nox_sid');
 }
 async function buy(sid, body) {
@@ -112,10 +113,35 @@ test('the website sells the bot\'s shop: fixed prices only, every option, sale p
   assert.equal(sale.price, 1200, 'the flash sale price');
 });
 
+test('signing in is all it takes: no access fee, and someone not on the server is added with the Member role', async () => {
+  const memberRole = db.roleId(guild.id, 'member');
+  // A newcomer: the bot adds them to the server (OAuth2 guilds.join) with the Member role.
+  const newcomer = { id: '555444333222111000', username: 'fresh', global_name: 'Fresh', avatar: null };
+  guild.unknownMembers = new Set([newcomer.id]);
+  const sid = await signIn(newcomer, '/?connected=1&joined=1');
+  const joined = guild.members.cache.get(newcomer.id);
+  assert.ok(joined, 'added to the server');
+  assert.ok(joined.roles.cache.has(memberRole), 'with the Member role');
+  assert.deepEqual(guild.oauthJoins.at(-1), { id: newcomer.id, accessToken: 'tok', roles: [memberRole] });
+  const session = await (await get('/api/nox/session', sid)).json();
+  assert.equal(session.access, true, 'signed in = can buy');
+  assert.equal(session.member, true);
+  assert.equal((await (await get('/api/nox/store')).json()).accessPrice, null);
+  assert.equal((await post('/api/nox/checkout', { kind: 'access', requestId: 'old' }, sid)).status, 409, 'there is no access pass to buy');
+
+  // Already on the server without the role (never verified) → the role is given; signing in again changes nothing.
+  const lurker = { id: '555444333222111001', username: 'lurker', global_name: null, avatar: null };
+  guild.addMember(lurker.id, []);
+  await signIn(lurker);
+  assert.ok(guild.members.cache.get(lurker.id).roles.cache.has(memberRole));
+  const joins = guild.oauthJoins.length;
+  await signIn(lurker);
+  assert.equal(guild.oauthJoins.length, joins, 'members are never added twice');
+  fakes.state.user = { id: '111222333444555666', username: 'tester', global_name: 'Tester', avatar: null };
+});
+
 test('paid on the website → the order ticket opens on Discord, paid, and the product is delivered by DM and in the ticket', async () => {
   const sid = await signIn();
-  await buy(sid, { kind: 'access', requestId: 'acc-1' });
-  assert.equal((await (await get('/api/nox/session', sid)).json()).access, true);
 
   await buy(sid, { kind: 'products', requestId: 'p-1', items: [{ id: keys.id, quantity: 1 }] });
   const ticket = db.tickets((t) => t.guildId === guild.id && t.ownerId === buyer.id).at(-1);
@@ -129,8 +155,11 @@ test('paid on the website → the order ticket opens on Discord, paid, and the p
   assert.ok(guild.dms.some((d) => d.to === buyer.id && /KEY-ABC-123/.test(textOf(d.payload))), 'delivered by DM');
   assert.ok(db.getTicket(ticket.channelId).completedAt, 'completed like any paid Discord order');
 
-  const orders = (await (await get('/api/nox/orders', sid)).json()).orders;
-  assert.match(orders.find((o) => o.kind === 'products').delivery, /ticket #\d{4} on the NØX Discord/);
+  const order = (await (await get('/api/nox/orders', sid)).json()).orders[0];
+  assert.match(order.delivery, /^Delivered! Your product is in ticket #\d{4} on the NØX Discord and in your DMs\.$/);
+  assert.equal(order.delivered, true);
+  assert.equal(order.ticketNumber, String(ticket.number).padStart(4, '0'));
+  assert.equal(order.ticketUrl, `https://discord.com/channels/${guild.id}/${ticket.channelId}`, 'the receipt links straight to the ticket');
 });
 
 test('a cart with options: one ticket for everything, staff pinged for what isn\'t automatic', async () => {
@@ -147,14 +176,17 @@ test('a cart with options: one ticket for everything, staff pinged for what isn\
   assert.equal(t.order.status, 'paid');
 });
 
-test('paid before joining the server: the order waits, and opens as soon as they join', async () => {
+test('the bot couldn\'t add them (no Create Invite permission): signing in still works, the order waits until they join', async () => {
   const stranger = { id: '999888777666555444', username: 'newbie', global_name: 'Newbie', avatar: null };
   guild.unknownMembers = new Set([stranger.id]);
+  guild.deny('CreateInstantInvite');
   const sid = await signIn(stranger);
-  await buy(sid, { kind: 'access', requestId: 's-acc' });
+  guild.deniedPermissions.delete('CreateInstantInvite');
+  assert.equal((await (await get('/api/nox/session', sid)).json()).member, false);
   await buy(sid, { kind: 'products', requestId: 's-1', items: [{ id: keys.id, quantity: 1 }] });
   let order = (await (await get('/api/nox/orders', sid)).json()).orders.find((o) => o.kind === 'products');
   assert.match(order.delivery, /Join the NØX Discord server/);
+  assert.equal(order.waiting, true);
   assert.equal(db.tickets((t) => t.ownerId === stranger.id).length, 0);
 
   guild.unknownMembers.delete(stranger.id);
@@ -163,6 +195,7 @@ test('paid before joining the server: the order waits, and opens as soon as they
   assert.equal(db.tickets((t) => t.ownerId === stranger.id).length, 1, 'the ticket opened on join');
   order = (await (await get('/api/nox/orders', sid)).json()).orders.find((o) => o.kind === 'products');
   assert.match(order.delivery, /ticket #\d{4}/);
+  assert.equal(order.waiting, false);
   fakes.state.user = { id: '111222333444555666', username: 'tester', global_name: 'Tester', avatar: null };
 });
 
@@ -186,8 +219,8 @@ test('safety: prices from the shop, foreign sites refused, no session → 401, f
   await post('/api/nox/checkout', { kind: 'products', requestId: 'cap', items: [{ id: keys.id, quantity: 99, price: 1 }] }, sid);
   assert.equal(fakes.state.lastCheckout.get('line_items[0][quantity]'), '10');
   assert.equal(fakes.state.lastCheckout.get('line_items[0][price_data][unit_amount]'), '990');
-  assert.equal((await post('/api/nox/checkout', { kind: 'access' }, sid, { origin: 'https://evil.example' })).status, 403);
-  assert.equal((await post('/api/nox/checkout', { kind: 'access' })).status, 401);
+  assert.equal((await post('/api/nox/checkout', { kind: 'products', items: [{ id: keys.id, quantity: 1 }] }, sid, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await post('/api/nox/checkout', { kind: 'products', items: [{ id: keys.id, quantity: 1 }] })).status, 401);
   assert.match(await (await get('/')).text(), /<title>NØX/);
   assert.doesNotMatch(await (await get('/..%2F..%2Fsrc%2Fenv.js')).text(), /webSettings/);
 });
@@ -204,7 +237,7 @@ function playwright() {
 }
 const pw = playwright();
 
-test('the real page in a browser: sign in → bag → Stripe → back → My orders, no errors', { skip: !pw && 'Playwright is not installed' }, async () => {
+test('the real page in a browser: bag → sign in → checkout → Stripe → receipt with the ticket, no errors', { skip: !pw && 'Playwright is not installed' }, async () => {
   const fs = require('node:fs');
   const browser = await pw.chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
@@ -217,19 +250,44 @@ test('the real page in a browser: sign in → bag → Stripe → back → My ord
   try {
     await page.goto(base);
     await page.waitForSelector('text=Game Keys');
+    if (process.env.NOX_SHOTS) await page.screenshot({ path: `${process.env.NOX_SHOTS}/home.png` });
     assert.equal(await page.locator('text=OFFLINE PREVIEW').count(), 0);
-    await page.getByRole('button', { name: 'Connect Discord' }).first().click();
-    await page.getByRole('link', { name: /Continue with Discord/ }).click();
-    await page.waitForSelector('text=@tester', { timeout: 10_000 });
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Add to bag' }).first().click(); // access is active from the tests above
+    assert.equal(await page.locator('text=/access pass|access fee unlocks|Activate my access/i').count(), 0, 'no paid access anywhere');
+    // The bag works before signing in; checkout asks for Discord, and the bag is still there afterwards.
+    await page.locator('article.product', { hasText: 'Game Keys' }).getByRole('button', { name: 'Add to bag' }).click();
     await page.getByRole('button', { name: /Open bag, 1 items/ }).click();
+    await page.getByRole('button', { name: /Sign in with Discord to check out/ }).click();
+    await page.getByRole('link', { name: /Continue with Discord/ }).click();
+    await page.waitForSelector('text=Your bag', { timeout: 10_000 });
     await Promise.all([page.waitForURL(/checkout\.stripe\.com/), page.getByRole('button', { name: /Continue to checkout/ }).click()]);
     const sessionId = page.url().split('/').pop();
     fakes.pay(sessionId);
     await page.goto(`${base}/?payment=return&session_id=${sessionId}`);
-    await page.waitForSelector('text=Payment confirmed. Your account is updated.');
-    await page.waitForSelector('text=on the NØX Discord');
+    await page.waitForSelector('text=Thank you, Tester.');
+    await page.waitForSelector('text=PAYMENT CONFIRMED');
+    const ticketLink = page.getByRole('link', { name: /Open ticket #\d{4}/ });
+    assert.match(await ticketLink.getAttribute('href'), new RegExp(`^https://discord\\.com/channels/${guild.id}/\\d+$`));
+    await page.waitForSelector('text=Delivered');
+    if (process.env.NOX_SHOTS) {
+      await page.screenshot({ path: `${process.env.NOX_SHOTS}/receipt-desktop.png` });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: `${process.env.NOX_SHOTS}/receipt-phone.png`, fullPage: false });
+      await page.setViewportSize({ width: 1366, height: 900 });
+    }
+    await page.getByRole('button', { name: 'My orders' }).last().click();
+    await page.locator('.order-top b', { hasText: 'DELIVERED' }).first().waitFor();
+    assert.ok(await page.getByRole('link', { name: /Open ticket #\d{4}/ }).first().isVisible(), 'My orders links to the ticket too');
+    if (process.env.NOX_SHOTS) {
+      await page.screenshot({ path: `${process.env.NOX_SHOTS}/orders.png` });
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Tester' }).click();
+      await page.waitForSelector('text=/signed in and a Member of the NØX Discord/');
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${process.env.NOX_SHOTS}/account.png` });
+      await page.keyboard.press('Escape');
+      await page.locator('#how').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `${process.env.NOX_SHOTS}/how.png` });
+    }
     assert.deepEqual(problems, []);
   } finally {
     await browser.close();

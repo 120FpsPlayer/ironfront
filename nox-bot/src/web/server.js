@@ -4,18 +4,20 @@
  * The store website, served by the bot (src/features/website.js starts it). The page (web/public/index.html) talks
  * to this API under /api/nox/:
  *
- *   GET  store            products (the bot's shop), access price, what's switched on, the Discord invite
- *   GET  session          the signed-in Discord user and whether their NØX Access is active
- *   GET  auth/start       → Discord sign-in;  auth/callback  ← back from Discord (sets the session cookie)
+ *   GET  store            products (the bot's shop), what's switched on, the Discord invite
+ *   GET  session          the signed-in Discord user (signing in is all it takes to buy – there is no access fee)
+ *   GET  auth/start       → Discord sign-in;  auth/callback  ← back from Discord (sets the session cookie; the bot adds
+ *                         the user to the NØX server with the Member role – onLogin)
  *   POST logout
- *   POST checkout         { kind: 'access' | 'products', requestId, items: [{ id, quantity }] } → { url } (Stripe Checkout)
+ *   POST checkout         { kind: 'products', requestId, items: [{ id, quantity }] } → { url } (Stripe Checkout)
  *   POST verify           { sessionId } – after Stripe sends the buyer back: is it paid?
  *   GET  orders           the user's website orders (newest first)
  *   POST stripe/webhook   Stripe → paid / expired (signature checked)
  *   GET  image/:id        a product's own picture
  *
  * Prices always come from the bot's catalog – never from the browser. A paid order is handed to the bot
- * (onPaid): an order ticket opens on Discord and the product is delivered like any other paid order.
+ * (onPaid): an order ticket opens on Discord and the product is delivered like any other paid order. The order then
+ * carries its ticket (number + link) and whether it was delivered – the page's receipt and My orders show them.
  */
 
 const http = require('node:http');
@@ -36,8 +38,8 @@ const authReady = () => Boolean(discord.clientId() && web().clientSecret && web(
 const paymentsReady = () => Boolean(env.stripeKey && web().publicUrl);
 
 // ───────────── Products ─────────────
-/** Set by createWebServer: { catalog, info, onPaid, currency }. */
-let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, currency: () => 'eur' };
+/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency }. */
+let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, onLogin: async () => null, isMember: () => null, currency: () => 'eur' };
 const products = () => hooks.catalog();
 const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, published: true });
 
@@ -118,12 +120,28 @@ function limited(req, bucket, max, windowMs = 60_000) {
 const userOf = (req) => store.sessionUser(cookies(req).nox_sid);
 const sessionJson = (user) => ({
   user: user ? { id: user.id, name: user.name, username: user.username, avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128` : null } : null,
-  access: Boolean(user?.access),
+  access: Boolean(user), // signed in = can buy
+  member: user ? hooks.isMember(user.id) : null, // on the NØX Discord (null = unknown)
 });
 
 // ───────────── Orders ─────────────
 function orderJson(order) {
-  return { id: order.id, kind: order.kind, items: order.items, amount: order.amount, currency: order.currency, status: order.status, created: order.created, stripe_id: order.stripe_id, delivery: order.status === 'paid' ? order.delivery ?? null : null };
+  const paid = order.status === 'paid';
+  return {
+    id: order.id,
+    kind: order.kind,
+    items: order.items.map((i) => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
+    amount: order.amount,
+    currency: order.currency,
+    status: order.status,
+    created: order.created,
+    stripe_id: order.stripe_id,
+    delivery: paid ? order.delivery ?? null : null,
+    ticketNumber: paid ? order.ticketNumber ?? null : null,
+    ticketUrl: paid ? order.ticketUrl ?? null : null,
+    delivered: paid && Boolean(order.delivered),
+    waiting: paid && Boolean(order.waitingForMember && !order.handedOver),
+  };
 }
 
 /** Stripe says paid (verify or webhook) → the order is paid once; the team is told once. */
@@ -150,42 +168,30 @@ async function checkout(req, res, user) {
   if (!paymentsReady()) return fail(res, 503, 'Checkout is not open yet. No payment has been taken.');
   if (limited(req, 'checkout', 10)) return fail(res, 429, 'Too many tries – wait a minute and try again.');
   const body = await jsonBody(req);
-  const kind = body.kind === 'access' ? 'access' : body.kind === 'products' ? 'products' : null;
-  if (!kind) return fail(res, 400, 'Unknown checkout.');
+  if (body.kind === 'access') return fail(res, 409, "Signing in with Discord is all you need – there's no access fee.");
+  if (body.kind !== 'products') return fail(res, 400, 'Unknown checkout.');
+  const kind = 'products';
   const requestId = String(body.requestId ?? '').slice(0, 100) || crypto.randomUUID();
 
   // The same click twice (double click, back button) → the same payment page.
   const again = store.orderByRequest(user.id, requestId);
   if (again?.status === 'pending' && again.url) return send(res, 200, { url: again.url, order: again.id });
 
-  let lines;
-  let items;
-  if (kind === 'access') {
-    if (user.access) return fail(res, 409, 'Your NØX access is already active.');
-    if (!web().accessPrice) {
-      store.grantAccess(user.id);
-      return fail(res, 409, 'Your NØX access is already active.');
-    }
-    items = [{ id: 'access', name: 'NØX Access', price: web().accessPrice, quantity: 1 }];
-    lines = [{ name: 'NØX Access – one-time access pass', amount: web().accessPrice, quantity: 1 }];
-  } else {
-    if (!user.access) return fail(res, 403, 'Activate your NØX access first.');
-    const list = products();
-    const wanted = new Map();
-    for (const it of Array.isArray(body.items) ? body.items.slice(0, 50) : []) {
-      const qty = Number(it?.quantity);
-      if (!Number.isInteger(qty) || qty < 1) continue;
-      wanted.set(String(it.id), Math.min(MAX_QTY, (wanted.get(String(it.id)) ?? 0) + qty));
-    }
-    items = [];
-    for (const [id, quantity] of wanted) {
-      const p = list.find((x) => x.id === id);
-      if (!p) return fail(res, 400, 'Something in your bag is no longer available. Remove it and try again.');
-      items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity), productId: p.productId ?? null, variant: p.variant ?? null });
-    }
-    if (!items.length) return fail(res, 400, 'Your bag is empty.');
-    lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity }));
+  const list = products();
+  const wanted = new Map();
+  for (const it of Array.isArray(body.items) ? body.items.slice(0, 50) : []) {
+    const qty = Number(it?.quantity);
+    if (!Number.isInteger(qty) || qty < 1) continue;
+    wanted.set(String(it.id), Math.min(MAX_QTY, (wanted.get(String(it.id)) ?? 0) + qty));
   }
+  const items = [];
+  for (const [id, quantity] of wanted) {
+    const p = list.find((x) => x.id === id);
+    if (!p) return fail(res, 400, 'Something in your bag is no longer available. Remove it and try again.');
+    items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity), productId: p.productId ?? null, variant: p.variant ?? null });
+  }
+  if (!items.length) return fail(res, 400, 'Your bag is empty.');
+  const lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity }));
   const amount = items.reduce((s, i) => s + i.price * i.quantity, 0);
   if (amount < STRIPE_MIN) return fail(res, 400, 'The total is below the smallest card payment (0.50 €).');
 
@@ -252,11 +258,15 @@ async function authCallback(req, res, url) {
     return redirect(res, '/?auth=failed', [clear]);
   }
   try {
-    const me = await discord.userFromCode(String(url.searchParams.get('code') ?? ''));
+    const { me, accessToken } = await discord.userFromCode(String(url.searchParams.get('code') ?? ''));
     const user = store.upsertUser(me);
-    if (!web().accessPrice) store.grantAccess(user.id); // free access – signing in is enough
+    // Not on the NØX Discord yet → the bot adds them (Member role included). Signing in never fails because of it.
+    const joined = await Promise.resolve(hooks.onLogin(user, accessToken)).catch((err) => {
+      console.warn(`[web] adding ${user.id} to the server:`, err.message);
+      return null;
+    });
     const token = store.createSession(user.id);
-    return redirect(res, '/?connected=1', [clear, cookie('nox_sid', token, 30 * 86_400)]);
+    return redirect(res, `/?connected=1${joined?.added ? '&joined=1' : ''}`, [clear, cookie('nox_sid', token, 30 * 86_400)]);
   } catch (err) {
     console.warn('[web] sign-in:', err.message);
     return redirect(res, '/?auth=failed', [clear]);
@@ -300,7 +310,7 @@ async function handle(req, res) {
         preview: !live,
         authReady: authReady(),
         paymentsReady: paymentsReady(),
-        accessPrice: web().accessPrice || null,
+        accessPrice: null, // no access fee – signing in with Discord is enough
         discordUrl: hooks.info().invite || null,
       });
     }
@@ -337,7 +347,10 @@ async function handle(req, res) {
   return fail(res, 405, 'Method not allowed');
 }
 
-/** The website server. h: { catalog() → products, info() → { invite }, onPaid(order, user), currency() → 'eur' }. */
+/**
+ * The website server. h: { catalog() → products, info() → { invite }, onPaid(order, user),
+ * onLogin(user, accessToken) → { added, member }, isMember(userId) → true | false | null, currency() → 'eur' }.
+ */
 function createWebServer(h = {}) {
   hooks = { ...hooks, ...h };
   return http.createServer((req, res) => {

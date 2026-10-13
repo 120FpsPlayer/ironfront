@@ -225,11 +225,12 @@ The bot also runs your NØX store website, in the same program on the same serve
 
 - `/product add | edit | stock | variants | sale` show on the website right away.
 - Only products with a fixed price are listed. Every option is listed separately, flash sale prices are included, sold-out products are hidden and product pictures are shown.
-- **Continue with Discord** signs the buyer in with the bot's own application. Their Discord ID links everything.
-- **NØX Access** (a one-time pass, `WEB_ACCESS_PRICE`) unlocks the store. Then the buyer fills the bag and pays by card on **Stripe** (the same `STRIPE_SECRET_KEY`).
+- **Continue with Discord** signs the buyer in with the bot's own application. Their Discord ID links everything. Signing in is all it takes to buy – there is no access fee.
+- Someone who isn't on the server yet is **added automatically with the Member role** when they sign in (OAuth2 `guilds.join`), and a member without the role gets it. The bot needs *Create Invite* and *Manage Roles* (it has them after `/build`).
+- The buyer fills the bag (it works before signing in, too) and pays by card on **Stripe** (the same `STRIPE_SECRET_KEY`).
 - **Paid** opens the buyer's order ticket on Discord (paid with "Website", nothing more to pay). Products with files or text (`/product delivery`) are delivered right away in the ticket and by DM, like any paid order, and everything else pings the sellers.
 - A buyer who isn't on the server yet gets their ticket as soon as they join.
-- **My orders** on the website shows the status and which ticket the order is in.
+- After paying, the buyer sees a **receipt**: the order reference, what was bought, the total, the ticket with a button straight to it, and whether it's delivered already. **My orders** shows the same for every order.
 - Every payment is posted in the log channel. The Support buttons use `DISCORD_INVITE_URL`, or a permanent invite the bot makes itself.
 
 **Setup:**

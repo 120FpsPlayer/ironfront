@@ -167,4 +167,4 @@ async function handleAnswer(interaction) {
   return grant(interaction, check.role);
 }
 
-module.exports = { verifyPanel, handleButton, handleAnswer, sign };
+module.exports = { verifyPanel, handleButton, handleAnswer, sign, memberRole };

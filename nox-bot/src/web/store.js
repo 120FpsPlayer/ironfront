@@ -4,10 +4,11 @@
  * The website's own JSON database (data/web.json): users, sessions and orders. Writes go to a temp file first and are then
  * renamed, so a crash never leaves half a file. Fine for a shop – thousands of orders, not millions.
  *
- * users[discordId]  = { id, name, username, avatar, access, accessAt, createdAt, lastSeenAt }
+ * users[discordId]  = { id, name, username, avatar, createdAt, lastSeenAt }
  * sessions[token]   = { userId, createdAt, expiresAt }
- * orders[id]        = { id, userId, kind ('access'|'products'), items [{ id, name, price, quantity }], amount, currency,
- *                       status ('pending'|'paid'|'expired'|'failed'), stripe_id, requestId, created, paidAt, delivery }
+ * orders[id]        = { id, userId, kind ('products'), items [{ id, name, price, quantity }], amount, currency,
+ *                       status ('pending'|'paid'|'expired'|'failed'), stripe_id, requestId, created, paidAt,
+ *                       delivery, ticketNumber, ticketUrl, delivered }
  */
 
 const fs = require('node:fs');
@@ -48,7 +49,7 @@ const save = () => {
 function upsertUser(discordUser) {
   const id = String(discordUser.id);
   const now = Date.now();
-  const user = state.users[id] ?? { id, access: false, accessAt: null, createdAt: now };
+  const user = state.users[id] ?? { id, createdAt: now };
   user.username = discordUser.username;
   user.name = discordUser.global_name || discordUser.username;
   user.avatar = discordUser.avatar ?? null;
@@ -106,27 +107,14 @@ function updateOrder(id, patch) {
   return order;
 }
 
-/** Paid → the order is marked once, and an access order turns access on. Returns { order, first } (first = just now). */
+/** Paid → the order is marked once. Returns { order, first } (first = just now). */
 function markPaid(id, extra = {}) {
   const order = state.orders[id];
   if (!order) return { order: null, first: false };
   if (order.status === 'paid') return { order, first: false };
   Object.assign(order, extra, { status: 'paid', paidAt: Date.now() });
-  if (order.kind === 'access') {
-    const user = state.users[order.userId];
-    if (user && !user.access) Object.assign(user, { access: true, accessAt: Date.now() });
-  }
   save();
   return { order, first: true };
 }
 
-function grantAccess(userId) {
-  const user = state.users[userId];
-  if (user && !user.access) {
-    Object.assign(user, { access: true, accessAt: Date.now() });
-    save();
-  }
-  return user;
-}
-
-module.exports = { load, flush, upsertUser, createSession, sessionUser, endSession, createOrder, getOrder, orderByStripe, orderByRequest, ordersOf, updateOrder, markPaid, grantAccess, _state: () => state };
+module.exports = { load, flush, upsertUser, createSession, sessionUser, endSession, createOrder, getOrder, orderByStripe, orderByRequest, ordersOf, updateOrder, markPaid, _state: () => state };

@@ -856,6 +856,18 @@ class FakeGuild {
         }
         return this.cache.get(id);
       },
+      /** OAuth2 guilds.join – the website adds a signed-in user (guild.oauthJoins records it). */
+      async add(user, { accessToken, roles = [] } = {}) {
+        const id = typeof user === 'string' ? user : user.id;
+        if (!accessToken) throw apiError(50035, 'Invalid Form Body\naccess_token: required');
+        guild.assertBotCan('CreateInstantInvite');
+        if (this.cache.has(id)) return this.cache.get(id);
+        guild.unknownMembers?.delete(id);
+        const m = new FakeMember(guild, id, { roles: [...roles] });
+        this.cache.set(id, m);
+        guild.oauthJoins = [...(guild.oauthJoins ?? []), { id, accessToken, roles: [...roles] }];
+        return m;
+      },
     };
     this.members.cache.set(ownerId, new FakeMember(this, ownerId));
     for (let i = 0; i < humans; i += 1) {
