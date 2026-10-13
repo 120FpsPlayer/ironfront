@@ -219,6 +219,26 @@ Give your team their roles (Manager, Support, Seller…) and you're good to go.
 
 ---
 
+## 🌐 Website (the store page, run by the bot)
+
+The bot also runs your NØX store website, in the same program on the same server. It sells exactly what's in the bot's shop:
+
+- `/product add | edit | stock | variants | sale` show on the website right away.
+- Only products with a fixed price are listed. Every option is listed separately, flash sale prices are included, sold-out products are hidden and product pictures are shown.
+- **Continue with Discord** signs the buyer in with the bot's own application. Their Discord ID links everything.
+- **NØX Access** (a one-time pass, `WEB_ACCESS_PRICE`) unlocks the store. Then the buyer fills the bag and pays by card on **Stripe** (the same `STRIPE_SECRET_KEY`).
+- **Paid** opens the buyer's order ticket on Discord (paid with "Website", nothing more to pay). Products with files or text (`/product delivery`) are delivered right away in the ticket and by DM, like any paid order, and everything else pings the sellers.
+- A buyer who isn't on the server yet gets their ticket as soon as they join.
+- **My orders** on the website shows the status and which ticket the order is in.
+- Every payment is posted in the log channel. The Support buttons use `DISCORD_INVITE_URL`, or a permanent invite the bot makes itself.
+
+**Setup:**
+1. `.env`: set `PUBLIC_URL` (the address people open) and `DISCORD_CLIENT_SECRET` (Developer Portal → OAuth2). Under Redirects, add `<PUBLIC_URL>/api/nox/auth/callback`.
+2. Optional: set `STRIPE_WEBHOOK_SECRET` (Stripe → Webhooks → `<PUBLIC_URL>/api/nox/stripe/webhook`).
+3. The port is `WEB_PORT`. On a hosting panel (Pterodactyl and similar) leave it empty: the bot uses the port the panel gives it.
+
+Until Discord sign-in and Stripe are both set up, the page shows its clearly marked offline preview. To change the design, export it from ChatGPT as one HTML file and run `node scripts/build-website.js NOX_website.html`. Website accounts and orders are kept in `data/web.json`.
+
 ## 🗺️ What /build creates
 
 ```

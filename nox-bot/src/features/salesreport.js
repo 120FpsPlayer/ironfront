@@ -166,6 +166,7 @@ const completedAt = (s) => s.completedAt ?? s.createdAt ?? 0;
  */
 function methodName(sale) {
   if (sale.paidWith === 'balance') return 'Store balance'; // features/balance.js
+  if (sale.paidWith === 'website') return 'Website'; // features/website.js
   const raw = String(sale.method ?? '').trim().toLowerCase();
   if (!raw) return 'Not given';
   const names = config.shop.paymentMethods.map((m) => String(m.name ?? '')).filter(Boolean);

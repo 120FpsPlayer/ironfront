@@ -124,12 +124,14 @@ function buildForm(type, origin) {
   return modal;
 }
 
-function checkCanOpen(member) {
+/** force – an order already paid elsewhere (the website): only a ticket system that isn't set up stops it. */
+function checkCanOpen(member, { force = false } = {}) {
   const settings = db.settings(member.guild.id);
   const category = member.guild.channels.cache.get(settings.categoryId);
   if (!category || category.type !== ChannelType.GuildCategory) {
     return 'The ticket system is not set up yet. An administrator needs to run `/build` (or `/setup set`).';
   }
+  if (force) return null;
   if (lockdown.pausedFor(member)) {
     return "The server is locked right now – new tickets and orders are paused until it's unlocked. Your open tickets keep working.";
   }
@@ -168,12 +170,12 @@ async function refreshControlMessage(channel, ticket) {
 }
 
 /** extra: more ticket fields, stored before the first card is posted (the shop's `order`, so the card shows that product). */
-async function openTicket(member, type, answers = [], extra = {}) {
+async function openTicket(member, type, answers = [], extra = {}, { force = false } = {}) {
   const guild = member.guild;
   const key = `${guild.id}:${member.id}`;
   if (creating.has(key)) throw new UserError('Your ticket is being created, one moment…');
 
-  const error = checkCanOpen(member);
+  const error = checkCanOpen(member, { force });
   if (error) throw new UserError(error);
 
   creating.add(key);

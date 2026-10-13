@@ -3,9 +3,6 @@
 /** Fake Discord + Stripe APIs for the tests (one local HTTP server), and the env that points the site at them. */
 
 const http = require('node:http');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 
 function startFakes() {
   const state = { sessions: new Map(), created: 0, user: { id: '111222333444555666', username: 'tester', global_name: 'Tester', avatar: null }, lastCheckout: null };
@@ -64,26 +61,22 @@ function startFakes() {
   );
 }
 
-/** Sets process.env for a site wired to the fakes – call before requiring server.js. */
-function fakeEnv(base, extra = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-web-'));
-  Object.assign(process.env, {
-    PORT: '0',
-    PUBLIC_URL: 'http://127.0.0.1:1',
-    DATA_DIR: dir,
-    DISCORD_CLIENT_ID: '123',
-    DISCORD_CLIENT_SECRET: 'secret',
-    DISCORD_INVITE_URL: 'https://discord.gg/nox',
-    DISCORD_ORDER_WEBHOOK_URL: `${base}/webhook`,
-    DISCORD_API_BASE: `${base}/discord`,
-    DISCORD_AUTHORIZE_URL: `${base}/discord/authorize`,
-    STRIPE_SECRET_KEY: 'sk_test_fake',
-    STRIPE_WEBHOOK_SECRET: 'whsec_test',
-    STRIPE_API_BASE: `${base}/stripe/v1`,
-    ACCESS_PRICE: '9.90',
+/** Points the bot's website settings (env.web, env.stripeKey) at the fakes. */
+function useFakes(env, base, site, extra = {}) {
+  Object.assign(env.web, {
+    enabled: true,
+    publicUrl: site,
+    clientId: '123',
+    clientSecret: 'secret',
+    stripeWebhookSecret: 'whsec_test',
+    accessPrice: 990,
+    invite: 'https://discord.gg/nox',
+    discordApi: `${base}/discord`,
+    discordAuthorize: `${base}/discord/authorize`,
+    stripeApi: `${base}/stripe/v1`,
     ...extra,
   });
-  return dir;
+  env.stripeKey = 'sk_test_fake';
 }
 
-module.exports = { startFakes, fakeEnv };
+module.exports = { startFakes, useFakes };

@@ -26,7 +26,7 @@ function blocked(ticket) {
   if (config.promos?.enabled === false) return 'Promo codes are turned off.';
   if (!o || ticket.typeId !== 'order' || ticket.status !== 'open' || ticket.completedAt) return 'This only works in an open order ticket.';
   if (o.topUp) return 'Promo codes don\'t work on balance top-ups.';
-  if (o.paidWith === 'balance' || statusOf(ticket) !== 'awaiting') return 'This order is already being paid – a code can only be added before you pay.';
+  if (o.paidWith || statusOf(ticket) !== 'awaiting') return 'This order is already being paid – a code can only be added before you pay.';
   if (o.promo && !o.promoError) return `Code **${o.promo}** is already on this order.`;
   if (!(o.subtotal > 0)) return 'This order has no fixed price yet – tell the seller your code.';
   return null;

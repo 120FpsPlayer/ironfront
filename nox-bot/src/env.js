@@ -74,8 +74,45 @@ const env = {
   paypalClientId: (process.env.PAYPAL_CLIENT_ID || '').trim(),
   paypalSecret: (process.env.PAYPAL_CLIENT_SECRET || '').trim(),
   paypalSandbox: bool('PAYPAL_SANDBOX', false),
+  /** The store website (src/web, src/features/website.js) – served by the bot itself on this port. */
+  web: webSettings(),
   ids,
 };
+
+/** "9.90" / "9,90" → 990 (cents); empty → fallback. */
+function cents(raw, fallback) {
+  const t = String(raw ?? '').trim();
+  if (!t) return fallback;
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : fallback;
+}
+
+function webSettings() {
+  const str = (name) => (process.env[name] || '').trim();
+  // WEB_PORT, or the port a hosting panel gives the server (Pterodactyl: SERVER_PORT, most others: PORT).
+  const port = Number(str('WEB_PORT') || str('SERVER_PORT') || str('PORT')) || null;
+  const guessed = port && str('SERVER_IP') && str('SERVER_IP') !== '0.0.0.0' ? `http://${str('SERVER_IP')}:${port}` : '';
+  return {
+    enabled: bool('WEB_ENABLED', true) && Boolean(port),
+    port,
+    /** The address people open, e.g. https://nox.example.com (for Discord sign-in and the Stripe return links). */
+    publicUrl: (str('PUBLIC_URL') || guessed).replace(/\/+$/, ''),
+    /** OAuth2 → Client Secret of the bot's application (Discord sign-in). The client ID is the bot's own. */
+    clientId: str('DISCORD_CLIENT_ID'),
+    clientSecret: str('DISCORD_CLIENT_SECRET'),
+    stripeWebhookSecret: str('STRIPE_WEBHOOK_SECRET'),
+    /** The one-time NØX Access price (0 = free – signing in with Discord is enough). */
+    accessPrice: cents(process.env.WEB_ACCESS_PRICE, 990),
+    /** The server whose shop the website sells (default: GUILD_ID, or the one server the bot is in). */
+    guildId: str('WEB_GUILD_ID') || null,
+    /** Invite for the Support / community buttons – empty: the bot makes a permanent one itself. */
+    invite: str('DISCORD_INVITE_URL'),
+    // Tests point these at local fakes.
+    discordApi: str('DISCORD_API_BASE') || 'https://discord.com/api',
+    discordAuthorize: str('DISCORD_AUTHORIZE_URL') || 'https://discord.com/oauth2/authorize',
+    stripeApi: str('STRIPE_API_BASE') || 'https://api.stripe.com/v1',
+  };
+}
 
 function validateEnv() {
   const problems = [];

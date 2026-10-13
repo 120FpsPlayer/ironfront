@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * A small JSON database (data/store.json): users, sessions and orders. Writes go to a temp file first and are then
+ * The website's own JSON database (data/web.json): users, sessions and orders. Writes go to a temp file first and are then
  * renamed, so a crash never leaves half a file. Fine for a shop – thousands of orders, not millions.
  *
  * users[discordId]  = { id, name, username, avatar, access, accessAt, createdAt, lastSeenAt }
@@ -13,18 +13,19 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { env } = require('./env');
+const db = require('../lib/db');
 
-const FILE = path.join(env.dataDir, 'store.json');
+const FILE = () => path.join(db.dataDir, 'web.json'); // next to the bot's db.json
 const SESSION_DAYS = 30;
 
 let state = { users: {}, sessions: {}, orders: {} };
 let timer = null;
 
 function load() {
-  fs.mkdirSync(env.dataDir, { recursive: true });
-  if (fs.existsSync(FILE)) {
-    const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  fs.mkdirSync(db.dataDir, { recursive: true });
+  state = { users: {}, sessions: {}, orders: {} };
+  if (fs.existsSync(FILE())) {
+    const raw = JSON.parse(fs.readFileSync(FILE(), 'utf8'));
     state = { users: raw.users ?? {}, sessions: raw.sessions ?? {}, orders: raw.orders ?? {} };
   }
   // Old sessions out.
@@ -35,9 +36,9 @@ function load() {
 function flush() {
   clearTimeout(timer);
   timer = null;
-  const tmp = `${FILE}.${process.pid}.tmp`;
+  const tmp = `${FILE()}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
-  fs.renameSync(tmp, FILE);
+  fs.renameSync(tmp, FILE());
 }
 const save = () => {
   if (!timer) timer = setTimeout(flush, 200);

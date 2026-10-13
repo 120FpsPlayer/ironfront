@@ -1,9 +1,11 @@
 'use strict';
 
-/** Stripe Checkout through the REST API (no SDK): create a payment page, read it back, check webhook signatures. */
+/** Website payments – Stripe Checkout through the REST API: create a payment page, read it back, check webhook signatures. */
 
 const crypto = require('node:crypto');
-const { env } = require('./env');
+const { env } = require('../env');
+
+const web = () => env.web;
 
 /** Stripe wants form encoding with brackets: line_items[0][price_data][currency]=eur … */
 function form(obj, prefix = '', out = new URLSearchParams()) {
@@ -17,7 +19,7 @@ function form(obj, prefix = '', out = new URLSearchParams()) {
 }
 
 async function call(method, path, body = null, { idempotencyKey } = {}) {
-  const res = await fetch(`${env.stripeApi}${path}`, {
+  const res = await fetch(`${web().stripeApi}${path}`, {
     method,
     headers: {
       authorization: `Bearer ${env.stripeKey}`,
@@ -40,8 +42,8 @@ async function call(method, path, body = null, { idempotencyKey } = {}) {
  * A Checkout Session for an order. lines: [{ name, amount (cents, each), quantity }].
  * Returns { id, url }.
  */
-function createCheckout({ order, user, lines, idempotencyKey }) {
-  const back = env.publicUrl;
+function createCheckout({ order, user, lines, currency, idempotencyKey }) {
+  const back = web().publicUrl;
   return call(
     'POST',
     '/checkout/sessions',
@@ -52,7 +54,7 @@ function createCheckout({ order, user, lines, idempotencyKey }) {
       client_reference_id: user.id,
       line_items: lines.map((l) => ({
         quantity: l.quantity,
-        price_data: { currency: env.currency, unit_amount: l.amount, product_data: { name: l.name } },
+        price_data: { currency, unit_amount: l.amount, product_data: { name: l.name } },
       })),
       metadata: { order_id: order.id, user_id: user.id, kind: order.kind },
       payment_intent_data: { metadata: { order_id: order.id, user_id: user.id, kind: order.kind } },
@@ -65,7 +67,7 @@ function createCheckout({ order, user, lines, idempotencyKey }) {
 const getCheckout = (id) => call('GET', `/checkout/sessions/${encodeURIComponent(id)}`);
 
 /** Checks the Stripe-Signature header (HMAC-SHA256 of "t.body"), 5 minutes tolerance. Returns the event or throws. */
-function verifyWebhook(rawBody, header, secret = env.stripeWebhookSecret, now = Date.now()) {
+function verifyWebhook(rawBody, header, secret = web().stripeWebhookSecret, now = Date.now()) {
   if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
   const parts = Object.fromEntries(String(header ?? '').split(',').map((p) => p.split('=').map((x) => x.trim())));
   const sigs = String(header ?? '').split(',').filter((p) => p.trim().startsWith('v1=')).map((p) => p.trim().slice(3));

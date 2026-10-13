@@ -251,7 +251,7 @@ async function postCard(channel, ticket) {
 
 /** A new order → its payment card, unless an automatic link (Stripe / PayPal) takes care of it. */
 async function onOrderPlaced({ channel, ticket }) {
-  if (!channel || !ticket?.order || ticket.order.paidWith === 'balance') return; // paid with store balance already (features/balance.js)
+  if (!channel || !ticket?.order || ticket.order.paidWith) return; // paid already – store balance (features/balance.js) or the website (features/website.js)
   const type = methodType(methodOf(ticket.order));
   if (type === 'stripe' && require('./stripe').enabled()) return; // stripe.js posts its link
   if (type === 'paypal' && require('./paypal').enabled()) return; // paypal.js posts its link

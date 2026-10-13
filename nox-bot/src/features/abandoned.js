@@ -45,7 +45,7 @@ function unpaidAndClosed(t) {
   const o = t.order;
   if (t.typeId !== 'order' || !o || t.status === 'open' || !t.closedAt || t.completedAt) return false;
   if ((o.status ?? 'awaiting') !== 'awaiting') return false;
-  if (o.paidWith === 'balance' || o.topUp || o.crypto?.txid) return false;
+  if (o.paidWith || o.topUp || o.crypto?.txid) return false; // paid with balance / on the website
   return !(o.payment && typeof o.payment === 'object');
 }
 

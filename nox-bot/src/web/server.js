@@ -1,58 +1,45 @@
 'use strict';
 
 /**
- * NØX website – serves the store page (public/index.html) and its API under /api/nox/:
+ * The store website, served by the bot (src/features/website.js starts it). The page (web/public/index.html) talks
+ * to this API under /api/nox/:
  *
- *   GET  store            products, access price, what's switched on (Discord sign-in, payments), the Discord invite
+ *   GET  store            products (the bot's shop), access price, what's switched on, the Discord invite
  *   GET  session          the signed-in Discord user and whether their NØX Access is active
  *   GET  auth/start       → Discord sign-in;  auth/callback  ← back from Discord (sets the session cookie)
  *   POST logout
  *   POST checkout         { kind: 'access' | 'products', requestId, items: [{ id, quantity }] } → { url } (Stripe Checkout)
  *   POST verify           { sessionId } – after Stripe sends the buyer back: is it paid?
- *   GET  orders           the user's orders (newest first)
+ *   GET  orders           the user's website orders (newest first)
  *   POST stripe/webhook   Stripe → paid / expired (signature checked)
+ *   GET  image/:id        a product's own picture
  *
- * Prices are always worked out here from products.json – never taken from the browser.
- * No packages needed: Node 18+ only.
+ * Prices always come from the bot's catalog – never from the browser. A paid order is handed to the bot
+ * (onPaid): an order ticket opens on Discord and the product is delivered like any other paid order.
  */
 
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { env } = require('./lib/env');
-const store = require('./lib/store');
-const stripe = require('./lib/stripe');
-const discord = require('./lib/discord');
+const { env } = require('../env');
+const store = require('./store');
+const stripe = require('./stripe');
+const discord = require('./discord');
 
-const PUBLIC = path.join(__dirname, 'public');
-const PRODUCTS_FILE = path.join(__dirname, 'products.json');
+const PUBLIC = path.join(__dirname, '..', '..', 'web', 'public');
 const STRIPE_MIN = 50; // Stripe's smallest charge in EUR cents
 const MAX_QTY = 10;
-const SECURE = env.publicUrl.startsWith('https://');
+const web = () => env.web;
+const secure = () => web().publicUrl.startsWith('https://');
+const authReady = () => Boolean(discord.clientId() && web().clientSecret && web().publicUrl);
+const paymentsReady = () => Boolean(env.stripeKey && web().publicUrl);
 
 // ───────────── Products ─────────────
-let productCache = { mtime: 0, list: [] };
-function products() {
-  const mtime = fs.statSync(PRODUCTS_FILE).mtimeMs;
-  if (mtime !== productCache.mtime) {
-    const raw = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
-    const list = (raw.products ?? raw).map((p) => ({
-      id: String(p.id),
-      name: String(p.name),
-      category: String(p.category ?? 'Other'),
-      description: String(p.description ?? ''),
-      price: Math.round(Number(p.price) * 100),
-      art: String(p.art ?? 'bot'),
-      published: p.published !== false,
-      delivery: p.delivery ? String(p.delivery) : null,
-    }));
-    for (const p of list) if (!(p.price >= 0)) throw new Error(`products.json: "${p.id}" has no valid price`);
-    productCache = { mtime, list };
-  }
-  return productCache.list;
-}
-const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, published: p.published }); // delivery texts stay private
+/** Set by createWebServer: { catalog, info, onPaid, currency }. */
+let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, currency: () => 'eur' };
+const products = () => hooks.catalog();
+const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, published: true });
 
 // ───────────── HTTP helpers ─────────────
 const HEADERS = {
@@ -79,7 +66,7 @@ function cookies(req) {
       .map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]),
   );
 }
-const cookie = (name, value, maxAge) => `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${SECURE ? '; Secure' : ''}`;
+const cookie = (name, value, maxAge) => `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure() ? '; Secure' : ''}`;
 
 function readBody(req, limit = 64 * 1024) {
   return new Promise((resolve, reject) => {
@@ -111,7 +98,7 @@ async function jsonBody(req) {
 function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
-  const allowed = [env.publicUrl, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean);
+  const allowed = [web().publicUrl, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean);
   return allowed.includes(origin);
 }
 
@@ -136,15 +123,7 @@ const sessionJson = (user) => ({
 
 // ───────────── Orders ─────────────
 function orderJson(order) {
-  const list = products();
-  const delivery =
-    order.status === 'paid' && order.kind === 'products'
-      ? order.items
-          .map((i) => list.find((p) => p.id === i.id)?.delivery)
-          .filter(Boolean)
-          .join('\n\n') || null
-      : null;
-  return { id: order.id, kind: order.kind, items: order.items, amount: order.amount, currency: order.currency, status: order.status, created: order.created, stripe_id: order.stripe_id, delivery };
+  return { id: order.id, kind: order.kind, items: order.items, amount: order.amount, currency: order.currency, status: order.status, created: order.created, stripe_id: order.stripe_id, delivery: order.status === 'paid' ? order.delivery ?? null : null };
 }
 
 /** Stripe says paid (verify or webhook) → the order is paid once; the team is told once. */
@@ -153,13 +132,13 @@ async function settle(order, session) {
   if (session.payment_status === 'paid') {
     const amountOk = session.amount_total === order.amount && String(session.currency).toLowerCase() === order.currency;
     if (!amountOk) {
-      console.warn(`[orders] ${order.id}: Stripe total ${session.amount_total} ${session.currency} ≠ order ${order.amount} ${order.currency} – not marked paid`);
+      console.warn(`[web] ${order.id}: Stripe total ${session.amount_total} ${session.currency} ≠ order ${order.amount} ${order.currency} – not marked paid`);
       return store.updateOrder(order.id, { status: 'failed', note: 'amount mismatch' });
     }
     const { order: paid, first } = store.markPaid(order.id, { payment_intent: session.payment_intent ?? null });
     if (first) {
-      console.log(`[orders] ${paid.id} paid – ${paid.kind} – ${(paid.amount / 100).toFixed(2)} ${paid.currency}`);
-      await discord.notifyPaid(paid, store._state().users[paid.userId]);
+      console.log(`[web] order ${paid.id} paid – ${paid.kind} – ${(paid.amount / 100).toFixed(2)} ${paid.currency}`);
+      await Promise.resolve(hooks.onPaid(paid, store._state().users[paid.userId])).catch((err) => console.warn(`[web] handing ${paid.id} to the bot:`, err.message));
     }
     return paid;
   }
@@ -168,7 +147,7 @@ async function settle(order, session) {
 }
 
 async function checkout(req, res, user) {
-  if (!env.paymentsReady) return fail(res, 503, 'Checkout is not open yet. No payment has been taken.');
+  if (!paymentsReady()) return fail(res, 503, 'Checkout is not open yet. No payment has been taken.');
   if (limited(req, 'checkout', 10)) return fail(res, 429, 'Too many tries – wait a minute and try again.');
   const body = await jsonBody(req);
   const kind = body.kind === 'access' ? 'access' : body.kind === 'products' ? 'products' : null;
@@ -183,12 +162,12 @@ async function checkout(req, res, user) {
   let items;
   if (kind === 'access') {
     if (user.access) return fail(res, 409, 'Your NØX access is already active.');
-    if (!env.accessPrice) {
+    if (!web().accessPrice) {
       store.grantAccess(user.id);
       return fail(res, 409, 'Your NØX access is already active.');
     }
-    items = [{ id: 'access', name: 'NØX Access', price: env.accessPrice, quantity: 1 }];
-    lines = [{ name: 'NØX Access – one-time access pass', amount: env.accessPrice, quantity: 1 }];
+    items = [{ id: 'access', name: 'NØX Access', price: web().accessPrice, quantity: 1 }];
+    lines = [{ name: 'NØX Access – one-time access pass', amount: web().accessPrice, quantity: 1 }];
   } else {
     if (!user.access) return fail(res, 403, 'Activate your NØX access first.');
     const list = products();
@@ -200,9 +179,9 @@ async function checkout(req, res, user) {
     }
     items = [];
     for (const [id, quantity] of wanted) {
-      const p = list.find((x) => x.id === id && x.published);
+      const p = list.find((x) => x.id === id);
       if (!p) return fail(res, 400, 'Something in your bag is no longer available. Remove it and try again.');
-      items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity) });
+      items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity), productId: p.productId ?? null, variant: p.variant ?? null });
     }
     if (!items.length) return fail(res, 400, 'Your bag is empty.');
     lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity }));
@@ -210,14 +189,15 @@ async function checkout(req, res, user) {
   const amount = items.reduce((s, i) => s + i.price * i.quantity, 0);
   if (amount < STRIPE_MIN) return fail(res, 400, 'The total is below the smallest card payment (0.50 €).');
 
-  const order = store.createOrder({ userId: user.id, kind, items, amount, currency: env.currency, requestId });
+  const currency = hooks.currency();
+  const order = store.createOrder({ userId: user.id, kind, items, amount, currency, requestId });
   try {
-    const session = await stripe.createCheckout({ order, user, lines, idempotencyKey: `nox-${order.id}` });
+    const session = await stripe.createCheckout({ order, user, lines, currency, idempotencyKey: `nox-${order.id}` });
     store.updateOrder(order.id, { stripe_id: session.id, url: session.url });
     return send(res, 200, { url: session.url, order: order.id });
   } catch (err) {
     store.updateOrder(order.id, { status: 'failed', note: err.message });
-    console.warn(`[checkout] ${order.id}:`, err.message);
+    console.warn(`[web] checkout ${order.id}:`, err.message);
     return fail(res, 502, err.status === 401 ? 'Payments are not set up correctly yet – please contact NØX.' : "The payment page couldn't be opened. Please try again.");
   }
 }
@@ -228,9 +208,9 @@ async function verify(req, res, user) {
   const order = sessionId ? store.orderByStripe(String(sessionId)) : null;
   if (!order || order.userId !== user.id) return fail(res, 404, 'This payment was not found on your account.');
   if (order.status === 'paid') return send(res, 200, { paid: true, status: 'paid', order: order.id });
-  if (!env.paymentsReady) return fail(res, 503, 'Payments are not connected right now.');
+  if (!paymentsReady()) return fail(res, 503, 'Payments are not connected right now.');
   const session = await stripe.getCheckout(order.stripe_id).catch((err) => {
-    console.warn(`[verify] ${order.id}:`, err.message);
+    console.warn(`[web] verify ${order.id}:`, err.message);
     return null;
   });
   if (!session) return fail(res, 502, "Stripe couldn't be reached. Try again in a moment.");
@@ -258,7 +238,7 @@ async function webhook(req, res) {
 
 // ───────────── Discord sign-in ─────────────
 function authStart(req, res) {
-  if (!env.authReady) return redirect(res, '/?auth=unavailable');
+  if (!authReady()) return redirect(res, '/?auth=unavailable');
   const state = crypto.randomBytes(16).toString('base64url');
   return redirect(res, discord.authorizeUrl(state), [cookie('nox_oauth', state, 600)]);
 }
@@ -274,17 +254,17 @@ async function authCallback(req, res, url) {
   try {
     const me = await discord.userFromCode(String(url.searchParams.get('code') ?? ''));
     const user = store.upsertUser(me);
-    if (!env.accessPrice) store.grantAccess(user.id); // free access – signing in is enough
+    if (!web().accessPrice) store.grantAccess(user.id); // free access – signing in is enough
     const token = store.createSession(user.id);
     return redirect(res, '/?connected=1', [clear, cookie('nox_sid', token, 30 * 86_400)]);
   } catch (err) {
-    console.warn('[auth]', err.message);
+    console.warn('[web] sign-in:', err.message);
     return redirect(res, '/?auth=failed', [clear]);
   }
 }
 
 // ───────────── Static files ─────────────
-const TYPES = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.css': 'text/css', '.js': 'text/javascript' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.css': 'text/css', '.js': 'text/javascript' };
 function serveStatic(req, res, pathname) {
   const file = pathname === '/' || pathname === '/index.html' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(pathname).replace(/^([/\\])+/, ''));
   if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
@@ -313,18 +293,26 @@ async function handle(req, res) {
   if (req.method === 'GET') {
     if (route === 'health') return send(res, 200, { ok: true });
     if (route === 'store') {
+      const live = authReady() && paymentsReady();
       return send(res, 200, {
-        products: products().filter((x) => x.published).map(publicProduct),
-        preview: env.preview,
-        authReady: env.authReady,
-        paymentsReady: env.paymentsReady,
-        accessPrice: env.accessPrice || null,
-        discordUrl: env.discordInvite || null,
+        products: products().map(publicProduct),
+        // Without Discord sign-in and Stripe the page shows its clearly marked offline preview (demo account).
+        preview: !live,
+        authReady: authReady(),
+        paymentsReady: paymentsReady(),
+        accessPrice: web().accessPrice || null,
+        discordUrl: hooks.info().invite || null,
       });
     }
     if (route === 'session') return send(res, 200, sessionJson(userOf(req)));
     if (route === 'auth/start') return authStart(req, res);
     if (route === 'auth/callback') return authCallback(req, res, url);
+    if (route.startsWith('image/')) {
+      const p = products().find((x) => x.id === decodeURIComponent(route.slice(6)));
+      if (!p?.imagePath || !fs.existsSync(p.imagePath)) return fail(res, 404, 'Not found');
+      res.writeHead(200, { ...HEADERS, 'content-type': TYPES[path.extname(p.imagePath)] ?? 'image/png', 'cache-control': 'public, max-age=300' });
+      return fs.createReadStream(p.imagePath).pipe(res);
+    }
     if (route === 'orders') {
       const user = userOf(req);
       if (!user) return fail(res, 401, 'Sign in with Discord to see your orders.');
@@ -349,34 +337,16 @@ async function handle(req, res) {
   return fail(res, 405, 'Method not allowed');
 }
 
-function createServer() {
+/** The website server. h: { catalog() → products, info() → { invite }, onPaid(order, user), currency() → 'eur' }. */
+function createWebServer(h = {}) {
+  hooks = { ...hooks, ...h };
   return http.createServer((req, res) => {
     handle(req, res).catch((err) => {
-      if (!err.status) console.error('[server]', err);
+      if (!err.status) console.error('[web]', err);
       if (!res.headersSent) fail(res, err.status ?? 500, err.status ? err.message : 'Something went wrong on our side. Please try again.');
       else res.end();
     });
   });
 }
 
-if (require.main === module) {
-  store.load();
-  products(); // a broken products.json stops the start with a clear error
-  const server = createServer().listen(env.port, () => {
-    console.log(`NØX website on http://localhost:${env.port}${env.publicUrl ? ` (public: ${env.publicUrl})` : ''}`);
-    if (!env.publicUrl) console.warn('⚠️  PUBLIC_URL is not set – Discord sign-in and payments stay off.');
-    if (!env.authReady) console.warn('⚠️  Discord sign-in is off – set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET.');
-    if (!env.paymentsReady) console.warn('⚠️  Payments are off – set STRIPE_SECRET_KEY.');
-    if (env.paymentsReady && !env.stripeWebhookSecret) console.warn('ℹ️  No STRIPE_WEBHOOK_SECRET – payments are confirmed when the buyer comes back (or clicks "Refresh payment status").');
-    if (env.preview) console.warn('ℹ️  The site shows its offline preview until Discord sign-in and payments are both set up.');
-  });
-  const stop = () => {
-    store.flush();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000).unref();
-  };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
-}
-
-module.exports = { createServer, products };
+module.exports = { createWebServer, authReady, paymentsReady };

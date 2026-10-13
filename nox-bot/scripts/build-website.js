@@ -6,7 +6,7 @@
  *   - the demo-only API stub is swapped for real calls to this server (/api/nox/...). If the server can't be reached
  *     (e.g. the file is opened straight from disk) the page still falls back to the original offline preview.
  *
- *   node tools/build-html.js path/to/NOX_website.html
+ *   node scripts/build-website.js path/to/NOX_website.html
  */
 
 const fs = require('node:fs');
@@ -15,10 +15,10 @@ const crypto = require('node:crypto');
 
 const src = process.argv[2];
 if (!src) {
-  console.error('Usage: node tools/build-html.js path/to/NOX_website.html');
+  console.error('Usage: node scripts/build-website.js path/to/NOX_website.html');
   process.exit(1);
 }
-const OUT = path.join(__dirname, '..', 'public');
+const OUT = path.join(__dirname, '..', 'web', 'public');
 let html = fs.readFileSync(src, 'utf8');
 
 // 1. Images → files (same image = same file)
@@ -62,7 +62,12 @@ html = html.replace(
   'Ue(b.get("auth")==="failed"?"Discord sign-in didn\'t work. Please try again.":b.get("auth")==="cancelled"?"Discord sign-in was cancelled.":"Discord sign-in is not connected yet. You can explore the demo.")',
 );
 
-// 4. Layout fixes on top of the design's own CSS.
+// 4. Products with their own picture (set with /product add | edit image) show it on their card.
+html = html.replace(/a\.art==="games"\?\(0,d\.jsx\)\("div",\{className:"art game-art",children:\(0,d\.jsx\)\("img",\{src:"([^"]+)"/, (all, src) =>
+  `a.art==="games"||a.image?(0,d.jsx)("div",{className:"art game-art",children:(0,d.jsx)("img",{src:a.image||"${src}"`,
+);
+
+// 5. Layout fixes on top of the design's own CSS.
 const FIXES = `
 /* Phones: the hero picture sat on top of the buttons once the title wrapped to three lines – now it follows them. */
 @media (max-width:650px){
@@ -74,4 +79,4 @@ const FIXES = `
 html = html.replace('</head>', `<style id="nox-fixes">${FIXES}</style></head>`);
 
 fs.writeFileSync(path.join(OUT, 'index.html'), html);
-console.log(`public/index.html – ${(html.length / 1024).toFixed(0)} KB, ${names.size} images in public/assets/`);
+console.log(`web/public/index.html – ${(html.length / 1024).toFixed(0)} KB, ${names.size} images in web/public/assets/`);
