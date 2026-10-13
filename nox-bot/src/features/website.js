@@ -86,14 +86,31 @@ function catalog() {
     };
     const tab = tabOf(p);
     const imagePath = images.file(p);
-    const base = { category: tab, description: p.description, art: artOf(p, tab), imagePath, productId: p.id };
+    const base = { category: tab, description: plain(p.description), art: artOf(p, tab), imagePath, productId: p.id };
     const variants = s.variantsOf(p);
     const entries = variants.length
-      ? variants.map((v) => ({ ...base, id: `${p.id}~${v.id}`, name: `${p.name} – ${v.name}`, price: cents(v.price), variant: v.name }))
-      : [{ ...base, id: p.id, name: p.name, price: cents(p.price), variant: null }];
+      ? variants.map((v) => ({ ...base, id: `${p.id}~${v.id}`, name: plain(`${p.name} – ${v.name}`), price: cents(v.price), variant: v.name }))
+      : [{ ...base, id: p.id, name: plain(p.name), price: cents(p.price), variant: null }];
     for (const e of entries) if (e.price > 0) out.push({ ...e, image: imagePath ? `/api/nox/image/${encodeURIComponent(e.id)}` : null });
   }
   return out;
+}
+
+/**
+ * Shop texts are written for Discord: custom emojis (<:nox_wallet:123…>), **bold**, -# small text… The website can't
+ * show Discord's custom emojis, so they are left out there (normal emojis like 🎮 stay) and the markdown is removed.
+ */
+function plain(text) {
+  return String(text ?? '')
+    .replace(/<a?:\w{1,32}:\d{15,25}>/g, '')
+    .replace(/:\w{1,32}:/g, (m) => (/^:[a-z0-9_]+:$/i.test(m) && !/^:\d/.test(m) ? '' : m))
+    .replace(/<(#|@&?|@!?)\d{15,25}>/g, '')
+    .replace(/^\s*-#\s+/gm, '')
+    .replace(/^\s*#{1,3}\s+/gm, '')
+    .replace(/\*\*|__|~~|\|\||`/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/ +\n/g, '\n')
+    .trim();
 }
 
 const inviteOf = () => env.web.invite || (guildOf() && db.guild(guildOf().id).webInvite?.url) || null;
@@ -269,4 +286,4 @@ hooks.on('inviteDelete', (invite) => {
   }
 });
 
-module.exports = { catalog, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, start, stop: () => server?.close(), _setClient: (c) => (client = c) };
+module.exports = { catalog, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, start, stop: () => server?.close(), _setClient: (c) => (client = c) };

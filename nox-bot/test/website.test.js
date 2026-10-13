@@ -92,6 +92,11 @@ test('the website sells the bot\'s shop: fixed prices only, every option, sale p
   assert.equal(byName['Custom Bot'], undefined, 'no fixed price → not sold online');
   assert.equal(byName['Sold out thing'], undefined);
   assert.ok(s.products.every((p) => !('imagePath' in p) && !('delivery' in p)));
+  assert.equal(
+    website.plain('Want to play 1,000+ paid games? <:nox_wallet:1555685339064967370> Get access **now**. Stop overpaying <a:nox_nox:1555685296526332095> 🎮 :nox_star:'),
+    'Want to play 1,000+ paid games? Get access now. Stop overpaying 🎮',
+    'Discord custom emojis and markdown are left out on the website',
+  );
 
   // A product picture shows on its card and is served by the website.
   const images = require('../src/lib/productImages');
@@ -207,7 +212,7 @@ test('the real page in a browser: sign in → bag → Stripe → back → My ord
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`));
   // Like a plain http://IP:port site: no crypto.randomUUID (browsers only give it on https / localhost).
-  await page.addInitScript(() => Object.defineProperty(Crypto.prototype, 'randomUUID', { value: undefined, configurable: true }));
+  await page.addInitScript(() => Object.defineProperty(Object.getPrototypeOf(globalThis.crypto), 'randomUUID', { value: undefined, configurable: true }));
   await page.route((u) => u.hostname === 'checkout.stripe.com', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Stripe</h1>' }));
   try {
     await page.goto(base);
