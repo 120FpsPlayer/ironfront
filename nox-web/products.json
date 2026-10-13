@@ -1,0 +1,44 @@
+{
+  "products": [
+    {
+      "id": "games",
+      "name": "The Game Collection",
+      "category": "Games",
+      "description": "Your next adventure is waiting. Access to 1,000+ paid PC games with the NØX method – step-by-step guide and support included.",
+      "price": 9.90,
+      "art": "games",
+      "published": true,
+      "delivery": "Payment confirmed! Open a ticket in the NØX Discord with your order reference – your guide is sent to you there."
+    },
+    {
+      "id": "discord-bot",
+      "name": "Your Discord. Upgraded.",
+      "category": "Discord Bots",
+      "description": "A custom bot built for your community – tickets, shop, verification, moderation and more. Set up for you, with hosting help.",
+      "price": 29.90,
+      "art": "bot",
+      "published": true,
+      "delivery": "Payment confirmed! Open a ticket in the NØX Discord with your order reference and tell us what your bot should do."
+    },
+    {
+      "id": "game-bundle",
+      "name": "The Game Bundle",
+      "category": "Games",
+      "description": "More to play. One collection. Five top games together – GTA V, Elden Ring, Cyberpunk 2077, Schedule I and Red Dead Redemption 2.",
+      "price": 15.00,
+      "art": "bundle",
+      "published": true,
+      "delivery": "Payment confirmed! Open a ticket in the NØX Discord with your order reference to receive your games."
+    },
+    {
+      "id": "discord-server",
+      "name": "A Server of Your Own.",
+      "category": "Discord Servers",
+      "description": "A complete Discord server with its own identity – channels, roles, permissions, branding and bots, handed over ready to use.",
+      "price": 24.90,
+      "art": "server",
+      "published": true,
+      "delivery": "Payment confirmed! Open a ticket in the NØX Discord with your order reference and tell us about your server."
+    }
+  ]
+}

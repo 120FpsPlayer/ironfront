@@ -1,0 +1,382 @@
+'use strict';
+
+/**
+ * NØX website – serves the store page (public/index.html) and its API under /api/nox/:
+ *
+ *   GET  store            products, access price, what's switched on (Discord sign-in, payments), the Discord invite
+ *   GET  session          the signed-in Discord user and whether their NØX Access is active
+ *   GET  auth/start       → Discord sign-in;  auth/callback  ← back from Discord (sets the session cookie)
+ *   POST logout
+ *   POST checkout         { kind: 'access' | 'products', requestId, items: [{ id, quantity }] } → { url } (Stripe Checkout)
+ *   POST verify           { sessionId } – after Stripe sends the buyer back: is it paid?
+ *   GET  orders           the user's orders (newest first)
+ *   POST stripe/webhook   Stripe → paid / expired (signature checked)
+ *
+ * Prices are always worked out here from products.json – never taken from the browser.
+ * No packages needed: Node 18+ only.
+ */
+
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { env } = require('./lib/env');
+const store = require('./lib/store');
+const stripe = require('./lib/stripe');
+const discord = require('./lib/discord');
+
+const PUBLIC = path.join(__dirname, 'public');
+const PRODUCTS_FILE = path.join(__dirname, 'products.json');
+const STRIPE_MIN = 50; // Stripe's smallest charge in EUR cents
+const MAX_QTY = 10;
+const SECURE = env.publicUrl.startsWith('https://');
+
+// ───────────── Products ─────────────
+let productCache = { mtime: 0, list: [] };
+function products() {
+  const mtime = fs.statSync(PRODUCTS_FILE).mtimeMs;
+  if (mtime !== productCache.mtime) {
+    const raw = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
+    const list = (raw.products ?? raw).map((p) => ({
+      id: String(p.id),
+      name: String(p.name),
+      category: String(p.category ?? 'Other'),
+      description: String(p.description ?? ''),
+      price: Math.round(Number(p.price) * 100),
+      art: String(p.art ?? 'bot'),
+      published: p.published !== false,
+      delivery: p.delivery ? String(p.delivery) : null,
+    }));
+    for (const p of list) if (!(p.price >= 0)) throw new Error(`products.json: "${p.id}" has no valid price`);
+    productCache = { mtime, list };
+  }
+  return productCache.list;
+}
+const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, published: p.published }); // delivery texts stay private
+
+// ───────────── HTTP helpers ─────────────
+const HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'x-frame-options': 'DENY',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+};
+
+function send(res, status, body, headers = {}) {
+  const json = typeof body !== 'string' && !Buffer.isBuffer(body);
+  res.writeHead(status, { ...HEADERS, ...(json && { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }), ...headers });
+  res.end(json ? JSON.stringify(body) : body);
+}
+const fail = (res, status, error) => send(res, status, { error });
+const redirect = (res, to, cookies = []) => send(res, 302, '', { location: to, 'set-cookie': cookies, 'cache-control': 'no-store' });
+
+function cookies(req) {
+  return Object.fromEntries(
+    String(req.headers.cookie ?? '')
+      .split(';')
+      .map((c) => c.trim().split('='))
+      .filter(([k, v]) => k && v !== undefined)
+      .map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]),
+  );
+}
+const cookie = (name, value, maxAge) => `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${SECURE ? '; Secure' : ''}`;
+
+function readBody(req, limit = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(Object.assign(new Error('Request too large'), { status: 413 }));
+        req.destroy();
+      } else chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+async function jsonBody(req) {
+  if (!String(req.headers['content-type'] ?? '').includes('application/json')) throw Object.assign(new Error('Send JSON.'), { status: 415 });
+  const raw = await readBody(req);
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw Object.assign(new Error('Invalid JSON.'), { status: 400 });
+  }
+}
+
+/** POSTs from other sites are refused (the session cookie is SameSite=Lax too). */
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const allowed = [env.publicUrl, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean);
+  return allowed.includes(origin);
+}
+
+// Simple per-IP limits: { key → [timestamps] }
+const hits = new Map();
+function limited(req, bucket, max, windowMs = 60_000) {
+  const ip = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+  const key = `${bucket}:${ip}`;
+  const now = Date.now();
+  const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  list.push(now);
+  hits.set(key, list);
+  if (hits.size > 10_000) hits.clear();
+  return list.length > max;
+}
+
+const userOf = (req) => store.sessionUser(cookies(req).nox_sid);
+const sessionJson = (user) => ({
+  user: user ? { id: user.id, name: user.name, username: user.username, avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128` : null } : null,
+  access: Boolean(user?.access),
+});
+
+// ───────────── Orders ─────────────
+function orderJson(order) {
+  const list = products();
+  const delivery =
+    order.status === 'paid' && order.kind === 'products'
+      ? order.items
+          .map((i) => list.find((p) => p.id === i.id)?.delivery)
+          .filter(Boolean)
+          .join('\n\n') || null
+      : null;
+  return { id: order.id, kind: order.kind, items: order.items, amount: order.amount, currency: order.currency, status: order.status, created: order.created, stripe_id: order.stripe_id, delivery };
+}
+
+/** Stripe says paid (verify or webhook) → the order is paid once; the team is told once. */
+async function settle(order, session) {
+  if (!order || !session) return order;
+  if (session.payment_status === 'paid') {
+    const amountOk = session.amount_total === order.amount && String(session.currency).toLowerCase() === order.currency;
+    if (!amountOk) {
+      console.warn(`[orders] ${order.id}: Stripe total ${session.amount_total} ${session.currency} ≠ order ${order.amount} ${order.currency} – not marked paid`);
+      return store.updateOrder(order.id, { status: 'failed', note: 'amount mismatch' });
+    }
+    const { order: paid, first } = store.markPaid(order.id, { payment_intent: session.payment_intent ?? null });
+    if (first) {
+      console.log(`[orders] ${paid.id} paid – ${paid.kind} – ${(paid.amount / 100).toFixed(2)} ${paid.currency}`);
+      await discord.notifyPaid(paid, store._state().users[paid.userId]);
+    }
+    return paid;
+  }
+  if (session.status === 'expired' && order.status === 'pending') return store.updateOrder(order.id, { status: 'expired' });
+  return order;
+}
+
+async function checkout(req, res, user) {
+  if (!env.paymentsReady) return fail(res, 503, 'Checkout is not open yet. No payment has been taken.');
+  if (limited(req, 'checkout', 10)) return fail(res, 429, 'Too many tries – wait a minute and try again.');
+  const body = await jsonBody(req);
+  const kind = body.kind === 'access' ? 'access' : body.kind === 'products' ? 'products' : null;
+  if (!kind) return fail(res, 400, 'Unknown checkout.');
+  const requestId = String(body.requestId ?? '').slice(0, 100) || crypto.randomUUID();
+
+  // The same click twice (double click, back button) → the same payment page.
+  const again = store.orderByRequest(user.id, requestId);
+  if (again?.status === 'pending' && again.url) return send(res, 200, { url: again.url, order: again.id });
+
+  let lines;
+  let items;
+  if (kind === 'access') {
+    if (user.access) return fail(res, 409, 'Your NØX access is already active.');
+    if (!env.accessPrice) {
+      store.grantAccess(user.id);
+      return fail(res, 409, 'Your NØX access is already active.');
+    }
+    items = [{ id: 'access', name: 'NØX Access', price: env.accessPrice, quantity: 1 }];
+    lines = [{ name: 'NØX Access – one-time access pass', amount: env.accessPrice, quantity: 1 }];
+  } else {
+    if (!user.access) return fail(res, 403, 'Activate your NØX access first.');
+    const list = products();
+    const wanted = new Map();
+    for (const it of Array.isArray(body.items) ? body.items.slice(0, 50) : []) {
+      const qty = Number(it?.quantity);
+      if (!Number.isInteger(qty) || qty < 1) continue;
+      wanted.set(String(it.id), Math.min(MAX_QTY, (wanted.get(String(it.id)) ?? 0) + qty));
+    }
+    items = [];
+    for (const [id, quantity] of wanted) {
+      const p = list.find((x) => x.id === id && x.published);
+      if (!p) return fail(res, 400, 'Something in your bag is no longer available. Remove it and try again.');
+      items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity) });
+    }
+    if (!items.length) return fail(res, 400, 'Your bag is empty.');
+    lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity }));
+  }
+  const amount = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  if (amount < STRIPE_MIN) return fail(res, 400, 'The total is below the smallest card payment (0.50 €).');
+
+  const order = store.createOrder({ userId: user.id, kind, items, amount, currency: env.currency, requestId });
+  try {
+    const session = await stripe.createCheckout({ order, user, lines, idempotencyKey: `nox-${order.id}` });
+    store.updateOrder(order.id, { stripe_id: session.id, url: session.url });
+    return send(res, 200, { url: session.url, order: order.id });
+  } catch (err) {
+    store.updateOrder(order.id, { status: 'failed', note: err.message });
+    console.warn(`[checkout] ${order.id}:`, err.message);
+    return fail(res, 502, err.status === 401 ? 'Payments are not set up correctly yet – please contact NØX.' : "The payment page couldn't be opened. Please try again.");
+  }
+}
+
+async function verify(req, res, user) {
+  if (limited(req, 'verify', 30)) return fail(res, 429, 'Too many tries – wait a minute and try again.');
+  const { sessionId } = await jsonBody(req);
+  const order = sessionId ? store.orderByStripe(String(sessionId)) : null;
+  if (!order || order.userId !== user.id) return fail(res, 404, 'This payment was not found on your account.');
+  if (order.status === 'paid') return send(res, 200, { paid: true, status: 'paid', order: order.id });
+  if (!env.paymentsReady) return fail(res, 503, 'Payments are not connected right now.');
+  const session = await stripe.getCheckout(order.stripe_id).catch((err) => {
+    console.warn(`[verify] ${order.id}:`, err.message);
+    return null;
+  });
+  if (!session) return fail(res, 502, "Stripe couldn't be reached. Try again in a moment.");
+  const updated = await settle(order, session);
+  return send(res, 200, { paid: updated.status === 'paid', status: updated.status, order: updated.id });
+}
+
+async function webhook(req, res) {
+  const raw = await readBody(req, 512 * 1024);
+  let event;
+  try {
+    event = stripe.verifyWebhook(raw, req.headers['stripe-signature']);
+  } catch (err) {
+    return fail(res, 400, `Webhook: ${err.message}`);
+  }
+  const s = event.data?.object ?? {};
+  const order = (s.metadata?.order_id && store.getOrder(s.metadata.order_id)) || (s.id && store.orderByStripe(s.id));
+  if (order && ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.expired'].includes(event.type)) {
+    await settle(order, s);
+  } else if (order && event.type === 'checkout.session.async_payment_failed' && order.status === 'pending') {
+    store.updateOrder(order.id, { status: 'failed' });
+  }
+  return send(res, 200, { received: true });
+}
+
+// ───────────── Discord sign-in ─────────────
+function authStart(req, res) {
+  if (!env.authReady) return redirect(res, '/?auth=unavailable');
+  const state = crypto.randomBytes(16).toString('base64url');
+  return redirect(res, discord.authorizeUrl(state), [cookie('nox_oauth', state, 600)]);
+}
+
+async function authCallback(req, res, url) {
+  const clear = cookie('nox_oauth', '', 0);
+  if (url.searchParams.get('error')) return redirect(res, '/?auth=cancelled', [clear]);
+  const state = url.searchParams.get('state');
+  const expected = cookies(req).nox_oauth;
+  if (!state || !expected || state.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
+    return redirect(res, '/?auth=failed', [clear]);
+  }
+  try {
+    const me = await discord.userFromCode(String(url.searchParams.get('code') ?? ''));
+    const user = store.upsertUser(me);
+    if (!env.accessPrice) store.grantAccess(user.id); // free access – signing in is enough
+    const token = store.createSession(user.id);
+    return redirect(res, '/?connected=1', [clear, cookie('nox_sid', token, 30 * 86_400)]);
+  } catch (err) {
+    console.warn('[auth]', err.message);
+    return redirect(res, '/?auth=failed', [clear]);
+  }
+}
+
+// ───────────── Static files ─────────────
+const TYPES = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.css': 'text/css', '.js': 'text/javascript' };
+function serveStatic(req, res, pathname) {
+  const file = pathname === '/' || pathname === '/index.html' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(pathname).replace(/^([/\\])+/, ''));
+  if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    // Unknown paths show the store (single page) – but not for missing assets.
+    if (pathname.startsWith('/assets/')) return fail(res, 404, 'Not found');
+    return serveStatic(req, res, '/');
+  }
+  const ext = path.extname(file);
+  const cache = ext === '.html' ? 'no-cache' : 'public, max-age=604800, immutable';
+  res.writeHead(200, { ...HEADERS, 'content-type': TYPES[ext] ?? 'application/octet-stream', 'cache-control': cache });
+  if (req.method === 'HEAD') return res.end();
+  fs.createReadStream(file).pipe(res);
+}
+
+// ───────────── Router ─────────────
+async function handle(req, res) {
+  const url = new URL(req.url, 'http://local');
+  const p = url.pathname;
+  if (!p.startsWith('/api/nox/')) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'Method not allowed');
+    return serveStatic(req, res, p);
+  }
+  const route = p.slice('/api/nox/'.length);
+  if (limited(req, 'api', 120)) return fail(res, 429, 'Slow down a little and try again.');
+
+  if (req.method === 'GET') {
+    if (route === 'health') return send(res, 200, { ok: true });
+    if (route === 'store') {
+      return send(res, 200, {
+        products: products().filter((x) => x.published).map(publicProduct),
+        preview: env.preview,
+        authReady: env.authReady,
+        paymentsReady: env.paymentsReady,
+        accessPrice: env.accessPrice || null,
+        discordUrl: env.discordInvite || null,
+      });
+    }
+    if (route === 'session') return send(res, 200, sessionJson(userOf(req)));
+    if (route === 'auth/start') return authStart(req, res);
+    if (route === 'auth/callback') return authCallback(req, res, url);
+    if (route === 'orders') {
+      const user = userOf(req);
+      if (!user) return fail(res, 401, 'Sign in with Discord to see your orders.');
+      return send(res, 200, { orders: store.ordersOf(user.id).filter((o) => o.stripe_id || o.status === 'paid').map(orderJson) });
+    }
+    return fail(res, 404, 'Not found');
+  }
+
+  if (req.method === 'POST') {
+    if (route === 'stripe/webhook') return webhook(req, res);
+    if (!sameOrigin(req)) return fail(res, 403, 'Request refused.');
+    if (route === 'logout') {
+      store.endSession(cookies(req).nox_sid);
+      return send(res, 200, { ok: true }, { 'set-cookie': cookie('nox_sid', '', 0) });
+    }
+    const user = userOf(req);
+    if (!user) return fail(res, 401, 'Sign in with Discord first.');
+    if (route === 'checkout') return checkout(req, res, user);
+    if (route === 'verify') return verify(req, res, user);
+    return fail(res, 404, 'Not found');
+  }
+  return fail(res, 405, 'Method not allowed');
+}
+
+function createServer() {
+  return http.createServer((req, res) => {
+    handle(req, res).catch((err) => {
+      if (!err.status) console.error('[server]', err);
+      if (!res.headersSent) fail(res, err.status ?? 500, err.status ? err.message : 'Something went wrong on our side. Please try again.');
+      else res.end();
+    });
+  });
+}
+
+if (require.main === module) {
+  store.load();
+  products(); // a broken products.json stops the start with a clear error
+  const server = createServer().listen(env.port, () => {
+    console.log(`NØX website on http://localhost:${env.port}${env.publicUrl ? ` (public: ${env.publicUrl})` : ''}`);
+    if (!env.publicUrl) console.warn('⚠️  PUBLIC_URL is not set – Discord sign-in and payments stay off.');
+    if (!env.authReady) console.warn('⚠️  Discord sign-in is off – set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET.');
+    if (!env.paymentsReady) console.warn('⚠️  Payments are off – set STRIPE_SECRET_KEY.');
+    if (env.paymentsReady && !env.stripeWebhookSecret) console.warn('ℹ️  No STRIPE_WEBHOOK_SECRET – payments are confirmed when the buyer comes back (or clicks "Refresh payment status").');
+    if (env.preview) console.warn('ℹ️  The site shows its offline preview until Discord sign-in and payments are both set up.');
+  });
+  const stop = () => {
+    store.flush();
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2000).unref();
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+}
+
+module.exports = { createServer, products };
