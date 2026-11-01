@@ -20,7 +20,8 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const promos = require('./promos');
 const { COLORS } = require('../lib/theme');
-const { UserError, embed, logEmbed, money, pad, sendLog, truncate, ts } = require('../lib/utils');
+const { UserError, embed, logEmbed, money, pad, sendLog, truncate, ts, count, plural } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 
 const MAX_LIST = 3800; // embed description budget (Discord allows 4096)
 
@@ -51,7 +52,7 @@ function create(guildId, { userId, code, discount = null, commission = null, cre
   const d = defaults();
   const pct = discount ?? d.discount;
   const cut = commission ?? d.commission;
-  if (!(Number(cut) >= 0 && Number(cut) <= 100)) throw new UserError('The commission must be between 0 and 100%.');
+  if (!(Number(cut) >= 0 && Number(cut) <= 100)) throw new UserError('Prowizja musi wynosić od 0 do 100%.');
   const promo = promos.create(guildId, {
     code,
     percent: pct,
@@ -84,7 +85,7 @@ function create(guildId, { userId, code, discount = null, commission = null, cre
 function remove(guildId, code, by = null) {
   const c = promos.normalize(code);
   const entry = list(guildId).find((a) => a.code === c && !a.removedAt);
-  if (!entry) throw new UserError(`There is no creator code **${truncate(c, 24)}**. Pick one from the suggestions.`);
+  if (!entry) throw new UserError(`Nie ma kodu twórcy **${truncate(c, 24)}**. Wybierz kod z podpowiedzi.`);
   if (promos.find(guildId, c)?.affiliate?.userId === entry.userId) promos.remove(guildId, c);
   const open = openOrders(guildId, entry);
   Object.assign(entry, { removedAt: Date.now(), removedBy: by });
@@ -199,10 +200,10 @@ async function onOrderCompleted({ guild, ticket, sale }) {
           .send({
             embeds: [
               embed(COLORS.success)
-                .setTitle('💸 New commission')
+                .setTitle('💸 Nowa prowizja')
                 .setDescription(
-                  `You earned **${money(commission)}** from a sale with your code **${entry.code}** at **${truncate(guild.name, 100)}**.\n` +
-                    `-# Owed to you now: ${money(owedOf(entry))} · \`/affiliate stats\` shows everything.`,
+                  `Dostajesz **${money(commission)}** prowizji za sprzedaż z Twoim kodem **${entry.code}** na serwerze **${truncate(guild.name, 100)}**.\n` +
+                    `-# Do wypłaty dla Ciebie: ${money(owedOf(entry))} · \`${slash('affiliate stats')}\` pokazuje wszystko.`,
                 ),
             ],
             allowedMentions: { parse: [] },
@@ -212,13 +213,13 @@ async function onOrderCompleted({ guild, ticket, sale }) {
       : false;
   await sendLog(guild, {
     embeds: [
-      logEmbed(COLORS.brand, '🎥 Creator commission').addFields(
-        { name: 'Creator', value: `<@${entry.userId}>`, inline: true },
-        { name: 'Code', value: `\`${entry.code}\``, inline: true },
-        { name: 'Sale', value: `\`${sale.id}\`${sale.ticketNumber ? ` (\`#${pad(sale.ticketNumber)}\`)` : ''}`, inline: true },
-        { name: 'Commission', value: sale.amount == null ? '0 – the amount paid is unknown' : `${money(commission)} (${done.aff.commission}% of ${money(sale.amount)})`, inline: true },
-        { name: 'Owed in total', value: money(owedOf(entry)), inline: true },
-        { name: 'DM', value: commission > 0 ? (dm ? 'sent' : "couldn't DM") : '—', inline: true },
+      logEmbed(COLORS.brand, '🎥 Prowizja twórcy').addFields(
+        { name: 'Twórca', value: `<@${entry.userId}>`, inline: true },
+        { name: 'Kod', value: `\`${entry.code}\``, inline: true },
+        { name: 'Sprzedaż', value: `\`${sale.id}\`${sale.ticketNumber ? ` (\`#${pad(sale.ticketNumber)}\`)` : ''}`, inline: true },
+        { name: 'Prowizja', value: sale.amount == null ? '0 – zapłacona kwota jest nieznana' : `${money(commission)} (${done.aff.commission}% z ${money(sale.amount)})`, inline: true },
+        { name: 'Do wypłaty łącznie', value: money(owedOf(entry)), inline: true },
+        { name: 'Wiadomość prywatna', value: commission > 0 ? (dm ? 'wysłana' : 'nie udało się wysłać') : '—', inline: true },
       ),
     ],
   }).catch(() => null);
@@ -229,15 +230,15 @@ hooks.on('orderCompleted', onOrderCompleted);
 
 // ───────────── Embeds ─────────────
 
-/** "🟢 `HS-ALEX` · 5% off · 10% commission · 3 sales" */
+/** "🟢 `HS-ALEX` · 5% rabatu · 10% prowizji · 3 sprzedaże" */
 function codeLine(guildId, a, { owner = false } = {}) {
   const active = isActive(guildId, a);
   const sales = (a.sales ?? []).length;
   const owed = owedOf(a);
   return (
     `${active ? '🟢' : '⚫'} \`${a.code}\`${owner ? ` · <@${a.userId}>` : ''}` +
-    `${a.discount != null ? ` · ${a.discount}% off` : ''} · ${a.commission}% commission · ${sales} ${sales === 1 ? 'sale' : 'sales'}` +
-    `${owed > 0 ? ` · **${money(owed)} owed**` : ''}${active ? '' : a.removedAt ? ` · removed ${ts(a.removedAt, 'R')}` : ' · code deleted'}`
+    `${a.discount != null ? ` · ${a.discount}% rabatu` : ''} · ${a.commission}% prowizji · ${count(sales, 'sprzedaż', 'sprzedaże', 'sprzedaży')}` +
+    `${owed > 0 ? ` · **${money(owed)} do wypłaty**` : ''}${active ? '' : a.removedAt ? ` · usunięty ${ts(a.removedAt, 'R')}` : ' · kod usunięty'}`
   );
 }
 
@@ -253,46 +254,46 @@ function listEmbed(guildId) {
     budget -= l.length + 1;
     lines.push(l);
   }
-  if (lines.length < all.length) lines.push(`-# …and ${all.length - lines.length} more – see one creator with \`/affiliate stats\`.`);
+  if (lines.length < all.length) lines.push(`-# …i ${all.length - lines.length} więcej – statystyki jednego twórcy pokaże \`${slash('affiliate stats')}\`.`);
   const t = totals(guildId, all);
   return embed(COLORS.brand)
-    .setTitle(`🎥 Creator codes (${all.length})`)
-    .setDescription(lines.join('\n') || 'No creator codes yet – create one with `/affiliate create`.')
+    .setTitle(`🎥 Kody twórców (${all.length})`)
+    .setDescription(lines.join('\n') || `Nie ma jeszcze kodów twórców – utwórz pierwszy przez \`${slash('affiliate create')}\`.`)
     .addFields(
-      { name: 'Active', value: String(all.filter((a) => isActive(guildId, a)).length), inline: true },
-      { name: 'Sales', value: `${t.sales} · ${money(t.revenue)}`, inline: true },
-      { name: 'Owed in total', value: money(t.owed), inline: true },
+      { name: 'Aktywne', value: String(all.filter((a) => isActive(guildId, a)).length), inline: true },
+      { name: 'Sprzedaż', value: `${t.sales} · ${money(t.revenue)}`, inline: true },
+      { name: 'Do wypłaty łącznie', value: money(t.owed), inline: true },
     );
 }
 
 /** /affiliate stats – uses, sales, revenue and commission (earned / paid out / owed) of one creator. */
 function statsEmbed(guildId, user, { self = false } = {}) {
   const entries = byUser(guildId, user.id);
-  const name = user.globalName ?? user.username ?? 'Creator';
+  const name = user.globalName ?? user.username ?? 'Twórca';
   if (!entries.length) {
-    throw new UserError(self ? "You don't have a creator code. Ask the team if you'd like one." : `<@${user.id}> has no creator code.`);
+    throw new UserError(self ? 'Nie masz kodu twórcy. Jeśli chcesz go mieć, zapytaj zespół.' : `<@${user.id}> nie ma kodu twórcy.`);
   }
   const t = totals(guildId, entries);
   const recent = entries
     .flatMap((a) => (a.sales ?? []).map((s) => ({ ...s, code: a.code })))
     .sort((a, b) => b.at - a.at)
     .slice(0, 5)
-    .map((s) => `\`${s.code}\` · ${s.amount == null ? 'amount unknown' : money(s.amount)} → **+${money(s.commission)}** · ${ts(s.at, 'R')}`);
+    .map((s) => `\`${s.code}\` · ${s.amount == null ? 'kwota nieznana' : money(s.amount)} → **+${money(s.commission)}** · ${ts(s.at, 'R')}`);
   const lastPayout = entries.flatMap((a) => a.payouts ?? []).sort((a, b) => b.at - a.at)[0];
   return embed(COLORS.brand)
-    .setTitle(truncate(`🎥 Creator stats – ${name}`, 256))
+    .setTitle(truncate(`🎥 Statystyki twórcy – ${name}`, 256))
     .setDescription(
       truncate(entries.map((a) => codeLine(guildId, a)).join('\n'), 3000) +
-        (self ? '\n-# Buyers type your code in the **Promo code** field of the order form. Commission is paid out by the team.' : ''),
+        (self ? '\n-# Kupujący wpisują Twój kod w polu **Kod rabatowy** w formularzu zamówienia. Prowizję wypłaca zespół.' : ''),
     )
     .addFields(
-      { name: 'Uses', value: `${t.uses}${t.open ? ` (${t.open} in open ${t.open === 1 ? 'order' : 'orders'})` : ''}`, inline: true },
-      { name: 'Sales', value: String(t.sales), inline: true },
-      { name: 'Revenue', value: money(t.revenue), inline: true },
-      { name: 'Commission earned', value: money(t.earned), inline: true },
-      { name: 'Paid out', value: `${money(t.paidOut)}${lastPayout ? ` · last ${ts(lastPayout.at, 'R')}` : ''}`, inline: true },
-      { name: 'Owed', value: `**${money(t.owed)}**`, inline: true },
-      { name: 'Recent sales', value: recent.join('\n') || 'No sales yet.' },
+      { name: 'Użycia', value: `${t.uses}${t.open ? ` (${t.open} w ${plural(t.open, 'otwartym zamówieniu', 'otwartych zamówieniach', 'otwartych zamówieniach')})` : ''}`, inline: true },
+      { name: 'Sprzedaż', value: String(t.sales), inline: true },
+      { name: 'Przychód', value: money(t.revenue), inline: true },
+      { name: 'Zarobiona prowizja', value: money(t.earned), inline: true },
+      { name: 'Wypłacono', value: `${money(t.paidOut)}${lastPayout ? ` · ostatnio ${ts(lastPayout.at, 'R')}` : ''}`, inline: true },
+      { name: 'Do wypłaty', value: `**${money(t.owed)}**`, inline: true },
+      { name: 'Ostatnia sprzedaż', value: recent.join('\n') || 'Jeszcze nic nie sprzedano.' },
     );
 }
 

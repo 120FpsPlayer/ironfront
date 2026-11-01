@@ -13,7 +13,7 @@ const hooks = require('../lib/hooks');
 const images = require('../lib/productImages');
 const shop = require('./shop');
 const { ce, COLORS } = require('../lib/theme');
-const { UserError, embed, reply } = require('../lib/utils');
+const { UserError, embed, reply, plural } = require('../lib/utils');
 const { container, text, header, row, btn, linkBtn, v2, channelUrl } = require('../lib/v2');
 
 const MAX_WAITING = 500; // per product – more people should grab the Restocks role instead
@@ -32,7 +32,7 @@ function toggle(guildId, productId, userId) {
     return false;
   }
   if (list.length >= MAX_WAITING) {
-    throw new UserError('So many people are waiting for this product already – grab the **Restocks** role in the roles channel to get pinged when it is back.');
+    throw new UserError('Na ten produkt czeka już bardzo dużo osób – weź rolę **📦 Dostawy** na kanale z rolami, a dostaniesz ping, gdy wróci.');
   }
   g.notify[productId] = [...list, userId];
   db.save();
@@ -42,18 +42,18 @@ function toggle(guildId, productId, userId) {
 async function onNotifyButton(interaction, productId) {
   const guild = interaction.guild;
   const product = shop.findProduct(guild.id, productId);
-  if (!product) throw new UserError('This product is no longer in the shop.');
+  if (!product) throw new UserError('Tego produktu nie ma już w sklepie.');
   const name = `${shop.productEmoji(guild, product)} **${product.name}**`;
   if (product.stock !== 'out') {
     return reply(interaction, {
-      embeds: [embed(COLORS.success).setDescription(`🎉 ${name} is in stock right now – you can order it straight away.`)],
-      components: [row(btn(`shop:buy:${product.id}`, 'Buy now', ce(guild, 'cart'), ButtonStyle.Primary))],
+      embeds: [embed(COLORS.success).setDescription(`🎉 ${name} jest teraz dostępny – możesz go od razu zamówić.`)],
+      components: [row(btn(`shop:buy:${product.id}`, 'Kup teraz', ce(guild, 'cart'), ButtonStyle.Primary))],
     });
   }
   const on = toggle(guild.id, product.id, interaction.user.id);
   const description = on
-    ? `🔔 **You're on the list!** I'll send you one DM as soon as ${name} is back in stock.\n-# Click **Notify me** again to cancel. Make sure your DMs are open for members of this server.`
-    : `🔕 **Okay, no DM.** You won't be notified about ${name} anymore.\n-# Changed your mind? Click **Notify me** again.`;
+    ? `🔔 **Jesteś na liście!** Wyślę Ci jedną wiadomość prywatną, gdy tylko ${name} wróci do sprzedaży.\n-# Kliknij ponownie **Powiadom mnie**, żeby anulować. Upewnij się, że masz włączone wiadomości prywatne od członków tego serwera.`
+    : `🔕 **Okej, bez wiadomości.** Nie dostaniesz już powiadomienia o ${name}.\n-# Zmiana zdania? Kliknij ponownie **Powiadom mnie**.`;
   return reply(interaction, { embeds: [embed(on ? COLORS.brand : COLORS.muted).setDescription(description)] });
 }
 
@@ -63,13 +63,13 @@ function restockDm(guild, product) {
   const c = container(COLORS.success);
   header(
     c,
-    `## 🔔 Back in stock!\n${shop.productEmoji(guild, product)} **${product.name}** is back in stock at **${config.brand.name}**.\n` +
-      `**Price:** ${shop.activeSale(product) ? shop.priceMarkdown(product) : shop.priceLabel(product)}\n-# Restocks can sell out fast – be quick!`,
+    `## 🔔 Znowu dostępny!\n${shop.productEmoji(guild, product)} **${product.name}** jest znowu dostępny w **${config.brand.name}**.\n` +
+      `**Cena:** ${shop.activeSale(product) ? shop.priceMarkdown(product) : shop.priceLabel(product)}\n-# Dostawy potrafią szybko się wyprzedać – nie zwlekaj!`,
     image?.url ?? guild.iconURL?.({ size: 256 }),
   );
   const shopChannel = db.channelId(guild.id, 'shop');
-  if (shopChannel) c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, shopChannel), 'Buy now in the shop', ce(guild, 'cart'))));
-  c.addTextDisplayComponents(text(`-# You asked to be notified on ${guild.name}. This was a one-time message.`));
+  if (shopChannel) c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, shopChannel), 'Kup teraz w sklepie', ce(guild, 'cart'))));
+  c.addTextDisplayComponents(text(`-# Prośba o powiadomienie została złożona na serwerze ${guild.name}. To jednorazowa wiadomość.`));
   return v2(c, { files: image ? [image.file] : [] });
 }
 
@@ -93,7 +93,7 @@ async function notifyRestock({ guild, product }) {
   }
   const result = { sent, waiting: ids.length };
   results.set(key, result);
-  console.log(`[restock] ${product.name}: notified ${sent}/${ids.length} ${ids.length === 1 ? 'person' : 'people'} by DM`);
+  console.log(`[restock] ${product.name}: powiadomiono w wiadomości prywatnej ${sent}/${ids.length} ${plural(ids.length, 'osobę', 'osoby', 'osób')}`);
   return result;
 }
 

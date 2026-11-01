@@ -16,7 +16,7 @@ const isCart = (record) => Array.isArray(record?.items) && record.items.length >
 const linesOf = (record) => (isCart(record) ? record.items : record ? [record] : []);
 
 /** "Netflix — 3 months × 1" */
-const lineText = (item) => `${item.product || 'Product'} × ${Number(item.quantity) || 1}`;
+const lineText = (item) => `${item.product || 'Produkt'} × ${Number(item.quantity) || 1}`;
 
 /**
  * "Netflix — 3 months × 1, Nitro × 2" – as many lines as fit into max characters, then "+2 more".
@@ -27,12 +27,12 @@ function cartTitle(items, max = 100) {
   if (parts.join(', ').length <= max) return parts.join(', ');
   const shown = [];
   for (const [i, part] of parts.entries()) {
-    const more = ` +${parts.length - i - 1} more`;
+    const more = ` +${parts.length - i - 1} więcej`;
     if ([...shown, part].join(', ').length + more.length > max) break;
     shown.push(part);
   }
   if (!shown.length) shown.push(truncate(parts[0], Math.max(10, max - 12)));
-  return `${shown.join(', ')} +${parts.length - shown.length} more`;
+  return `${shown.join(', ')} +${parts.length - shown.length} więcej`;
 }
 
 /** " × 2" behind an order's product – nothing for a cart or a balance top-up (their title says it all). */
@@ -42,6 +42,6 @@ const quantitySuffix = (order) => (isCart(order) || order?.topUp ? '' : ` × ${o
  * What an order is about, for one line of text: "Spotify × 2" – or, for a cart or a balance top-up,
  * just its title ("Netflix × 1, Nitro × 2", "Balance top-up 25€") without a quantity behind it.
  */
-const orderTitle = (order, { max = 100, fallback = 'Custom order' } = {}) => `${truncate(order?.product || fallback, max)}${quantitySuffix(order)}`;
+const orderTitle = (order, { max = 100, fallback = 'Zamówienie indywidualne' } = {}) => `${truncate(order?.product || fallback, max)}${quantitySuffix(order)}`;
 
 module.exports = { isCart, linesOf, lineText, cartTitle, quantitySuffix, orderTitle };

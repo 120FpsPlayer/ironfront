@@ -33,11 +33,11 @@ const recipientOf = (ticket) => ticket?.order?.giftTo ?? null;
 
 /** Why this order's gift can't be set or changed now – or null when it can. */
 function lockedReason(ticket) {
-  if (!ticket || ticket.typeId !== 'order' || !ticket.order) return 'Only shop orders can be a gift.';
-  if (ticket.order.topUp) return "A balance top-up can't be a gift.";
-  if (ticket.status !== 'open') return 'This ticket is closed.';
-  if (ticket.completedAt || ticket.order.delivered) return 'This order was already delivered – the gift can no longer be changed.';
-  if (delivery().isDelivering(ticket.channelId)) return 'The product is being delivered right now.';
+  if (!ticket || ticket.typeId !== 'order' || !ticket.order) return 'Prezentem mogą być tylko zamówienia ze sklepu.';
+  if (ticket.order.topUp) return 'Doładowanie salda nie może być prezentem.';
+  if (ticket.status !== 'open') return 'Ten ticket jest zamknięty.';
+  if (ticket.completedAt || ticket.order.delivered) return 'To zamówienie zostało już dostarczone – prezentu nie można już zmienić.';
+  if (delivery().isDelivering(ticket.channelId)) return 'Produkt jest właśnie dostarczany.';
   return null;
 }
 
@@ -46,22 +46,22 @@ function addToCard(c, ticket) {
   const to = recipientOf(ticket);
   const changeable = enabled() && !lockedReason(ticket);
   if (!changeable) {
-    if (to) c.addTextDisplayComponents(text(`🎁 **Gift for <@${to}>** – the product goes to their DMs, the receipt stays with <@${ticket.ownerId}>.`));
+    if (to) c.addTextDisplayComponents(text(`🎁 **Prezent dla <@${to}>** – produkt trafi do odbiorcy w wiadomości prywatnej, a potwierdzenie zakupu zostaje u <@${ticket.ownerId}>.`));
     return c;
   }
   const content = to
-    ? `🎁 **Gift for <@${to}>** – they get the product by DM when it's delivered; the receipt stays with you.`
-    : '🎁 **Buying for a friend?** Make it a gift – the product goes straight to their DMs.';
-  c.addSectionComponents(buttonSection(content, btn('gift:open', to ? 'Change gift' : 'Make it a gift', '🎁')));
+    ? `🎁 **Prezent dla <@${to}>** – odbiorca dostanie produkt w wiadomości prywatnej po dostarczeniu, a potwierdzenie zakupu zostaje u Ciebie.`
+    : '🎁 **Kupujesz dla znajomego?** Kup jako prezent – produkt trafi prosto do odbiorcy w wiadomości prywatnej.';
+  c.addSectionComponents(buttonSection(content, btn('gift:open', to ? 'Zmień prezent' : 'Kup jako prezent', '🎁')));
   return c;
 }
 
 /** The order ticket of this click, if its buyer clicked and the gift can still be changed (a UserError otherwise). */
 function requireBuyer(interaction) {
   const ticket = db.getTicket(interaction.channel?.id);
-  if (!ticket || ticket.typeId !== 'order') throw new UserError('This only works in an order ticket.');
-  if (ticket.ownerId !== interaction.user.id) throw new UserError('Only the buyer can make this order a gift.');
-  if (!enabled()) throw new UserError('Gifts are turned off on this server.');
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('To działa tylko w tickecie zamówienia.');
+  if (ticket.ownerId !== interaction.user.id) throw new UserError('Tylko kupujący może zamienić to zamówienie w prezent.');
+  if (!enabled()) throw new UserError('Prezenty są wyłączone na tym serwerze.');
   const locked = lockedReason(ticket);
   if (locked) throw new UserError(locked);
   return ticket;
@@ -71,15 +71,15 @@ function requireBuyer(interaction) {
 function openPicker(interaction) {
   const ticket = requireBuyer(interaction);
   const to = recipientOf(ticket);
-  const rows = [row(new UserSelectMenuBuilder().setCustomId('gift:pick').setPlaceholder('Who gets the product?').setMinValues(1).setMaxValues(1))];
-  if (to) rows.push(row(btn('gift:remove', 'Not a gift – send it to me', '↩️')));
+  const rows = [row(new UserSelectMenuBuilder().setCustomId('gift:pick').setPlaceholder('Kto ma dostać produkt?').setMinValues(1).setMaxValues(1))];
+  if (to) rows.push(row(btn('gift:remove', 'To nie prezent – wyślij do mnie', '↩️')));
   return interaction.reply({
     embeds: [
       embed(COLORS.brand)
-        .setTitle('🎁 Make it a gift')
+        .setTitle('🎁 Kup jako prezent')
         .setDescription(
-          `${to ? `Right now it's a gift for <@${to}>. Pick someone else, or make it yours again.` : `Pick the member who gets **${truncate(ticket.order.product ?? 'this order', 100)}**.`}\n` +
-            "-# They get the product by DM as soon as it's delivered – you see it here too and keep the receipt. You can change it until then.",
+          `${to ? `Teraz to prezent dla <@${to}>. Wybierz kogoś innego albo zostaw produkt dla siebie.` : `Wybierz członka serwera, który dostanie **${truncate(ticket.order.product ?? 'to zamówienie', 100)}**.`}\n` +
+            '-# Odbiorca dostanie produkt w wiadomości prywatnej zaraz po dostarczeniu – Ty też zobaczysz go tutaj i zachowasz potwierdzenie zakupu. Do tego czasu możesz to zmienić.',
         ),
     ],
     components: rows,
@@ -90,11 +90,11 @@ function openPicker(interaction) {
 
 /** Checks the picked member: on this server, not a bot, not the buyer. */
 async function checkRecipient(guild, buyerId, user) {
-  if (!user) throw new UserError('Pick a member.');
-  if (user.bot) throw new UserError("Bots can't get gifts – pick a member.");
-  if (user.id === buyerId) throw new UserError("That's you – to get the product yourself, just don't make it a gift.");
+  if (!user) throw new UserError('Wybierz członka serwera.');
+  if (user.bot) throw new UserError('Boty nie mogą dostawać prezentów – wybierz członka serwera.');
+  if (user.id === buyerId) throw new UserError('To Ty – jeśli produkt ma trafić do Ciebie, po prostu nie zamieniaj zamówienia w prezent.');
   const member = guild.members.cache.get(user.id) ?? (await guild.members.fetch(user.id).catch(() => null));
-  if (!member) throw new UserError("That member isn't on this server any more – pick someone else.");
+  if (!member) throw new UserError('Tej osoby nie ma już na serwerze – wybierz kogoś innego.');
   return member;
 }
 
@@ -108,8 +108,8 @@ async function setGift(channel, userId) {
   const updated = db.updateTicket(channel.id, { order });
   await tickets().refreshControlMessage(channel, updated);
   const line = userId
-    ? `🎁 <@${ticket.ownerId}> made this order a gift for <@${userId}>${before ? ` (instead of <@${before}>)` : ''} – the product goes to their DMs when it's delivered. The receipt stays with the buyer.`
-    : `🎁 This order is no longer a gift – the product goes to <@${ticket.ownerId}>.`;
+    ? `🎁 Zamówienie <@${ticket.ownerId}> to teraz prezent dla <@${userId}>${before ? ` (zamiast <@${before}>)` : ''} – po dostarczeniu produkt trafi do odbiorcy w wiadomości prywatnej. Potwierdzenie zakupu zostaje u kupującego.`
+    : `🎁 To zamówienie nie jest już prezentem – produkt trafi do <@${ticket.ownerId}>.`;
   await channel.send(notice(COLORS.brand, line)).catch(() => null);
   return updated;
 }
@@ -122,7 +122,7 @@ async function pick(interaction) {
   await interaction.deferUpdate();
   await setGift(interaction.channel, user.id);
   return interaction.editReply({
-    embeds: [embed(COLORS.success).setDescription(`🎁 It's a gift for <@${user.id}> now – they get the product by DM when it's delivered. You can change it until then.`)],
+    embeds: [embed(COLORS.success).setDescription(`🎁 Teraz to prezent dla <@${user.id}> – odbiorca dostanie produkt w wiadomości prywatnej po dostarczeniu. Do tego czasu możesz to zmienić.`)],
     components: [],
     allowedMentions: { parse: [] },
   });
@@ -131,20 +131,19 @@ async function pick(interaction) {
 /** gift:remove – the product goes to the buyer again. */
 async function removeGift(interaction) {
   const ticket = requireBuyer(interaction);
-  if (!recipientOf(ticket)) throw new UserError("This order isn't a gift.");
+  if (!recipientOf(ticket)) throw new UserError('To zamówienie nie jest prezentem.');
   await interaction.deferUpdate();
   await setGift(interaction.channel, null);
-  return interaction.editReply({ embeds: [embed(COLORS.success).setDescription('↩️ Not a gift any more – the product comes to you.')], components: [] });
+  return interaction.editReply({ embeds: [embed(COLORS.success).setDescription('↩️ To już nie prezent – produkt trafi do Ciebie.')], components: [] });
 }
 
 /** The ticket's note after a gift was delivered: did the DM reach the recipient? */
 function deliveredNotice(ticket, giftTo, dm, { many = false } = {}) {
-  const what = many ? 'products' : 'product';
   return dm
-    ? notice(COLORS.success, `🎁 <@${ticket.ownerId}> your gift is delivered – <@${giftTo}> got the ${what} by DM.`, { mentions: { users: [ticket.ownerId] } })
+    ? notice(COLORS.success, `🎁 <@${ticket.ownerId}> Twój prezent został dostarczony – ${many ? 'produkty trafiły' : 'produkt trafił'} do <@${giftTo}> w wiadomości prywatnej.`, { mentions: { users: [ticket.ownerId] } })
     : notice(
         COLORS.warning,
-        `📭 <@${ticket.ownerId}> I couldn't DM <@${giftTo}> (their DMs are closed, or they left the server) – the ${what} ${many ? 'are' : 'is'} right above, please pass ${many ? 'them' : 'it'} on to them yourself.`,
+        `📭 <@${ticket.ownerId}> nie udało się wysłać wiadomości prywatnej do <@${giftTo}> (zamknięte wiadomości prywatne albo tej osoby nie ma już na serwerze) – ${many ? 'produkty są' : 'produkt jest'} tuż powyżej, przekaż ${many ? 'je' : 'go'} odbiorcy samodzielnie.`,
         { mentions: { users: [ticket.ownerId] } },
       );
 }

@@ -7,8 +7,9 @@ const restock = require('../features/restock');
 const shop = require('../features/shop');
 const delivery = require('../features/delivery');
 const { COLORS } = require('../lib/theme');
-const { embed, reply, replyError, truncate, ts } = require('../lib/utils');
+const { embed, reply, replyError, truncate, ts, count } = require('../lib/utils');
 const { isShopManager } = require('../lib/permissions');
+const { slash } = require('../lib/commandsPl');
 
 const STOCK_CHOICES = [
   { name: '🟢 In stock', value: 'in' },
@@ -20,15 +21,15 @@ const categoryOption = (o, description) => o.setName('category').setDescription(
 const imageOption = (o, description) => o.setName('image').setDescription(description);
 const countOption = (o, description) => o.setName('count').setDescription(description).setMinValue(0).setMaxValue(100_000);
 
-/** "**in stock** · **12 left**" – the stock status, and the counter when the product has one. */
+/** "**dostępny** · **zostało 12**" – the stock status, and the counter when the product has one. */
 const stockState = (p) =>
-  `**${(shop.STOCK[p.stock] ?? shop.STOCK.in).label.toLowerCase()}**${shop.counted(p) && p.stock !== 'out' ? ` · **${p.stockCount} left**` : ''}`;
+  `**${(shop.STOCK[p.stock] ?? shop.STOCK.in).label.toLowerCase()}**${shop.counted(p) && p.stock !== 'out' ? ` · **zostało ${p.stockCount}**` : ''}`;
 
 /** The options of a product as a preview: "1 month — 5€" (and the sale price during a flash sale). */
 function variantPreview(p) {
   const sale = shop.activeSale(p);
   const lines = shop.variantsOf(p).map((v) => `• ${v.name} — ${sale ? `~~${shop.formatPrice(v.price)}~~ ` : ''}**${shop.variantPrice(p, v)}**`);
-  if (sale) lines.push(`-# ⚡ −${sale.percent}% flash sale until ${ts(sale.endsAt, 'f')}`);
+  if (sale) lines.push(`-# ⚡ −${sale.percent}% – promocja błyskawiczna do ${ts(sale.endsAt, 'f')}`);
   return lines.join('\n');
 }
 
@@ -45,11 +46,11 @@ async function readImage(interaction) {
 async function restockNotes(guild, product, { restocked, announce }) {
   if (!restocked) return '';
   const notes = [];
-  if (announce && (await shop.announceProduct(guild, product, 'restock').catch(() => null))) notes.push('Restock announced 📦');
+  if (announce && (await shop.announceProduct(guild, product, 'restock').catch(() => null))) notes.push('Dostawa ogłoszona 📦');
   const dms = restock.takeResult(guild.id, product.id);
   if (dms?.waiting) {
-    const people = `${dms.waiting} ${dms.waiting === 1 ? 'person' : 'people'} waiting`;
-    notes.push(dms.sent === dms.waiting ? `🔔 DM sent to the ${people}` : `🔔 DM sent to ${dms.sent} of the ${people} (the others don't accept DMs)`);
+    const people = count(dms.waiting, 'oczekującej osoby', 'oczekujących osób', 'oczekujących osób');
+    notes.push(dms.sent === dms.waiting ? `🔔 Wysłano wiadomość prywatną do ${people}` : `🔔 Wysłano wiadomość prywatną do ${dms.sent} z ${people} (pozostałe nie przyjmują wiadomości prywatnych)`);
   }
   return notes.length ? ` ${notes.join(' · ')}` : '';
 }
@@ -62,12 +63,12 @@ function listEmbed(guild) {
     const sale = shop.activeSale(p);
     const options = shop.variantsOf(p).length;
     const extras = [
-      shop.counted(p) && `${p.stockCount} left`,
-      options && `${options} ${options === 1 ? 'option' : 'options'}`,
-      sale && `⚡ −${sale.percent}% until ${ts(sale.endsAt, 'R')}`,
+      shop.counted(p) && `zostało ${p.stockCount}`,
+      options && count(options, 'wariant', 'warianty', 'wariantów'),
+      sale && `⚡ −${sale.percent}%, koniec ${ts(sale.endsAt, 'R')}`,
       p.image && '🖼️',
-      delivery.hasDelivery(p) && '📦 instant delivery',
-      waiting[p.id]?.length && `🔔 ${waiting[p.id].length} waiting`,
+      delivery.hasDelivery(p) && '📦 dostawa natychmiastowa',
+      waiting[p.id]?.length && `🔔 ${count(waiting[p.id].length, 'osoba czeka', 'osoby czekają', 'osób czeka')}`,
     ].filter(Boolean);
     return `${shop.STOCK[p.stock]?.dot ?? '🟢'} **${p.name}** — ${shop.priceLabel(p)}${extras.map((x) => ` · ${x}`).join('')}\n${require('../lib/v2').subtext(truncate(p.description, 90))}`;
   };
@@ -75,8 +76,8 @@ function listEmbed(guild) {
   const titled = gs.some((g) => g.name);
   const text = gs.map((g) => `${titled ? `### ${shop.groupTitle(guild, g)}\n` : ''}${g.products.map(line).join('\n')}`).join('\n');
   return embed(COLORS.brand)
-    .setTitle(`🛒 Products (${list.length})`)
-    .setDescription(truncate(text || 'No products yet – add one with `/product add`.', 4000));
+    .setTitle(`🛒 Produkty (${list.length})`)
+    .setDescription(truncate(text || `Nie ma jeszcze produktów – dodaj pierwszy przez \`${slash('product add')}\`.`, 4000));
 }
 
 const DELIVERY_CHOICES = [
@@ -169,7 +170,7 @@ module.exports = {
   autocomplete: (interaction) => shop.autocomplete(interaction),
 
   async execute(interaction) {
-    if (!isShopManager(interaction.member)) return replyError(interaction, 'Only administrators and sellers can manage the shop.');
+    if (!isShopManager(interaction.member)) return replyError(interaction, 'Tylko administratorzy i sprzedawcy mogą zarządzać sklepem.');
     const o = interaction.options;
     const sub = o.getSubcommand();
     const guild = interaction.guild;
@@ -197,15 +198,15 @@ module.exports = {
         if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await delivery.setDelivery(guild, product.id, { attachments: [file], text: deliveryText });
       }
-      const extras = [product.category && ` in **${product.category}**`, product.image && ' with its image'].filter(Boolean).join('');
-      const counter = shop.counted(product) ? ` It is ${stockState(product)}.` : '';
-      const delivers = file || deliveryText ? `\n📦 Delivered after payment: ${delivery.deliverySummary(shop.findProduct(guild.id, product.id))}.` : '';
-      return reply(interaction, `Added **${product.name}** (${shop.formatPrice(product.price)}) to the shop${extras}.${counter} The shop panel updates in a few seconds.${delivers}`);
+      const extras = [product.category && ` w kategorii **${product.category}**`, product.image && ' ze zdjęciem'].filter(Boolean).join('');
+      const counter = shop.counted(product) ? ` Stan: ${stockState(product)}.` : '';
+      const delivers = file || deliveryText ? `\n📦 Wysyłane po płatności: ${delivery.deliverySummary(shop.findProduct(guild.id, product.id))}.` : '';
+      return reply(interaction, `Dodano **${product.name}** (${shop.formatPrice(product.price)}) do sklepu${extras}.${counter} Panel sklepu zaktualizuje się za kilka sekund.${delivers}`);
     }
 
     if (sub === 'edit') {
       const target = shop.findProduct(guild.id, o.getString('product'));
-      if (!target) return replyError(interaction, 'There is no such product. Pick one from the suggestions.');
+      if (!target) return replyError(interaction, 'Nie ma takiego produktu. Wybierz produkt z podpowiedzi.');
       const image = await readImage(interaction);
       if (!interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const wasOut = target.stock === 'out';
@@ -222,8 +223,8 @@ module.exports = {
         removeImage: o.getBoolean('remove_image') ?? false,
       });
       const notes = await restockNotes(guild, p, { restocked: wasOut && p.stock !== 'out', announce: true });
-      const stock = o.getInteger('count') != null || o.getString('stock') ? ` It is ${stockState(p)}${shop.counted(p) ? '' : ' (no stock counter)'}.` : '';
-      return reply(interaction, `Updated **${p.name}**${p.category ? ` (category: **${p.category}**)` : ''}.${stock} The shop panel updates in a few seconds.${notes}`);
+      const stock = o.getInteger('count') != null || o.getString('stock') ? ` Stan: ${stockState(p)}${shop.counted(p) ? '' : ' (bez licznika sztuk)'}.` : '';
+      return reply(interaction, `Zaktualizowano **${p.name}**${p.category ? ` (kategoria: **${p.category}**)` : ''}.${stock} Panel sklepu zaktualizuje się za kilka sekund.${notes}`);
     }
 
     if (sub === 'stock') {
@@ -231,26 +232,26 @@ module.exports = {
       const { product, restocked, counterOff } = await shop.setStock(guild, o.getString('product'), o.getString('status'), { count: o.getInteger('count') });
       const notes = await restockNotes(guild, product, { restocked, announce: o.getBoolean('announce') ?? true });
       const counter = shop.counted(product)
-        ? ' Completed orders count it down – at 0 it is sold out.'
+        ? ' Zrealizowane zamówienia zmniejszają licznik – przy 0 produkt jest wyprzedany.'
         : counterOff
-          ? ' The stock counter is off now – set a **count** to turn it back on.'
+          ? ' Licznik sztuk jest teraz wyłączony – ustaw **ilosc**, żeby go włączyć.'
           : '';
-      return reply(interaction, `**${product.name}** is now ${stockState(product)}.${counter}${notes}`);
+      return reply(interaction, `**${product.name}** – stan: ${stockState(product)}.${counter}${notes}`);
     }
 
     if (sub === 'variants') {
       const p = shop.setVariants(guild, o.getString('product'), o.getString('variants'));
       if (!shop.variantsOf(p).length) {
-        return reply(interaction, `**${p.name}** has no options any more – it is sold for one price again: **${shop.formatPrice(p.price)}**. The shop panel updates in a few seconds.`);
+        return reply(interaction, `Produkt **${p.name}** nie ma już wariantów – znowu ma jedną cenę: **${shop.formatPrice(p.price)}**. Panel sklepu zaktualizuje się za kilka sekund.`);
       }
       const n = shop.variantsOf(p).length;
       return reply(interaction, {
         embeds: [
           embed(COLORS.success)
-            .setTitle(truncate(`🧩 ${p.name} – ${n} ${n === 1 ? 'option' : 'options'}`, 256))
+            .setTitle(truncate(`🧩 ${p.name} – ${count(n, 'wariant', 'warianty', 'wariantów')}`, 256))
             .setDescription(
-              `${variantPreview(p)}\n\nThe shop shows **${shop.priceLabel(p)}**, and buyers pick an option in the order form. ` +
-                'The shop panel updates in a few seconds.\n-# Run the command again to change them – an option that keeps its name stays valid in order forms that are already open.',
+              `${variantPreview(p)}\n\nSklep pokazuje **${shop.priceLabel(p)}**, a kupujący wybierają wariant w formularzu zamówienia. ` +
+                'Panel sklepu zaktualizuje się za kilka sekund.\n-# Użyj komendy ponownie, żeby je zmienić – wariant, który zachowa nazwę, pozostaje ważny w już otwartych formularzach zamówienia.',
             ),
         ],
       });
@@ -263,16 +264,16 @@ module.exports = {
         text: o.getString('text'),
         clear: o.getBoolean('clear') ?? false,
       });
-      if (!delivery.hasDelivery(p)) return reply(interaction, `**${p.name}** delivers nothing automatically now – a seller delivers it by hand.`);
+      if (!delivery.hasDelivery(p)) return reply(interaction, `Produkt **${p.name}** nie jest już dostarczany automatycznie – sprzedawca dostarczy go ręcznie.`);
       return reply(interaction, {
         embeds: [
           embed(COLORS.success)
-            .setTitle(truncate(`📦 ${p.name} – delivery`, 256))
+            .setTitle(truncate(`📦 ${p.name} – dostawa`, 256))
             .setDescription(
               `${delivery.deliverySummary(p)}\n\n` +
-                '**PayPal / Stripe:** sent automatically right after the payment – in the ticket and by DM – and the order is completed.\n' +
-                '**PaysafeCard / Crypto:** after the customer clicks **Pay**, check the payment and click **Payment OK – deliver**.\n' +
-                '-# Run it again to add files (same name = replaced), `text:none` removes the text, `clear:True` starts over.',
+                '**PayPal / Stripe:** wysyłane automatycznie zaraz po płatności – w tickecie i w wiadomości prywatnej – a zamówienie zostaje zrealizowane.\n' +
+                '**PaysafeCard / Krypto:** gdy klient kliknie **Zapłać**, sprawdź płatność i kliknij **Płatność OK – dostarcz**.\n' +
+                '-# Użyj ponownie, żeby dodać pliki (ta sama nazwa = podmiana), `tekst:none` usuwa tekst, `wyczysc:True` zaczyna od nowa.',
             ),
         ],
       });
@@ -280,7 +281,7 @@ module.exports = {
 
     if (sub === 'remove') {
       const p = shop.removeProduct(guild, o.getString('product'));
-      return reply(interaction, `Removed **${p.name}** from the shop.`);
+      return reply(interaction, `Usunięto **${p.name}** ze sklepu.`);
     }
 
     return reply(interaction, { embeds: [listEmbed(guild)] });

@@ -36,11 +36,11 @@ const { container, text, divider, btn, linkBtn, row, v2, notice } = require('../
 const HISTORY_MAX = 50; // changes kept per member
 const SHOWN = 8; // changes shown in the balance view
 const MAX_AMOUNT = 100_000; // the most staff can add or remove at once
-const NON_REFUNDABLE = "Balance can't be refunded or paid out.";
-const METHOD = 'Store balance';
+const NON_REFUNDABLE = 'Salda nie można zwrócić ani wypłacić.';
+const METHOD = 'Saldo sklepu';
 
 /** What the customer is told under a payment link (Stripe / PayPal) of a top-up. */
-const PAID_NOTE = `💰 Once you've paid, the amount is added to your store balance automatically. ${NON_REFUNDABLE}`;
+const PAID_NOTE = `💰 Po opłaceniu kwota zostanie automatycznie dodana do Twojego salda sklepu. ${NON_REFUNDABLE}`;
 
 const round = (n) => Math.round(n * 100) / 100;
 const enabled = () => config.balance?.enabled !== false;
@@ -68,11 +68,11 @@ const history = (guildId, userId) => [...(accounts(guildId)[userId]?.history ?? 
  */
 function change(guildId, userId, amount, { reason, by = null, ref = null, now = Date.now() } = {}) {
   const delta = round(Number(amount));
-  if (!Number.isFinite(delta)) throw new Error('Bad balance change');
+  if (!Number.isFinite(delta)) throw new Error('Nieprawidłowa zmiana salda');
   const all = accounts(guildId);
   const before = round(Number(all[userId]?.amount) || 0);
   const after = round(before + delta);
-  if (after < 0) throw new UserError(`Not enough store balance – that's **${money(-delta)}**, the balance is **${money(before)}**.`);
+  if (after < 0) throw new UserError(`Za mało środków na saldzie – potrzeba **${money(-delta)}**, a saldo wynosi **${money(before)}**.`);
   const account = all[userId] ?? { amount: 0, history: [] };
   account.history ??= [];
   const entry = { at: now, change: delta, reason: truncate(reason ?? '—', 200), by, ref };
@@ -88,14 +88,14 @@ function change(guildId, userId, amount, { reason, by = null, ref = null, now = 
  * Pays an order with the balance – taken right away (before its ticket is opened, so a second order at the same
  * moment sees the lower balance). → the history entry, for giveBack() if the order can't be placed.
  */
-function takeForOrder(guildId, userId, total, { reason = 'Order' } = {}) {
-  if (!enabled()) throw new UserError('Paying with store balance is turned off right now – please choose another payment method.');
+function takeForOrder(guildId, userId, total, { reason = 'Zamówienie' } = {}) {
+  if (!enabled()) throw new UserError('Płatność saldem sklepu jest teraz wyłączona – wybierz inną metodę płatności.');
   if (total == null || !Number.isFinite(Number(total))) {
-    throw new UserError("This order has no fixed price yet, so it can't be paid with store balance – please choose another payment method.");
+    throw new UserError('To zamówienie nie ma jeszcze ustalonej ceny, więc nie można go opłacić saldem sklepu – wybierz inną metodę płatności.');
   }
   const have = get(guildId, userId);
   if (have < total) {
-    throw new UserError(`Not enough store balance: you have **${money(have)}**, this order is **${money(total)}**. Choose another payment method, or top up first (💰 Balance in **My orders**).`);
+    throw new UserError(`Za mało środków na saldzie: masz **${money(have)}**, a to zamówienie kosztuje **${money(total)}**. Wybierz inną metodę płatności albo najpierw doładuj saldo (💰 Saldo w **Moje zamówienia**).`);
   }
   return change(guildId, userId, -total, { reason, by: userId });
 }
@@ -103,13 +103,13 @@ function takeForOrder(guildId, userId, total, { reason = 'Order' } = {}) {
 /** The order couldn't be placed after its balance was taken – the money goes straight back (not a refund). */
 function giveBack(guildId, userId, entry) {
   if (!entry || !(entry.change < 0)) return null;
-  return change(guildId, userId, -entry.change, { reason: 'Order could not be placed – returned', by: userId });
+  return change(guildId, userId, -entry.change, { reason: 'Nie udało się złożyć zamówienia – zwrot', by: userId });
 }
 
 /** The order of a balance payment is open now – its history entry points to the ticket. */
 function linkOrder(entry, ticket) {
   if (!entry || !ticket) return;
-  entry.reason = `Order #${pad(ticket.number)}`;
+  entry.reason = `Zamówienie #${pad(ticket.number)}`;
   entry.ref = ticket.channelId;
   db.save();
 }
@@ -124,7 +124,7 @@ function paymentOption(guildId, userId, atLeast) {
   if (!enabled() || !userId || atLeast == null) return null;
   const have = get(guildId, userId);
   if (!(have > 0) || have < atLeast) return null;
-  return { label: `${METHOD} (${money(have)} available)`, value: 'balance', description: "Paid at once from your balance – it can't be refunded", emoji: '💰' };
+  return { label: `${METHOD} (dostępne ${money(have)})`, value: 'balance', description: 'Płatność od razu z salda – bez możliwości zwrotu', emoji: '💰' };
 }
 
 // ───────────── Top-ups ─────────────
@@ -133,8 +133,8 @@ function paymentOption(guildId, userId, atLeast) {
 function parseTopUp(raw) {
   const { min, max } = limits();
   const amount = parseAmount(raw);
-  if (amount == null || !(amount > 0)) throw new UserError(`\`${truncate(raw, 20)}\` is not an amount – type a number like **25** or **19.99**.`);
-  if (amount < min || amount > max) throw new UserError(`You can top up from **${money(min)}** to **${money(max)}** at once.`);
+  if (amount == null || !(amount > 0)) throw new UserError(`\`${truncate(raw, 20)}\` to nie jest kwota – wpisz liczbę, np. **25** albo **19.99**.`);
+  if (amount < min || amount > max) throw new UserError(`Jednorazowo możesz doładować od **${money(min)}** do **${money(max)}**.`);
   return round(amount);
 }
 
@@ -142,35 +142,35 @@ function topUpModal(guild) {
   const { min, max } = limits();
   const modal = new ModalBuilder()
     .setCustomId('balance:topupform')
-    .setTitle('💰 Top up your store balance')
+    .setTitle('💰 Doładuj saldo sklepu')
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `Pay once – then choose **${METHOD}** when you order, and it's taken off instantly.\n-# ⚠️ ${NON_REFUNDABLE} Only top up what you plan to spend here.`,
+        `Zapłać raz – potem przy zamówieniu wybierz **${METHOD}**, a kwota zostanie pobrana od razu.\n-# ⚠️ ${NON_REFUNDABLE} Doładuj tylko tyle, ile planujesz tu wydać.`,
       ),
     )
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel(`Amount (${config.shop.currency ?? '€'})`.slice(0, 45))
-        .setDescription(`From ${money(min)} to ${money(max)}.`)
-        .setTextInputComponent(new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(10).setPlaceholder(`e.g. ${Math.max(min, Math.min(25, max))}`)),
+        .setLabel(`Kwota (${config.shop.currency ?? '€'})`.slice(0, 45))
+        .setDescription(`Od ${money(min)} do ${money(max)}.`)
+        .setTextInputComponent(new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(10).setPlaceholder(`np. ${Math.max(min, Math.min(25, max))}`)),
     );
   const methods = require('../lib/paymentState').activeMethods(guild?.id).slice(0, 25); // without methods switched off (/disable)
-  if (!methods.length && require('../lib/paymentState').allOff(guild?.id)) throw new UserError('Payments are paused for a moment – please try again a bit later.');
+  if (!methods.length && require('../lib/paymentState').allOff(guild?.id)) throw new UserError('Płatności są chwilowo wstrzymane – spróbuj ponownie trochę później.');
   if (methods.length) {
     modal.addLabelComponents(
       new LabelBuilder()
-        .setLabel('Payment method')
-        .setDescription('How would you like to pay? Details follow in your ticket.')
+        .setLabel('Metoda płatności')
+        .setDescription('Jak chcesz zapłacić? Szczegóły dostaniesz w tickecie.')
         .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('payment')
-            .setPlaceholder('Choose a payment method…')
+            .setPlaceholder('Wybierz metodę płatności…')
             .addOptions(methods.map(({ m, index: i }) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }))),
         ),
     );
   } else {
     modal.addLabelComponents(
-      new LabelBuilder().setLabel('Payment method').setTextInputComponent(new TextInputBuilder().setCustomId('payment_text').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60)),
+      new LabelBuilder().setLabel('Metoda płatności').setTextInputComponent(new TextInputBuilder().setCustomId('payment_text').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60)),
     );
   }
   return modal;
@@ -205,7 +205,7 @@ function pickedRaw(interaction) {
 }
 
 function openTopUp(interaction) {
-  if (!enabled()) throw new UserError('Store balance is turned off right now.');
+  if (!enabled()) throw new UserError('Saldo sklepu jest teraz wyłączone.');
   const error = require('../tickets/tickets').checkCanOpen(interaction.member);
   if (error) throw new UserError(error);
   return interaction.showModal(topUpModal(interaction.guild));
@@ -213,15 +213,15 @@ function openTopUp(interaction) {
 
 /** The top-up form → an order ticket for "Balance top-up 25€", paid like any other order. */
 async function submitTopUp(interaction) {
-  if (!enabled()) throw new UserError('Store balance is turned off right now.');
+  if (!enabled()) throw new UserError('Saldo sklepu jest teraz wyłączone.');
   const tickets = require('../tickets/tickets');
   const amount = parseTopUp(field(interaction, 'amount'));
   const { method, methodIndex, payment } = pickedMethod(interaction);
-  const product = `Balance top-up ${money(amount)}`;
+  const product = `Doładowanie salda ${money(amount)}`;
   const answers = [
-    { label: 'Balance top-up', value: `**${money(amount)}** – added to your store balance once the payment is confirmed.\n⚠️ ${NON_REFUNDABLE}` },
-    { label: 'Payment method', value: payment || '—' },
-    { label: 'Price', value: `**Total to pay: ${money(amount)}**` },
+    { label: 'Doładowanie salda', value: `**${money(amount)}** – trafi na Twoje saldo sklepu po potwierdzeniu płatności.\n⚠️ ${NON_REFUNDABLE}` },
+    { label: 'Metoda płatności', value: payment || '—' },
+    { label: 'Cena', value: `**Do zapłaty: ${money(amount)}**` },
   ];
   const order = { productId: null, product, unitPrice: amount, quantity: 1, method, methodIndex, promo: null, discount: 0, subtotal: amount, total: amount, topUp: { amount } };
   const error = tickets.checkCanOpen(interaction.member);
@@ -231,14 +231,14 @@ async function submitTopUp(interaction) {
   const answer = await interaction.editReply({
     embeds: [
       embed(COLORS.success)
-        .setTitle(truncate(`💰 Top-up started – ${money(amount)}`, 256))
+        .setTitle(truncate(`💰 Doładowanie rozpoczęte – ${money(amount)}`, 256))
         .setDescription(
-          `Your private order ticket is ready: ${channel}\n` +
-            `${e(interaction.guild, 'card')} Total to pay: **${money(amount)}** – it's added to your balance once the payment is confirmed.\n` +
-            `⚠️ ${NON_REFUNDABLE}\n**Never pay anyone in DMs.**`,
+          `Twój prywatny ticket zamówienia jest gotowy: ${channel}\n` +
+            `${e(interaction.guild, 'card')} Do zapłaty: **${money(amount)}** – kwota trafi na Twoje saldo po potwierdzeniu płatności.\n` +
+            `⚠️ ${NON_REFUNDABLE}\n**Nigdy nie płać nikomu w wiadomościach prywatnych.**`,
         ),
     ],
-    components: [row(linkBtn(channel.url, 'Go to my top-up', '🎫'))],
+    components: [row(linkBtn(channel.url, 'Przejdź do doładowania', '🎫'))],
   });
   await hooks.emit('orderPlaced', { guild: interaction.guild, channel, ticket: db.getTicket(channel.id), member: interaction.member });
   return answer;
@@ -254,7 +254,7 @@ function creditTopUp(guildId, ticket, sale) {
   if (!topUp || topUp.creditedAt) return null;
   const amount = round(sale?.amount != null ? Number(sale.amount) : Number(topUp.amount) || 0);
   const now = Date.now();
-  if (amount > 0) change(guildId, ticket.ownerId, amount, { reason: `Top-up #${pad(ticket.number)}`, by: sale?.sellerId ?? null, ref: ticket.channelId, now });
+  if (amount > 0) change(guildId, ticket.ownerId, amount, { reason: `Doładowanie #${pad(ticket.number)}`, by: sale?.sellerId ?? null, ref: ticket.channelId, now });
   db.updateTicket(ticket.channelId, { order: { ...ticket.order, topUp: { ...topUp, creditedAt: now, credited: Math.max(0, amount) } } });
   return { amount: Math.max(0, amount), balance: get(guildId, ticket.ownerId) };
 }
@@ -265,11 +265,11 @@ function topUpDoneCard(guild, ticket, sale) {
   const c = container(COLORS.success);
   c.addTextDisplayComponents(
     text(
-      `## 💰 Balance topped up!\n<@${ticket.ownerId}>, **${money(credited)}** was added to your store balance – you now have **${money(get(guild.id, ticket.ownerId))}**.\n` +
-        `Pay with it in the shop: choose **${METHOD}** as the payment method when you order.`,
+      `## 💰 Saldo doładowane!\n<@${ticket.ownerId}>, **${money(credited)}** zostało dodane do Twojego salda sklepu – masz teraz **${money(get(guild.id, ticket.ownerId))}**.\n` +
+        `Płać nim w sklepie: przy zamówieniu wybierz **${METHOD}** jako metodę płatności.`,
     ),
   );
-  c.addTextDisplayComponents(text(`-# ⚠️ ${NON_REFUNDABLE}${sale ? ` · Receipt \`${sale.id}\`` : ''} · ${ts(Date.now(), 'f')}`));
+  c.addTextDisplayComponents(text(`-# ⚠️ ${NON_REFUNDABLE}${sale ? ` · Potwierdzenie zakupu \`${sale.id}\`` : ''} · ${ts(Date.now(), 'f')}`));
   return v2(c, { mentions: { users: [ticket.ownerId] } });
 }
 
@@ -279,12 +279,12 @@ async function logTopUp({ guild, ticket, staff, sale }) {
   if (credited == null || !sale) return;
   await sendLog(guild, {
     embeds: [
-      logEmbed(COLORS.success, '💰 Balance topped up', staff?.user ?? staff ?? null).addFields(
-        { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
-        { name: 'Added', value: money(credited), inline: true },
-        { name: 'Balance now', value: money(get(guild.id, ticket.ownerId)), inline: true },
+      logEmbed(COLORS.success, '💰 Saldo doładowane', staff?.user ?? staff ?? null).addFields(
+        { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
+        { name: 'Dodano', value: money(credited), inline: true },
+        { name: 'Saldo teraz', value: money(get(guild.id, ticket.ownerId)), inline: true },
         { name: 'Ticket', value: `<#${ticket.channelId}> (\`#${pad(ticket.number)}\`)`, inline: true },
-        { name: 'Sale', value: `\`${sale.id}\``, inline: true },
+        { name: 'Sprzedaż', value: `\`${sale.id}\``, inline: true },
       ),
     ],
   }).catch(() => null);
@@ -304,29 +304,29 @@ async function onOrderPlaced({ guild, channel, ticket }) {
   const instant = delivery.deliverable(guild.id, ticket);
   const pings = instant ? { users: [], roles: [] } : autopay.pingsFor(guild, ticket);
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
-  const ask = instant ? ' 📦 The product is delivered automatically.' : who ? ` ${who}, please deliver it.` : '';
+  const ask = instant ? ' 📦 Produkt zostanie dostarczony automatycznie.' : who ? ` ${who}, proszę o dostarczenie produktu.` : '';
   await channel
-    .send(notice(COLORS.success, `💰 **Paid with store balance – ${money(order.total)}** for order \`#${pad(ticket.number)}\`. Balance left: **${money(get(guild.id, ticket.ownerId))}**.${ask}`, { mentions: pings }))
+    .send(notice(COLORS.success, `💰 **Opłacono saldem sklepu – ${money(order.total)}** za zamówienie \`#${pad(ticket.number)}\`. Pozostałe saldo: **${money(get(guild.id, ticket.ownerId))}**.${ask}`, { mentions: pings }))
     .catch(() => null);
   await sendLog(guild, {
     embeds: [
-      logEmbed(COLORS.success, '💰 Paid with store balance', guild.client.user).addFields(
+      logEmbed(COLORS.success, '💰 Opłacono saldem sklepu', guild.client.user).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
-        { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
-        { name: 'Amount', value: money(order.total), inline: true },
-        { name: 'Balance left', value: money(get(guild.id, ticket.ownerId)), inline: true },
+        { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
+        { name: 'Kwota', value: money(order.total), inline: true },
+        { name: 'Pozostałe saldo', value: money(get(guild.id, ticket.ownerId)), inline: true },
       ),
     ],
   }).catch(() => null);
   if (!instant) return;
   const done = await delivery.deliverPaid(channel, db.getTicket(channel.id), { amount: order.total }).catch((err) => {
-    console.warn('[balance] delivery:', err.message);
+    console.warn('[balance] dostawa:', err.message);
     return false;
   });
   if (!done) {
     const team = autopay.pingsFor(guild, ticket);
     const mention = [...team.users.map((id) => `<@${id}>`), ...team.roles.map((id) => `<@&${id}>`)].join(' ');
-    await channel.send(notice(COLORS.warning, `⚠️ The product couldn't be delivered automatically${mention ? ` – ${mention}, please deliver it by hand` : ' – a seller delivers it by hand'}.`, { mentions: team })).catch(() => null);
+    await channel.send(notice(COLORS.warning, `⚠️ Nie udało się automatycznie dostarczyć produktu${mention ? ` – ${mention}, proszę dostarczyć go ręcznie` : ' – sprzedawca dostarczy go ręcznie'}.`, { mentions: team })).catch(() => null);
   }
 }
 
@@ -343,29 +343,29 @@ function balanceView(guild, userId, { staffView = false } = {}) {
   const amount = get(guild.id, userId);
   const changes = history(guild.id, userId).slice(0, SHOWN);
   const c = container(COLORS.brand);
-  const whose = staffView ? `<@${userId}> has` : 'You have';
+  const whose = staffView ? `<@${userId}> ma` : 'Masz';
   c.addTextDisplayComponents(
     text(
-      `## 💰 Store balance\n${whose} **${money(amount)}** to spend in the shop.\n` +
-        (staffView ? '' : `-# Pay with it: choose **${METHOD}** as the payment method in the order form or at cart checkout.`),
+      `## 💰 Saldo sklepu\n${whose} **${money(amount)}** do wydania w sklepie.\n` +
+        (staffView ? '' : `-# Jak płacić saldem: wybierz **${METHOD}** jako metodę płatności w formularzu zamówienia albo przy zamawianiu z koszyka.`),
     ),
   );
   c.addSeparatorComponents(divider());
-  c.addTextDisplayComponents(text(`### Last changes\n${changes.length ? changes.map(historyLine).join('\n') : '-# Nothing yet.'}`));
+  c.addTextDisplayComponents(text(`### Ostatnie zmiany\n${changes.length ? changes.map(historyLine).join('\n') : '-# Na razie nic.'}`));
   c.addTextDisplayComponents(text(`-# ⚠️ ${NON_REFUNDABLE}`));
   if (!staffView && enabled()) {
-    const buttons = [btn('balance:topup', 'Top up', ce(guild, 'wallet'), ButtonStyle.Success)];
-    if (config.cart?.enabled !== false) buttons.push(btn('cart:open', 'Cart', ce(guild, 'cart')));
+    const buttons = [btn('balance:topup', 'Doładuj', ce(guild, 'wallet'), ButtonStyle.Success)];
+    if (config.cart?.enabled !== false) buttons.push(btn('cart:open', 'Koszyk', ce(guild, 'cart')));
     c.addActionRowComponents(row(...buttons));
   }
   return v2(c);
 }
 
 /** "💰 Balance: 30€" – the button in My orders and the cart (null when balance is off). */
-const balanceButton = (guild, userId) => (enabled() ? btn('balance:open', `Balance: ${money(get(guild.id, userId))}`, ce(guild, 'wallet')) : null);
+const balanceButton = (guild, userId) => (enabled() ? btn('balance:open', `Saldo: ${money(get(guild.id, userId))}`, ce(guild, 'wallet')) : null);
 
 async function showBalance(interaction) {
-  if (!enabled()) throw new UserError('Store balance is turned off right now.');
+  if (!enabled()) throw new UserError('Saldo sklepu jest teraz wyłączone.');
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   return interaction.editReply(balanceView(interaction.guild, interaction.user.id));
 }
@@ -375,21 +375,21 @@ async function showBalance(interaction) {
 /** /balance add | remove – amount > 0; never below 0. Logged to the ticket log channel. → the new balance. */
 async function staffChange(guild, staff, user, amount, reason, { remove = false } = {}) {
   const value = round(Number(amount));
-  if (!(value > 0) || value > MAX_AMOUNT) throw new UserError(`The amount must be more than 0 and at most ${money(MAX_AMOUNT)}.`);
-  if (user.bot) throw new UserError('Bots have no store balance.');
+  if (!(value > 0) || value > MAX_AMOUNT) throw new UserError(`Kwota musi być większa niż 0 i wynosić maksymalnie ${money(MAX_AMOUNT)}.`);
+  if (user.bot) throw new UserError('Boty nie mają salda sklepu.');
   const why = String(reason ?? '').trim();
-  if (!why) throw new UserError('Give a reason – it is kept in the balance history and the log.');
+  if (!why) throw new UserError('Podaj powód – zostanie zapisany w historii salda i w logach.');
   const before = get(guild.id, user.id);
-  if (remove && value > before) throw new UserError(`<@${user.id}> only has **${money(before)}** – you can remove up to that.`);
+  if (remove && value > before) throw new UserError(`<@${user.id}> ma tylko **${money(before)}** – możesz odjąć najwyżej tyle.`);
   change(guild.id, user.id, remove ? -value : value, { reason: why, by: staff.id });
   const after = get(guild.id, user.id);
   await sendLog(guild, {
     embeds: [
-      logEmbed(remove ? COLORS.danger : COLORS.success, remove ? '💰 Balance removed' : '💰 Balance added', staff.user ?? staff).addFields(
-        { name: 'Member', value: `<@${user.id}>`, inline: true },
-        { name: remove ? 'Removed' : 'Added', value: money(value), inline: true },
-        { name: 'Balance', value: `${money(before)} → **${money(after)}**`, inline: true },
-        { name: 'Reason', value: truncate(why, 1024) },
+      logEmbed(remove ? COLORS.danger : COLORS.success, remove ? '💰 Saldo odjęte' : '💰 Saldo dodane', staff.user ?? staff).addFields(
+        { name: 'Członek', value: `<@${user.id}>`, inline: true },
+        { name: remove ? 'Odjęto' : 'Dodano', value: money(value), inline: true },
+        { name: 'Saldo', value: `${money(before)} → **${money(after)}**`, inline: true },
+        { name: 'Powód', value: truncate(why, 1024) },
       ),
     ],
   }).catch(() => null);

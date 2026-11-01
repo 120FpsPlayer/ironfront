@@ -35,14 +35,17 @@ const promos = require('./promos');
 const balance = require('./balance');
 const { cartTitle } = require('../lib/orderItems');
 const { e, ce, COLORS } = require('../lib/theme');
-const { UserError, money, parseAmount, truncate } = require('../lib/utils');
+const { UserError, money, parseAmount, truncate, count: countPl, plural: pluralPl } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, subtext } = require('../lib/v2');
 
 const MAX_QUANTITY = 999;
 const ADD_MENU = 25; // products in the "Add a product" menu (Discord allows 25 options)
 
 const round = (n) => Math.round(n * 100) / 100;
-const plural = (n, word) => `${n} ${n === 1 ? word : `${word}s`}`;
+/** "3 sztuki" – the units in a cart. */
+const unitsText = (n) => countPl(n, 'sztuka', 'sztuki', 'sztuk');
+/** "10 różnych produktów" – how many different products a cart holds. */
+const productsText = (n) => `${n} ${pluralPl(n, 'produkt', 'różne produkty', 'różnych produktów')}`;
 const enabled = () => config.cart?.enabled !== false;
 const isPrivate = (interaction) => Boolean(interaction.message?.flags?.has?.(MessageFlags.Ephemeral));
 
@@ -83,11 +86,11 @@ function resolve(guildId, userId, { now = Date.now() } = {}) {
     const options = product ? shop.variantsOf(product) : [];
     const variant = item.variantId ? options.find((v) => v.id === item.variantId) ?? null : null;
     let why = null;
-    if (!product) why = 'no longer in the shop';
-    else if (product.stock === 'out') why = 'sold out';
-    else if (item.variantId ? !variant : options.length > 0) why = 'its options changed – add it again';
+    if (!product) why = 'nie ma go już w sklepie';
+    else if (product.stock === 'out') why = 'wyprzedany';
+    else if (item.variantId ? !variant : options.length > 0) why = 'zmieniły się jego warianty – dodaj go ponownie';
     if (why) {
-      dropped.push(`${truncate(item.name || product?.name || 'a product', 60)} (${why})`);
+      dropped.push(`${truncate(item.name || product?.name || 'produkt', 60)} (${why})`);
       continue;
     }
     const quantity = Math.max(1, Math.min(MAX_QUANTITY, Math.trunc(Number(item.quantity)) || 1));
@@ -104,7 +107,7 @@ function resolve(guildId, userId, { now = Date.now() } = {}) {
   const units = new Map();
   for (const l of lines) units.set(l.product.id, (units.get(l.product.id) ?? 0) + l.quantity);
   for (const l of lines) {
-    if (shop.counted(l.product) && units.get(l.product.id) > l.product.stockCount) l.problem = `only ${l.product.stockCount} left`;
+    if (shop.counted(l.product) && units.get(l.product.id) > l.product.stockCount) l.problem = `zostało tylko ${l.product.stockCount}`;
   }
   const known = round(lines.reduce((n, l) => n + (l.total ?? 0), 0));
   const subtotal = lines.length && lines.every((l) => l.total != null) ? known : null;
@@ -128,22 +131,22 @@ function priceCart(guildId, userId, subtotal, rawCode) {
 
 /** Puts a product (and option) into the cart – or adds to the quantity already there. → the stored item. */
 function addItem(guildId, userId, product, variant, quantity, now = Date.now()) {
-  if (product.stock === 'out') throw new UserError(`**${product.name}** is sold out right now – click **Notify me** on its card to hear when it's back.`);
+  if (product.stock === 'out') throw new UserError(`**${product.name}** jest teraz wyprzedany – kliknij **Powiadom mnie** na karcie produktu, a damy Ci znać, gdy wróci.`);
   const all = carts(guildId);
   const cart = all[userId] ?? { items: [], updatedAt: now };
   cart.items ??= [];
   const key = keyOf({ productId: product.id, variantId: variant?.id ?? null });
   const existing = cart.items.find((i) => keyOf(i) === key);
   if (!existing && cart.items.length >= maxItems()) {
-    throw new UserError(`Your cart is full – it holds up to **${maxItems()}** different products. Check out first, or remove something.`);
+    throw new UserError(`Twój koszyk jest pełny – mieści maksymalnie ${productsText(maxItems())}. Najpierw złóż zamówienie albo coś usuń.`);
   }
   const next = (Number(existing?.quantity) || 0) + quantity;
-  if (next > MAX_QUANTITY) throw new UserError(`That would be ${next} – one product can be in the cart up to **${MAX_QUANTITY}** times.`);
+  if (next > MAX_QUANTITY) throw new UserError(`Łącznie byłoby ${next} – jeden produkt może być w koszyku maksymalnie **${MAX_QUANTITY}** razy.`);
   if (shop.counted(product)) {
     const others = cart.items.filter((i) => i.productId === product.id && keyOf(i) !== key).reduce((n, i) => n + (Number(i.quantity) || 0), 0);
     if (others + next > product.stockCount) {
       const already = others + (Number(existing?.quantity) || 0);
-      throw new UserError(`Only **${product.stockCount}** of **${product.name}** left${already ? ` – ${already} ${already === 1 ? 'is' : 'are'} already in your cart` : ''}. Lower the quantity.`);
+      throw new UserError(`Zostało tylko **${product.stockCount}** szt. **${product.name}**${already ? ` – ${already} szt. masz już w koszyku` : ''}. Zmniejsz ilość.`);
     }
   }
   const name = variant ? `${product.name} — ${variant.name}` : product.name;
@@ -186,9 +189,9 @@ function removeOrdered(guildId, userId, lines) {
 
 // ───────────── The cart view ─────────────
 
-/** "**1.** 💎 **Netflix — 3 months** × 2 · ~~5€~~ 4€ each · **8€**" */
+/** "**1.** 💎 **Netflix — 3 miesiące** × 2 · ~~5€~~ 4€ za sztukę · **8€**" */
 function lineMarkdown(guild, l, i, nameMax = 90) {
-  const each = l.quantity > 1 && l.unitPrice != null ? ` · ${l.salePercent ? `~~${money(l.listPrice)}~~ ` : ''}${money(l.unitPrice)} each` : '';
+  const each = l.quantity > 1 && l.unitPrice != null ? ` · ${l.salePercent ? `~~${money(l.listPrice)}~~ ` : ''}${money(l.unitPrice)} za sztukę` : '';
   const one = l.quantity === 1 && l.salePercent ? ` · ~~${money(l.listPrice)}~~` : '';
   const price = l.total != null ? `**${money(l.total)}**` : truncate(shop.formatPrice(l.rawPrice), 40);
   const sale = l.salePercent ? ` ⚡ −${l.salePercent}%` : '';
@@ -209,9 +212,9 @@ function linesText(guild, lines) {
 }
 
 function totalText(cart) {
-  if (cart.subtotal != null) return `### Total: ${money(cart.subtotal)}\n-# Promo codes go in at checkout – they're taken off the whole cart.`;
-  if (cart.known > 0) return `### Total: ${money(cart.known)} + the prices the seller confirms\n-# Some prices aren't fixed – the seller tells you the final total in your ticket.`;
-  return '### Total: the seller confirms it\n-# These prices aren\'t fixed – the seller tells you the final total in your ticket.';
+  if (cart.subtotal != null) return `### Razem: ${money(cart.subtotal)}\n-# Kod rabatowy wpiszesz przy składaniu zamówienia – obejmuje cały koszyk.`;
+  if (cart.known > 0) return `### Razem: ${money(cart.known)} + ceny, które potwierdzi sprzedawca\n-# Niektóre ceny nie są stałe – ostateczną kwotę sprzedawca poda w Twoim tickecie.`;
+  return '### Razem: kwotę potwierdzi sprzedawca\n-# Te ceny nie są stałe – ostateczną kwotę sprzedawca poda w Twoim tickecie.';
 }
 
 /** The "➕ Add a product…" menu – products that can be bought, in catalog order. */
@@ -220,11 +223,11 @@ function addMenu(guildId) {
   if (!list.length) return null;
   return new StringSelectMenuBuilder()
     .setCustomId('cart:pick')
-    .setPlaceholder('➕ Add a product…')
+    .setPlaceholder('➕ Dodaj produkt…')
     .addOptions(
       list.map((p) => {
         const sale = shop.activeSale(p);
-        return { label: truncate(p.name, 100), value: p.id, description: truncate(`${shop.priceLabel(p)}${sale ? ` · −${sale.percent}% sale` : ''}${shop.variantsOf(p).length ? ' · pick an option' : ''}`, 100) };
+        return { label: truncate(p.name, 100), value: p.id, description: truncate(`${shop.priceLabel(p)}${sale ? ` · promocja −${sale.percent}%` : ''}${shop.variantsOf(p).length ? ' · wybierz wariant' : ''}`, 100) };
       }),
     );
 }
@@ -232,7 +235,7 @@ function addMenu(guildId) {
 function removeMenu(lines) {
   return new StringSelectMenuBuilder()
     .setCustomId('cart:remove')
-    .setPlaceholder('✖️ Remove an item…')
+    .setPlaceholder('✖️ Usuń pozycję…')
     .addOptions(lines.slice(0, 25).map((l, i) => ({ label: truncate(`${i + 1}. ${l.name} × ${l.quantity}`, 100), value: l.key, description: truncate(l.total != null ? money(l.total) : shop.formatPrice(l.rawPrice), 100), emoji: '✖️' })));
 }
 
@@ -240,11 +243,11 @@ function removeMenu(lines) {
 function cartView(guild, userId, { note = null, now = Date.now() } = {}) {
   const cart = resolve(guild.id, userId, { now });
   const c = container(COLORS.brand);
-  const head = `## ${e(guild, 'cart')} Your cart`;
+  const head = `## ${e(guild, 'cart')} Twój koszyk`;
   if (!cart.lines.length) {
-    c.addTextDisplayComponents(text(`${head}\nYour cart is empty. Click **Add to cart** on a product in the shop – or pick one below – and check out everything in one order.`));
+    c.addTextDisplayComponents(text(`${head}\nTwój koszyk jest pusty. Kliknij **Do koszyka** przy produkcie w sklepie – albo wybierz go poniżej – i zamów wszystko w jednym zamówieniu.`));
   } else {
-    c.addTextDisplayComponents(text(`${head}\n-# ${plural(cart.units, 'item')} · only you can see this\n${linesText(guild, cart.lines)}`));
+    c.addTextDisplayComponents(text(`${head}\n-# ${unitsText(cart.units)} · widzisz to tylko Ty\n${linesText(guild, cart.lines)}`));
   }
   if (note) c.addTextDisplayComponents(text(truncate(note, 300)));
   if (cart.lines.length) {
@@ -252,16 +255,16 @@ function cartView(guild, userId, { note = null, now = Date.now() } = {}) {
     c.addTextDisplayComponents(text(totalText(cart)));
   }
   const notes = [];
-  if (cart.dropped.length) notes.push(`⚠️ Removed from your cart: ${cart.dropped.join(', ')}`);
-  if (cart.lines.length >= maxItems()) notes.push(`Your cart is full (${maxItems()} different products) – check out or remove something to add more.`);
-  if (balance.enabled() && balance.get(guild.id, userId) > 0) notes.push(`💰 Store balance: **${money(balance.get(guild.id, userId))}** – choose **${balance.METHOD}** at checkout to pay with it.`);
+  if (cart.dropped.length) notes.push(`⚠️ Usunięto z koszyka: ${cart.dropped.join(', ')}`);
+  if (cart.lines.length >= maxItems()) notes.push(`Twój koszyk jest pełny (${productsText(maxItems())}) – złóż zamówienie albo coś usuń, żeby dodać więcej.`);
+  if (balance.enabled() && balance.get(guild.id, userId) > 0) notes.push(`💰 Saldo sklepu: **${money(balance.get(guild.id, userId))}** – wybierz **${balance.METHOD}** przy składaniu zamówienia, żeby nim zapłacić.`);
   if (notes.length) c.addTextDisplayComponents(text(truncate(notes.map((n) => `-# ${n}`).join('\n'), 900)));
   const menu = cart.lines.length < maxItems() ? addMenu(guild.id) : null;
   if (menu) c.addActionRowComponents(row(menu));
   if (cart.lines.length) c.addActionRowComponents(row(removeMenu(cart.lines)));
   const buttons = [
-    btn('cart:checkout', 'Checkout', ce(guild, 'card'), ButtonStyle.Success).setDisabled(!cart.lines.length),
-    btn('cart:clear', 'Clear cart', '🗑️', ButtonStyle.Danger).setDisabled(!cart.lines.length),
+    btn('cart:checkout', 'Zamów', ce(guild, 'card'), ButtonStyle.Success).setDisabled(!cart.lines.length),
+    btn('cart:clear', 'Wyczyść koszyk', '🗑️', ButtonStyle.Danger).setDisabled(!cart.lines.length),
   ];
   const wallet = balance.balanceButton(guild, userId);
   if (wallet) buttons.push(wallet);
@@ -273,7 +276,7 @@ function cartView(guild, userId, { note = null, now = Date.now() } = {}) {
 function cartButton(guild, userId = null) {
   if (!enabled()) return null;
   const n = userId ? count(guild.id, userId) : 0;
-  return btn('cart:open', n > 0 ? `Cart (${n})` : 'Cart', ce(guild, 'cart'));
+  return btn('cart:open', n > 0 ? `Koszyk (${n})` : 'Koszyk', ce(guild, 'cart'));
 }
 
 /** [🛒 Cart (n)] [💰 Balance: 30€] – the buttons for My orders (none when both are off). */
@@ -287,7 +290,7 @@ async function show(interaction, { inPlace = true, note = null } = {}) {
 }
 
 function requireEnabled() {
-  if (!enabled()) throw new UserError('The cart is turned off – click **Buy** on a product to order it.');
+  if (!enabled()) throw new UserError('Koszyk jest wyłączony – kliknij **Kup** przy produkcie, żeby go zamówić.');
 }
 
 // ───────────── Adding ─────────────
@@ -298,20 +301,20 @@ function addModal(product, origin = 's') {
   if (shop.variantsOf(product).length) modal.addLabelComponents(shop.variantField(product));
   else {
     const price = shop.activeSale(product) ? shop.priceMarkdown(product) : shop.formatPrice(product.price);
-    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n${subtext(truncate(product.description || 'Added to your cart – check out everything in one order.', 300))}`));
+    modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}\n${subtext(truncate(product.description || 'Trafi do Twojego koszyka – zamów wszystko w jednym zamówieniu.', 300))}`));
   }
   const quantity = new LabelBuilder()
-    .setLabel('Quantity')
+    .setLabel('Ilość')
     .setTextInputComponent(new TextInputBuilder().setCustomId('quantity').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(6).setValue('1'));
-  if (shop.counted(product)) quantity.setDescription(`${product.stockCount} left`);
+  if (shop.counted(product)) quantity.setDescription(`Zostało: ${product.stockCount}`);
   return modal.addLabelComponents(quantity);
 }
 
 async function openAdd(interaction, productId, origin) {
   requireEnabled();
   const product = shop.findProduct(interaction.guild.id, productId);
-  if (!product) throw new UserError('This product is no longer available – the catalog has been updated.');
-  if (product.stock === 'out') throw new UserError(`**${product.name}** is sold out right now.`);
+  if (!product) throw new UserError('Ten produkt nie jest już dostępny – katalog został zaktualizowany.');
+  if (product.stock === 'out') throw new UserError(`**${product.name}** jest teraz wyprzedany.`);
   return interaction.showModal(addModal(product, origin === 'c' ? 'c' : 's'));
 }
 
@@ -326,64 +329,64 @@ function field(interaction, id) {
 async function submitAdd(interaction, productId, origin) {
   requireEnabled();
   const product = shop.findProduct(interaction.guild.id, productId);
-  if (!product) throw new UserError('This product is no longer available.');
+  if (!product) throw new UserError('Ten produkt nie jest już dostępny.');
   const variant = shop.chosenVariant(interaction, product);
   const quantity = shop.parseQuantity(field(interaction, 'quantity'));
   addItem(interaction.guild.id, interaction.user.id, product, variant, quantity);
   const name = variant ? `${product.name} — ${variant.name}` : product.name;
-  return show(interaction, { inPlace: origin === 'c', note: `✅ Added **${truncate(name, 100)}** × ${quantity} to your cart.` });
+  return show(interaction, { inPlace: origin === 'c', note: `✅ Dodano **${truncate(name, 100)}** × ${quantity} do koszyka.` });
 }
 
 // ───────────── Checkout ─────────────
 
 const cents = (amount) => (amount == null ? 'x' : String(Math.round(amount * 100)));
 
-/** "Store balance (30€ available)" joins the methods when it covers the whole cart. */
+/** "Saldo sklepu (dostępne 30€)" joins the methods when it covers the whole cart. */
 function paymentField(guild, userId, subtotal) {
   const methods = require('../lib/paymentState').activeMethods(guild.id).slice(0, 24); // without methods switched off (/disable)
   const extra = balance.paymentOption(guild.id, userId, subtotal);
-  if (!methods.length && !extra && require('../lib/paymentState').allOff(guild.id)) throw new UserError('Payments are paused for a moment – please try again a bit later.');
+  if (!methods.length && !extra && require('../lib/paymentState').allOff(guild.id)) throw new UserError('Płatności są chwilowo wstrzymane – spróbuj ponownie trochę później.');
   if (!methods.length && !extra) {
-    return new LabelBuilder().setLabel('Payment method').setTextInputComponent(new TextInputBuilder().setCustomId('payment_text').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60));
+    return new LabelBuilder().setLabel('Metoda płatności').setTextInputComponent(new TextInputBuilder().setCustomId('payment_text').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60));
   }
   const options = methods.map(({ m, index: i }) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: ce(guild, m.emoji) }));
   if (extra) options.push(extra);
   return new LabelBuilder()
-    .setLabel('Payment method')
-    .setDescription('How would you like to pay? Details follow in your ticket.')
-    .setStringSelectMenuComponent(new StringSelectMenuBuilder().setCustomId('payment').setPlaceholder('Choose a payment method…').addOptions(options));
+    .setLabel('Metoda płatności')
+    .setDescription('Jak chcesz zapłacić? Szczegóły dostaniesz w tickecie.')
+    .setStringSelectMenuComponent(new StringSelectMenuBuilder().setCustomId('payment').setPlaceholder('Wybierz metodę płatności…').addOptions(options));
 }
 
 /** The checkout form: what's in the cart, payment method, promo code, notes (4 of the 5 components a form holds). */
 function checkoutModal(guild, userId, cart) {
   const lines = cart.lines.map((l) => `• ${l.name} × ${l.quantity} · ${l.total != null ? money(l.total) : shop.formatPrice(l.rawPrice)}`);
-  const total = cart.subtotal != null ? `Total **${money(cart.subtotal)}**` : 'the seller confirms the total';
+  const total = cart.subtotal != null ? `Razem **${money(cart.subtotal)}**` : 'kwotę potwierdzi sprzedawca';
   const modal = new ModalBuilder()
     .setCustomId(`cart:submit:${cents(cart.subtotal)}`)
-    .setTitle('🛒 Checkout')
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(truncate(`**${plural(cart.units, 'item')}** · ${total}\n${lines.join('\n')}`, 1500)))
+    .setTitle('🛒 Złóż zamówienie')
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(truncate(`**${unitsText(cart.units)}** · ${total}\n${lines.join('\n')}`, 1500)))
     .addLabelComponents(paymentField(guild, userId, cart.subtotal));
   if (config.promos.enabled !== false) {
     modal.addLabelComponents(
       new LabelBuilder()
-        .setLabel('Promo code')
-        .setDescription('Optional – taken off the whole cart.')
-        .setTextInputComponent(new TextInputBuilder().setCustomId('promo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(24).setPlaceholder('e.g. HS10')),
+        .setLabel('Kod rabatowy')
+        .setDescription('Opcjonalnie – rabat obejmuje cały koszyk.')
+        .setTextInputComponent(new TextInputBuilder().setCustomId('promo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(24).setPlaceholder('np. HS10')),
     );
   }
   return modal.addLabelComponents(
     new LabelBuilder()
-      .setLabel('Anything else we should know?')
+      .setLabel('Coś jeszcze, o czym mamy wiedzieć?')
       .setTextInputComponent(new TextInputBuilder().setCustomId('notes').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
   );
 }
 
 /** The cart's problems that stop a checkout (or null). */
 function checkoutProblem(cart) {
-  if (cart.dropped.length) return `Some products in your cart are no longer available: ${cart.dropped.join(', ')}. They were removed – check your cart, then check out again.`;
-  if (!cart.lines.length) return 'Your cart is empty – add something first.';
+  if (cart.dropped.length) return `Niektóre produkty z Twojego koszyka nie są już dostępne: ${cart.dropped.join(', ')}. Zostały usunięte – sprawdź koszyk i złóż zamówienie ponownie.`;
+  if (!cart.lines.length) return 'Twój koszyk jest pusty – najpierw coś dodaj.';
   const over = cart.lines.find((l) => l.problem);
-  if (over) return `**${over.name}** – ${over.problem}. Remove it and add it again with a lower quantity.`;
+  if (over) return `**${over.name}** – ${over.problem}. Usuń tę pozycję i dodaj ją ponownie z mniejszą ilością.`;
   return null;
 }
 
@@ -417,40 +420,40 @@ function pickedRaw(interaction) {
   return { method: typed || null, methodIndex: null, payment: typed, withBalance: false };
 }
 
-/** The "Products" and "Price" answers shown in the order ticket. */
+/** The "Produkty" and "Cena" answers shown in the order ticket. */
 function cartAnswers(cart, price, { payment, notes, withBalance }) {
   const products = cart.lines.map((l) => `${l.name} × ${l.quantity} — ${l.total != null ? money(l.total) : shop.formatPrice(l.rawPrice)}${l.salePercent ? ` (⚡ −${l.salePercent}%)` : ''}`);
   const answers = [
-    { label: 'Products', value: products.join('\n') },
-    { label: 'Payment method', value: payment || '—' },
+    { label: 'Produkty', value: products.join('\n') },
+    { label: 'Metoda płatności', value: payment || '—' },
   ];
-  if (notes) answers.push({ label: 'Notes', value: notes });
+  if (notes) answers.push({ label: 'Uwagi', value: notes });
   const lines = [];
   if (price.subtotal == null) {
-    lines.push(price.promo ? `Promo code ${price.code} – ${promos.label(price.promo)}, the seller applies it to the final price` : 'The seller confirms the final price.');
+    lines.push(price.promo ? `Kod rabatowy ${price.code} – ${promos.label(price.promo)}, sprzedawca uwzględni go w ostatecznej cenie` : 'Sprzedawca potwierdzi ostateczną cenę.');
   } else if (price.discount > 0) {
-    lines.push(`Subtotal: ${money(price.subtotal)}`, `Discount (${price.code} · ${promos.label(price.promo)}): −${money(price.discount)}`, `**Total to pay: ${money(price.total)}**`);
-  } else lines.push(`**Total to pay: ${money(price.subtotal)}**`);
-  if (cart.lines.some((l) => l.salePercent)) lines.unshift('⚡ Flash sale prices included');
-  if (price.error) lines.push(`Promo code ${price.code} – not applied: ${price.error}`);
-  if (withBalance) lines.push(`💰 Paid with store balance – ${balance.NON_REFUNDABLE}`);
-  answers.push({ label: 'Price', value: lines.join('\n') });
+    lines.push(`Suma: ${money(price.subtotal)}`, `Rabat (${price.code} · ${promos.label(price.promo)}): −${money(price.discount)}`, `**Do zapłaty: ${money(price.total)}**`);
+  } else lines.push(`**Do zapłaty: ${money(price.subtotal)}**`);
+  if (cart.lines.some((l) => l.salePercent)) lines.unshift('⚡ Uwzględniono ceny z promocji błyskawicznej');
+  if (price.error) lines.push(`Kod rabatowy ${price.code} – nie zastosowano: ${price.error}`);
+  if (withBalance) lines.push(`💰 Opłacono saldem sklepu – ${balance.NON_REFUNDABLE}`);
+  answers.push({ label: 'Cena', value: lines.join('\n') });
   return answers;
 }
 
 /** The private answer once the order ticket is open (replaces the cart). */
 function placedView(guild, channel, cart, price, { withBalance, userId }) {
   const c = container(COLORS.success);
-  const lines = [`## ${e(guild, 'check')} Order started – ${plural(cart.units, 'item')}`, `Your private order ticket is ready: ${channel}`];
-  if (withBalance) lines.push(`💰 Paid with store balance: **${money(price.total)}** – ${money(balance.get(guild.id, userId))} left. Your order is handled in the ticket.`);
+  const lines = [`## ${e(guild, 'check')} Zamówienie rozpoczęte – ${unitsText(cart.units)}`, `Twój prywatny ticket zamówienia jest gotowy: ${channel}`];
+  if (withBalance) lines.push(`💰 Opłacono saldem sklepu: **${money(price.total)}** – na saldzie zostało ${money(balance.get(guild.id, userId))}. Zamówienie zrealizujemy w tickecie.`);
   else if (price.total != null) {
-    const savings = [cart.lines.some((l) => l.salePercent) && '⚡ flash sale prices', price.discount > 0 && `you save ${money(price.discount)} with **${price.code}**`].filter(Boolean);
-    lines.push(`${e(guild, 'card')} Total to pay: **${money(price.total)}**${savings.length ? ` (${savings.join(' · ')})` : ''}`);
-  } else if (price.promo) lines.push(`${e(guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
-  if (price.error) lines.push(`${e(guild, 'warning')} Promo code **${price.code}** – not applied: ${price.error}`);
-  if (!withBalance) lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
+    const savings = [cart.lines.some((l) => l.salePercent) && '⚡ ceny z promocji błyskawicznej', price.discount > 0 && `oszczędzasz ${money(price.discount)} z kodem **${price.code}**`].filter(Boolean);
+    lines.push(`${e(guild, 'card')} Do zapłaty: **${money(price.total)}**${savings.length ? ` (${savings.join(' · ')})` : ''}`);
+  } else if (price.promo) lines.push(`${e(guild, 'gift')} Kod rabatowy **${price.code}** (${promos.label(price.promo)}) – sprzedawca uwzględni go w ostatecznej cenie.`);
+  if (price.error) lines.push(`${e(guild, 'warning')} Kod rabatowy **${price.code}** – nie zastosowano: ${price.error}`);
+  if (!withBalance) lines.push('Sprzedawca potwierdzi tam cenę i szczegóły płatności. **Nigdy nie płać nikomu w wiadomościach prywatnych.**');
   c.addTextDisplayComponents(text(lines.join('\n')));
-  c.addActionRowComponents(row(linkBtn(channel.url, 'Go to my order', '🎫')));
+  c.addActionRowComponents(row(linkBtn(channel.url, 'Przejdź do zamówienia', '🎫')));
   return v2(c);
 }
 
@@ -463,19 +466,19 @@ async function submitCheckout(interaction, shown) {
   const { guild, member } = interaction;
   const userId = interaction.user.id;
   const key = `${guild.id}:${userId}`;
-  if (placing.has(key)) throw new UserError('Your order is being placed – one moment…');
+  if (placing.has(key)) throw new UserError('Twoje zamówienie jest właśnie składane – chwileczkę…');
   const cart = resolve(guild.id, userId);
   const problem = checkoutProblem(cart);
   if (problem) throw new UserError(problem);
   if (shown != null && shown !== cents(cart.subtotal)) {
-    throw new UserError('The prices in your cart changed while the form was open (e.g. a flash sale ended) – open your cart to see the new total, then check out again.');
+    throw new UserError('Ceny w Twoim koszyku zmieniły się, gdy formularz był otwarty (np. skończyła się promocja błyskawiczna) – otwórz koszyk, żeby zobaczyć nową kwotę, i złóż zamówienie ponownie.');
   }
   const error = tickets.checkCanOpen(member);
   if (error) throw new UserError(error);
   const { method, methodIndex, payment, withBalance } = pickedMethod(interaction);
   const price = priceCart(guild.id, userId, cart.subtotal, field(interaction, 'promo'));
   // Money taken at once must be exactly what the customer expects – a code that doesn't work stops it.
-  if (withBalance && price.error) throw new UserError(`Promo code **${price.code}** can't be used: ${price.error} Remove it (or fix it) to pay with store balance.`);
+  if (withBalance && price.error) throw new UserError(`Nie można użyć kodu rabatowego **${price.code}**. ${price.error} Usuń go (albo popraw), żeby zapłacić saldem sklepu.`);
   const items = cart.lines.map((l) => ({
     productId: l.product.id,
     product: l.name,
@@ -507,16 +510,16 @@ async function submitCheckout(interaction, shown) {
   let spent = null;
   let channel;
   try {
-    if (withBalance) spent = balance.takeForOrder(guild.id, userId, price.total, { reason: 'Cart order' });
+    if (withBalance) spent = balance.takeForOrder(guild.id, userId, price.total, { reason: 'Zamówienie z koszyka' });
     if (isPrivate(interaction)) await interaction.deferUpdate();
     else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     channel = await tickets.openTicket(member, config.getType('order'), answers, { order });
   } catch (err) {
     if (spent) balance.giveBack(guild.id, userId, spent);
     if (!interaction.deferred) throw err;
-    if (!(err instanceof UserError)) console.error('[cart] checkout:', err);
-    const why = err instanceof UserError ? err.message : 'Your order could not be placed – please try again in a moment.';
-    return interaction.editReply(cartView(guild, userId, { note: `⚠️ ${why}${spent ? ' Nothing was taken from your balance.' : ''}` }));
+    if (!(err instanceof UserError)) console.error('[cart] składanie zamówienia:', err);
+    const why = err instanceof UserError ? err.message : 'Nie udało się złożyć zamówienia – spróbuj ponownie za chwilę.';
+    return interaction.editReply(cartView(guild, userId, { note: `⚠️ ${why}${spent ? ' Z Twojego salda nic nie zostało pobrane.' : ''}` }));
   } finally {
     release(); // the saved ticket holds the code now (or opening it failed)
     placing.delete(key);
@@ -533,13 +536,13 @@ async function submitCheckout(interaction, shown) {
 async function clearButton(interaction) {
   requireEnabled();
   clear(interaction.guild.id, interaction.user.id);
-  return show(interaction, { note: '🗑️ Your cart is empty now.' });
+  return show(interaction, { note: '🗑️ Twój koszyk jest teraz pusty.' });
 }
 
 async function removeSelect(interaction) {
   requireEnabled();
   const removed = removeItem(interaction.guild.id, interaction.user.id, String(interaction.values?.[0] ?? ''));
-  return show(interaction, { note: removed ? '✖️ Removed from your cart.' : null });
+  return show(interaction, { note: removed ? '✖️ Usunięto z koszyka.' : null });
 }
 
 const STALE = 30 * 86_400_000; // a cart nobody changed for 30 days is dropped

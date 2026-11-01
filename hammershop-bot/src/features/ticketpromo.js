@@ -23,26 +23,26 @@ const tickets = () => require('../tickets/tickets');
 /** Why a code can't be added to this order right now, or null. */
 function blocked(ticket) {
   const o = ticket?.order;
-  if (config.promos?.enabled === false) return 'Promo codes are turned off.';
-  if (!o || ticket.typeId !== 'order' || ticket.status !== 'open' || ticket.completedAt) return 'This only works in an open order ticket.';
-  if (o.topUp) return 'Promo codes don\'t work on balance top-ups.';
-  if (o.paidWith || statusOf(ticket) !== 'awaiting') return 'This order is already being paid – a code can only be added before you pay.';
-  if (o.promo && !o.promoError) return `Code **${o.promo}** is already on this order.`;
-  if (!(o.subtotal > 0)) return 'This order has no fixed price yet – tell the seller your code.';
+  if (config.promos?.enabled === false) return 'Kody rabatowe są wyłączone.';
+  if (!o || ticket.typeId !== 'order' || ticket.status !== 'open' || ticket.completedAt) return 'To działa tylko w otwartym tickecie zamówienia.';
+  if (o.topUp) return 'Kody rabatowe nie działają przy doładowaniu salda.';
+  if (o.paidWith || statusOf(ticket) !== 'awaiting') return 'To zamówienie jest już w trakcie płatności – kod można dodać tylko przed zapłatą.';
+  if (o.promo && !o.promoError) return `Kod **${o.promo}** jest już dodany do tego zamówienia.`;
+  if (!(o.subtotal > 0)) return 'To zamówienie nie ma jeszcze ustalonej ceny – podaj swój kod sprzedawcy.';
   return null;
 }
 
 /** "🏷️ Got a promo code?" on the order card (src/tickets/ui.js) while one can still be added. */
 function addToCard(c, ticket) {
   if (blocked(ticket)) return c;
-  c.addSectionComponents(buttonSection('🏷️ **Got a promo code?** Add it here – the price and the payment link update right away.', btn('tpromo:open', 'Add promo code', '🏷️')));
+  c.addSectionComponents(buttonSection('🏷️ **Masz kod rabatowy?** Dodaj go tutaj – cena i link do płatności od razu się zaktualizują.', btn('tpromo:open', 'Dodaj kod rabatowy', '🏷️')));
   return c;
 }
 
 function requireBuyer(interaction) {
   const ticket = db.getTicket(interaction.channel?.id);
-  if (!ticket) throw new UserError('This only works in an order ticket.');
-  if (interaction.user.id !== ticket.ownerId && !require('../lib/permissions').isStaff(interaction.member)) throw new UserError('Only the buyer can add a code here.');
+  if (!ticket) throw new UserError('To działa tylko w tickecie zamówienia.');
+  if (interaction.user.id !== ticket.ownerId && !require('../lib/permissions').isStaff(interaction.member)) throw new UserError('Tylko kupujący może tu dodać kod.');
   const why = blocked(ticket);
   if (why) throw new UserError(why);
   return ticket;
@@ -50,8 +50,8 @@ function requireBuyer(interaction) {
 
 function openForm(interaction) {
   requireBuyer(interaction);
-  const input = new TextInputBuilder().setCustomId('code').setLabel('Promo code').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32).setPlaceholder('e.g. HS10');
-  return interaction.showModal(new ModalBuilder().setCustomId('tpromo:submit').setTitle('Add a promo code').addComponents(new ActionRowBuilder().addComponents(input)));
+  const input = new TextInputBuilder().setCustomId('code').setLabel('Kod rabatowy').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32).setPlaceholder('np. HS10');
+  return interaction.showModal(new ModalBuilder().setCustomId('tpromo:submit').setTitle('Dodaj kod rabatowy').addComponents(new ActionRowBuilder().addComponents(input)));
 }
 
 /**
@@ -72,7 +72,7 @@ async function removePaymentCards(channel, ticket) {
   for (const m of recent?.values?.() ?? []) {
     if (m.id === ticket.controlMessageId || !after(m.id) || (me && m.author?.id !== me)) continue;
     const json = JSON.stringify(m.components ?? []);
-    if (/"content":"## [^"]*?(?:Pay [^"]*? – |Payment – )/.test(json)) await m.delete().catch(() => null);
+    if (/"content":"## [^"]*?(?:Pay [^"]*? – |Payment – |Zapłać [^"]*? – |Płatność – )/.test(json)) await m.delete().catch(() => null);
   }
 }
 
@@ -81,19 +81,19 @@ async function submit(interaction) {
   const shop = require('./shop');
   const o = ticket.order;
   const code = promos.normalize(interaction.fields.getTextInputValue('code'));
-  if (!code) throw new UserError('Type a promo code.');
+  if (!code) throw new UserError('Wpisz kod rabatowy.');
   const { promo, error } = promos.check(ticket.guildId, code, ticket.ownerId, {
     completedOrders: db.guild(ticket.guildId).orders[ticket.ownerId] ?? 0,
     openOrders: promos.openOrdersOf(ticket.guildId, ticket.ownerId, { except: ticket.channelId }),
     reserved: promos.reservedBy(ticket.guildId, code, { except: ticket.channelId }),
   });
-  if (error || !promo) throw new UserError(`Code **${code}** can't be used: ${error ?? 'it doesn\'t exist'}.`);
-  if (promo.affiliate?.userId === ticket.ownerId) throw new UserError('You can\'t use your own creator code.');
+  if (error || !promo) throw new UserError(`Nie można użyć kodu **${code}**. ${error ?? 'Taki kod nie istnieje.'}`);
+  if (promo.affiliate?.userId === ticket.ownerId) throw new UserError('Nie możesz użyć własnego kodu twórcy.');
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const { total, discount } = promos.apply(promo, o.subtotal);
   const price = { unitPrice: o.unitPrice ?? o.subtotal, listPrice: o.listPrice ?? null, salePercent: o.salePercent ?? null, subtotal: o.subtotal, total, discount, code, promo, error: null };
   const quantity = o.items ? 1 : o.quantity ?? 1;
-  const answers = [...(ticket.answers ?? []).filter((a) => a.label !== 'Price' && a.label !== 'Promo code'), ...shop.priceAnswers(price, quantity)];
+  const answers = [...(ticket.answers ?? []).filter((a) => !shop.isPriceAnswer(a)), ...shop.priceAnswers(price, quantity)];
   const order = { ...o, promo: code, promoError: null, total, discount };
   if (promo.affiliate) order.affiliate = { code: promo.code, userId: promo.affiliate.userId, commission: promo.affiliate.commission };
   if (order.cryptoQuote) delete order.cryptoQuote;
@@ -101,7 +101,7 @@ async function submit(interaction) {
   const channel = interaction.channel;
   await removePaymentCards(channel, ticket);
   await tickets().refreshControlMessage(channel, updated).catch(() => null);
-  await channel.send(notice(COLORS.success, `🏷️ Code **${code}** added – **−${money(discount)}**. New total: **${money(total)}**.`)).catch(() => null);
+  await channel.send(notice(COLORS.success, `🏷️ Kod **${code}** dodany – **−${money(discount)}**. Nowa kwota do zapłaty: **${money(total)}**.`)).catch(() => null);
   // A new payment card / link for the new amount – the same way a new order gets one.
   const type = require('./paycards').methodType(require('./paycards').methodOf(order));
   updated = db.getTicket(ticket.channelId);
@@ -110,10 +110,10 @@ async function submit(interaction) {
     else if (type === 'paypal' && require('./paypal').enabled()) await require('./paypal').postLink(channel, updated);
     else await require('./paycards').postCard(channel, updated);
   } catch (err) {
-    console.warn(`[ticketpromo] new payment link for ${ticket.channelId}:`, err.message);
+    console.warn(`[ticketpromo] nowy link do płatności dla ${ticket.channelId}:`, err.message);
     await require('./paycards').postCard(channel, db.getTicket(ticket.channelId)).catch(() => null);
   }
-  return interaction.editReply({ content: `✅ Code **${code}** added – the new total is **${money(total)}**.` });
+  return interaction.editReply({ content: `✅ Kod **${code}** dodany – nowa kwota do zapłaty to **${money(total)}**.` });
 }
 
 hooks.route('tpromo', {

@@ -29,7 +29,7 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const CHECK_EVERY = MINUTE;
 const TOP_PERCENT = 50; // a deal never gives more than this
-const TITLE = '🔥 Deal of the week';
+const TITLE = '🔥 Okazja tygodnia';
 
 const int = (value, fallback) => (Number.isFinite(Number(value)) && value !== null && value !== '' ? Math.round(Number(value)) : fallback);
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
@@ -134,9 +134,9 @@ const eligible = (guildId, now = Date.now()) =>
 /** Starts a deal now (a random eligible product and percent) and announces it → { product, percent, announced }. */
 async function startDeal(guild, { now = Date.now(), by = null, announce = true } = {}) {
   const running = activeDeal(guild.id, now);
-  if (running) throw new UserError(`A deal is already running: **${running.product.name}** −${running.percent}% – only one at a time.`);
+  if (running) throw new UserError(`Okazja już trwa: **${running.product.name}** −${running.percent}% – może być tylko jedna naraz.`);
   const list = eligible(guild.id, now);
-  if (!list.length) throw new UserError('No product can be the deal right now – it needs a plain number price, stock and no running sale.');
+  if (!list.length) throw new UserError('Żaden produkt nie może być teraz okazją – potrzebna jest zwykła cena liczbowa, dostępność i brak trwającej promocji.');
   const opts = settings();
   const pick = list[Math.floor(Math.random() * list.length)];
   const percent = randInt(opts.minPercent, opts.maxPercent);
@@ -145,7 +145,7 @@ async function startDeal(guild, { now = Date.now(), by = null, announce = true }
   const g = db.guild(guild.id);
   g.deals.current = { productId: product.id, percent, endsAt: product.sale.endsAt, startedAt: now, by };
   db.save();
-  console.log(`[deals] ${guild.name}: ${product.name} −${percent}% for ${Math.round(opts.durationMs / HOUR)}h`);
+  console.log(`[deals] ${guild.name}: ${product.name} −${percent}% na ${Math.round(opts.durationMs / HOUR)} h`);
   const announced = announce ? Boolean(await flash.announceSale(guild, product, now, { title: TITLE }).catch(() => null)) : false;
   return { product, percent, announced };
 }

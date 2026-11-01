@@ -20,14 +20,15 @@ const productBadges = require('./badges');
 const shopstatus = require('./shopstatus');
 const { splitEmoji } = require('../builder/style');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
-const { UserError, embed, truncate, sendToChannel, sendLog, logEmbed, parseAmount, money, ts, pad } = require('../lib/utils');
+const { UserError, embed, truncate, sendToChannel, sendLog, logEmbed, parseAmount, money, ts, pad, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl, subtext } = require('../lib/v2');
 const { isCart, linesOf } = require('../lib/orderItems');
 
 const STOCK = {
-  in: { label: 'In stock', dot: '🟢' },
-  low: { label: 'Low stock – almost gone', dot: '🟠' },
-  out: { label: 'Sold out', dot: '🔴' },
+  in: { label: 'Dostępny', dot: '🟢' },
+  low: { label: 'Mało sztuk – prawie wyprzedany', dot: '🟠' },
+  out: { label: 'Wyprzedany', dot: '🔴' },
 };
 
 const products = (guildId) => db.guild(guildId).products;
@@ -53,11 +54,11 @@ function parseEmoji(input, guild = null) {
   if (UNICODE_EMOJI.test(s)) return s;
   if (CUSTOM_EMOJI.test(s)) {
     if (!customEmojiUsable(guild, s)) {
-      throw new UserError('The bot cannot use that custom emoji – it is from a server the bot is not in. Use an emoji from this server or a normal emoji (e.g. 💎).');
+      throw new UserError('Bot nie może użyć tego własnego emoji – pochodzi z serwera, na którym bota nie ma. Użyj emoji z tego serwera albo zwykłego emoji (np. 💎).');
     }
     return s;
   }
-  throw new UserError('That emoji is not valid. Use a normal emoji (e.g. 💎) or a custom emoji from this server.');
+  throw new UserError('To emoji jest nieprawidłowe. Użyj zwykłego emoji (np. 💎) albo własnego emoji z tego serwera.');
 }
 
 /** A custom emoji only shows if it is in a server the bot is in and still available. */
@@ -82,7 +83,7 @@ function findProduct(guildId, query) {
 
 function requireProduct(guildId, query) {
   const p = findProduct(guildId, query);
-  if (!p) throw new UserError('There is no such product. Pick one from the suggestions.');
+  if (!p) throw new UserError('Nie ma takiego produktu. Wybierz produkt z podpowiedzi.');
   return p;
 }
 
@@ -91,13 +92,13 @@ const productEmoji = (guild, p) => (p.emoji && (!p.emoji.startsWith('<') || cust
 
 // ───────────── Categories ─────────────
 
-const MAX_CATEGORIES = 20; // + "Other products" – all fit in one select menu (25)
+const MAX_CATEGORIES = 20; // + "Inne produkty" – all fit in one select menu (25)
 
-/** "  Game   keys " → "Game keys"; empty / "none" → null (no category). */
+/** "  Game   keys " → "Game keys"; empty / "none" / "brak" → null (no category). */
 function cleanCategory(input) {
   const name = String(input ?? '').replace(/\s+/g, ' ').trim();
-  if (!name || /^(none|-)$/i.test(name)) return null;
-  if (name.length > 30) throw new UserError('Category names can be up to 30 characters.');
+  if (!name || /^(none|brak|-)$/i.test(name)) return null;
+  if (name.length > 30) throw new UserError('Nazwa kategorii może mieć maksymalnie 30 znaków.');
   return name;
 }
 
@@ -117,7 +118,7 @@ function resolveCategory(guildId, input, productId = null) {
   const others = categories(guildId, productId);
   const existing = others.find((c) => c.toLowerCase() === name.toLowerCase());
   if (existing) return existing;
-  if (others.length >= MAX_CATEGORIES) throw new UserError(`The shop can have up to ${MAX_CATEGORIES} categories – use one of the existing ones.`);
+  if (others.length >= MAX_CATEGORIES) throw new UserError(`Sklep może mieć maksymalnie ${MAX_CATEGORIES} kategorii – użyj jednej z istniejących.`);
   return name;
 }
 
@@ -144,7 +145,7 @@ try {
 
 /** "🎮 Games" → { emoji: '🎮', label: 'Games' }; "Games" → { emoji: null, label: 'Games' }. */
 function categoryParts(group, titled = true) {
-  if (!group.name) return { emoji: null, label: titled ? 'Other products' : 'Products' };
+  if (!group.name) return { emoji: null, label: titled ? 'Inne produkty' : 'Produkty' };
   const { emoji, label } = splitEmoji(group.name);
   return emoji && RGI.test(emoji) ? { emoji, label } : { emoji: null, label: group.name };
 }
@@ -162,15 +163,15 @@ function categoryAutocomplete(interaction, typed) {
   const q = String(typed ?? '').replace(/\s+/g, ' ').trim().slice(0, 30);
   const list = categories(interaction.guild.id);
   const choices = list.filter((c) => !q || c.toLowerCase().includes(q.toLowerCase())).slice(0, 23).map((c) => ({ name: c, value: c }));
-  if (q && !/^(none|-)$/i.test(q) && !list.some((c) => c.toLowerCase() === q.toLowerCase())) choices.push({ name: `➕ New category: ${q}`, value: q });
-  if (interaction.options.getSubcommand(false) === 'edit') choices.push({ name: '🚫 No category', value: 'none' });
+  if (q && !/^(none|brak|-)$/i.test(q) && !list.some((c) => c.toLowerCase() === q.toLowerCase())) choices.push({ name: `➕ Nowa kategoria: ${q}`, value: q });
+  if (interaction.options.getSubcommand(false) === 'edit') choices.push({ name: '🚫 Bez kategorii', value: 'none' });
   return interaction.respond(choices.slice(0, 25));
 }
 
 function groupSummary(group) {
   const n = group.products.length;
   const out = group.products.filter((p) => p.stock === 'out').length;
-  return `${n} ${n === 1 ? 'product' : 'products'}${out ? ` · ${out} sold out` : ''}`;
+  return `${count(n, 'produkt', 'produkty', 'produktów')}${out ? ` · ${count(out, 'wyprzedany', 'wyprzedane', 'wyprzedanych')}` : ''}`;
 }
 
 // ───────────── Variants, stock counter, flash sales ─────────────
@@ -199,17 +200,17 @@ function cheapestVariant(p) {
   return best?.variant ?? null;
 }
 
-/** "20€", or "from 5€" for a product with options (falls back to the product price when no option price is a number). */
+/** "20€", or "od 5€" for a product with options (falls back to the product price when no option price is a number). */
 function priceLabel(p) {
   const cheapest = cheapestVariant(p);
-  return cheapest ? `from ${formatPrice(cheapest.price)}` : formatPrice(p.price);
+  return cheapest ? `od ${formatPrice(cheapest.price)}` : formatPrice(p.price);
 }
 
 /** The price as shown on a card: **20€** · from **5€** · ~~20€~~ **16€** · −20% during a flash sale. */
 function priceMarkdown(p, now = Date.now()) {
   const cheapest = cheapestVariant(p);
   const raw = cheapest ? cheapest.price : p.price;
-  const from = cheapest ? 'from ' : '';
+  const from = cheapest ? 'od ' : '';
   const sale = activeSale(p, now);
   const amount = parseAmount(raw);
   if (sale && amount != null) return `${from}~~${formatPrice(raw)}~~ **${money(salePrice(amount, sale.percent))}** · −${sale.percent}%`;
@@ -231,11 +232,11 @@ function optionsText(p, now = Date.now()) {
   if (parts.join(' · ').length <= OPTIONS_LINE) return parts.join(' · ');
   const shown = [];
   for (const part of parts) {
-    if ([...shown, part].join(' · ').length > OPTIONS_LINE - 12) break; // room for " · +10 more"
+    if ([...shown, part].join(' · ').length > OPTIONS_LINE - 14) break; // room for " · +10 więcej"
     shown.push(part);
   }
-  if (!shown.length) shown.push(truncate(parts[0], OPTIONS_LINE - 12));
-  return `${shown.join(' · ')} · +${parts.length - shown.length} more`;
+  if (!shown.length) shown.push(truncate(parts[0], OPTIONS_LINE - 14));
+  return `${shown.join(' · ')} · +${parts.length - shown.length} więcej`;
 }
 
 /** stockCount: a number when the stock is counted (completed orders count it down), null / missing otherwise. */
@@ -248,11 +249,11 @@ function stockFor(count) {
   return count <= (Number.isFinite(low) ? low : 3) ? 'low' : 'in';
 }
 
-/** "🟢 In stock", or with a counter "🟢 In stock · 12 left" / "🟠 Only 2 left" / "🔴 Sold out". */
+/** "🟢 Dostępny", or with a counter "🟢 Dostępny · zostało 12" / "🟠 Zostało tylko 2" / "🔴 Wyprzedany". */
 function stockText(p) {
   const stock = STOCK[p.stock] ?? STOCK.in;
   if (!counted(p) || p.stock === 'out') return `${stock.dot} ${stock.label}`;
-  return p.stock === 'low' ? `${stock.dot} Only ${p.stockCount} left` : `${stock.dot} ${stock.label} · ${p.stockCount} left`;
+  return p.stock === 'low' ? `${stock.dot} Zostało tylko ${p.stockCount}` : `${stock.dot} ${stock.label} · zostało ${p.stockCount}`;
 }
 
 // ───────────── Product cards ─────────────
@@ -265,21 +266,21 @@ const instantDelivery = (p) => require('./delivery').hasDelivery(p) && (require(
 
 /** Delivery time picked in /product add | edit (delivery_time) – otherwise "Instant delivery" when it's automatic. */
 const DELIVERY_TIMES = {
-  instant: '⚡ Instant delivery',
-  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [String(d), `🕒 Delivery: ${d} day${d === 1 ? '' : 's'}`])),
-  14: '🕒 Delivery: up to 14 days',
+  instant: '⚡ Dostawa natychmiastowa',
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [String(d), `🕒 Dostawa: ${count(d, 'dzień', 'dni', 'dni')}`])),
+  14: '🕒 Dostawa: do 14 dni',
 };
 const deliveryLabel = (p) => DELIVERY_TIMES[p.deliveryTime] ?? (instantDelivery(p) ? DELIVERY_TIMES.instant : null);
 
 /** badges: Map(productId → ['🔥 Bestseller', '⭐ 4.9']) from features/badges.js – worked out once per panel. */
 function cardText(guild, p, { category = false, now = Date.now(), badges = null } = {}) {
-  const where = category ? (p.category ? `📂 ${p.category}` : '📂 Other') : null;
+  const where = category ? (p.category ? `📂 ${p.category}` : '📂 Inne') : null;
   const sale = activeSale(p, now);
   const title = `### ${productEmoji(guild, p)} ${p.name}${SPACER}${priceMarkdown(p, now)}`;
   const extras = [
     variantsOf(p).length ? `-# ${optionsText(p, now)}` : null,
     `-# ${[stockText(p), deliveryLabel(p), ...(badges?.get(p.id) ?? []), where].filter(Boolean).join(' · ')}`,
-    sale ? `-# ⏰ Sale ends ${ts(sale.endsAt, 'R')}` : null,
+    sale ? `-# ⏰ Promocja kończy się ${ts(sale.endsAt, 'R')}` : null,
   ].filter(Boolean);
   const room = CARD_TEXT - title.length - extras.join('\n').length - 2;
   // A blank line between the title, the description and the stock line – easier to read than one block.
@@ -289,12 +290,12 @@ function cardText(guild, p, { category = false, now = Date.now(), badges = null 
 /** Buy – or 🔔 Notify me while it's sold out (features/restock.js). */
 function cardButton(guild, p) {
   return p.stock === 'out'
-    ? btn(`restock:notify:${p.id}`, 'Notify me', ce(guild, 'bell'))
-    : btn(`shop:buy:${p.id}`, 'Buy', ce(guild, 'cart'), ButtonStyle.Primary);
+    ? btn(`restock:notify:${p.id}`, 'Powiadom mnie', ce(guild, 'bell'))
+    : btn(`shop:buy:${p.id}`, 'Kup', ce(guild, 'cart'), ButtonStyle.Primary);
 }
 
 /** The card's buttons: Buy (+ ➕ Add to cart with opts.cart – features/cart.js) or Notify me. */
-const cardButtons = (guild, p, opts = {}) => (opts.cart && p.stock !== 'out' ? [cardButton(guild, p), btn(`cart:add:${p.id}`, 'Add to cart', '➕')] : [cardButton(guild, p)]);
+const cardButtons = (guild, p, opts = {}) => (opts.cart && p.stock !== 'out' ? [cardButton(guild, p), btn(`cart:add:${p.id}`, 'Do koszyka', '➕')] : [cardButton(guild, p)]);
 
 /**
  * A product card: the button on the right – or, with an image, the image on the right and the button below.
@@ -313,7 +314,7 @@ function soldOutView(guild, p) {
   const c = container(COLORS.brand);
   const picture = pickImages([p]).get(p.id);
   addCard(c, guild, p, picture);
-  c.addTextDisplayComponents(text("-# Sold out right now – click **Notify me** and I'll DM you once it's back."));
+  c.addTextDisplayComponents(text('-# Teraz wyprzedany – kliknij **Powiadom mnie**, a dam Ci znać w wiadomości prywatnej, gdy wróci.'));
   return v2(c, { files: picture ? [picture.file] : [] });
 }
 
@@ -365,9 +366,9 @@ function shopTabs(list) {
 }
 
 function tabLabel(guild, tab) {
-  if (tab.all) return { label: 'All', emoji: ce(guild, 'cart') };
+  if (tab.all) return { label: 'Wszystko', emoji: ce(guild, 'cart') };
   const { emoji, label } = categoryParts(tab);
-  return { label: tab.name ? label : 'Other', emoji: emoji ?? ce(guild, tab.name ? 'folder' : 'box') };
+  return { label: tab.name ? label : 'Inne', emoji: emoji ?? ce(guild, tab.name ? 'folder' : 'box') };
 }
 
 /** Tab buttons (the open one highlighted) – or a menu when there are more tabs than fit in one row. */
@@ -383,7 +384,7 @@ function tabsRow(guild, tabs, active) {
   return row(
     new StringSelectMenuBuilder()
       .setCustomId('shopview:tabs')
-      .setPlaceholder('📂 Choose a category…')
+      .setPlaceholder('📂 Wybierz kategorię…')
       .addOptions(
         tabs.slice(0, 25).map((t) => {
           const { label, emoji } = tabLabel(guild, t);
@@ -409,22 +410,22 @@ function navRow(guild, value, index, pages, userId = null) {
   // components (without the line above the footer – see shopView).
   if (pages > 1) {
     buttons.push(
-      btn(`shopview:page:${index - 1}:${value}`, `Page ${index + 1} / ${pages}`, '◀️').setDisabled(index <= 0),
-      btn(`shopview:page:${index + 1}:${value}`, 'Next', '▶️').setDisabled(index >= pages - 1),
+      btn(`shopview:page:${index - 1}:${value}`, `Strona ${index + 1} / ${pages}`, '◀️').setDisabled(index <= 0),
+      btn(`shopview:page:${index + 1}:${value}`, 'Następna', '▶️').setDisabled(index >= pages - 1),
     );
   }
   // With page buttons the links move into the footer text, so the row never has more than 3 buttons.
   if (pages <= 1) {
     const howTo = db.channelId(guild.id, 'howToBuy');
     const vouches = db.channelId(guild.id, 'vouches');
-    if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'How to buy', ce(guild, 'info')));
+    if (howTo) buttons.push(linkBtn(channelUrl(guild.id, howTo), 'Jak kupić', ce(guild, 'info')));
     // Balance instead of Vouches – everyone sees they can top up and pay instantly (Vouches when the balance is off).
-    if (config.balance?.enabled !== false) buttons.push(btn('balance:open', 'Balance', ce(guild, 'wallet')));
-    else if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Vouches', ce(guild, 'star')));
+    if (config.balance?.enabled !== false) buttons.push(btn('balance:open', 'Saldo', ce(guild, 'wallet')));
+    else if (vouches) buttons.push(linkBtn(channelUrl(guild.id, vouches), 'Opinie', ce(guild, 'star')));
   }
   const cart = require('./cart').cartButton(guild, userId); // here – cart.js needs this file
   if (cart) buttons.push(cart);
-  buttons.push(btn('myorders:open', 'My orders', ce(guild, 'box')));
+  buttons.push(btn('myorders:open', 'Moje zamówienia', ce(guild, 'box')));
   return row(...buttons);
 }
 
@@ -434,12 +435,12 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
   const status = shopstatus.statusLine(guild.id, 'shop', now);
   const vs = vouchStats(guild.id);
   const meta = [
-    list.length ? `${list.length} ${list.length === 1 ? 'product' : 'products'}` : 'Catalog coming soon',
-    `${e(guild, 'clock')} ${config.shop.deliveryTime ?? 'Fast delivery'}`,
-    vs.count ? `${e(guild, 'star')} ${vs.avg.toFixed(1)}/5 from ${vs.count} ${vs.count === 1 ? 'vouch' : 'vouches'}` : null,
+    list.length ? count(list.length, 'produkt', 'produkty', 'produktów') : 'Katalog już wkrótce',
+    `${e(guild, 'clock')} ${config.shop.deliveryTime ?? 'Szybka dostawa'}`,
+    vs.count ? `${e(guild, 'star')} ${vs.avg.toFixed(1)}/5 z ${vs.count} opinii` : null,
   ].filter(Boolean);
   c.addTextDisplayComponents(
-    text(`# ${e(guild, 'cart')} ${config.brand.name} Shop\n${config.brand.tagline ?? ''}\n-# ${meta.join(' · ')}${status ? `\n${status}` : ''}`),
+    text(`# ${e(guild, 'cart')} Sklep ${config.brand.name}\n${config.brand.tagline ?? ''}\n-# ${meta.join(' · ')}${status ? `\n${status}` : ''}`),
   );
   if (tabs.length) c.addActionRowComponents(tabsRow(guild, tabs, active));
   c.addSeparatorComponents(divider(true));
@@ -447,9 +448,9 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
   if (!list.length) {
     c.addTextDisplayComponents(
       text(
-        `### ${e(guild, 'box')} New products are on the way\n` +
-          'Our catalog is being stocked right now – check back soon. ' +
-          'Want a ping when they arrive? Grab the **Restocks** role.',
+        `### ${e(guild, 'box')} Nowe produkty są w drodze\n` +
+          'Właśnie uzupełniamy katalog – zajrzyj niedługo. ' +
+          'Chcesz dostać ping, gdy się pojawią? Weź rolę **📦 Dostawy**.',
       ),
     );
   } else {
@@ -459,11 +460,11 @@ function buildView(guild, { list, tabs, active, items, index, pages, pictures, n
   }
 
   if (!compact) c.addSeparatorComponents(divider(true));
-  const methods = config.shop.paymentMethods.map((m) => (require('../lib/paymentState').isOff(guild.id, m) ? `~~${m.name}~~ (paused)` : m.name));
+  const methods = config.shop.paymentMethods.map((m) => (require('../lib/paymentState').isOff(guild.id, m) ? `~~${m.name}~~ (wstrzymana)` : m.name));
   const links = pages > 1 ? ['howToBuy', 'vouches'].map((k) => db.channelId(guild.id, k)).filter(Boolean).map((id) => `<#${id}>`) : [];
   c.addTextDisplayComponents(
     text(
-      `-# ${methods.length ? `${e(guild, 'card')} We accept: ${methods.join(' · ')} · ` : ''}🔒 We never ask for payment in DMs – only inside your ticket.` +
+      `-# ${methods.length ? `${e(guild, 'card')} Akceptujemy: ${methods.join(' · ')} · ` : ''}🔒 Nigdy nie prosimy o płatność w wiadomościach prywatnych – tylko w Twoim tickecie.` +
         (links.length ? `\n-# ${links.join(' · ')}` : ''),
     ),
   );
@@ -510,7 +511,7 @@ const refreshShop = (guild) => panels.schedule(guild, 'shop');
 
 function assertUniqueName(guildId, name, productId = null) {
   if (products(guildId).some((p) => p.id !== productId && p.name.toLowerCase() === name.trim().toLowerCase())) {
-    throw new UserError('A product with this name already exists.');
+    throw new UserError('Produkt o tej nazwie już istnieje.');
   }
 }
 
@@ -523,11 +524,11 @@ const MAX_COUNT = 100_000;
 function stockPatch({ stock = null, count = null } = {}) {
   if (count != null) {
     const n = Number(count);
-    if (!Number.isInteger(n) || n < 0 || n > MAX_COUNT) throw new UserError(`The count must be a whole number from 0 to ${MAX_COUNT.toLocaleString('en-US')}.`);
+    if (!Number.isInteger(n) || n < 0 || n > MAX_COUNT) throw new UserError(`Ilość musi być liczbą całkowitą od 0 do ${MAX_COUNT.toLocaleString('pl-PL')}.`);
     return { stockCount: n, stock: stockFor(n) };
   }
   if (!stock) return {};
-  if (!STOCK[stock]) throw new UserError('Unknown stock status.');
+  if (!STOCK[stock]) throw new UserError('Nieznany stan magazynu.');
   return { stock, stockCount: null };
 }
 
@@ -540,24 +541,24 @@ function saleAmount(raw) {
 /** Why a product can't be on a flash sale – its price (or an option's price) is not a plain number in the shop currency – or null. */
 function saleProblem(p) {
   const currency = config.shop.currency ?? '€';
-  const why = (price, example) => (parseAmount(price) == null ? `is not a plain number (like ${example})` : `is in another currency than the shop's${currency ? ` (${currency})` : ''}`);
+  const why = (price, example) => (parseAmount(price) == null ? `nie jest zwykłą liczbą (np. ${example})` : `jest w innej walucie niż sklep${currency ? ` (${currency})` : ''}`);
   const options = variantsOf(p);
-  if (!options.length) return saleAmount(p.price) == null ? `its price "${truncate(p.price, 40)}" ${why(p.price, '`20` or `19.99`')}` : null;
+  if (!options.length) return saleAmount(p.price) == null ? `cena „${truncate(p.price, 40)}” ${why(p.price, '`20` albo `19.99`')}` : null;
   const bad = options.find((v) => saleAmount(v.price) == null);
-  return bad ? `the price of the option **${truncate(bad.name, 50)}** ("${truncate(bad.price, 40)}") ${why(bad.price, '`5` or `4.99`')}` : null;
+  return bad ? `cena wariantu **${truncate(bad.name, 50)}** („${truncate(bad.price, 40)}”) ${why(bad.price, '`5` albo `4.99`')}` : null;
 }
 
 /** A change that would leave a product on sale with a price it can't reduce (see saleProblem) is refused. */
 function assertSaleStillWorks(p, next) {
   if (!activeSale(p)) return;
   const problem = saleProblem({ ...p, ...next });
-  if (problem) throw new UserError(`**${p.name}** is on a flash sale right now and ${problem}. Use a number, or stop the sale first with \`/sale stop\`.`);
+  if (problem) throw new UserError(`**${p.name}** jest teraz w promocji błyskawicznej, a ${problem}. Użyj liczby albo najpierw zakończ promocję przez \`${slash('sale stop')}\`.`);
 }
 
 /** image: { buffer, ext } from productImages.download(); stockCount: how many are left (null = not counted) */
 function addProduct(guild, { name, price, description, emoji, stock = 'in', stockCount = null, category = null, image = null, deliveryTime = null }) {
   const list = products(guild.id);
-  if (list.length >= 50) throw new UserError('The catalog is full (50 products). Remove an old product first.');
+  if (list.length >= 50) throw new UserError('Katalog jest pełny (50 produktów). Najpierw usuń jakiś stary produkt.');
   assertUniqueName(guild.id, name);
   const product = {
     id: crypto.randomBytes(4).toString('hex'),
@@ -636,7 +637,7 @@ function removeProduct(guild, query) {
 /** /product stock: a status, or a count (which sets the status) → { product, restocked, counterOff }. */
 async function setStock(guild, query, stock, { count = null } = {}) {
   const p = requireProduct(guild.id, query);
-  if (!stock && count == null) throw new UserError('Give a **status**, or a **count** of how many are left.');
+  if (!stock && count == null) throw new UserError('Podaj **status** albo **ilosc** – ile sztuk zostało.');
   const next = stockPatch({ stock, count });
   const wasOut = p.stock === 'out';
   const wasCounted = counted(p);
@@ -667,9 +668,9 @@ async function countDownLine(guild, sale, line) {
   db.save();
   refreshShop(guild);
   if (left === 0 && before > 0) {
-    const order = sale.ticketNumber ? ` with order \`#${pad(sale.ticketNumber)}\`` : '';
+    const order = sale.ticketNumber ? ` w zamówieniu \`#${pad(sale.ticketNumber)}\`` : '';
     await sendLog(guild, {
-      embeds: [logEmbed(COLORS.danger, '🔴 Sold out').setDescription(`**${p.name}** is sold out – the last one went${order}. Restock it with \`/product stock count:\`.`)],
+      embeds: [logEmbed(COLORS.danger, '🔴 Wyprzedany').setDescription(`**${p.name}** jest wyprzedany – ostatnia sztuka została sprzedana${order}. Uzupełnij stan przez \`${slash('product stock')} ilosc:\`.`)],
     });
   }
   return left;
@@ -685,7 +686,7 @@ hooks.on('orderCompleted', afterSale);
 // ───────────── Variants (/product variants) ─────────────
 
 const MAX_VARIANTS = 10;
-const VARIANT_FORMAT = 'write the options as **name = price**, separated by commas – e.g. `1 month = 5, 3 months = 12, 12 months = 40`.';
+const VARIANT_FORMAT = 'wpisz warianty jako **nazwa = cena**, oddzielone przecinkami – np. `1 miesiąc = 5, 3 miesiące = 12, 12 miesięcy = 40`.';
 
 /**
  * "1 month = 5, 3 months = 12; 12 months = 40" → [{ id, name, price }] – separated by , ; or new lines (a comma
@@ -694,19 +695,19 @@ const VARIANT_FORMAT = 'write the options as **name = price**, separated by comm
  */
 function parseVariants(input, existing = []) {
   const raw = String(input ?? '').trim();
-  if (!raw || /^(none|-)$/i.test(raw)) return [];
+  if (!raw || /^(none|brak|-)$/i.test(raw)) return [];
   const out = [];
   for (const entry of raw.split(/\s*(?:[;\n]|,(?!\d)|(?<!\d),)\s*/).filter(Boolean)) {
     const at = entry.indexOf('=');
     const name = entry.slice(0, at).replace(/\s+/g, ' ').trim();
     const price = entry.slice(at + 1).trim();
     if (at === -1 || !name || !price || price.includes('=')) throw new UserError(`\`${truncate(entry, 60)}\` – ${VARIANT_FORMAT}`);
-    if (name.length > 50) throw new UserError(`Option names can be up to 50 characters – **${truncate(name, 50)}** has ${name.length}.`);
-    if (price.length > 40) throw new UserError(`Option prices can be up to 40 characters – the price of **${name}** has ${price.length}.`);
-    if (out.some((v) => v.name.toLowerCase() === name.toLowerCase())) throw new UserError(`The option **${name}** is there twice – every option needs its own name.`);
+    if (name.length > 50) throw new UserError(`Nazwa wariantu może mieć maksymalnie 50 znaków – **${truncate(name, 50)}** ma ${name.length}.`);
+    if (price.length > 40) throw new UserError(`Cena wariantu może mieć maksymalnie 40 znaków – cena **${name}** ma ${price.length}.`);
+    if (out.some((v) => v.name.toLowerCase() === name.toLowerCase())) throw new UserError(`Wariant **${name}** występuje dwa razy – każdy wariant musi mieć własną nazwę.`);
     out.push({ name, price });
   }
-  if (out.length > MAX_VARIANTS) throw new UserError(`A product can have up to ${MAX_VARIANTS} options – that's ${out.length}.`);
+  if (out.length > MAX_VARIANTS) throw new UserError(`Produkt może mieć maksymalnie ${MAX_VARIANTS} wariantów – podano ${out.length}.`);
   const used = new Set();
   return out.map((v) => {
     let id = existing.find((x) => x.name.toLowerCase() === v.name.toLowerCase())?.id;
@@ -734,10 +735,10 @@ async function announceProduct(guild, p, kind = 'new') {
   const roleId = db.roleId(guild.id, 'pingRestocks');
   const image = images.attachment(p);
   const c = container(kind === 'new' ? COLORS.brand : COLORS.success);
-  const title = kind === 'new' ? `${e(guild, 'sparkles')} New product` : `${e(guild, 'box')} Back in stock`;
+  const title = kind === 'new' ? `${e(guild, 'sparkles')} Nowy produkt` : `${e(guild, 'box')} Znowu dostępny`;
   const options = variantsOf(p).length ? `\n-# ${optionsText(p)}` : '';
-  header(c, `## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Price:** ${activeSale(p) ? priceMarkdown(p) : priceLabel(p)}${options}`, image?.url);
-  c.addActionRowComponents(row(btn(`shop:buy:${p.id}`, 'Buy now', ce(guild, 'cart'), ButtonStyle.Primary)));
+  header(c, `## ${title}: ${productEmoji(guild, p)} ${p.name}\n${p.description}\n\n**Cena:** ${activeSale(p) ? priceMarkdown(p) : priceLabel(p)}${options}`, image?.url);
+  c.addActionRowComponents(row(btn(`shop:buy:${p.id}`, 'Kup teraz', ce(guild, 'cart'), ButtonStyle.Primary)));
   if (roleId) c.addTextDisplayComponents(text(`-# 🔔 <@&${roleId}>`));
   return sendToChannel(guild, channelId, v2(c, { mentions: { roles: roleId ? [roleId] : [] }, files: image ? [image.file] : [] }));
 }
@@ -750,7 +751,7 @@ function ticketProduct(guildId, ticket) {
   if (!guildId || !ticket || isCart(ticket.order) || ticket.order?.topUp) return null;
   const id = ticket.order?.productId;
   if (id) return products(guildId).find((p) => p.id === id) ?? null;
-  const values = (ticket.answers ?? []).filter((a) => /product|buy/i.test(a.label ?? '')).map((a) => String(a.value ?? '').trim().toLowerCase());
+  const values = (ticket.answers ?? []).filter((a) => /product|buy|produkt|kup/i.test(a.label ?? '')).map((a) => String(a.value ?? '').trim().toLowerCase());
   // Names can contain " — " too: "Spotify — 12 months — 40€" is "Spotify — 12 months", not "Spotify" – the longest match wins.
   let best = null;
   for (const p of products(guildId)) {
@@ -765,19 +766,19 @@ function ticketProduct(guildId, ticket) {
 const promos = require('./promos');
 const storeBalance = () => require('./balance'); // features/balance.js – loaded with the other features
 
-/** "16€ (was 20€ · −20% flash sale)" – an option's price in the order form menu. */
+/** "16€ (było 20€ · promocja −20%)" – an option's price in the order form menu. */
 function optionPrice(product, v, now = Date.now()) {
   const sale = activeSale(product, now);
   const reduced = variantPrice(product, v, now);
-  return sale && parseAmount(v.price) != null ? `${reduced} (was ${formatPrice(v.price)} · −${sale.percent}% flash sale)` : reduced;
+  return sale && parseAmount(v.price) != null ? `${reduced} (było ${formatPrice(v.price)} · promocja −${sale.percent}%)` : reduced;
 }
 
 /** The required "Option" menu of the order form: every option with its price (reduced during a flash sale). */
 function variantField(product) {
-  const field = new LabelBuilder().setLabel('Option').setStringSelectMenuComponent(
+  const field = new LabelBuilder().setLabel('Wariant').setStringSelectMenuComponent(
     new StringSelectMenuBuilder()
       .setCustomId('variant')
-      .setPlaceholder('Choose an option…')
+      .setPlaceholder('Wybierz wariant…')
       .setRequired(true)
       .addOptions(variantsOf(product).slice(0, 25).map((v) => ({ label: truncate(v.name, 100), value: v.id, description: truncate(optionPrice(product, v), 100) }))),
   );
@@ -803,45 +804,45 @@ function orderModal(product, guild = null, { userId = null } = {}) {
     modal.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${product.name}** — ${price}${when ? ` · ${when}` : ''}\n${subtext(truncate(product.description, 300))}`));
   }
   const quantity = new LabelBuilder()
-    .setLabel('Quantity')
+    .setLabel('Ilość')
     .setTextInputComponent(new TextInputBuilder().setCustomId('quantity').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(6).setValue('1'));
-  if (counted(product)) quantity.setDescription(`${product.stockCount} left`);
+  if (counted(product)) quantity.setDescription(`Zostało: ${product.stockCount}`);
   modal.addLabelComponents(quantity);
   const fromBalance = guild && userId ? storeBalance().paymentOption(guild.id, userId, lowestPrice(product)) : null;
   // Methods switched off with /disable are left out – the option value stays the method's index in config.json.
   const methods = require('../lib/paymentState').activeMethods(guild?.id).slice(0, fromBalance ? 24 : 25);
-  if (!methods.length && !fromBalance && require('../lib/paymentState').allOff(guild?.id)) throw new UserError('Payments are paused for a moment – please try again a bit later.');
+  if (!methods.length && !fromBalance && require('../lib/paymentState').allOff(guild?.id)) throw new UserError('Płatności są chwilowo wstrzymane – spróbuj ponownie trochę później.');
   if (methods.length || fromBalance) {
     const options = methods.map(({ m, index: i }) => ({ label: truncate(m.name, 100), value: String(i), description: m.details ? truncate(m.details, 100) : undefined, emoji: guild ? ce(guild, m.emoji) : FALLBACK[m.emoji] ?? '💳' }));
     modal.addLabelComponents(
       new LabelBuilder()
-        .setLabel('Payment method')
-        .setDescription('How would you like to pay? Details follow in your ticket.')
+        .setLabel('Metoda płatności')
+        .setDescription('Jak chcesz zapłacić? Szczegóły dostaniesz w tickecie.')
         .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('payment')
-            .setPlaceholder('Choose a payment method…')
+            .setPlaceholder('Wybierz metodę płatności…')
             .addOptions(fromBalance ? [...options, fromBalance] : options),
         ),
     );
   } else {
     modal.addLabelComponents(
       new LabelBuilder()
-        .setLabel('Payment method')
+        .setLabel('Metoda płatności')
         .setTextInputComponent(new TextInputBuilder().setCustomId('payment_text').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60)),
     );
   }
   modal.addLabelComponents(
     new LabelBuilder()
-      .setLabel('Anything else we should know?')
+      .setLabel('Coś jeszcze, o czym mamy wiedzieć?')
       .setTextInputComponent(new TextInputBuilder().setCustomId('notes').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)),
   );
   if (config.promos.enabled !== false) {
     modal.addLabelComponents(
       new LabelBuilder()
-        .setLabel('Promo code')
-        .setDescription('Optional – got a discount code? Enter it here.')
-        .setTextInputComponent(new TextInputBuilder().setCustomId('promo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(24).setPlaceholder('e.g. HS10')),
+        .setLabel('Kod rabatowy')
+        .setDescription('Opcjonalnie – masz kod rabatowy? Wpisz go tutaj.')
+        .setTextInputComponent(new TextInputBuilder().setCustomId('promo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(24).setPlaceholder('np. HS10')),
     );
   }
   return modal;
@@ -851,7 +852,7 @@ function orderModal(product, guild = null, { userId = null } = {}) {
 function parseQuantity(raw) {
   const s = String(raw ?? '').trim() || '1';
   const n = /^\d{1,6}$/.test(s) ? Number(s) : NaN;
-  if (!(n >= 1 && n <= 999)) throw new UserError('The quantity must be a whole number from **1** to **999** (e.g. `1` or `3`).');
+  if (!(n >= 1 && n <= 999)) throw new UserError('Ilość musi być liczbą całkowitą od **1** do **999** (np. `1` albo `3`).');
   return n;
 }
 
@@ -877,23 +878,27 @@ function priceOrder(guildId, userId, product, quantity, rawCode, { variant = nul
   return { unitPrice, listPrice, salePercent, subtotal, total, discount, code, promo, error };
 }
 
-/** The "Price" answer shown in the ticket: subtotal, discount and total (when the price is a number) and the promo result. */
+/** The order's price / promo answers (Polish – or English from orders placed before the translation). */
+const PRICE_ANSWERS = ['Cena', 'Kod rabatowy', 'Price', 'Promo code'];
+const isPriceAnswer = (a) => PRICE_ANSWERS.includes(a?.label);
+
+/** The "Cena" answer shown in the ticket: subtotal, discount and total (when the price is a number) and the promo result. */
 function priceAnswers(p, quantity) {
   let promoNote = null;
-  if (p.error) promoNote = `${p.code} – not applied: ${p.error}`;
-  else if (p.promo && p.subtotal == null) promoNote = `${p.code} – ${promos.label(p.promo)}, the seller applies it to the final price`;
-  if (p.subtotal == null) return promoNote ? [{ label: 'Promo code', value: promoNote }] : [];
+  if (p.error) promoNote = `${p.code} – nie zastosowano: ${p.error}`;
+  else if (p.promo && p.subtotal == null) promoNote = `${p.code} – ${promos.label(p.promo)}, sprzedawca uwzględni go w ostatecznej cenie`;
+  if (p.subtotal == null) return promoNote ? [{ label: 'Kod rabatowy', value: promoNote }] : [];
   const each = quantity > 1 ? ` (${quantity} × ${money(p.unitPrice)})` : '';
   const lines =
     p.discount > 0
-      ? [`Subtotal: ${money(p.subtotal)}${each}`, `Discount (${p.code} · ${promos.label(p.promo)}): −${money(p.discount)}`, `**Total to pay: ${money(p.total)}**`]
-      : [`**Total to pay: ${money(p.subtotal)}**${each}`];
+      ? [`Suma: ${money(p.subtotal)}${each}`, `Rabat (${p.code} · ${promos.label(p.promo)}): −${money(p.discount)}`, `**Do zapłaty: ${money(p.total)}**`]
+      : [`**Do zapłaty: ${money(p.subtotal)}**${each}`];
   if (p.salePercent) {
-    const was = p.listPrice != null ? `: ${money(p.listPrice)} → ${money(p.unitPrice)}${quantity > 1 ? ' each' : ''}` : '';
-    lines.unshift(`⚡ Flash sale −${p.salePercent}%${was}`);
+    const was = p.listPrice != null ? `: ${money(p.listPrice)} → ${money(p.unitPrice)}${quantity > 1 ? ' za sztukę' : ''}` : '';
+    lines.unshift(`⚡ Promocja błyskawiczna −${p.salePercent}%${was}`);
   }
-  if (promoNote) lines.push(`Promo code ${promoNote}`);
-  return [{ label: 'Price', value: lines.join('\n') }];
+  if (promoNote) lines.push(`Kod rabatowy ${promoNote}`);
+  return [{ label: 'Cena', value: lines.join('\n') }];
 }
 
 /**
@@ -915,7 +920,7 @@ function recheckOrderPromo(guildId, ticket) {
   if (!error) return null;
   const subtotal = order.subtotal ?? null;
   const price = { unitPrice: order.unitPrice ?? null, listPrice: order.listPrice ?? null, salePercent: order.salePercent ?? null, subtotal, total: subtotal, discount: 0, code: order.promo, promo: null, error };
-  const answers = (ticket.answers ?? []).filter((a) => a.label !== 'Price' && a.label !== 'Promo code');
+  const answers = (ticket.answers ?? []).filter((a) => !isPriceAnswer(a));
   return {
     code: order.promo,
     error,
@@ -927,7 +932,7 @@ function recheckOrderPromo(guildId, ticket) {
 async function startOrder(interaction, productId) {
   const tickets = require('../tickets/tickets');
   const product = findProduct(interaction.guild.id, productId);
-  if (!product) throw new UserError('This product is no longer available – the catalog has been updated.');
+  if (!product) throw new UserError('Ten produkt nie jest już dostępny – katalog został zaktualizowany.');
   // Sold out since the button was posted (#restocks, an open category list) – offer Notify me, not a dead end.
   if (product.stock === 'out') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -949,14 +954,14 @@ function chosenVariant(interaction, product) {
   const options = variantsOf(product);
   if (!id && !options.length) return null;
   const variant = options.find((v) => v.id === id);
-  if (!variant) throw new UserError(`The options of **${product.name}** have changed since you opened the form – click **Buy** again to see the current ones.`);
+  if (!variant) throw new UserError(`Warianty **${product.name}** zmieniły się od otwarcia formularza – kliknij ponownie **Kup**, żeby zobaczyć aktualne.`);
   return variant;
 }
 
 async function submitOrder(interaction, productId) {
   const tickets = require('../tickets/tickets');
   const product = findProduct(interaction.guild.id, productId);
-  if (!product) throw new UserError('This product is no longer available.');
+  if (!product) throw new UserError('Ten produkt nie jest już dostępny.');
   // Sold out while the form was open – offer Notify me instead of an order ticket.
   if (product.stock === 'out') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -972,12 +977,12 @@ async function submitOrder(interaction, productId) {
   const variant = chosenVariant(interaction, product);
   const quantity = parseQuantity(field('quantity'));
   if (counted(product) && quantity > product.stockCount) {
-    throw new UserError(`Only **${product.stockCount}** left – lower the quantity to ${product.stockCount} or less.`);
+    throw new UserError(`Zostało tylko **${product.stockCount}** – zmniejsz ilość do ${product.stockCount} lub mniej.`);
   }
   let payment = field('payment_text');
   let method = payment;
   let methodIndex = null;
-  let withBalance = false; // "Store balance" – paid right away (features/balance.js)
+  let withBalance = false; // "Saldo sklepu" – paid right away (features/balance.js)
   try {
     const [index] = interaction.fields.getStringSelectValues('payment');
     const m = config.shop.paymentMethods[Number(index)];
@@ -995,17 +1000,17 @@ async function submitOrder(interaction, productId) {
   if (methodIndex != null) require('../lib/paymentState').assertOn(interaction.guild.id, method); // an old form with a method switched off since
   const price = priceOrder(interaction.guild.id, interaction.user.id, product, quantity, field('promo'), { variant });
   // Money taken at once must be exactly what the buyer expects – a code that doesn't work stops it.
-  if (withBalance && price.error) throw new UserError(`Promo code **${price.code}** can't be used: ${price.error} Remove it (or fix it) to pay with store balance.`);
+  if (withBalance && price.error) throw new UserError(`Nie można użyć kodu rabatowego **${price.code}**. ${price.error} Usuń go (albo popraw), żeby zapłacić saldem sklepu.`);
   const name = variant ? `${product.name} — ${variant.name}` : product.name;
   const answers = [
-    { label: 'Product', value: `${name} — ${formatPrice(variant ? variant.price : product.price)}` },
-    { label: 'Quantity', value: String(quantity) },
-    { label: 'Payment method', value: payment || '—' },
+    { label: 'Produkt', value: `${name} — ${formatPrice(variant ? variant.price : product.price)}` },
+    { label: 'Ilość', value: String(quantity) },
+    { label: 'Metoda płatności', value: payment || '—' },
   ];
   const notes = field('notes');
-  if (notes) answers.push({ label: 'Notes', value: notes });
+  if (notes) answers.push({ label: 'Uwagi', value: notes });
   answers.push(...priceAnswers(price, quantity));
-  if (withBalance) answers.push({ label: 'Paid', value: `💰 With store balance – ${storeBalance().NON_REFUNDABLE}` });
+  if (withBalance) answers.push({ label: 'Opłacone', value: `💰 Saldem sklepu – ${storeBalance().NON_REFUNDABLE}` });
 
   const order = {
     productId: product.id,
@@ -1041,18 +1046,18 @@ async function submitOrder(interaction, productId) {
     release(); // the saved ticket holds the code now (or opening the ticket failed)
   }
   if (spent) storeBalance().linkOrder(spent, db.getTicket(channel.id));
-  const lines = [`Your private order ticket is ready: ${channel}`];
+  const lines = [`Twój prywatny ticket zamówienia jest gotowy: ${channel}`];
   if (withBalance) {
-    lines.push(`💰 Paid with store balance: **${money(price.total)}** – ${money(storeBalance().get(interaction.guild.id, interaction.user.id))} left. Your order is handled in the ticket.`);
+    lines.push(`💰 Opłacono saldem sklepu: **${money(price.total)}** – na saldzie zostało ${money(storeBalance().get(interaction.guild.id, interaction.user.id))}. Zamówienie zrealizujemy w tickecie.`);
   } else if (price.total != null) {
-    const savings = [price.salePercent && `⚡ −${price.salePercent}% flash sale`, price.discount > 0 && `you save ${money(price.discount)} with **${price.code}**`].filter(Boolean);
-    lines.push(`${e(interaction.guild, 'card')} Total to pay: **${money(price.total)}**${savings.length ? ` (${savings.join(' · ')})` : ''}`);
-  } else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Promo code **${price.code}** (${promos.label(price.promo)}) – the seller applies it to the final price.`);
-  if (price.error) lines.push(`${e(interaction.guild, 'warning')} Promo code **${price.code}** – not applied: ${price.error}`);
-  if (!withBalance) lines.push('A seller will confirm the price and payment details there. **Never pay anyone in DMs.**');
+    const savings = [price.salePercent && `⚡ promocja błyskawiczna −${price.salePercent}%`, price.discount > 0 && `oszczędzasz ${money(price.discount)} z kodem **${price.code}**`].filter(Boolean);
+    lines.push(`${e(interaction.guild, 'card')} Do zapłaty: **${money(price.total)}**${savings.length ? ` (${savings.join(' · ')})` : ''}`);
+  } else if (price.promo) lines.push(`${e(interaction.guild, 'gift')} Kod rabatowy **${price.code}** (${promos.label(price.promo)}) – sprzedawca uwzględni go w ostatecznej cenie.`);
+  if (price.error) lines.push(`${e(interaction.guild, 'warning')} Kod rabatowy **${price.code}** – nie zastosowano: ${price.error}`);
+  if (!withBalance) lines.push('Sprzedawca potwierdzi tam cenę i szczegóły płatności. **Nigdy nie płać nikomu w wiadomościach prywatnych.**');
   const answer = await interaction.editReply({
-    embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Order started – ${name}`, 256)).setDescription(lines.join('\n'))],
-    components: [row(linkBtn(channel.url, 'Go to my order', '🎫'))],
+    embeds: [embed(COLORS.success).setTitle(truncate(`🛒 Zamówienie rozpoczęte – ${name}`, 256)).setDescription(lines.join('\n'))],
+    components: [row(linkBtn(channel.url, 'Przejdź do zamówienia', '🎫'))],
   });
   // After the answer – e.g. the Stripe payment link (features/stripe.js) takes a call to Stripe.
   await hooks.emit('orderPlaced', { guild: interaction.guild, channel, ticket: db.getTicket(channel.id), member: interaction.member });
@@ -1066,8 +1071,8 @@ function autocomplete(interaction, { filter = null } = {}) {
   const q = String(focused.value ?? '').toLowerCase();
   const label = (p) => {
     const sale = activeSale(p);
-    const stock = counted(p) && p.stock !== 'out' ? `${p.stockCount} left` : STOCK[p.stock]?.label ?? '';
-    return `${p.name} · ${priceLabel(p)}${sale ? ` · −${sale.percent}% sale` : ''} · ${stock}`;
+    const stock = counted(p) && p.stock !== 'out' ? `zostało ${p.stockCount}` : STOCK[p.stock]?.label ?? '';
+    return `${p.name} · ${priceLabel(p)}${sale ? ` · promocja −${sale.percent}%` : ''} · ${stock}`;
   };
   return interaction.respond(
     products(interaction.guild.id)
@@ -1134,6 +1139,7 @@ module.exports = {
   parseQuantity,
   priceOrder,
   priceAnswers,
+  isPriceAnswer,
   recheckOrderPromo,
   startOrder,
   submitOrder,

@@ -41,20 +41,20 @@ module.exports = {
 
     if (sub === 'view') {
       if (user && user.id !== interaction.user.id) {
-        if (!staff) return replyError(interaction, "Only administrators and sellers can see someone else's balance.");
+        if (!staff) return replyError(interaction, 'Tylko administratorzy i sprzedawcy mogą zobaczyć cudze saldo.');
         return reply(interaction, balance.balanceView(interaction.guild, user.id, { staffView: true }));
       }
-      if (!balance.enabled() && !staff) return replyError(interaction, 'Store balance is turned off right now.');
+      if (!balance.enabled() && !staff) return replyError(interaction, 'Saldo sklepu jest teraz wyłączone.');
       return reply(interaction, balance.balanceView(interaction.guild, interaction.user.id));
     }
 
-    if (!staff) return replyError(interaction, 'Only administrators and sellers can change store balances.');
+    if (!staff) return replyError(interaction, 'Tylko administratorzy i sprzedawcy mogą zmieniać saldo członków.');
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const remove = sub === 'remove';
     const after = await balance.staffChange(interaction.guild, interaction.member, user, o.getNumber('amount'), o.getString('reason'), { remove });
     return reply(
       interaction,
-      `${remove ? 'Removed' : 'Added'} **${money(o.getNumber('amount'))}** ${remove ? 'from' : 'to'} <@${user.id}>'s store balance – it is now **${money(after)}**. Logged in the ticket log.`,
+      `${remove ? 'Odjęto' : 'Dodano'} **${money(o.getNumber('amount'))}** ${remove ? 'z salda' : 'do salda'} sklepu <@${user.id}> – wynosi teraz **${money(after)}**. Zapisano w logach ticketów.`,
     );
   },
 };

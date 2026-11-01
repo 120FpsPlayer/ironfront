@@ -13,7 +13,7 @@ const { UserError } = require('./utils');
 
 const MAX_BYTES = 1024 * 1024;
 const EXTS = ['png', 'jpg', 'webp', 'gif'];
-const TYPES = 'PNG, JPG, WEBP or GIF';
+const TYPES = 'PNG, JPG, WEBP lub GIF';
 
 const dir = () => path.join(db.dataDir, 'products');
 const safeId = (id) => /^[\w-]{1,64}$/.test(String(id ?? ''));
@@ -34,9 +34,9 @@ function check(attachment) {
   const name = String(attachment?.name ?? '').toLowerCase();
   const type = String(attachment?.contentType ?? '').toLowerCase();
   const ok = /^image\/(png|jpe?g|webp|gif)$/.test(type) || (!type && /\.(png|jpe?g|webp|gif)$/.test(name));
-  if (!ok) throw new UserError(`The product image must be a ${TYPES} file.`);
+  if (!ok) throw new UserError(`Zdjęcie produktu musi być plikiem ${TYPES}.`);
   if (attachment.size > MAX_BYTES) {
-    throw new UserError(`That image is ${mb(attachment.size)} – product images can be up to **1 MB**. Make it smaller (e.g. with squoosh.app or tinypng.com) and try again.`);
+    throw new UserError(`To zdjęcie ma ${mb(attachment.size)} – zdjęcie produktu może mieć maksymalnie **1 MB**. Zmniejsz je (np. na squoosh.app lub tinypng.com) i spróbuj ponownie.`);
   }
 }
 
@@ -45,15 +45,15 @@ async function download(attachment) {
   if (!attachment?.url) return null;
   check(attachment);
   const res = await fetch(attachment.url, { signal: globalThis.AbortSignal?.timeout?.(20_000) }).catch(() => null);
-  if (!res?.ok) throw new UserError('I could not download that image – please try again.');
+  if (!res?.ok) throw new UserError('Nie udało się pobrać zdjęcia – spróbuj ponownie.');
   const length = Number(res.headers?.get?.('content-length'));
-  if (length > MAX_BYTES) throw new UserError(`That image is ${mb(length)} – product images can be up to **1 MB**.`);
+  if (length > MAX_BYTES) throw new UserError(`To zdjęcie ma ${mb(length)} – zdjęcie produktu może mieć maksymalnie **1 MB**.`);
   const body = await res.arrayBuffer().catch(() => null);
-  if (!body) throw new UserError('I could not download that image – please try again.');
+  if (!body) throw new UserError('Nie udało się pobrać zdjęcia – spróbuj ponownie.');
   const buffer = Buffer.from(body);
-  if (buffer.length > MAX_BYTES) throw new UserError(`That image is ${mb(buffer.length)} – product images can be up to **1 MB**.`);
+  if (buffer.length > MAX_BYTES) throw new UserError(`To zdjęcie ma ${mb(buffer.length)} – zdjęcie produktu może mieć maksymalnie **1 MB**.`);
   const ext = sniff(buffer);
-  if (!ext) throw new UserError(`That file is not a real ${TYPES} image.`);
+  if (!ext) throw new UserError(`Ten plik nie jest prawdziwym obrazem ${TYPES}.`);
   return { buffer, ext };
 }
 
@@ -65,7 +65,7 @@ function remove(productId) {
 
 /** Stores an image for a product (replacing the old one) → what goes into product.image. */
 function save(productId, { buffer, ext }) {
-  if (!safeId(productId) || !EXTS.includes(ext)) throw new Error(`Invalid product image ${productId}.${ext}`);
+  if (!safeId(productId) || !EXTS.includes(ext)) throw new Error(`Nieprawidłowe zdjęcie produktu ${productId}.${ext}`);
   remove(productId);
   fs.mkdirSync(dir(), { recursive: true });
   fs.writeFileSync(path.join(dir(), `${productId}.${ext}`), buffer);

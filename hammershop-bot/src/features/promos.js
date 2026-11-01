@@ -32,14 +32,14 @@ const find = (guildId, code) => list(guildId).find((p) => p.code === normalize(c
 
 function create(guildId, { code, percent = null, amount = null, expiresAt = null, maxUses = null, userId = null, oncePerUser = true, firstOrderOnly = false, reason = null, createdBy = null, affiliate = null }) {
   const c = normalize(code);
-  if (!CODE.test(c)) throw new UserError('A code has 3–24 characters: letters, numbers, - and _.');
-  if (find(guildId, c)) throw new UserError(`The code **${c}** already exists.`);
+  if (!CODE.test(c)) throw new UserError('Kod musi mieć 3–24 znaki: litery, cyfry, - i _.');
+  if (find(guildId, c)) throw new UserError(`Kod **${c}** już istnieje.`);
   const pct = percent == null ? null : Number(percent);
   const amt = amount == null ? null : Number(amount);
-  if ((pct == null) === (amt == null)) throw new UserError('Give either a percentage or an amount off – not both.');
-  if (pct != null && !(pct >= 1 && pct <= 100)) throw new UserError('The percentage must be between 1 and 100.');
-  if (amt != null && !(amt > 0)) throw new UserError('The amount off must be more than 0.');
-  if (maxUses != null && !(Number.isInteger(Number(maxUses)) && Number(maxUses) > 0)) throw new UserError('Max uses must be a whole number above 0.');
+  if ((pct == null) === (amt == null)) throw new UserError('Podaj rabat w procentach albo kwotę rabatu – nie oba naraz.');
+  if (pct != null && !(pct >= 1 && pct <= 100)) throw new UserError('Procent musi być od 1 do 100.');
+  if (amt != null && !(amt > 0)) throw new UserError('Kwota rabatu musi być większa niż 0.');
+  if (maxUses != null && !(Number.isInteger(Number(maxUses)) && Number(maxUses) > 0)) throw new UserError('Limit użyć musi być liczbą całkowitą większą niż 0.');
   const promo = {
     code: c,
     percent: pct,
@@ -69,7 +69,7 @@ function personal(guildId, userId, { percent, days = 7, prefix = 'HS', reason = 
       return create(guildId, { code, percent, expiresAt: Date.now() + days * DAY, maxUses: 1, userId, oncePerUser: true, firstOrderOnly, reason });
     }
   }
-  throw new Error('Could not create a unique promo code');
+  throw new Error('Nie udało się utworzyć unikalnego kodu rabatowego');
 }
 
 function remove(guildId, code) {
@@ -87,19 +87,19 @@ function remove(guildId, code) {
  * @param {{ now?: number, completedOrders?: number, openOrders?: number, reserved?: string[] }} opts
  */
 function problem(promo, userId, { now = Date.now(), completedOrders = 0, openOrders = 0, reserved = [] } = {}) {
-  if (!promo || !promo.active) return "This code doesn't exist.";
-  if (promo.expiresAt && now > promo.expiresAt) return 'This code has expired.';
-  if (promo.affiliate && config.affiliates?.enabled === false) return 'Creator codes are turned off right now.';
-  if (promo.affiliate && promo.affiliate.userId === userId) return "This is your own creator code – it's for your audience, you can't use it yourself.";
-  if (promo.userId && promo.userId !== userId) return 'This code belongs to someone else.';
-  if (promo.oncePerUser && reserved.includes(userId)) return "You're already using this code in another open order.";
-  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return 'This code has been used up.';
-  if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return "You've already used this code.";
+  if (!promo || !promo.active) return 'Taki kod nie istnieje.';
+  if (promo.expiresAt && now > promo.expiresAt) return 'Ten kod wygasł.';
+  if (promo.affiliate && config.affiliates?.enabled === false) return 'Kody twórców są teraz wyłączone.';
+  if (promo.affiliate && promo.affiliate.userId === userId) return 'To Twój własny kod twórcy – jest dla Twoich odbiorców, nie możesz z niego korzystać.';
+  if (promo.userId && promo.userId !== userId) return 'Ten kod należy do kogoś innego.';
+  if (promo.oncePerUser && reserved.includes(userId)) return 'Używasz już tego kodu w innym otwartym zamówieniu.';
+  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return 'Ten kod został już wykorzystany.';
+  if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return 'Ten kod został już przez Ciebie wykorzystany.';
   if (promo.maxUses != null && promo.uses.length + reserved.length >= promo.maxUses) {
-    return 'All remaining uses of this code are held by other open orders right now – it only becomes available again if one of them is cancelled.';
+    return 'Wszystkie pozostałe użycia tego kodu są teraz zarezerwowane przez inne otwarte zamówienia – kod będzie znów dostępny tylko wtedy, gdy któreś z nich zostanie anulowane.';
   }
-  if (promo.firstOrderOnly && completedOrders > 0) return 'This code is only valid for your first order.';
-  if (promo.firstOrderOnly && openOrders > 0) return 'This code is only valid for your first order – you already have another open order.';
+  if (promo.firstOrderOnly && completedOrders > 0) return 'Ten kod działa tylko przy pierwszym zamówieniu.';
+  if (promo.firstOrderOnly && openOrders > 0) return 'Ten kod działa tylko przy pierwszym zamówieniu – masz już inne otwarte zamówienie.';
   return null;
 }
 
@@ -110,9 +110,9 @@ function problem(promo, userId, { now = Date.now(), completedOrders = 0, openOrd
  */
 function overLimit(promo, userId, { completedOrders = 0 } = {}) {
   if (!promo) return null;
-  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return `already used up (${promo.uses.length}/${promo.maxUses} uses)`;
-  if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return 'the customer already used it on an earlier order';
-  if (promo.firstOrderOnly && completedOrders > 0) return "it's for first orders only, and the customer already had a completed order";
+  if (promo.maxUses != null && promo.uses.length >= promo.maxUses) return `już wykorzystany (${promo.uses.length}/${promo.maxUses} użyć)`;
+  if (promo.oncePerUser && promo.uses.some((u) => u.userId === userId)) return 'klient użył go już przy wcześniejszym zamówieniu';
+  if (promo.firstOrderOnly && completedOrders > 0) return 'jest tylko na pierwsze zamówienie, a klient ma już zrealizowane zamówienie';
   return null;
 }
 
@@ -178,7 +178,7 @@ function redeem(guildId, code, userId, saleId = null) {
   return promo;
 }
 
-/** "10% off" / "5€ off" */
-const label = (promo) => (promo.percent != null ? `${promo.percent}% off` : `${money(promo.amount)} off`);
+/** "10% rabatu" / "5€ rabatu" */
+const label = (promo) => (promo.percent != null ? `${promo.percent}% rabatu` : `${money(promo.amount)} rabatu`);
 
 module.exports = { DAY, normalize, list, find, create, personal, remove, problem, overLimit, check, apply, hold, openOrdersWith, reservedBy, openOrdersOf, redeem, label };

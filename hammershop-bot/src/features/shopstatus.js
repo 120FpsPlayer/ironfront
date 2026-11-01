@@ -57,14 +57,14 @@ const whenText = (at, now) => `${hours.whenText(config.workingHours, at, now)} (
 function statusLine(guildId, place = 'shop', now = clock.now()) {
   if (mode(guildId) === 'auto' && !config.workingHours?.enabled) return null;
   if (isOpen(guildId, now)) {
-    const lead = { support: '🟢 **Support is online now**', ticket: "🟢 **We're open**" }[place] ?? '🟢 **Open now**';
+    const lead = { support: '🟢 **Pomoc jest teraz dostępna**', ticket: '🟢 **Jesteśmy otwarci**' }[place] ?? '🟢 **Teraz otwarte**';
     return hoursText() ? `${lead} · ${hoursText()}` : lead;
   }
   const next = nextChange(guildId, now);
-  const back = next ? `we open ${whenText(next, now)}` : "we'll be back soon";
-  if (place === 'support') return `🔴 **Support is offline right now** – ${back}. Open a ticket anyway, we reply as soon as we're back.`;
-  if (place === 'ticket') return `🔴 **We're closed right now** – ${back}. Our team replies as soon as we're back.`;
-  return `🔴 **Closed right now** – ${back}. You can still order; a seller replies when we open.`;
+  const back = next ? `otwieramy ${whenText(next, now)}` : 'niedługo wracamy';
+  if (place === 'support') return `🔴 **Pomoc jest teraz niedostępna** – ${back}. Mimo to otwórz ticket – odpowiemy, gdy tylko wrócimy.`;
+  if (place === 'ticket') return `🔴 **Teraz jesteśmy zamknięci** – ${back}. Nasz zespół odpowie, gdy tylko wrócimy.`;
+  return `🔴 **Teraz zamknięte** – ${back}. Nadal możesz zamawiać, a sprzedawca odpowie po otwarciu.`;
 }
 
 /** Name of the status channel right now (null when the feature is off). Emoji variation selectors are dropped. */
@@ -95,13 +95,13 @@ async function removeChannel(guild) {
   const channel = guild.channels.cache.get(db.channelId(guild.id, 'statShop') ?? '');
   if (!channel || removeFailed.has(guild.id)) return false;
   try {
-    await channel.delete('Shop status channel turned off in config.json (shopStatus.enabled)');
+    await channel.delete('Kanał statusu sklepu wyłączony w config.json (shopStatus.enabled)');
   } catch (err) {
     removeFailed.add(guild.id);
-    console.warn(`[shop status] ${guild.name}: the status channel is turned off in config.json but I couldn't delete it (${err.message}) – delete it by hand.`);
+    console.warn(`[shop status] ${guild.name}: kanał statusu jest wyłączony w config.json, ale nie udało się go usunąć (${err.message}) – usuń go ręcznie.`);
     return false;
   }
-  console.log(`[shop status] ${guild.name}: removed the status channel – it is turned off in config.json (shopStatus.enabled).`);
+  console.log(`[shop status] ${guild.name}: usunięto kanał statusu – jest wyłączony w config.json (shopStatus.enabled).`);
   return true;
 }
 
@@ -139,7 +139,7 @@ async function tick(client, now = clock.now()) {
 
 /** /shop open | close | auto – sets the mode, renames the channel and refreshes the panels right away. */
 async function setMode(guild, newMode, { by = null, now = clock.now() } = {}) {
-  if (!MODES.includes(newMode)) throw new UserError('Unknown mode – use open, closed or auto.');
+  if (!MODES.includes(newMode)) throw new UserError('Nieznany tryb – użyj open, closed albo auto.');
   const state = db.guild(guild.id).shopStatus;
   Object.assign(state, { mode: newMode, setBy: by, setAt: now.getTime() });
   // After the new mode is in place:

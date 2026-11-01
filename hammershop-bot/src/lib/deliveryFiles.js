@@ -30,21 +30,21 @@ function cleanName(name) {
 async function download(attachments, keptBytes = 0) {
   const list = attachments.filter(Boolean);
   const total = list.reduce((n, a) => n + (Number(a.size) || 0), keptBytes);
-  if (total > MAX_TOTAL) throw new UserError(`Those files are ${mb(total)} together – a product can have up to **${mb(MAX_TOTAL)}** of files (they're sent in one message).`);
+  if (total > MAX_TOTAL) throw new UserError(`Te pliki mają razem ${mb(total)} – produkt może mieć maksymalnie **${mb(MAX_TOTAL)}** plików (są wysyłane w jednej wiadomości).`);
   const out = [];
   for (const a of list) {
     const res = await fetch(a.url, { signal: AbortSignal.timeout(30_000) }).catch(() => null);
-    if (!res?.ok) throw new UserError(`I could not download **${cleanName(a.name)}** – please try again.`);
+    if (!res?.ok) throw new UserError(`Nie udało się pobrać pliku **${cleanName(a.name)}** – spróbuj ponownie.`);
     const buffer = Buffer.from(await res.arrayBuffer());
     out.push({ name: cleanName(a.name), buffer });
   }
-  if (out.reduce((n, f) => n + f.buffer.length, keptBytes) > MAX_TOTAL) throw new UserError(`Those files are too big together – up to **${mb(MAX_TOTAL)}**.`);
+  if (out.reduce((n, f) => n + f.buffer.length, keptBytes) > MAX_TOTAL) throw new UserError(`Te pliki są razem za duże – maksymalnie **${mb(MAX_TOTAL)}**.`);
   return out;
 }
 
 /** Saves files for a product → [{ name, size }] (a file with the same name is replaced). */
 function save(productId, files) {
-  if (!safeId(productId)) throw new Error('Bad product id');
+  if (!safeId(productId)) throw new Error('Nieprawidłowe ID produktu');
   fs.mkdirSync(dir(productId), { recursive: true });
   return files.map((f) => {
     fs.writeFileSync(path.join(dir(productId), f.name), f.buffer);

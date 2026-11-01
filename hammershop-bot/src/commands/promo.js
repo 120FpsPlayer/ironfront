@@ -4,8 +4,9 @@ const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const config = require('../lib/config');
 const promos = require('../features/promos');
 const { COLORS } = require('../lib/theme');
-const { UserError, embed, logEmbed, money, reply, replyError, sendLog, truncate, ts } = require('../lib/utils');
+const { UserError, embed, logEmbed, money, reply, replyError, sendLog, truncate, ts, plural } = require('../lib/utils');
 const { isShopManager } = require('../lib/permissions');
+const { slash } = require('../lib/commandsPl');
 
 const MAX_LIST = 3800; // embed description budget (Discord allows 4096)
 
@@ -18,22 +19,25 @@ function status(p, now = Date.now()) {
 }
 
 const DOT = { active: '🟢', expired: '⌛', 'used up': '🔴', inactive: '⚫' };
-/** "1/3 uses", plus the open orders holding the code: "0/1 uses · 1 held by an open order". */
+const STATUS_LABEL = { active: 'aktywny', expired: 'wygasł', 'used up': 'wykorzystany', inactive: 'nieaktywny' };
+/** Stored reasons of automatic codes → what is shown (other reasons as they are). */
+const reasonText = (r) => ({ welcome: 'powitalny', manual: 'ręczny', 'creator code': 'kod twórcy' })[r] ?? r;
+/** "1/3 użyć", plus the open orders holding the code: "0/1 użyć · 1 zarezerwowane przez otwarte zamówienie". */
 const uses = (p, held = 0) =>
-  `${p.uses.length}/${p.maxUses ?? '∞'} uses${held ? ` · ${held === 1 ? '1 held by an open order' : `${held} held by open orders`}` : ''}`;
+  `${p.uses.length}/${p.maxUses ?? '∞'} użyć${held ? ` · ${held === 1 ? '1 zarezerwowane przez otwarte zamówienie' : `${held} ${plural(held, 'zarezerwowane', 'zarezerwowane', 'zarezerwowanych')} przez otwarte zamówienia`}` : ''}`;
 /** Open orders hold every remaining use – new orders can't use the code until one of them is cancelled. */
 const fullyHeld = (p, held) => p.maxUses != null && held > 0 && p.uses.length < p.maxUses && p.uses.length + held >= p.maxUses;
-const expiry = (p) => (p.expiresAt ? `${Date.now() > p.expiresAt ? 'expired' : 'expires'} ${ts(p.expiresAt, 'R')}` : 'no expiry');
+const expiry = (p) => (p.expiresAt ? `${Date.now() > p.expiresAt ? 'wygasł' : 'wygasa'} ${ts(p.expiresAt, 'R')}` : 'bezterminowy');
 
 function line(p, held = 0) {
   const s = status(p);
   const flags = [];
-  if (p.firstOrderOnly) flags.push('first order only');
-  if (!p.oncePerUser) flags.push('reusable');
+  if (p.firstOrderOnly) flags.push('tylko pierwsze zamówienie');
+  if (!p.oncePerUser) flags.push('wielokrotnego użytku');
   const owner = p.userId
-    ? ` · 👤 personal: <@${p.userId}>${p.reason ? ` (${p.reason})` : ''}`
+    ? ` · 👤 osobisty: <@${p.userId}>${p.reason ? ` (${reasonText(p.reason)})` : ''}`
     : p.affiliate
-      ? ` · 🎥 creator code of <@${p.affiliate.userId}> (${p.affiliate.commission}% commission)`
+      ? ` · 🎥 kod twórcy <@${p.affiliate.userId}> (${p.affiliate.commission}% prowizji)`
       : '';
   return `${DOT[s]} \`${p.code}\` · **${promos.label(p)}** · ${uses(p, held)} · ${expiry(p)}${flags.length ? ` · ${flags.join(', ')}` : ''}${owner}`;
 }
@@ -56,14 +60,14 @@ function listEmbed(guildId) {
     budget -= l.length + 1;
     lines.push(l);
   }
-  if (lines.length < list.length) lines.push(`-# …and ${list.length - lines.length} more – look one up with \`/promo info\`.`);
+  if (lines.length < list.length) lines.push(`-# …i ${list.length - lines.length} więcej – sprawdź konkretny kod przez \`${slash('promo info')}\`.`);
   return embed(COLORS.brand)
-    .setTitle(`🏷️ Promo codes (${list.length})`)
-    .setDescription(lines.join('\n') || 'No promo codes yet – create one with `/promo create`.')
+    .setTitle(`🏷️ Kody rabatowe (${list.length})`)
+    .setDescription(lines.join('\n') || `Nie ma jeszcze kodów rabatowych – utwórz pierwszy przez \`${slash('promo create')}\`.`)
     .addFields(
-      { name: 'Active', value: String(active), inline: true },
-      { name: 'Public', value: String(list.length - personal.length), inline: true },
-      { name: 'Personal', value: String(personal.length), inline: true },
+      { name: 'Aktywne', value: String(active), inline: true },
+      { name: 'Publiczne', value: String(list.length - personal.length), inline: true },
+      { name: 'Osobiste', value: String(personal.length), inline: true },
     );
 }
 
@@ -71,12 +75,12 @@ function listEmbed(guildId) {
 function detailFields(p, held = 0) {
   const s = status(p);
   return [
-    { name: 'Discount', value: promos.label(p), inline: true },
-    { name: 'Status', value: `${DOT[s]} ${s}${s === 'active' && fullyHeld(p, held) ? ' – all remaining uses are held by open orders' : ''}`, inline: true },
-    { name: 'Uses', value: uses(p, held), inline: true },
-    { name: 'Expires', value: p.expiresAt ? `${ts(p.expiresAt, 'f')} (${ts(p.expiresAt, 'R')})` : 'Never', inline: true },
-    { name: 'Once per member', value: p.oncePerUser ? 'Yes' : 'No', inline: true },
-    { name: 'First order only', value: p.firstOrderOnly ? 'Yes' : 'No', inline: true },
+    { name: 'Rabat', value: promos.label(p), inline: true },
+    { name: 'Status', value: `${DOT[s]} ${STATUS_LABEL[s]}${s === 'active' && fullyHeld(p, held) ? ' – wszystkie pozostałe użycia są zarezerwowane przez otwarte zamówienia' : ''}`, inline: true },
+    { name: 'Użycia', value: uses(p, held), inline: true },
+    { name: 'Wygasa', value: p.expiresAt ? `${ts(p.expiresAt, 'f')} (${ts(p.expiresAt, 'R')})` : 'Nigdy', inline: true },
+    { name: 'Raz na osobę', value: p.oncePerUser ? 'Tak' : 'Nie', inline: true },
+    { name: 'Tylko pierwsze zamówienie', value: p.firstOrderOnly ? 'Tak' : 'Nie', inline: true },
   ];
 }
 
@@ -89,14 +93,14 @@ function infoEmbed(guildId, p) {
   const e = embed(status(p) === 'active' ? COLORS.success : COLORS.muted)
     .setTitle(`🏷️ ${p.code}`)
     .addFields(detailFields(p, held));
-  if (p.userId) e.addFields({ name: 'Personal code', value: `👤 <@${p.userId}>${p.reason ? ` · ${p.reason}` : ''}`, inline: true });
-  e.addFields({ name: 'Created', value: `${ts(p.createdAt, 'R')}${p.createdBy ? ` by <@${p.createdBy}>` : ' automatically'}`, inline: true });
-  e.addFields({ name: `Recent uses (${p.uses.length})`, value: truncate(recent.join('\n') || 'Not used yet.', 1024) });
+  if (p.userId) e.addFields({ name: 'Kod osobisty', value: `👤 <@${p.userId}>${p.reason ? ` · ${reasonText(p.reason)}` : ''}`, inline: true });
+  e.addFields({ name: 'Utworzono', value: `${ts(p.createdAt, 'R')}${p.createdBy ? ` przez <@${p.createdBy}>` : ' automatycznie'}`, inline: true });
+  e.addFields({ name: `Ostatnie użycia (${p.uses.length})`, value: truncate(recent.join('\n') || 'Jeszcze nieużyty.', 1024) });
   const holding = promos.openOrdersWith(guildId, p.code);
   if (holding.length) {
     const lines = holding.slice(0, 15).map((t) => `<#${t.channelId}> · <@${t.ownerId}>`);
-    if (holding.length > lines.length) lines.push(`…and ${holding.length - lines.length} more`);
-    e.addFields({ name: `Held by open orders (${holding.length})`, value: truncate(`${lines.join('\n')}\n-# Counted as used until the order is completed or closed.`, 1024) });
+    if (holding.length > lines.length) lines.push(`…i ${holding.length - lines.length} więcej`);
+    e.addFields({ name: `Zarezerwowany przez otwarte zamówienia (${holding.length})`, value: truncate(`${lines.join('\n')}\n-# Liczy się jako użyty, dopóki zamówienie nie zostanie zrealizowane albo zamknięte.`, 1024) });
   }
   return e;
 }
@@ -139,12 +143,12 @@ module.exports = {
       sorted(promos.list(interaction.guild.id))
         .filter((p) => !q || p.code.includes(q))
         .slice(0, 25)
-        .map((p) => ({ name: truncate(`${p.code} · ${promos.label(p)} · ${uses(p)} · ${status(p)}${p.userId ? ' · personal' : ''}`, 100), value: p.code })),
+        .map((p) => ({ name: truncate(`${p.code} · ${promos.label(p)} · ${uses(p)} · ${STATUS_LABEL[status(p)]}${p.userId ? ' · osobisty' : ''}`, 100), value: p.code })),
     );
   },
 
   async execute(interaction) {
-    if (!isShopManager(interaction.member)) return replyError(interaction, 'Only administrators and sellers can manage promo codes.');
+    if (!isShopManager(interaction.member)) return replyError(interaction, 'Tylko administratorzy i sprzedawcy mogą zarządzać kodami rabatowymi.');
     const o = interaction.options;
     const sub = o.getSubcommand();
     const guild = interaction.guild;
@@ -152,7 +156,7 @@ module.exports = {
     if (sub === 'create') {
       const percent = o.getInteger('percent');
       const amount = o.getNumber('amount');
-      if (percent == null && amount == null) throw new UserError(`Give the discount: either **percent** (e.g. 10 → 10% off) or **amount** (e.g. 5 → ${money(5)} off).`);
+      if (percent == null && amount == null) throw new UserError(`Podaj rabat: **procent** (np. 10 → 10% rabatu) albo **kwota** (np. 5 → ${money(5)} rabatu).`);
       const days = o.getInteger('expires_in_days');
       const p = promos.create(guild.id, {
         code: o.getString('code'),
@@ -168,27 +172,27 @@ module.exports = {
       await reply(interaction, {
         embeds: [
           embed(COLORS.success)
-            .setTitle(`🏷️ Promo code ${p.code} created`)
+            .setTitle(`🏷️ Kod rabatowy ${p.code} utworzony`)
             .setDescription(
-              `Buyers type \`${p.code}\` in the **Promo code** field of the order form.` +
-                (config.promos.enabled === false ? '\n⚠️ Promo codes are turned off in `config.json` (`promos.enabled`) – the order form has no code field right now.' : ''),
+              `Kupujący wpisują \`${p.code}\` w polu **Kod rabatowy** w formularzu zamówienia.` +
+                (config.promos.enabled === false ? '\n⚠️ Kody rabatowe są wyłączone w `config.json` (`promos.enabled`) – formularz zamówienia nie ma teraz pola na kod.' : ''),
             )
             .addFields(detailFields(p)),
         ],
       });
-      return sendLog(guild, { embeds: [logEmbed(COLORS.brand, '🏷️ Promo code created', interaction.user).setDescription(`${interaction.user} created \`${p.code}\` · ${line(p)}`)] });
+      return sendLog(guild, { embeds: [logEmbed(COLORS.brand, '🏷️ Kod rabatowy utworzony', interaction.user).setDescription(`Utworzony przez ${interaction.user}: \`${p.code}\` · ${line(p)}`)] });
     }
 
     if (sub === 'list') return reply(interaction, { embeds: [listEmbed(guild.id)] });
 
     const code = promos.normalize(o.getString('code'));
     const p = promos.find(guild.id, code);
-    if (!p) throw new UserError(`There is no promo code **${truncate(code, 24)}**. Pick one from the suggestions.`);
+    if (!p) throw new UserError(`Nie ma kodu rabatowego **${truncate(code, 24)}**. Wybierz kod z podpowiedzi.`);
 
     if (sub === 'info') return reply(interaction, { embeds: [infoEmbed(guild.id, p)] });
 
     promos.remove(guild.id, p.code);
-    await reply(interaction, `Deleted the promo code **${p.code}** (${promos.label(p)}, ${uses(p)}). It can't be used anymore – open orders that already use it keep their discount.`);
-    return sendLog(guild, { embeds: [logEmbed(COLORS.danger, '🗑️ Promo code deleted', interaction.user).setDescription(`${interaction.user} deleted \`${p.code}\` (${promos.label(p)}, ${uses(p)})`)] });
+    await reply(interaction, `Usunięto kod rabatowy **${p.code}** (${promos.label(p)}, ${uses(p)}). Nie można go już używać – otwarte zamówienia, które go używają, zachowują rabat.`);
+    return sendLog(guild, { embeds: [logEmbed(COLORS.danger, '🗑️ Kod rabatowy usunięty', interaction.user).setDescription(`Usunięty przez ${interaction.user}: \`${p.code}\` (${promos.label(p)}, ${uses(p)})`)] });
   },
 };

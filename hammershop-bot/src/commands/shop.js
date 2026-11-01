@@ -7,8 +7,9 @@ const shopstatus = require('../features/shopstatus');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, replyError, ts } = require('../lib/utils');
 const { isShopManager } = require('../lib/permissions');
+const { slash } = require('../lib/commandsPl');
 
-const MODE_LABEL = { auto: '🕒 Automatic', open: '🟢 Open (set by hand)', closed: '🔴 Closed (set by hand)' };
+const MODE_LABEL = { auto: '🕒 Automatyczny', open: '🟢 Otwarty (ręcznie)', closed: '🔴 Zamknięty (ręcznie)' };
 
 /** Status card shown after every /shop subcommand. */
 function statusEmbed(guild, { title, res = null, now = shopstatus.clock.now() }) {
@@ -17,21 +18,21 @@ function statusEmbed(guild, { title, res = null, now = shopstatus.clock.now() })
   const next = shopstatus.nextChange(guild.id, now);
   const state = db.guild(guild.id).shopStatus;
   const lines = [
-    `**Right now:** ${open ? '🟢 Open' : '🔴 Closed'}`,
-    `**Mode:** ${MODE_LABEL[m]}${m !== 'auto' && state.setBy ? ` by <@${state.setBy}> ${ts(state.setAt ?? Date.now(), 'R')}` : ''}`,
-    `**Opening hours:** ${shopstatus.hoursText() ?? 'none set (config.json → workingHours)'}`,
+    `**Teraz:** ${open ? '🟢 Otwarte' : '🔴 Zamknięte'}`,
+    `**Tryb:** ${MODE_LABEL[m]}${m !== 'auto' && state.setBy ? ` · ustawiony przez <@${state.setBy}> ${ts(state.setAt ?? Date.now(), 'R')}` : ''}`,
+    `**Godziny pracy:** ${shopstatus.hoursText() ?? 'nieustawione (config.json → workingHours)'}`,
   ];
-  if (next) lines.push(`**${open ? 'Closes' : 'Opens'}:** ${shopstatus.whenText(next, now)}`);
-  if (m !== 'auto') lines.push('-# Stays like this until someone runs `/shop auto`.');
+  if (next) lines.push(`**${open ? 'Zamknięcie' : 'Otwarcie'}:** ${shopstatus.whenText(next, now)}`);
+  if (m !== 'auto') lines.push(`-# Zostaje tak, dopóki ktoś nie użyje \`${slash('shop auto')}\`.`);
 
   const { channel, upToDate } = shopstatus.statusChannel(guild, now);
   const notes = [];
-  if (res?.error) notes.push(`⚠️ I couldn't rename the status channel: ${res.error}`);
-  else if (res?.wait) notes.push(`⏳ Discord only allows renaming a channel twice per 10 minutes – the status channel ${channel} updates by itself in about ${res.wait} min.`);
-  else if (!config.shopStatus.enabled) notes.push('ℹ️ The status channel is turned off (config.json → shopStatus.enabled).');
-  else if (!channel) notes.push('ℹ️ No status channel yet – run `/build only:update` to add it.');
-  else if (!upToDate) notes.push(`⏳ The status channel ${channel} still says otherwise – it is renamed by itself within 10 minutes (Discord allows 2 renames per 10 minutes).`);
-  else notes.push(`The status channel ${channel}, the shop panel and the ticket panel are up to date.`);
+  if (res?.error) notes.push(`⚠️ Nie udało się zmienić nazwy kanału statusu: ${res.error}`);
+  else if (res?.wait) notes.push(`⏳ Discord pozwala zmienić nazwę kanału tylko dwa razy na 10 minut – kanał statusu ${channel} zaktualizuje się sam za około ${res.wait} min.`);
+  else if (!config.shopStatus.enabled) notes.push('ℹ️ Kanał statusu jest wyłączony (config.json → shopStatus.enabled).');
+  else if (!channel) notes.push(`ℹ️ Nie ma jeszcze kanału statusu – użyj \`${slash('build')} tylko:update\`, żeby go dodać.`);
+  else if (!upToDate) notes.push(`⏳ Kanał statusu ${channel} pokazuje jeszcze co innego – sam zmieni nazwę w ciągu 10 minut (Discord pozwala na 2 zmiany nazwy na 10 minut).`);
+  else notes.push(`Kanał statusu ${channel}, panel sklepu i panel ticketów są aktualne.`);
 
   return embed(open ? COLORS.success : COLORS.danger)
     .setTitle(title)
@@ -40,9 +41,9 @@ function statusEmbed(guild, { title, res = null, now = shopstatus.clock.now() })
 
 /** Subcommand → mode and the title of the answer. */
 const ACTIONS = {
-  open: { mode: 'open', title: '🟢 The shop is open' },
-  close: { mode: 'closed', title: '🔴 The shop is closed' },
-  auto: { mode: 'auto', title: '🕒 Opening hours are automatic again' },
+  open: { mode: 'open', title: '🟢 Sklep jest otwarty' },
+  close: { mode: 'closed', title: '🔴 Sklep jest zamknięty' },
+  auto: { mode: 'auto', title: '🕒 Sklep znowu działa według godzin pracy' },
 };
 
 module.exports = {
@@ -56,13 +57,13 @@ module.exports = {
     .addSubcommand((s) => s.setName('status').setDescription('Show if the shop is open, the opening hours and the next change')),
 
   async execute(interaction) {
-    if (!isShopManager(interaction.member)) return replyError(interaction, 'Only administrators and sellers can open or close the shop.');
+    if (!isShopManager(interaction.member)) return replyError(interaction, 'Tylko administratorzy i sprzedawcy mogą otwierać i zamykać sklep.');
     const guild = interaction.guild;
     const sub = interaction.options.getSubcommand();
-    if (sub === 'status') return reply(interaction, { embeds: [statusEmbed(guild, { title: '🛒 Shop status' })] });
+    if (sub === 'status') return reply(interaction, { embeds: [statusEmbed(guild, { title: '🛒 Status sklepu' })] });
 
     const action = ACTIONS[sub];
-    if (!action) return replyError(interaction, 'Unknown option.');
+    if (!action) return replyError(interaction, 'Nieznana opcja.');
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const res = await shopstatus.setMode(guild, action.mode, { by: interaction.user.id });
     return reply(interaction, { embeds: [statusEmbed(guild, { title: action.title, res })] });
