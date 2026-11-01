@@ -206,17 +206,17 @@ test('change vs the previous period of the same length (±%), average and unknow
   assert.equal(sales.changeText(60, 40), '📈 +50%');
   assert.equal(sales.changeText(30, 40), '📉 −25%');
   assert.equal(sales.changeText(40, 40), '➖ ±0%');
-  assert.equal(sales.changeText(5, 0), '📈 up');
+  assert.equal(sales.changeText(5, 0), '📈 wzrost');
   assert.equal(sales.changeText(0, 0), '➖ ±0%');
 
   const card = textOf(sales.salesCard(guild, range));
-  assert.match(card, /Sales · Last 7 days/);
-  assert.match(card, /27 Sep – 3 Oct 2026 · days in Europe\/Warsaw/);
-  assert.match(card, /Revenue: 60€/);
-  assert.match(card, /📈 \+50% vs the 7 days before \(40€\)/);
-  assert.match(card, /\*\*Orders:\*\* 3 .*📈 \+50% \(2 before\)/);
-  assert.match(card, /\*\*Average order:\*\* 30€/);
-  assert.match(card, /1 order without a known amount isn't counted/);
+  assert.match(card, /Sprzedaż · Ostatnie 7 dni/);
+  assert.match(card, /27 wrz – 3 paź 2026 · dni wg strefy Europe\/Warsaw/);
+  assert.match(card, /Przychód: 60€/);
+  assert.match(card, /📈 \+50% \(poprzednie 7 dni: 40€\)/);
+  assert.match(card, /\*\*Zamówienia:\*\* 3 .*📈 \+50% \(wcześniej 2\)/);
+  assert.match(card, /\*\*Średnie zamówienie:\*\* 30€/);
+  assert.match(card, /Pominięto w przychodzie i średniej: 1 zamówienie bez znanej kwoty/);
 });
 
 test('sales card: top 5 products, sellers, payment methods, discounts and promo codes', async () => {
@@ -238,19 +238,19 @@ test('sales card: top 5 products, sellers, payment methods, discounts and promo 
     ['Netflix', 1, 4],
   ]);
   assert.deepEqual(s.sellers.map((x) => [x.key, x.orders, x.revenue]), [[SELLER, 6, 69], [seller2, 2, 19]]);
-  assert.deepEqual(s.methods.map((m) => [m.name, m.orders]), [['Crypto', 1], ['PaysafeCard', 2], ['PayPal', 1], ['Other', 3], ['Not given', 1]]);
+  assert.deepEqual(s.methods.map((m) => [m.name, m.orders]), [['Kryptowaluty', 1], ['PaysafeCard', 2], ['PayPal', 1], ['Inna', 3], ['Nie podano', 1]]);
   assert.deepEqual([s.discount, s.discounted], [7, 3]);
   assert.deepEqual(s.promos, [{ code: 'NOX10', uses: 2, discount: 2 }, { code: 'SPRING', uses: 1, discount: 5 }]);
 
   const card = textOf(sales.salesCard(guild, sales.periodRange('today', now)));
-  assert.match(card, /🥇 \*\*Spotify Premium\*\*  ·  1 order · 50€/);
-  assert.match(card, /🥈 \*\*Nitro Boost \(1 month\)\*\*  ·  3 orders · 28€/);
+  assert.match(card, /🥇 \*\*Spotify Premium\*\*  ·  1 zamówienie · 50€/);
+  assert.match(card, /🥈 \*\*Nitro Boost \(1 month\)\*\*  ·  3 zamówienia · 28€/);
   assert.doesNotMatch(card, /Canva Pro/, 'only the top 5 products');
-  assert.match(card, new RegExp(`🥇 <@${SELLER}>  ·  6 orders · 69€`));
-  assert.match(card, /\*\*PayPal\*\*  ·  1 order · 10€/);
-  assert.match(card, /\*\*7€\*\* given on \*\*3 orders\*\*/);
-  assert.match(card, /`NOX10`  ·  2 uses · −2€/);
-  assert.match(card, /`SPRING`  ·  1 use · −5€/);
+  assert.match(card, new RegExp(`🥇 <@${SELLER}>  ·  6 zamówień · 69€`));
+  assert.match(card, /\*\*PayPal\*\*  ·  1 zamówienie · 10€/);
+  assert.match(card, /\*\*7€\*\* rabatu w \*\*3 zamówieniach\*\*/);
+  assert.match(card, /`NOX10`  ·  2 użycia · −2€/);
+  assert.match(card, /`SPRING`  ·  1 użycie · −5€/);
 });
 
 test('sales card stays within Discord limits with long names, many products, sellers and codes', async () => {
@@ -269,14 +269,14 @@ test('empty state: no sales yet / none in this period (with the period before)',
   const guild = await newGuild();
   const now = at('2026-10-03T18:00:00+02:00');
   const empty = textOf(sales.salesCard(guild, sales.periodRange('all', now)));
-  assert.match(empty, /No sales yet/);
-  assert.match(empty, /Order completed/);
-  assert.doesNotMatch(empty, /Revenue/);
+  assert.match(empty, /Jeszcze nie ma sprzedaży/);
+  assert.match(empty, /Zamówienie zrealizowane/);
+  assert.doesNotMatch(empty, /Przychód/);
 
   addSale(guild, at('2026-09-22T12:00:00+02:00'), { amount: 15 });
   const week = textOf(sales.salesCard(guild, sales.periodRange('7d', now)));
-  assert.match(week, /No sales in this period/);
-  assert.match(week, /The 7 days before: 1 order · 15€/);
+  assert.match(week, /Brak sprzedaży w tym okresie/);
+  assert.match(week, /Poprzednie 7 dni: 1 zamówienie · 15€/);
   validateMessage(sales.salesCard(guild, sales.periodRange('today', now)), guild);
 });
 
@@ -287,7 +287,7 @@ test('/sales: admins and sellers only, private, last 7 days by default', async (
   addSale(guild, Date.now() - 3_600_000, { amount: 25 });
   for (const who of [member(guild), member(guild, ['member', 'support']), member(guild, ['member', 'moderator'])]) {
     const denied = await salesCmd(guild, who);
-    assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+    assert.match(textOf(lastResponse(denied)), /widzą tylko administratorzy i sprzedawcy/);
   }
   for (const who of [member(guild, ['member', 'seller']), member(guild, ['admin']), guild.members.cache.get(guild.ownerId)]) {
     const ok = await salesCmd(guild, who);
@@ -295,11 +295,11 @@ test('/sales: admins and sellers only, private, last 7 days by default', async (
     assert.ok(res.flags & MessageFlags.Ephemeral, 'only the person asking sees it');
     assert.ok(res.flags & MessageFlags.IsComponentsV2);
     assert.deepEqual(res.allowedMentions, { parse: [] }, 'seller mentions never ping');
-    assert.match(textOf(res), /Sales · Last 7 days/);
-    assert.match(textOf(res), /Revenue: 25€/);
+    assert.match(textOf(res), /Sprzedaż · Ostatnie 7 dni/);
+    assert.match(textOf(res), /Przychód: 25€/);
   }
   const today = await salesCmd(guild, guild.members.cache.get(guild.ownerId), { period: 'today' });
-  assert.match(textOf(lastResponse(today)), /Sales · Today/);
+  assert.match(textOf(lastResponse(today)), /Sprzedaż · Dziś/);
   const json = commands.get('sales').data.toJSON();
   assert.deepEqual(json.options[0].choices.map((c) => c.value), ['today', '7d', '30d', 'all']);
 });
@@ -319,19 +319,19 @@ test('a shop order completed in its ticket shows up in /sales and on the custome
   await tickets.completeOrder(guild.channels.cache.get(ticket.channelId), seller);
 
   const card = textOf(lastResponse(await salesCmd(guild, seller, { period: 'today' })));
-  assert.match(card, /Revenue: 27€/);
-  assert.match(card, /🥇 \*\*Spotify Premium\*\*  ·  1 order · 27€/);
-  assert.match(card, new RegExp(`🥇 <@${seller.id}>  ·  1 order · 27€`));
-  assert.match(card, /🥇 \*\*PaysafeCard\*\*  ·  1 order · 27€/);
-  assert.match(card, /\*\*3€\*\* given on \*\*1 order\*\*/);
-  assert.match(card, /`NOX10`  ·  1 use · −3€/);
+  assert.match(card, /Przychód: 27€/);
+  assert.match(card, /🥇 \*\*Spotify Premium\*\*  ·  1 zamówienie · 27€/);
+  assert.match(card, new RegExp(`🥇 <@${seller.id}>  ·  1 zamówienie · 27€`));
+  assert.match(card, /🥇 \*\*PaysafeCard\*\*  ·  1 zamówienie · 27€/);
+  assert.match(card, /\*\*3€\*\* rabatu w \*\*1 zamówieniu\*\*/);
+  assert.match(card, /`NOX10`  ·  1 użycie · −3€/);
 
   const profile = createInteraction({ guild, member: seller, kind: 'command', commandName: 'customer', subcommand: 'view', options: { user: buyer.user } });
   await handle(profile, commands);
   const text = textOf(lastResponse(profile));
-  assert.match(text, /\*\*Completed orders:\*\* 1  ·  \*\*Total spent:\*\* 27€/);
+  assert.match(text, /\*\*Zrealizowane zamówienia:\*\* 1  ·  \*\*Wydano łącznie:\*\* 27€/);
   assert.match(text, new RegExp(`\`#${String(ticket.number).padStart(4, '0')}\` · \\*\\*Spotify Premium\\*\\* × 3 · 27€ · 🏷️ NOX10`));
-  assert.match(text, /\*\*Tickets:\*\* 1 open · 0 closed/);
+  assert.match(text, /\*\*Tickety:\*\* otwarte: 1 · zamknięte: 0/);
 });
 
 // ───────────── Weekly report ─────────────
@@ -352,11 +352,11 @@ test('weekly report: posted in #sales once per week (Monday 10:00 Warsaw), never
   await Promise.all([sales.runWeeklyReport(guild.client, at('2026-10-05T10:00:30+02:00')), sales.runWeeklyReport(guild.client, at('2026-10-05T10:00:31+02:00'))]);
   assert.equal(channel.messageList.length, 1, 'two checks at the same time post one report');
   const report = textOf(channel.messageList[0].body);
-  assert.match(report, /Weekly sales report/);
-  assert.match(report, /28 Sep – 4 Oct 2026/);
-  assert.match(report, /Revenue: 33€/);
-  assert.match(report, /📈 \+230% vs the week before \(10€\)/);
-  assert.match(report, /Sent every Monday at 10:00 \(Europe\/Warsaw\)/);
+  assert.match(report, /Raport tygodniowy sprzedaży/);
+  assert.match(report, /28 wrz – 4 paź 2026/);
+  assert.match(report, /Przychód: 33€/);
+  assert.match(report, /📈 \+230% \(poprzedni tydzień: 10€\)/);
+  assert.match(report, /Wysyłany co poniedziałek o 10:00 \(Europe\/Warsaw\)/);
   assert.deepEqual(db.guild(guild.id).stats.salesReport, { week: '2026-10-05', sentAt: at('2026-10-05T10:00:30+02:00') });
 
   await sales.runWeeklyReport(guild.client, at('2026-10-05T10:10:30+02:00'));
@@ -367,7 +367,7 @@ test('weekly report: posted in #sales once per week (Monday 10:00 Warsaw), never
 
   await sales.runWeeklyReport(guild.client, at('2026-10-12T10:05:00+02:00'));
   assert.equal(channel.messageList.length, 2, 'the next Monday');
-  assert.match(textOf(channel.messageList[1].body), /5 Oct – 11 Oct 2026[\s\S]*Revenue: 99€/);
+  assert.match(textOf(channel.messageList[1].body), /5 paź – 11 paź 2026[\s\S]*Przychód: 99€/);
   assert.equal(db.guild(guild.id).stats.salesReport.week, '2026-10-12');
 
   // After summer time ends: 10:00 CET = 09:00 UTC
@@ -375,7 +375,7 @@ test('weekly report: posted in #sales once per week (Monday 10:00 Warsaw), never
   assert.equal(channel.messageList.length, 2);
   await sales.runWeeklyReport(guild.client, at('2026-10-26T10:00:00+01:00'));
   assert.equal(channel.messageList.length, 3);
-  assert.match(textOf(channel.messageList[2].body), /19 Oct – 25 Oct 2026/);
+  assert.match(textOf(channel.messageList[2].body), /19 paź – 25 paź 2026/);
 });
 
 test('weekly report: a late bot still posts the same day, a missed week is skipped, a failed post is retried', async () => {
@@ -393,7 +393,7 @@ test('weekly report: a late bot still posts the same day, a missed week is skipp
 
   await sales.sendWeeklyReport(guild, at('2026-10-13T09:00:00+02:00'));
   assert.equal(channel.messageList.length, 1, 'Tuesday morning: within a day of the planned time');
-  assert.match(textOf(channel.messageList[0].body), /5 Oct – 11 Oct 2026/, 'still the week before Monday');
+  assert.match(textOf(channel.messageList[0].body), /5 paź – 11 paź 2026/, 'still the week before Monday');
 
   const before = config.salesReport.enabled;
   config.salesReport.enabled = false;
@@ -412,7 +412,7 @@ test('weekly report: weekday and hour from config.json (7 = Sunday)', async () =
     assert.equal(sales.lastReportTime(at('2026-10-04T21:00:00+02:00')), at('2026-10-04T21:00:00+02:00'));
     assert.equal(sales.lastReportTime(at('2026-10-04T20:59:00+02:00')), at('2026-09-27T21:00:00+02:00'));
     assert.equal(sales.lastReportTime(at('2026-10-10T08:00:00+02:00')), at('2026-10-04T21:00:00+02:00'));
-    assert.match(textOf(sales.weeklyCard(await newGuild(), at('2026-10-04T21:00:00+02:00'))), /Sent every Sunday at 21:00/);
+    assert.match(textOf(sales.weeklyCard(await newGuild(), at('2026-10-04T21:00:00+02:00'))), /Wysyłany co niedzielę o 21:00/);
   } finally {
     Object.assign(config.salesReport, before);
   }

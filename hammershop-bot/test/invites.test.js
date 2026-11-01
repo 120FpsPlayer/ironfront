@@ -246,10 +246,10 @@ test('rewards: a personal INVITE code by DM once per level – leaving and rejoi
 
     assert.equal(codes().length, 1);
     const code = codes()[0];
-    assert.match(code.code, /^INVITE-[0-9A-F]{6}$/);
+    assert.match(code.code, /^ZAPROSZENIE-[0-9A-F]{6}$/);
     assert.equal(code.percent, 10);
     assert.equal(code.maxUses, 1);
-    assert.equal(code.reason, '2 invites');
+    assert.equal(code.reason, '2 zaproszenia');
     assert.ok(Math.abs(code.expiresAt - (Date.now() + invites.REWARD_DAYS * DAY)) < 5000, 'valid for 30 days');
     assert.deepEqual(invites.store(guild.id).rewarded[alice.id][2], { code: code.code, percent: 10, at: invites.store(guild.id).rewarded[alice.id][2].at, delivered: true });
 
@@ -258,11 +258,11 @@ test('rewards: a personal INVITE code by DM once per level – leaving and rejoi
     validateMessage(dm, guild);
     const out = textOf(dm);
     assert.ok(out.includes(code.code));
-    assert.match(out, /Invite reward unlocked/);
-    assert.match(out, /\*\*2\*\* people you invited/);
-    assert.match(out, /10% off/);
-    assert.match(out, /\*\*3\*\* valid invites unlock \*\*15% off\*\*/);
-    assert.match(textOf(guild.channels.cache.get(db.channelId(guild.id, 'serverLogs')).messageList.at(-1).body), new RegExp(`Invite reward[\\s\\S]*${code.code}`));
+    assert.match(out, /Nagroda za zaproszenia odblokowana/);
+    assert.match(out, /Zaproszone przez Ciebie osoby, które dołączyły i się zweryfikowały: \*\*2\*\*/);
+    assert.match(out, /10% rabatu/);
+    assert.match(out, /za \*\*3\*\* ważne zaproszenia dostaniesz \*\*15% rabatu\*\*/);
+    assert.match(textOf(guild.channels.cache.get(db.channelId(guild.id, 'serverLogs')).messageList.at(-1).body), new RegExp(`Nagroda za zaproszenia[\\s\\S]*${code.code}`));
 
     // Leave + rejoin + verify again: back to 2, but level 2 was already rewarded
     await leave(guild, second);
@@ -277,7 +277,7 @@ test('rewards: a personal INVITE code by DM once per level – leaving and rejoi
     await verify(guild, await join(guild, a.code));
     assert.equal(codes().length, 2);
     assert.equal(codes()[1].percent, 15);
-    assert.equal(codes()[1].reason, '3 invites');
+    assert.equal(codes()[1].reason, '3 zaproszenia');
     await verify(guild, await join(guild, a.code));
     assert.equal(codes().length, 2, 'every level is rewarded once');
 
@@ -297,9 +297,9 @@ test('rewards: closed DMs keep the code (shown in /invites stats); no rewards wh
     const [code] = promos.list(guild.id).filter((p) => p.userId === shy.id);
     assert.ok(code, 'the code is kept');
     assert.equal(invites.store(guild.id).rewarded[shy.id][1].delivered, false);
-    assert.match(textOf(guild.channels.cache.get(db.channelId(guild.id, 'serverLogs')).messageList.at(-1).body), /DMs closed/);
+    assert.match(textOf(guild.channels.cache.get(db.channelId(guild.id, 'serverLogs')).messageList.at(-1).body), /zamknięte wiadomości prywatne/);
     const stats = await command(guild, shy, 'stats');
-    assert.match(textOf(lastResponse(stats)), new RegExp(`Your reward codes[\\s\\S]*\`${code.code}\` · 5% off · valid until`));
+    assert.match(textOf(lastResponse(stats)), new RegExp(`Twoje kody z nagród[\\s\\S]*\`${code.code}\` · 5% rabatu · ważny do`));
 
     const other = member(guild);
     const o = guild.addInvite({ inviterId: other.id });
@@ -332,10 +332,10 @@ test('without Manage Server: no crash, one console warning, joins are recorded w
     assert.equal(record(guild, first).inviterId, null);
     assert.equal(record(guild, second).inviterId, null);
     assert.equal(warnings.filter((w) => w.includes('[invites]')).length, 1, 'warned once');
-    assert.match(warnings[0], /missing the Manage Server permission/);
+    assert.match(warnings[0], /brak uprawnienia Zarządzanie serwerem/);
     assert.equal(invites.isReadable(guild.id), false);
     const stats = await command(guild, alice, 'stats');
-    assert.match(textOf(lastResponse(stats)), /Tracking paused[\s\S]*Manage Server/);
+    assert.match(textOf(lastResponse(stats)), /Śledzenie wstrzymane[\s\S]*Zarządzanie serwerem/);
   } finally {
     console.warn = warn;
   }
@@ -359,34 +359,34 @@ test('/invites stats: valid / pending / left, reward levels and the next reward'
 
     const mine = await command(guild, alice, 'stats');
     const out = textOf(lastResponse(mine));
-    assert.match(out, /Valid 3/);
-    assert.match(out, /Pending 1 \(not verified\)/);
-    assert.match(out, /Left 1/);
-    assert.match(out, /\*\*2 more valid invites\*\* → \*\*20% off\*\*/);
-    assert.match(out, /✅ \*\*2\*\* valid invites → 10% off\n⬜ \*\*5\*\* valid invites → 20% off/);
-    assert.match(out, /Your reward codes[\s\S]*`INVITE-[0-9A-F]{6}` · 10% off · valid until/);
+    assert.match(out, /Ważne 3/);
+    assert.match(out, /Oczekujące 1 \(bez weryfikacji\)/);
+    assert.match(out, /Utracone 1/);
+    assert.match(out, /\*\*jeszcze 2 ważne zaproszenia\*\* → \*\*20% rabatu\*\*/);
+    assert.match(out, /✅ \*\*2\*\* ważne zaproszenia → 10% rabatu\n⬜ \*\*5\*\* ważnych zaproszeń → 20% rabatu/);
+    assert.match(out, /Twoje kody z nagród[\s\S]*`ZAPROSZENIE-[0-9A-F]{6}` · 10% rabatu · ważny do/);
     assert.ok(lastResponse(mine).flags & 64, 'ephemeral');
 
     // Somebody else's stats: counts, but never their codes
     const other = await command(guild, member(guild), 'stats', { user: alice.user });
     const theirs = textOf(lastResponse(other));
-    assert.match(theirs, new RegExp(`Invites of <@${alice.id}>`));
-    assert.match(theirs, /Valid 3/);
-    assert.doesNotMatch(theirs, /INVITE-/);
+    assert.match(theirs, new RegExp(`Zaproszenia osoby <@${alice.id}>`));
+    assert.match(theirs, /Ważne 3/);
+    assert.doesNotMatch(theirs, /ZAPROSZENIE-/);
 
     const invited = (await join(guild, a.code));
     const joinedVia = await command(guild, invited, 'stats');
-    assert.match(textOf(lastResponse(joinedVia)), new RegExp(`You joined through <@${alice.id}>'s invite`));
+    assert.match(textOf(lastResponse(joinedVia)), new RegExp(`Zaprosił\\(a\\) Cię <@${alice.id}>`));
 
     const bot = await command(guild, alice, 'stats', { user: guild.client.user });
-    assert.match(textOf(lastResponse(bot)), /Bots don't invite anyone/);
+    assert.match(textOf(lastResponse(bot)), /Boty nikogo nie zapraszają/);
   });
 });
 
 test('/invites top: the 10 best inviters, ranked by valid invites, and your own place', async () => {
   const guild = await setup();
   const empty = await command(guild, member(guild), 'top');
-  assert.match(textOf(lastResponse(empty)), /Nobody has a valid invite yet/);
+  assert.match(textOf(lastResponse(empty)), /Nikt nie ma jeszcze ważnego zaproszenia/);
 
   const inviters = Array.from({ length: 12 }, () => member(guild));
   const data = invites.store(guild.id).members;
@@ -400,10 +400,10 @@ test('/invites top: the 10 best inviters, ranked by valid invites, and your own 
   const out = textOf(lastResponse(top));
   const lines = out.split('\n').filter((l) => /<@\d+> – /.test(l));
   assert.equal(lines.length, 10);
-  assert.ok(lines[0].startsWith(`🥇 <@${inviters[11].id}> – **12 valid invites** · 1 pending · 1 left`));
-  assert.ok(lines[1].startsWith(`🥈 <@${inviters[10].id}> – **11 valid invites**`));
-  assert.ok(lines[9].startsWith(`**10.** <@${inviters[2].id}> – **3 valid invites**`));
-  assert.match(out, /You're \*\*#12\*\* with 1 valid invite\./);
+  assert.ok(lines[0].startsWith(`🥇 <@${inviters[11].id}> – **12 ważnych zaproszeń** · oczekujące: 1 · utracone: 1`));
+  assert.ok(lines[1].startsWith(`🥈 <@${inviters[10].id}> – **11 ważnych zaproszeń**`));
+  assert.ok(lines[9].startsWith(`**10.** <@${inviters[2].id}> – **3 ważne zaproszenia**`));
+  assert.match(out, /Jesteś na \*\*12\.\*\* miejscu z 1 ważnym zaproszeniem\./);
 });
 
 // ───────────── Regressions ─────────────
@@ -415,7 +415,7 @@ test('rewards cannot be farmed by rotating the same accounts through different i
     const inviteOf = new Map();
     for (const who of [alice, bob, carol]) inviteOf.set(who.id, guild.addInvite({ inviterId: who.id }).code);
     await invites.refresh(guild);
-    const codes = () => promos.list(guild.id).filter((p) => p.code.startsWith('INVITE'));
+    const codes = () => promos.list(guild.id).filter((p) => p.code.startsWith('ZAPROSZENIE'));
 
     // Two friends join through Alice's invite and verify: Alice's reward
     const ids = [uid(), uid()];
@@ -489,7 +489,7 @@ test('/invites when tracking is turned off', async () => {
   config.invites.enabled = false;
   try {
     const i = await command(guild, member(guild), 'stats');
-    assert.match(textOf(lastResponse(i)), /Invite tracking is turned off/);
+    assert.match(textOf(lastResponse(i)), /Śledzenie zaproszeń jest wyłączone/);
     const m = await join(guild);
     assert.equal(record(guild, m), undefined, 'nothing is recorded');
   } finally {

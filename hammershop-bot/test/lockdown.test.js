@@ -60,9 +60,9 @@ test('/lockdown and /unlock: moderators and admins only', async () => {
   const before = snapshot(guild);
   for (const who of [member(guild), member(guild, ['member', 'support']), member(guild, ['member', 'seller'])]) {
     const lock = await command(guild, who, 'lockdown', { reason: 'test' });
-    assert.match(textOf(lastResponse(lock)), /Only moderators and administrators can lock the server/);
+    assert.match(textOf(lastResponse(lock)), /Tylko moderatorzy i administratorzy mogą zablokować serwer/);
     const unlock = await command(guild, who, 'unlock');
-    assert.match(textOf(lastResponse(unlock)), /Only moderators and administrators can unlock the server/);
+    assert.match(textOf(lastResponse(unlock)), /Tylko moderatorzy i administratorzy mogą odblokować serwer/);
   }
   assert.deepEqual(snapshot(guild), before, 'nothing changed');
   assert.equal(lockdown.current(guild.id), null);
@@ -86,10 +86,10 @@ test('lockdown → unlock round trip: members are silenced, staff can still talk
 
   const lock = await command(guild, mod, 'lockdown', { reason: 'Raid in progress' });
   const reply = textOf(lastResponse(lock));
-  assert.match(reply, /Server locked/);
-  assert.match(reply, /can't send messages, react, create threads or use voice/);
-  assert.match(reply, /Invites are paused/);
-  assert.match(reply, /Staff roles keep their own permissions/);
+  assert.match(reply, /Serwer zablokowany/);
+  assert.match(reply, /nie może już wysyłać wiadomości, reagować, tworzyć wątków ani korzystać z kanałów głosowych/);
+  assert.match(reply, /Zaproszenia są wstrzymane/);
+  assert.match(reply, /Role zespołu zachowują własne uprawnienia/);
   assert.match(reply, /Raid in progress/);
 
   // The Member role lost exactly the locked permissions
@@ -116,11 +116,11 @@ test('lockdown → unlock round trip: members are silenced, staff can still talk
   assert.equal(state.invitesPaused, true);
   assert.ok(guild.features.includes('INVITES_DISABLED'));
   const notice = announcements.messageList.at(-1);
-  assert.match(textOf(notice.body), /The server is locked[\s\S]*Raid in progress[\s\S]*open tickets keep working/);
-  assert.match(textOf(ch(guild, 'serverLogs').messageList.at(-1).body), /Server locked[\s\S]*Raid in progress/);
+  assert.match(textOf(notice.body), /Serwer jest zablokowany[\s\S]*Raid in progress[\s\S]*otwarte tickety nadal działają/);
+  assert.match(textOf(ch(guild, 'serverLogs').messageList.at(-1).body), /Serwer zablokowany[\s\S]*Raid in progress/);
 
   const twice = await command(guild, mod, 'lockdown');
-  assert.match(textOf(lastResponse(twice)), /already locked – since <t:\d+:R> by <@\d+>/);
+  assert.match(textOf(lastResponse(twice)), /już zablokowany – blokadę założono <t:\d+:R> \(<@\d+>\)/);
 
   // A restart: everything the bot knows comes from data/db.json
   db.flush();
@@ -131,16 +131,16 @@ test('lockdown → unlock round trip: members are silenced, staff can still talk
   const admin = guild.members.cache.get(guild.ownerId);
   const unlock = await command(guild, admin, 'unlock');
   const out = textOf(lastResponse(unlock));
-  assert.match(out, /Server unlocked/);
-  assert.match(out, /has its permissions back/);
-  assert.match(out, /Invites are open again/);
+  assert.match(out, /Serwer odblokowany/);
+  assert.match(out, /ma z powrotem swoje uprawnienia/);
+  assert.match(out, /Zaproszenia znów są otwarte/);
   assert.deepEqual(snapshot(guild), before, 'roles, channel overwrites and invites are exactly as before');
   assert.ok(can(buyer, chat, P.SendMessages) && can(buyer, lounge, P.Connect) && can(buyer, announcements, P.AddReactions));
   assert.equal(lockdown.current(guild.id), null);
-  assert.match(textOf(announcements.messageList.at(-1).body), /The server is unlocked/);
+  assert.match(textOf(announcements.messageList.at(-1).body), /Serwer jest odblokowany/);
 
   const again = await command(guild, mod, 'unlock');
-  assert.match(textOf(lastResponse(again)), /isn't locked/);
+  assert.match(textOf(lastResponse(again)), /nie jest zablokowany/);
 });
 
 test('invites: already paused stay paused, the setting can turn pausing off, a missing permission is reported', async () => {
@@ -150,7 +150,7 @@ test('invites: already paused stay paused, the setting can turn pausing off, a m
   await command(a.guild, a.mod, 'lockdown');
   assert.equal(lockdown.current(a.guild.id).invitesPaused, false);
   const unlockA = await command(a.guild, a.mod, 'unlock');
-  assert.match(textOf(lastResponse(unlockA)), /were paused before the lockdown, so they stay paused/);
+  assert.match(textOf(lastResponse(unlockA)), /były wstrzymane już przed blokadą, więc takie zostają/);
   assert.ok(a.guild.features.includes('INVITES_DISABLED'));
 
   // security.lockdownPausesInvites: false
@@ -158,7 +158,7 @@ test('invites: already paused stay paused, the setting can turn pausing off, a m
   config.security.lockdownPausesInvites = false;
   try {
     const lock = await command(b.guild, b.mod, 'lockdown');
-    assert.match(textOf(lastResponse(lock)), /Invites stay open/);
+    assert.match(textOf(lastResponse(lock)), /Zaproszenia pozostają otwarte/);
     assert.ok(!b.guild.features.includes('INVITES_DISABLED'));
     await command(b.guild, b.mod, 'unlock');
     assert.ok(!b.guild.features.includes('INVITES_DISABLED'));
@@ -173,11 +173,11 @@ test('invites: already paused stay paused, the setting can turn pausing off, a m
   console.warn = () => {};
   try {
     const lock = await command(c.guild, c.mod, 'lockdown');
-    assert.match(textOf(lastResponse(lock)), /couldn't pause invites/);
+    assert.match(textOf(lastResponse(lock)), /Nie udało mi się wstrzymać zaproszeń/);
     assert.ok(lockdown.current(c.guild.id));
     assert.ok(!c.guild.roles.cache.get(role(c.guild, 'member')).permissions.has(P.SendMessages));
     const unlock = await command(c.guild, c.mod, 'unlock');
-    assert.doesNotMatch(textOf(lastResponse(unlock)), /Invites/);
+    assert.doesNotMatch(textOf(lastResponse(unlock)), /zaprosze/i);
   } finally {
     console.warn = warn;
   }
@@ -193,10 +193,10 @@ test('notice goes to #chat without #announcements; staff roles without their own
 
   const lock = await command(guild, mod, 'lockdown', { reason: 'Spam wave' });
   const out = textOf(lastResponse(lock));
-  assert.match(out, new RegExp(`Notice posted in <#${db.channelId(guild.id, 'chat')}>`));
-  assert.match(out, new RegExp(`<@&${seller.id}> had no \\*\\*Send Messages\\*\\* of its own – it gets it until \`/unlock\`, so its members can still talk`));
+  assert.match(out, new RegExp(`Komunikat opublikowany na <#${db.channelId(guild.id, 'chat')}>`));
+  assert.match(out, new RegExp(`<@&${seller.id}> nie miała własnego uprawnienia \\*\\*Wysyłanie wiadomości\\*\\* – dostaje je do \`/odblokuj\`, żeby jej członkowie nadal mogli pisać`));
   assert.ok(can(sellerMember, ch(guild, 'chat'), P.SendMessages), 'sellers can still talk');
-  assert.match(textOf(ch(guild, 'chat').messageList.at(-1).body), /The server is locked[\s\S]*Spam wave/);
+  assert.match(textOf(ch(guild, 'chat').messageList.at(-1).body), /Serwer jest zablokowany[\s\S]*Spam wave/);
 
   // Changes made during the lockdown (outside the locked permissions) are kept by /unlock
   const memberRole = guild.roles.cache.get(role(guild, 'member'));
@@ -211,13 +211,13 @@ test('/lockdown without a Member role or with a role above the bot explains what
   const memberRole = guild.roles.cache.get(role(guild, 'member'));
   memberRole.position = 5000;
   const high = await command(guild, mod, 'lockdown');
-  assert.match(textOf(lastResponse(high)), /I can't edit .* drag my role above it/);
+  assert.match(textOf(lastResponse(high)), /Nie mogę edytować roli .* przeciągnij moją rolę nad nią/);
   assert.equal(lockdown.current(guild.id), null);
 
   db.guild(guild.id).build.roles.member = null;
   db.guild(guild.id).settings.verifyRoleId = null;
   const none = await command(guild, mod, 'lockdown');
-  assert.match(textOf(lastResponse(none)), /no Member role/);
+  assert.match(textOf(lastResponse(none)), /Nie ma roli Członek/);
 });
 
 // ───────────── Regressions ─────────────
@@ -234,20 +234,20 @@ test('while locked, members cannot post vouches or open new tickets and orders t
   const vouches = ch(guild, 'vouches');
   const posts = vouches.messageList.length;
   const vouch = await command(guild, raider, 'vouch', { rating: 1, product: 'x', review: 'RAID RAID join discord.gg/xxx now' });
-  assert.match(textOf(lastResponse(vouch)), /server is locked[\s\S]*vouches are paused/);
+  assert.match(textOf(lastResponse(vouch)), /Serwer jest teraz zablokowany[\s\S]*opinie są wstrzymane/);
   const form = await press(guild, raider, 'vouch:open', vouches);
-  assert.match(textOf(lastResponse(form)), /vouches are paused/);
+  assert.match(textOf(lastResponse(form)), /opinie są wstrzymane/);
   assert.equal(form.state.modals.length, 0);
   assert.equal(vouches.messageList.length, posts, 'nothing was posted in #vouches');
 
   const ticketCount = () => db.tickets((t) => t.guildId === guild.id).length;
   const count = ticketCount();
   const open = await press(guild, raider, 'ticket:open:support');
-  assert.match(textOf(lastResponse(open)), /server is locked[\s\S]*new tickets and orders are paused[\s\S]*open tickets keep working/);
+  assert.match(textOf(lastResponse(open)), /Serwer jest teraz zablokowany[\s\S]*nowe tickety i zamówienia są wstrzymane[\s\S]*otwarte tickety działają/);
   const buy = await press(guild, raider, `shop:buy:${product.id}`);
-  assert.match(textOf(lastResponse(buy)), /new tickets and orders are paused/);
+  assert.match(textOf(lastResponse(buy)), /nowe tickety i zamówienia są wstrzymane/);
   assert.equal(buy.state.modals.length, 0);
-  await assert.rejects(tickets.openTicket(raider, config.getType('order'), []), /new tickets and orders are paused/, 'an order form sent just before the lock');
+  await assert.rejects(tickets.openTicket(raider, config.getType('order'), []), /nowe tickety i zamówienia są wstrzymane/, 'an order form sent just before the lock');
   assert.equal(ticketCount(), count, 'no new ticket channels');
 
   // Staff still can; the ticket from before keeps working
@@ -257,7 +257,7 @@ test('while locked, members cannot post vouches or open new tickets and orders t
 
   await command(guild, mod, 'unlock');
   const after = await command(guild, raider, 'vouch', { rating: 5, product: 'Netflix Premium', review: 'Fast delivery, thank you!' });
-  assert.match(textOf(lastResponse(after)), /Thank you for your vouch/);
+  assert.match(textOf(lastResponse(after)), /Dziękujemy za opinię/);
   const again = await press(guild, raider, `shop:buy:${product.id}`);
   assert.equal(again.state.modals.length, 1, 'orders work again after /unlock');
 });
@@ -278,7 +278,7 @@ test('staff roles from /setup keep talking during a lockdown, and the reply is b
   const out = textOf(lastResponse(lock));
   assert.ok(!can(buyer, chat, P.SendMessages), 'members are quiet');
   assert.ok(can(helper, chat, P.SendMessages) && can(helper, lounge, P.Connect), 'the helpers can still talk');
-  assert.match(out, new RegExp(`<@&${helpers.id}> had no \\*\\*Send Messages\\*\\* of its own – it gets it until \`/unlock\`, so its members can still talk`));
+  assert.match(out, new RegExp(`<@&${helpers.id}> nie miała własnego uprawnienia \\*\\*Wysyłanie wiadomości\\*\\* – dostaje je do \`/odblokuj\`, żeby jej członkowie nadal mogli pisać`));
   assert.doesNotMatch(out, /⚠️/);
   assert.equal(lockdown.current(guild.id).staffRoles.length, 1);
 
@@ -288,8 +288,8 @@ test('staff roles from /setup keep talking during a lockdown, and the reply is b
   // A quiet staff role I can't edit is reported – no "the team can still talk"
   helpers.position = 5000;
   const again = textOf(lastResponse(await command(guild, mod, 'lockdown')));
-  assert.match(again, new RegExp(`⚠️ <@&${helpers.id}> has no \\*\\*Send Messages\\*\\* of its own and I can't edit it`));
-  assert.doesNotMatch(again, /can still talk/);
+  assert.match(again, new RegExp(`⚠️ <@&${helpers.id}> nie ma własnego uprawnienia \\*\\*Wysyłanie wiadomości\\*\\*, a nie mogę jej edytować`));
+  assert.doesNotMatch(again, /nadal mo(?:gli|że) pisać/);
   await command(guild, mod, 'unlock');
 });
 
@@ -323,13 +323,13 @@ test('/unlock while /lockdown is still running waits for it – nothing stays lo
   await sleep(5);
   const unlocking = command(guild, mod2, 'unlock');
   const [lock, unlock] = await Promise.all([locking, unlocking]);
-  assert.match(textOf(lastResponse(lock)), /Server locked/);
-  assert.match(textOf(lastResponse(unlock)), /Server unlocked[\s\S]*Restored \*\*\d+\*\* channel permissions[\s\S]*Invites are open again/);
+  assert.match(textOf(lastResponse(lock)), /Serwer zablokowany/);
+  assert.match(textOf(lastResponse(unlock)), /Serwer odblokowany[\s\S]*Przywrócono \*\*\d+\*\* uprawnie(?:ń|nia|nie) na kana(?:łach|le)[\s\S]*Zaproszenia znów są otwarte/);
   assert.equal(lockdown.current(guild.id), null);
   assert.deepEqual(snapshot(guild), before, 'roles, channels and invites are exactly as before');
   const notices = ch(guild, 'announcements').messageList.slice(-2).map((m) => textOf(m.body));
-  assert.match(notices[0], /The server is locked/);
-  assert.match(notices[1], /The server is unlocked/);
+  assert.match(notices[0], /Serwer jest zablokowany/);
+  assert.match(notices[1], /Serwer jest odblokowany/);
 });
 
 test('every other non-staff role that lets people chat is locked too and restored exactly; roles I cannot edit are reported', async () => {
@@ -365,8 +365,8 @@ test('every other non-staff role that lets people chat is locked too and restore
   assert.ok(!can(boosting, chat, P.SendMessages), 'boosters are quiet too');
   assert.ok(can(mod, chat, P.SendMessages), 'staff still talk');
   assert.ok(guild.roles.cache.get(role(guild, 'bots')).permissions.has(P.SendMessages), 'the Bots role is left alone');
-  assert.match(out, new RegExp(`Also locked:[^\\n]*<@&${level.id}>`));
-  assert.match(out, new RegExp(`⚠️ <@&${above.id}> still allows \\*\\*Send Messages\\*\\*`));
+  assert.match(out, new RegExp(`Zablokowano też:[^\\n]*<@&${level.id}>`));
+  assert.match(out, new RegExp(`⚠️ <@&${above.id}> nadal daje: \\*\\*Wysyłanie wiadomości\\*\\*`));
   const state = lockdown.current(guild.id);
   assert.ok(state.roles.some((r) => r.id === level.id) && state.roles.some((r) => r.id === guild.id));
   assert.ok(state.channels.some((c) => c.id === announcements.id && c.roleId === level.id));

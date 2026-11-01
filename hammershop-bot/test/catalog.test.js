@@ -139,14 +139,14 @@ test('categories: /product add | edit with autocomplete, the shop panel groups p
   assert.equal(byName('Steam Gift Card').category, null);
 
   const long = await add('Netflix', 'A category name that is far too long');
-  assert.match(textOf(lastResponse(long)), /up to 30 characters/);
+  assert.match(textOf(lastResponse(long)), /Nazwa kategorii może mieć maksymalnie 30 znaków/);
   assert.equal(byName('Netflix'), undefined);
 
   // Autocomplete: existing categories, "New category" for what is typed, "No category" when editing.
   // Existing categories come first – Discord highlights the first suggestion, so Enter reuses "💻 Software".
   const ac = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'add', focusedOption: 'category', focused: 'so' });
   assert.deepEqual(ac.state.responded.map((c) => c.value), ['💻 Software', 'so']);
-  assert.match(ac.state.responded[1].name, /New category: so/);
+  assert.match(ac.state.responded[1].name, /Nowa kategoria: so/);
   const all = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'edit', focusedOption: 'category', focused: '' });
   assert.deepEqual(all.state.responded.map((c) => c.value), ['Games', '💻 Software', 'none']);
   const products = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'product', subcommand: 'edit', focusedOption: 'product', focused: 'gta' });
@@ -157,7 +157,7 @@ test('categories: /product add | edit with autocomplete, the shop panel groups p
   const panel = shopMessage(guild).body;
   validateMessage(panel, guild);
   const tabs = buttons(panel).filter((b) => b.custom_id?.startsWith('shopview:tab:'));
-  assert.deepEqual(tabs.map((b) => b.label), ['All', 'Games', 'Software', 'Other']);
+  assert.deepEqual(tabs.map((b) => b.label), ['Wszystko', 'Games', 'Software', 'Inne']);
   assert.equal(tabs[0].style, ButtonStyle.Primary, '"All" is the open tab');
   assert.equal(tabs.find((b) => b.label === 'Software').emoji.name, '💻', "a category's own emoji is its icon");
   const body = textOf(panel);
@@ -185,9 +185,9 @@ test('tabs and pages: 5 products per page, ◀ ▶ and tabs answer privately and
   const message = shopMessage(guild);
   const panel = message.body;
   validateMessage(panel, guild);
-  assert.deepEqual(buttons(panel).filter((b) => b.custom_id?.startsWith('shopview:tab:')).map((b) => b.label), ['All', 'Games', 'Streaming', 'Software']);
+  assert.deepEqual(buttons(panel).filter((b) => b.custom_id?.startsWith('shopview:tab:')).map((b) => b.label), ['Wszystko', 'Games', 'Streaming', 'Software']);
   assert.equal(productIds(panel).length, 5, '5 products per page');
-  assert.match(labels(panel), /Page 1 \/ 3/);
+  assert.match(labels(panel), /Strona 1 \/ 3/);
   const games = shop.products(guild.id).filter((p) => p.category === 'Games');
   assert.ok(customIds(panel).includes(`restock:notify:${games[1].id}`), 'a sold-out product offers Notify me');
 
@@ -196,7 +196,7 @@ test('tabs and pages: 5 products per page, ◀ ▶ and tabs answer privately and
   assert.equal(next.deferred, true, 'answers privately');
   const page2 = lastResponse(next);
   validateMessage(page2, guild);
-  assert.match(labels(page2), /Page 2 \/ 3/);
+  assert.match(labels(page2), /Strona 2 \/ 3/);
   assert.notDeepEqual(productIds(page2), productIds(panel));
   assert.deepEqual(shopMessage(guild).body, panel, 'the public panel is untouched');
 
@@ -205,9 +205,9 @@ test('tabs and pages: 5 products per page, ◀ ▶ and tabs answer privately and
   const last = await run({ guild, member: buyer, kind: 'button', customId: 'shopview:page:2:all', message: privateCopy });
   assert.equal(last.state.updates.length + last.state.edits.length > 0, true);
   const page3 = lastResponse(last);
-  assert.match(labels(page3), /Page 3 \/ 3/);
+  assert.match(labels(page3), /Strona 3 \/ 3/);
   assert.equal(productIds(page3).length, 4, '14 products → 5 + 5 + 4');
-  assert.ok(buttons(page3).find((b) => b.label === 'Next').disabled, 'Next is off on the last page');
+  assert.ok(buttons(page3).find((b) => b.label === 'Następna').disabled, 'Next is off on the last page');
   const everything = new Set([...productIds(panel), ...productIds(page2), ...productIds(page3)]);
   assert.equal(everything.size, 14, 'every product is on exactly one page');
 
@@ -217,7 +217,7 @@ test('tabs and pages: 5 products per page, ◀ ▶ and tabs answer privately and
   const gameIds = new Set(games.map((p) => p.id));
   assert.ok(productIds(gamesPage).every((id) => gameIds.has(id)), 'only Games products');
   assert.equal(buttons(gamesPage).find((b) => b.label === 'Games').style, ButtonStyle.Primary);
-  assert.match(labels(gamesPage), /Page 1 \/ 2/);
+  assert.match(labels(gamesPage), /Strona 1 \/ 2/);
 
   // 50 products in 20 categories: the tabs become a menu, every tab and page stays within Discord's limits.
   const big = (await builtGuild()).guild;
@@ -243,7 +243,7 @@ test('a long category is shown 5 per page until the last page', async () => {
   let page = lastResponse(await run({ guild, member: member(guild), kind: 'button', customId: 'shopview:tab:c:keys' }));
   const shown = new Set(productIds(page));
   let pages = 1;
-  while (!buttons(page).find((b) => b.label === 'Next').disabled) {
+  while (!buttons(page).find((b) => b.label === 'Następna').disabled) {
     const i = await run({ guild, member: member(guild), kind: 'button', customId: `shopview:page:${pages}:c:keys`, message: privateCopy });
     page = lastResponse(i);
     assert.deepEqual(page.attachments, [], 'turning a page replaces the message');
@@ -265,14 +265,14 @@ test('without categories: no tabs, just pages of 5 – sold-out products offer N
   const panel = shop.shopPanel(guild);
   validateMessage(panel, guild);
   assert.ok(!customIds(panel).some((id) => id.startsWith('shopview:tab')), 'no tabs without categories');
-  assert.match(labels(panel), /Page 1 \/ 2/);
+  assert.match(labels(panel), /Strona 1 \/ 2/);
   assert.ok(customIds(panel).includes(`restock:notify:${soldOut.id}`));
 
   // An older panel's product menu still opens the order form, its "All products" option the pages.
   const buy = await run({ guild, member: buyer, kind: 'select', customId: 'catalog:pick', values: [shop.findProduct(guild.id, 'Product 1').id] });
   assert.equal(buy.state.modals.length, 1, 'the order form opens');
   const all = await run({ guild, member: buyer, kind: 'select', customId: 'catalog:pick', values: ['all'] });
-  assert.match(labels(lastResponse(all)), /Page 1 \/ 2/);
+  assert.match(labels(lastResponse(all)), /Strona 1 \/ 2/);
 });
 
 // ───────────── Images ─────────────
@@ -282,7 +282,7 @@ test('images: /product add stores the picture and shows it in the shop panel, th
   const pic = upload('gta.png', imageBytes('png', 4096));
   stubFetch(pic);
   const add = await product(guild, owner, 'add', { name: 'GTA V', price: '20', description: 'Instant delivery.', category: 'Games', image: pic });
-  assert.match(textOf(lastResponse(add)), /Added \*\*GTA V\*\* \(20€\) to the shop in \*\*Games\*\* with its image\./);
+  assert.match(textOf(lastResponse(add)), /Dodano \*\*GTA V\*\* \(20€\) do sklepu w kategorii \*\*Games\*\* ze zdjęciem\./);
   assert.deepEqual(fetched, [pic.url], 'downloaded once – Discord links expire');
   const gta = shop.findProduct(guild.id, 'GTA V');
   assert.equal(gta.image.ext, 'png');
@@ -297,7 +297,7 @@ test('images: /product add stores the picture and shows it in the shop panel, th
   assert.ok(customIds(panel.body).includes(`shop:buy:${gta.id}`));
 
   const announcement = ch(guild, 'restocks').messageList.at(-1);
-  assert.match(textOf(announcement.body), /New product.*GTA V/);
+  assert.match(textOf(announcement.body), /Nowy produkt.*GTA V/);
   assert.deepEqual(fileNames(announcement.body), [name]);
   assert.ok(mediaUrls(announcement.body).includes(`attachment://${name}`));
 
@@ -322,7 +322,7 @@ test('images: /product add stores the picture and shows it in the shop panel, th
 
   const jpgPath = imagePath(gta);
   const removed = await product(guild, owner, 'edit', { product: gta.id, remove_image: true });
-  assert.match(textOf(lastResponse(removed)), /Updated \*\*GTA V\*\*/);
+  assert.match(textOf(lastResponse(removed)), /Zaktualizowano \*\*GTA V\*\*/);
   assert.equal(gta.image, null);
   assert.equal(fs.existsSync(jpgPath), false);
   await panels.refresh(guild, 'shop');
@@ -347,21 +347,21 @@ test('images: bigger than 1 MB, the wrong type or not really an image → a frie
   };
 
   const huge = upload('huge.png', imageBytes('png', 64), 'image/png', 1.5 * 1024 * 1024);
-  assert.match(await attempt(huge, 'Huge'), /1\.5 MB – product images can be up to \*\*1 MB\*\*/);
+  assert.match(await attempt(huge, 'Huge'), /1\.5 MB – zdjęcie produktu może mieć maksymalnie \*\*1 MB\*\*/);
   assert.deepEqual(fetched, [], 'too big – not even downloaded');
 
-  assert.match(await attempt(upload('menu.pdf', Buffer.from('%PDF-1.7 ......'), 'application/pdf'), 'Pdf'), /must be a PNG, JPG, WEBP or GIF/);
-  assert.match(await attempt(upload('fake.png', Buffer.from('this is not an image at all'), 'image/png'), 'Fake'), /not a real PNG, JPG, WEBP or GIF image/);
+  assert.match(await attempt(upload('menu.pdf', Buffer.from('%PDF-1.7 ......'), 'application/pdf'), 'Pdf'), /musi być plikiem PNG, JPG, WEBP lub GIF/);
+  assert.match(await attempt(upload('fake.png', Buffer.from('this is not an image at all'), 'image/png'), 'Fake'), /nie jest prawdziwym obrazem PNG, JPG, WEBP lub GIF/);
   // The size Discord reported was wrong – the download is checked too.
-  assert.match(await attempt(upload('liar.png', imageBytes('png', 1024 * 1024 + 10), 'image/png', 1000), 'Liar'), /That image is 1\.1 MB – product images can be up to \*\*1 MB\*\*/);
+  assert.match(await attempt(upload('liar.png', imageBytes('png', 1024 * 1024 + 10), 'image/png', 1000), 'Liar'), /To zdjęcie ma 1\.1 MB – zdjęcie produktu może mieć maksymalnie \*\*1 MB\*\*/);
   let bodyRead = false;
   global.fetch = async () => ({ ok: true, headers: new Map([['content-length', String(5 * 1024 * 1024)]]), arrayBuffer: async () => ((bodyRead = true), new ArrayBuffer(8)) });
   const header = await product(guild, owner, 'add', { name: 'Header', price: '5', description: 'Test.', image: upload('big.png', imageBytes(), 'image/png', 900) });
-  assert.match(textOf(lastResponse(header)), /That image is 5\.0 MB/);
+  assert.match(textOf(lastResponse(header)), /To zdjęcie ma 5\.0 MB/);
   assert.equal(bodyRead, false, 'a too big download is not read at all');
   global.fetch = async () => ({ ok: false, status: 404 });
   const gone = await product(guild, owner, 'add', { name: 'Gone', price: '5', description: 'Test.', image: upload('gone.png', imageBytes()) });
-  assert.match(textOf(lastResponse(gone)), /could not download that image/);
+  assert.match(textOf(lastResponse(gone)), /Nie udało się pobrać zdjęcia/);
 
   assert.equal(shop.products(guild.id).length, 0);
   const dir = path.join(db.dataDir, 'products');
@@ -424,13 +424,13 @@ test('Notify me: a Buy button of a product that has sold out since offers Notify
   assert.equal(buy.state.modals.length, 0, 'no order form');
   assert.ok(buy.deferred && !buy.state.replies.length, 'answered privately (deferred ephemeral reply)');
   const answer = lastResponse(buy);
-  assert.match(textOf(answer), /Nitro[\s\S]*Sold out right now – click \*\*Notify me\*\*/);
+  assert.match(textOf(answer), /Nitro[\s\S]*Teraz wyprzedany – kliknij \*\*Powiadom mnie\*\*/);
   assert.ok(customIds(answer).includes(`restock:notify:${item.id}`));
   assert.ok(!customIds(answer).includes(`shop:buy:${item.id}`));
   assert.deepEqual(fileNames(answer), [`product-${item.id}.png`]);
 
   const notify = await run({ guild, member: buyer, kind: 'button', customId: `restock:notify:${item.id}` });
-  assert.match(textOf(lastResponse(notify)), /You're on the list/);
+  assert.match(textOf(lastResponse(notify)), /Jesteś na liście/);
   assert.deepEqual(restock.waiting(guild.id, item.id), [buyer.id]);
 });
 
@@ -447,11 +447,11 @@ test('Notify me: a sold-out product offers a toggle, a restock DMs everyone wait
   const [alice, bob, carol] = [member(guild), member(guild), member(guild)];
   const click = (who) => run({ guild, member: who, kind: 'button', customId: `restock:notify:${item.id}` });
   const on = await click(alice);
-  assert.match(textOf(lastResponse(on)), /You're on the list/);
+  assert.match(textOf(lastResponse(on)), /Jesteś na liście/);
   assert.equal(lastResponse(on).flags & 64, 64, 'ephemeral');
   assert.deepEqual(db.guild(guild.id).notify[item.id], [alice.id]);
   const off = await click(alice);
-  assert.match(textOf(lastResponse(off)), /Okay, no DM/);
+  assert.match(textOf(lastResponse(off)), /Okej, bez wiadomości/);
   assert.equal(db.guild(guild.id).notify[item.id], undefined);
 
   for (const who of [alice, bob, carol]) await click(who);
@@ -461,22 +461,22 @@ test('Notify me: a sold-out product offers a toggle, a restock DMs everyone wait
     if (g === guild) events.push(p.id);
   });
   const restocked = await product(guild, owner, 'stock', { product: item.id, status: 'low' });
-  assert.match(textOf(lastResponse(restocked)), /low stock[\s\S]*Restock announced[\s\S]*DM sent to 2 of the 3 people waiting/);
+  assert.match(textOf(lastResponse(restocked)), /mało sztuk[\s\S]*Dostawa ogłoszona[\s\S]*Wysłano wiadomość prywatną do 2 z 3 oczekujących osób/);
   assert.deepEqual(events, [item.id], 'productRestocked emitted once');
   assert.equal(db.guild(guild.id).notify[item.id], undefined, 'list cleared');
-  const dms = guild.dms.filter((d) => /Back in stock/.test(textOf(d.payload)));
+  const dms = guild.dms.filter((d) => /Znowu dostępny!/.test(textOf(d.payload)));
   assert.deepEqual(dms.map((d) => d.to).sort(), [alice.id, carol.id].sort());
   const dm = dms[0].payload;
-  assert.match(textOf(dm), /Nitro\*\* is back in stock at \*\*HammerShop\*\*/);
+  assert.match(textOf(dm), /Nitro\*\* jest znowu dostępny w \*\*HammerShop\*\*/);
   const link = JSON.stringify(dm.components.map((c) => c.toJSON()));
   assert.ok(link.includes(`https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'shop')}`), 'Buy link to #shop');
   assert.deepEqual(fileNames(dm), [`product-${item.id}.png`]);
 
   // Already in stock: a second restock sends nothing; the button now says so.
   await shop.setStock(guild, item.id, 'in');
-  assert.equal(guild.dms.filter((d) => /Back in stock/.test(textOf(d.payload))).length, 2);
+  assert.equal(guild.dms.filter((d) => /Znowu dostępny!/.test(textOf(d.payload))).length, 2);
   const late = await click(member(guild));
-  assert.match(textOf(lastResponse(late)), /in stock right now/);
+  assert.match(textOf(lastResponse(late)), /jest teraz dostępny/);
   assert.ok(customIds(lastResponse(late)).includes(`shop:buy:${item.id}`));
 
   // /product edit stock: works the same way.
@@ -484,8 +484,8 @@ test('Notify me: a sold-out product offers a toggle, a restock DMs everyone wait
   const dave = member(guild);
   await click(dave);
   const edit = await product(guild, owner, 'edit', { product: item.id, stock: 'in' });
-  assert.match(textOf(lastResponse(edit)), /DM sent to the 1 person waiting/);
-  assert.equal(guild.dms.filter((d) => d.to === dave.id && /Back in stock/.test(textOf(d.payload))).length, 1);
+  assert.match(textOf(lastResponse(edit)), /Wysłano wiadomość prywatną do 1 oczekującej osoby/);
+  assert.equal(guild.dms.filter((d) => d.to === dave.id && /Znowu dostępny!/.test(textOf(d.payload))).length, 1);
   assert.equal(restock.waiting(guild.id, item.id).length, 0);
 
   // Removing a product forgets who was waiting for it.
@@ -501,7 +501,7 @@ test('/product: only admins and sellers can manage the catalog', async () => {
   const visitor = member(guild);
   for (const [sub, options] of [['edit', { product: item.id, category: 'Hack' }], ['stock', { product: item.id, status: 'out' }], ['remove', { product: item.id }]]) {
     const i = await product(guild, visitor, sub, options);
-    assert.match(textOf(lastResponse(i)), /Only administrators and sellers can manage the shop/);
+    assert.match(textOf(lastResponse(i)), /Tylko administratorzy i sprzedawcy mogą zarządzać sklepem/);
   }
   assert.deepEqual({ category: item.category, stock: item.stock }, { category: null, stock: 'in' });
   assert.ok(shop.findProduct(guild.id, item.id));
@@ -516,13 +516,13 @@ test('buying only works through Buy in #shop: no Purchase button, the ticket pan
 
   // Shop panel: only "How to buy", "Balance" and "My orders" under the products.
   const shopPanel = json(await panels.render('shop', guild));
-  assert.ok(!shopPanel.includes('ticket:open:order') && !shopPanel.includes('"label":"Purchase"'), 'no Purchase button in the shop');
-  assert.ok(shopPanel.includes('"label":"How to buy"') && shopPanel.includes('"custom_id":"balance:open"') && shopPanel.includes('"custom_id":"myorders:open"'));
+  assert.ok(!shopPanel.includes('ticket:open:order') && !shopPanel.includes('"label":"Zakup"'), 'no Purchase button in the shop');
+  assert.ok(shopPanel.includes('"label":"Jak kupić"') && shopPanel.includes('"custom_id":"balance:open"') && shopPanel.includes('"custom_id":"myorders:open"'));
 
   // Ticket panel: Purchase has a "Go to shop" link instead of "Open".
   const ticketPanel = json(await panels.render('tickets', guild, { style: 'buttons' }));
   assert.ok(!ticketPanel.includes('ticket:open:order'), 'no Open button for Purchase');
-  assert.ok(ticketPanel.includes(shopUrl) && ticketPanel.includes('"label":"Go to shop"'));
+  assert.ok(ticketPanel.includes(shopUrl) && ticketPanel.includes('"label":"Przejdź do sklepu"'));
   assert.ok(ticketPanel.includes('ticket:open:support'), 'other ticket types still open tickets');
 
   // Info cards point to the shop too.
@@ -545,7 +545,7 @@ test('buying only works through Buy in #shop: no Purchase button, the ticket pan
     await handle(i, commands);
     assert.equal(i.state.modals.length, 0, `${args.customId}: no form`);
     const out = JSON.stringify(lastResponse(i));
-    assert.match(out, /click \*\*Buy\*\* next to the product/, args.customId);
+    assert.match(out, /kliknij \*\*Kup\*\* przy wybranym produkcie/, args.customId);
     assert.ok(out.includes(shopUrl), `${args.customId}: link to the shop`);
   }
   assert.equal(db.tickets(() => true).length, before, 'no Purchase ticket was opened');

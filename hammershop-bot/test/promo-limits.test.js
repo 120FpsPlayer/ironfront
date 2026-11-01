@@ -30,7 +30,7 @@ const run = async (args) => {
 };
 const answer = (ticket, label) => ticket.answers.find((a) => a.label === label)?.value;
 const logText = (guild) => textOf(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1).body);
-const HELD = /All remaining uses of this code are held by other open orders right now – it only becomes available again if one of them is cancelled\./;
+const HELD = /Wszystkie pozostałe użycia tego kodu są teraz zarezerwowane przez inne otwarte zamówienia – kod będzie znów dostępny tylko wtedy, gdy któreś z nich zostanie anulowane\./;
 
 async function shopGuild() {
   const guild = new FakeGuild();
@@ -64,8 +64,8 @@ test('two buyers submitting a max_uses:1 code at the same time: only one gets th
   assert.deepEqual([ra, rb].map((r) => r.ticket.order.promo).filter(Boolean), ['FIRST1'], 'exactly one order keeps the code');
   const loser = ra.ticket.order.promo ? rb : ra;
   assert.equal(loser.ticket.order.total, 10);
-  assert.match(textOf(lastResponse(loser.i)), /Promo code \*\*FIRST1\*\* – not applied: All remaining uses/);
-  assert.match(answer(loser.ticket, 'Price'), HELD);
+  assert.match(textOf(lastResponse(loser.i)), /Kod rabatowy \*\*FIRST1\*\* – nie zastosowano: Wszystkie pozostałe użycia/);
+  assert.match(answer(loser.ticket, 'Cena'), HELD);
 
   await complete(guild, seller, ra.channel, ra.ticket.order.total);
   await complete(guild, seller, rb.channel, rb.ticket.order.total);
@@ -82,7 +82,7 @@ test('an order that fails to open gives its code back right away', async () => {
   try {
     const failed = await order(guild, member(guild), product, { promo: 'SOLO' });
     assert.equal(failed.ticket, undefined);
-    assert.match(textOf(lastResponse(failed.i)), /not set up yet/);
+    assert.match(textOf(lastResponse(failed.i)), /nie jest jeszcze skonfigurowany/);
   } finally {
     db.updateSettings(guild.id, { categoryId });
   }
@@ -106,19 +106,19 @@ test('reopening an order whose code was used up in the meantime drops the discou
   await complete(guild, seller, rb.channel, 5);
 
   const reopen = await run({ guild, member: seller, kind: 'button', customId: 'ticket:reopen', channel: ra.channel, message: ra.channel.messageList.at(-1) });
-  assert.match(textOf(lastResponse(reopen)), /reopened/);
+  assert.match(textOf(lastResponse(reopen)), /ponownie otwarty/);
   const ticket = db.getTicket(ra.channel.id);
   assert.equal(ticket.status, 'open');
   assert.equal(ticket.order.promo, null);
   assert.equal(ticket.order.discount, 0);
   assert.equal(ticket.order.total, 10);
-  assert.equal(answer(ticket, 'Price'), '**Total to pay: 10€**\nPromo code ONE – not applied: This code has been used up.');
-  const notice = ra.channel.messageList.map((m) => textOf(m.body)).find((x) => /Ticket reopened/.test(x));
-  validateMessage(ra.channel.messageList.find((m) => /Ticket reopened/.test(textOf(m.body))).body, guild);
-  assert.match(notice, /Promo code \*\*ONE\*\* no longer applies/);
-  assert.match(notice, /released while this ticket was closed[\s\S]*This code has been used up\./);
-  assert.match(notice, /Total to pay now: \*\*10€\*\*/);
-  assert.match(logText(guild), /Ticket reopened[\s\S]*ONE removed – This code has been used up\./);
+  assert.equal(answer(ticket, 'Cena'), '**Do zapłaty: 10€**\nKod rabatowy ONE – nie zastosowano: Ten kod został już wykorzystany.');
+  const notice = ra.channel.messageList.map((m) => textOf(m.body)).find((x) => /Ticket otwarty ponownie/.test(x));
+  validateMessage(ra.channel.messageList.find((m) => /Ticket otwarty ponownie/.test(textOf(m.body))).body, guild);
+  assert.match(notice, /Kod rabatowy \*\*ONE\*\* już nie obowiązuje/);
+  assert.match(notice, /zwolniony, gdy ticket był zamknięty[\s\S]*Ten kod został już wykorzystany\./);
+  assert.match(notice, /Do zapłaty teraz: \*\*10€\*\*/);
+  assert.match(logText(guild), /Ticket otwarty ponownie[\s\S]*ONE usunięty – Ten kod został już wykorzystany\./);
 
   const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel: ra.channel });
   assert.equal(pick.state.modals[0].components.find((c) => c.component?.custom_id === 'amount').component.value, '10');
@@ -138,7 +138,7 @@ test('reopening: once-per-member codes are not taken twice; a code that is still
   assert.equal(second.ticket.order.promo, 'ONCE', 'the closed order released the code');
   await t.reopenTicket(first.channel, seller);
   assert.equal(db.getTicket(first.channel.id).order.promo, null);
-  assert.match(textOf(first.channel.messageList.at(-1).body), /ONCE\*\* no longer applies[\s\S]*You're already using this code in another open order\./);
+  assert.match(textOf(first.channel.messageList.at(-1).body), /ONCE\*\* już nie obowiązuje[\s\S]*Używasz już tego kodu w innym otwartym zamówieniu\./);
   await t.completeOrder(first.channel, seller);
   await t.completeOrder(second.channel, seller);
   assert.equal(promos.find(guild.id, 'ONCE').uses.filter((u) => u.userId === a.id).length, 1);
@@ -151,9 +151,9 @@ test('reopening: once-per-member codes are not taken twice; a code that is still
   await t.reopenTicket(kept.channel, seller);
   const ticket = db.getTicket(kept.channel.id);
   assert.deepEqual([ticket.order.promo, ticket.order.total], ['NOX10', 9]);
-  assert.doesNotMatch(textOf(kept.channel.messageList.at(-1).body), /no longer applies/);
+  assert.doesNotMatch(textOf(kept.channel.messageList.at(-1).body), /już nie obowiązuje/);
   const again = await order(guild, b, product, { promo: 'NOX10' });
-  assert.match(answer(again.ticket, 'Price'), /You're already using this code in another open order\./);
+  assert.match(answer(again.ticket, 'Cena'), /Używasz już tego kodu w innym otwartym zamówieniu\./);
 });
 
 test('reopening an order with a non-numeric price: the code is dropped and the seller prices it without the discount', async () => {
@@ -167,8 +167,8 @@ test('reopening an order with a non-numeric price: the code is dropped and the s
   await t.reopenTicket(ra.channel, seller);
   const ticket = db.getTicket(ra.channel.id);
   assert.deepEqual([ticket.order.promo, ticket.order.total], [null, null]);
-  assert.match(answer(ticket, 'Promo code'), /^ART – not applied: All remaining uses/);
-  assert.match(textOf(ra.channel.messageList.at(-1).body), /The seller confirms the final price without the discount\./);
+  assert.match(answer(ticket, 'Kod rabatowy'), /^ART – nie zastosowano: Wszystkie pozostałe użycia/);
+  assert.match(textOf(ra.channel.messageList.at(-1).body), /Sprzedawca potwierdzi ostateczną cenę bez rabatu\./);
 });
 
 // ───────────── First order only ─────────────
@@ -177,12 +177,12 @@ test('first-order-only codes: a member with another open order cannot use one', 
   const { guild, product, seller } = await shopGuild();
   const buyer = member(guild);
   promos.create(guild.id, { code: 'FIRST20', amount: 2, firstOrderOnly: true });
-  const welcome = promos.personal(guild.id, buyer.id, { percent: 5, prefix: 'WELCOME', firstOrderOnly: true });
+  const welcome = promos.personal(guild.id, buyer.id, { percent: 5, prefix: 'WITAJ', firstOrderOnly: true });
   const one = await order(guild, buyer, product, { promo: 'FIRST20' });
   assert.equal(one.ticket.order.promo, 'FIRST20');
   const two = await order(guild, buyer, product, { promo: welcome.code });
   assert.equal(two.ticket.order.promo, null);
-  assert.match(answer(two.ticket, 'Price'), /not applied: This code is only valid for your first order – you already have another open order\./);
+  assert.match(answer(two.ticket, 'Cena'), /nie zastosowano: Ten kod działa tylko przy pierwszym zamówieniu – masz już inne otwarte zamówienie\./);
   await t.completeOrder(one.channel, seller);
   await t.completeOrder(two.channel, seller);
   assert.deepEqual(db.sales(guild.id).map((s) => [s.promo, s.discount]), [['FIRST20', 2], [null, 0]]);
@@ -192,7 +192,7 @@ test('first-order-only codes: a member with another open order cannot use one', 
   const plain = await order(guild, other, product);
   promos.create(guild.id, { code: 'HELLO', percent: 10, firstOrderOnly: true });
   const later = await order(guild, other, product, { promo: 'HELLO' });
-  assert.match(answer(later.ticket, 'Price'), /only valid for your first order – you already have another open order/);
+  assert.match(answer(later.ticket, 'Cena'), /działa tylko przy pierwszym zamówieniu – masz już inne otwarte zamówienie/);
   // …but a closed one doesn't
   await t.closeTicket(plain.channel, seller);
   await t.closeTicket(later.channel, seller);
@@ -212,28 +212,28 @@ test('completing an order whose code went over its limit warns the seller in the
   const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel });
   const form = pick.state.modals[0];
   validateModal(form, guild);
-  assert.match(form.components[0].content, /⚠️ \*\*Code DROP is over its limit\*\* – already used up \(1\/1 uses\)\. The total above still includes its discount – enter what the customer actually paid\./);
+  assert.match(form.components[0].content, /⚠️ \*\*Kod DROP przekroczył swój limit\*\* – już wykorzystany \(1\/1 użyć\)\. Kwota powyżej nadal uwzględnia jego rabat – wpisz, ile klient faktycznie zapłacił\./);
 
   const done = await complete(guild, seller, channel, 5);
   const out = textOf(lastResponse(done));
-  assert.match(out, /Order completed – sale `S-0001` recorded – 5€ paid \(code DROP\)/);
-  assert.match(out, /⚠️ Code DROP was over its limit \(already used up \(1\/1 uses\)\) – its −5€ discount is still recorded on this sale\./);
-  assert.match(logText(guild), /Promo code[\s\S]*DROP \(−5€\)[\s\S]*⚠️ over its limit: already used up \(1\/1 uses\)/);
+  assert.match(out, /Zamówienie zrealizowane – sprzedaż `S-0001` zapisana – zapłacono 5€ \(kod DROP\)/);
+  assert.match(out, /⚠️ Kod DROP przekroczył limit \(już wykorzystany \(1\/1 użyć\)\) – jego rabat −5€ nadal jest zapisany w tej sprzedaży\./);
+  assert.match(logText(guild), /Kod rabatowy[\s\S]*DROP \(−5€\)[\s\S]*⚠️ ponad limit: już wykorzystany \(1\/1 użyć\)/);
   assert.equal(promos.find(guild.id, 'DROP').uses.length, 2, 'the use is recorded – the history stays true');
 
   // First order only: another order of the same member was completed first
   const newbie = member(guild);
-  const welcome = promos.personal(guild.id, newbie.id, { percent: 10, prefix: 'WELCOME', firstOrderOnly: true });
+  const welcome = promos.personal(guild.id, newbie.id, { percent: 10, prefix: 'WITAJ', firstOrderOnly: true });
   const w = await order(guild, newbie, product, { promo: welcome.code });
   db.guild(guild.id).orders[newbie.id] = 1; // e.g. a Purchase ticket from the panel, completed first
   const done2 = await complete(guild, seller, w.channel, 9);
-  assert.match(textOf(lastResponse(done2)), /over its limit \(it's for first orders only, and the customer already had a completed order\)/);
+  assert.match(textOf(lastResponse(done2)), /przekroczył limit \(jest tylko na pierwsze zamówienie, a klient ma już zrealizowane zamówienie\)/);
 
   // Within the limit: no warning
   promos.create(guild.id, { code: 'FINE', percent: 10 });
   const f = await order(guild, member(guild), product, { promo: 'FINE' });
   const ok = await complete(guild, seller, f.channel, 9);
-  assert.doesNotMatch(textOf(lastResponse(ok)), /over its limit/);
+  assert.doesNotMatch(textOf(lastResponse(ok)), /przekroczył/);
 });
 
 // ───────────── Codes held by open orders ─────────────
@@ -245,22 +245,22 @@ test('a code held by an open order: honest message for buyers, /promo list and i
   assert.equal(a.ticket.order.promo, 'FIRST1');
   const b = await order(guild, member(guild), product, { promo: 'FIRST1' });
   assert.match(textOf(lastResponse(b.i)), HELD);
-  assert.doesNotMatch(textOf(lastResponse(b.i)), /used up/);
+  assert.doesNotMatch(textOf(lastResponse(b.i)), /wykorzystany/);
 
   const list = await run({ guild, member: seller, kind: 'command', commandName: 'promo', subcommand: 'list' });
   validateMessage(lastResponse(list), guild);
-  assert.match(textOf(lastResponse(list)), /`FIRST1` · \*\*10% off\*\* · 0\/1 uses · 1 held by an open order · no expiry/);
+  assert.match(textOf(lastResponse(list)), /`FIRST1` · \*\*10% rabatu\*\* · 0\/1 użyć · 1 zarezerwowane przez otwarte zamówienie · bezterminowy/);
   const info = await run({ guild, member: seller, kind: 'command', commandName: 'promo', subcommand: 'info', options: { code: 'FIRST1' } });
   validateMessage(lastResponse(info), guild);
   const details = textOf(lastResponse(info));
-  assert.match(details, /Uses 0\/1 uses · 1 held by an open order/);
-  assert.match(details, /all remaining uses are held by open orders/);
-  assert.match(details, new RegExp(`Held by open orders \\(1\\)[\\s\\S]*<#${a.channel.id}> · <@${a.ticket.ownerId}>`));
+  assert.match(details, /Użycia 0\/1 użyć · 1 zarezerwowane przez otwarte zamówienie/);
+  assert.match(details, /wszystkie pozostałe użycia są zarezerwowane przez otwarte zamówienia/);
+  assert.match(details, new RegExp(`Zarezerwowany przez otwarte zamówienia \\(1\\)[\\s\\S]*<#${a.channel.id}> · <@${a.ticket.ownerId}>`));
 
   // Used up for real: the plain "used up" message, nothing held any more
   await complete(guild, seller, a.channel, 9);
   const c = await order(guild, member(guild), product, { promo: 'FIRST1' });
-  assert.match(answer(c.ticket, 'Price'), /not applied: This code has been used up\./);
+  assert.match(answer(c.ticket, 'Cena'), /nie zastosowano: Ten kod został już wykorzystany\./);
   const after = await run({ guild, member: seller, kind: 'command', commandName: 'promo', subcommand: 'list' });
-  assert.match(textOf(lastResponse(after)), /`FIRST1` · \*\*10% off\*\* · 1\/1 uses · no expiry/);
+  assert.match(textOf(lastResponse(after)), /`FIRST1` · \*\*10% rabatu\*\* · 1\/1 użyć · bezterminowy/);
 });

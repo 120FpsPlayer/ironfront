@@ -175,7 +175,9 @@ function methodName(sale) {
   const exact = names.find((name) => name.toLowerCase() === raw);
   if (exact) return exact;
   const inside = names.filter((name) => raw.includes(name.toLowerCase())).sort((a, b) => b.length - a.length);
-  return inside[0] ?? 'Inna';
+  // Sales recorded before the translation say "Crypto" – the method's type still recognises them.
+  const byType = config.shop.paymentMethods.find((m) => m.name && m.type && raw.includes(String(m.type).toLowerCase()))?.name;
+  return inside[0] ?? byType ?? 'Inna';
 }
 
 /** Groups sales: [{ key, name, orders, known, revenue }] – highest revenue first, then most orders. */

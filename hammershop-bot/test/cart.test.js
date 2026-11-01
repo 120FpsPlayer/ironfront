@@ -113,7 +113,7 @@ test('Add to cart on the cards and in the cart: options, quantities and flash sa
     const cardRow = actionRows(panel).find((r) => r.components.some((b) => b.custom_id === `shop:buy:${p.id}`));
     assert.deepEqual(cardRow.components.map((b) => b.custom_id), [`shop:buy:${p.id}`, `cart:add:${p.id}`]);
   }
-  assert.ok(navLabels(panel).includes('Cart'));
+  assert.ok(navLabels(panel).includes('Koszyk'));
 
   // The button opens the option + quantity form.
   const click = await run({ guild, member: buyer, kind: 'button', customId: `cart:add:${netflix.id}` });
@@ -123,25 +123,25 @@ test('Add to cart on the cards and in the cart: options, quantities and flash sa
 
   const first = await add(guild, buyer, netflix, { variant: threeMonths });
   assert.equal(first.state.deferredAs, 'reply', 'from the shop: the cart answers in a new private message');
-  assert.match(textOf(lastResponse(first)), /Added \*\*Netflix Premium — 3 months\*\* × 1 to your cart/);
+  assert.match(textOf(lastResponse(first)), /Dodano \*\*Netflix Premium — 3 months\*\* × 1 do koszyka/);
   await add(guild, buyer, nitro, { quantity: '2' });
   const again = await add(guild, buyer, netflix, { variant: threeMonths, from: 'c' });
   assert.equal(again.state.deferredAs, 'update', 'inside the cart: updated in place');
   const view = lastResponse(again);
   validateMessage(view, guild);
   const said = textOf(view);
-  assert.match(said, /\*\*Netflix Premium — 3 months\*\* × 2 · 12€ each · \*\*24€\*\*/);
-  assert.match(said, /\*\*Nitro Boost\*\* × 2 · ~~10€~~ 8€ each · \*\*16€\*\* ⚡ −20%/);
-  assert.match(said, /Total: 40€/);
+  assert.match(said, /\*\*Netflix Premium — 3 months\*\* × 2 · 12€ za sztukę · \*\*24€\*\*/);
+  assert.match(said, /\*\*Nitro Boost\*\* × 2 · ~~10€~~ 8€ za sztukę · \*\*16€\*\* ⚡ −20%/);
+  assert.match(said, /Razem: 40€/);
   assert.deepEqual(db.guild(guild.id).carts[buyer.id].items.map((i) => [i.productId, i.variantId, i.quantity]), [
     [netflix.id, threeMonths.id, 2],
     [nitro.id, null, 2],
   ]);
 
   // Private shop pages show how many things are in the cart.
-  assert.deepEqual(navLabels(shop.shopView(guild, { userId: buyer.id })).slice(-2), ['Cart (4)', 'My orders']);
+  assert.deepEqual(navLabels(shop.shopView(guild, { userId: buyer.id })).slice(-2), ['Koszyk (4)', 'Moje zamówienia']);
   const opened = await run({ guild, member: buyer, kind: 'button', customId: 'cart:open' });
-  assert.match(textOf(lastResponse(opened)), /4 items · only you can see this/);
+  assert.match(textOf(lastResponse(opened)), /4 sztuki · widzisz to tylko Ty/);
   assert.ok(customIds(lastResponse(opened)).includes('cart:checkout'));
 
   // "➕ Add a product…" in the cart opens the same form, marked as coming from the cart.
@@ -161,29 +161,29 @@ test('Cart limits: max items, counted stock, sold-out and deleted products – r
     await add(guild, buyer, netflix, { variant: threeMonths });
     await add(guild, buyer, nitro);
     const full = await add(guild, buyer, keys);
-    assert.match(textOf(lastResponse(full)), /Your cart is full – it holds up to \*\*2\*\* different products/);
+    assert.match(textOf(lastResponse(full)), /Twój koszyk jest pełny – mieści maksymalnie 2 różne produkty/);
     const more = await add(guild, buyer, nitro, { quantity: '3' });
-    assert.match(textOf(lastResponse(more)), /Nitro Boost\*\* × 3 to your cart/, 'more of a product already in the cart is fine');
+    assert.match(textOf(lastResponse(more)), /Nitro Boost\*\* × 3 do koszyka/, 'more of a product already in the cart is fine');
   } finally {
     config.cart.maxItems = before;
   }
 
   await add(guild, buyer, keys, { quantity: '2' });
   const over = await add(guild, buyer, keys, { quantity: '2' });
-  assert.match(textOf(lastResponse(over)), /Only \*\*3\*\* of \*\*Steam Key\*\* left – 2 are already in your cart/);
+  assert.match(textOf(lastResponse(over)), /Zostało tylko \*\*3\*\* szt\. \*\*Steam Key\*\* – 2 szt\. masz już w koszyku/);
   const bad = await add(guild, buyer, keys, { quantity: '0' });
-  assert.match(textOf(lastResponse(bad)), /whole number from \*\*1\*\* to \*\*999\*\*/);
+  assert.match(textOf(lastResponse(bad)), /liczbą całkowitą od \*\*1\*\* do \*\*999\*\*/);
 
   // Sold out meanwhile → dropped with a note; deleted → the same.
   await shop.setStock(guild, nitro.id, 'out');
   shop.removeProduct(guild, netflix.id);
   const view = lastResponse(await run({ guild, member: buyer, kind: 'button', customId: 'cart:open' }));
   const said = textOf(view);
-  assert.match(said, /Removed from your cart: Netflix Premium — 3 months \(no longer in the shop\), Nitro Boost \(sold out\)/);
+  assert.match(said, /Usunięto z koszyka: Netflix Premium — 3 months \(nie ma go już w sklepie\), Nitro Boost \(wyprzedany\)/);
   assert.doesNotMatch(said, /\*\*Nitro Boost\*\* ×/);
   assert.deepEqual(db.guild(guild.id).carts[buyer.id].items.map((i) => i.productId), [keys.id]);
   const soldOut = await add(guild, buyer, shop.findProduct(guild.id, nitro.id));
-  assert.match(textOf(lastResponse(soldOut)), /sold out right now/);
+  assert.match(textOf(lastResponse(soldOut)), /jest teraz wyprzedany/);
   const pickOut = await run({ guild, member: buyer, kind: 'button', customId: `cart:add:${nitro.id}` });
   assert.equal(pickOut.state.modals.length, 0);
 
@@ -191,15 +191,15 @@ test('Cart limits: max items, counted stock, sold-out and deleted products – r
   await shop.setStock(guild, keys.id, null, { count: 1 });
   const blocked = await run({ guild, member: buyer, kind: 'button', customId: 'cart:checkout', message: privateMsg });
   assert.equal(blocked.state.modals.length, 0);
-  assert.match(textOf(lastResponse(blocked)), /\*\*Steam Key\*\* – only 1 left/);
+  assert.match(textOf(lastResponse(blocked)), /\*\*Steam Key\*\* – zostało tylko 1/);
 
   // Remove an item, then clear.
   const removed = await run({ guild, member: buyer, kind: 'select', customId: 'cart:remove', values: [`${keys.id}:`], message: privateMsg });
   assert.equal(removed.state.deferredAs, 'update');
-  assert.match(textOf(lastResponse(removed)), /Your cart is empty/);
+  assert.match(textOf(lastResponse(removed)), /Twój koszyk jest pusty/);
   await add(guild, buyer, keys);
   const cleared = await run({ guild, member: buyer, kind: 'button', customId: 'cart:clear', message: privateMsg });
-  assert.match(textOf(lastResponse(cleared)), /Your cart is empty now/);
+  assert.match(textOf(lastResponse(cleared)), /Twój koszyk jest teraz pusty/);
   assert.equal(db.guild(guild.id).carts[buyer.id], undefined);
   assert.equal(cart.count(guild.id, buyer.id), 0);
 });
@@ -220,7 +220,7 @@ test('A huge cart stays within Discord limits (25 long items, 30 products); cart
     assert.equal(cart.maxItems(), 25);
     for (const p of list.slice(0, 25)) await add(guild, buyer, p, { variant: p.variants[0], quantity: '999' });
     const full = await add(guild, buyer, list[25], { variant: list[25].variants[0] });
-    assert.match(textOf(lastResponse(full)), /Your cart is full/);
+    assert.match(textOf(lastResponse(full)), /Twój koszyk jest pełny/);
     const view = cart.cartView(guild, buyer.id, { note: `✅ ${'n'.repeat(500)}` });
     const { total, textLength } = validateMessage(view, guild);
     assert.ok(total <= 40 && textLength <= 4000, `${total} components, ${textLength} characters`);
@@ -253,11 +253,11 @@ test('Checkout: one order ticket with every item, sale prices and the promo code
   assert.equal(form.custom_id, 'cart:submit:2800', 'the form remembers the total it shows');
   assert.ok(form.components.length <= 5);
   assert.deepEqual(form.components.filter((c) => c.type === 18).map((c) => c.component.custom_id), ['payment', 'promo', 'notes']);
-  assert.match(form.components[0].content, /3 items\*\* · Total \*\*28€\*\*\n• Netflix Premium — 3 months × 1 · 12€\n• Nitro Boost × 2 · 16€/);
+  assert.match(form.components[0].content, /3 sztuki\*\* · Razem \*\*28€\*\*\n• Netflix Premium — 3 months × 1 · 12€\n• Nitro Boost × 2 · 16€/);
 
   assert.equal(i.state.deferredAs, 'update', 'the order replaces the cart message');
   const placed = textOf(lastResponse(i));
-  assert.match(placed, /Order started – 3 items[\s\S]*Total to pay: \*\*25\.20€\*\* \(⚡ flash sale prices · you save 2\.80€ with \*\*CART10\*\*\)/);
+  assert.match(placed, /Zamówienie rozpoczęte – 3 sztuki[\s\S]*Do zapłaty: \*\*25\.20€\*\* \(⚡ ceny z promocji błyskawicznej · oszczędzasz 2\.80€ z kodem \*\*CART10\*\*\)/);
   assert.ok(lastResponse(i).components.length > 0);
 
   const order = ticket.order;
@@ -278,10 +278,10 @@ test('Checkout: one order ticket with every item, sale prices and the promo code
   // The ticket shows every item; the payment card is for the whole cart.
   const channel = guild.channels.cache.get(ticket.channelId);
   const all = texts(channel);
-  assert.match(all, /\*\*Products\*\*\n> Netflix Premium — 3 months × 1 — 12€\n> Nitro Boost × 2 — 16€ \(⚡ −20%\)/);
-  assert.match(all, /Discount \(CART10 · 10% off\): −2\.80€[\s\S]*Total to pay: 25\.20€/);
-  assert.match(all, /Pay 25\.20€ – PaysafeCard\n-# Order `#\d+` · Netflix Premium — 3 months × 1, Nitro Boost × 2\n/);
-  assert.match(all, /Notes\*\*\n> Fast please/);
+  assert.match(all, /\*\*Produkty\*\*\n> Netflix Premium — 3 months × 1 — 12€\n> Nitro Boost × 2 — 16€ \(⚡ −20%\)/);
+  assert.match(all, /Rabat \(CART10 · 10% rabatu\): −2\.80€[\s\S]*Do zapłaty: 25\.20€/);
+  assert.match(all, /Zapłać 25\.20€ – PaysafeCard\n-# Zamówienie `#\d+` · Netflix Premium — 3 months × 1, Nitro Boost × 2\n/);
+  assert.match(all, /Uwagi\*\*\n> Fast please/);
 });
 
 test('Checkout is refused when the prices changed while the form was open, or the cart is empty', async () => {
@@ -293,12 +293,12 @@ test('Checkout is refused when the prices changed while the form was open, or th
   assert.equal(open.state.modals[0].custom_id, 'cart:submit:800');
   flash.stopSale(guild, nitro.id);
   const late = await run({ guild, member: buyer, kind: 'modal', customId: 'cart:submit:800', fields: {}, selects: { payment: [METHOD('crypto')] }, message: privateMsg });
-  assert.match(textOf(lastResponse(late)), /prices in your cart changed while the form was open/);
+  assert.match(textOf(lastResponse(late)), /Ceny w Twoim koszyku zmieniły się, gdy formularz był otwarty/);
   assert.equal(db.tickets((x) => x.ownerId === buyer.id).length, 0);
 
   const empty = member(guild);
   const none = await run({ guild, member: empty, kind: 'button', customId: 'cart:checkout', message: privateMsg });
-  assert.match(textOf(lastResponse(none)), /Your cart is empty – add something first/);
+  assert.match(textOf(lastResponse(none)), /Twój koszyk jest pusty – najpierw coś dodaj/);
 });
 
 // ───────────── Delivery, stock, badges, sales ─────────────
@@ -336,12 +336,12 @@ test('Stripe pays a cart: every item is delivered (ticket + DM), the stock of ea
   try {
     const { ticket } = await checkout(guild, buyer, { payment: METHOD('stripe') });
     const channel = guild.channels.cache.get(ticket.channelId);
-    assert.match(texts(channel), /Instant delivery:\*\* your product arrives right here/);
+    assert.match(texts(channel), /Dostawa natychmiastowa:\*\* produkt trafi tutaj/);
     await stripe.checkPayments(guild.client);
     const all = texts(channel);
-    assert.match(all, /📦 The product is delivered automatically/);
-    assert.match(all, /Your product – Netflix Premium × 1[\s\S]*NETFLIX-LOGIN-123/);
-    assert.match(all, /Your product – Nitro Boost × 3[\s\S]*NITRO-GIFT-456/);
+    assert.match(all, /📦 Produkt zostanie dostarczony automatycznie/);
+    assert.match(all, /Twój produkt – Netflix Premium × 1[\s\S]*NETFLIX-LOGIN-123/);
+    assert.match(all, /Twój produkt – Nitro Boost × 3[\s\S]*NITRO-GIFT-456/);
     const dms = guild.dms.filter((d) => d.to === buyer.id).map((d) => textOf(d.payload)).join('\n---\n');
     assert.match(dms, /NETFLIX-LOGIN-123/);
     assert.match(dms, /NITRO-GIFT-456/);
@@ -359,9 +359,9 @@ test('Stripe pays a cart: every item is delivered (ticket + DM), the stock of ea
     assert.equal(shop.findProduct(guild.id, nitro.id).stockCount, 2);
 
     // Receipt and #proofs list the items.
-    assert.match(dms, /\*\*Products:\*\*\n> .* Netflix Premium × 1 · 12€ each\n> .* Nitro Boost × 3 · 10€ each/);
+    assert.match(dms, /\*\*Produkty:\*\*\n> .* Netflix Premium × 1 · 12€ \/ szt\.\n> .* Nitro Boost × 3 · 10€ \/ szt\./);
     const proofs = guild.channels.cache.get(db.channelId(guild.id, 'proofs'));
-    assert.match(textOf(proofs.messageList.at(-1).body), /delivered\n.* \*\*Netflix Premium\*\* × 1\n.* \*\*Nitro Boost\*\* × 3/);
+    assert.match(textOf(proofs.messageList.at(-1).body), /dostarczone\n.* \*\*Netflix Premium\*\* × 1\n.* \*\*Nitro Boost\*\* × 3/);
 
     // 🔥 Bestseller counts units of every item; the sales report has a row per product with its share.
     assert.equal(badges.bestseller(guild.id), nitro.id);
@@ -395,10 +395,10 @@ test('A cart with a product delivered by hand: staff send what has files or text
 
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { note: 'tx 0xabc' }, channel });
   const card = channel.messageList.at(-1);
-  assert.ok(textOf(card.body).includes('Payment OK – deliver'));
+  assert.ok(textOf(card.body).includes('Płatność OK – dostarcz'));
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), /Delivered \*\*1 product\*\* in the ticket and by DM\. ⚠️ Deliver by hand: Custom Logo × 1 – then ⚙️ → \*\*Order completed\*\*/);
-  assert.match(texts(channel), /Your product – Game Key × 1[\s\S]*KEY-AAAA-BBBB/);
+  assert.match(textOf(lastResponse(ok)), /Dostarczono \*\*1 produkt\*\* w tickecie i w DM\. ⚠️ Dostarcz ręcznie: Custom Logo × 1 – a potem ⚙️ → \*\*Zamówienie zrealizowane\*\*/);
+  assert.match(texts(channel), /Twój produkt – Game Key × 1[\s\S]*KEY-AAAA-BBBB/);
   assert.equal(db.getTicket(ticket.channelId).completedAt ?? null, null, 'completed by hand later');
   assert.equal(statusOf(db.getTicket(ticket.channelId)), 'paid');
 });
@@ -433,7 +433,7 @@ test('The shop keeps every image with 🛒 Cart: 5 tabs, pages and 5 products wi
     const off = shop.shopView(guild, { page: 2 });
     assert.ok(!customIds(off).some((id) => id.startsWith('cart:')));
     const click = await run({ guild, member: buyer, kind: 'button', customId: 'cart:open' });
-    assert.match(textOf(lastResponse(click)), /The cart is turned off/);
+    assert.match(textOf(lastResponse(click)), /Koszyk jest wyłączony/);
   } finally {
     config.cart.enabled = true;
   }
@@ -448,5 +448,5 @@ test('Single-product orders stay as they were: no items, the product and quantit
   assert.equal(ticket.order.items, undefined);
   assert.equal(ticket.order.productId, product.id);
   assert.equal(shop.ticketProduct(guild.id, ticket).id, product.id);
-  assert.match(texts(guild.channels.cache.get(ticket.channelId)), /Order `#\d+` · Spotify Premium × 2/);
+  assert.match(texts(guild.channels.cache.get(ticket.channelId)), /Zamówienie `#\d+` · Spotify Premium × 2/);
 });

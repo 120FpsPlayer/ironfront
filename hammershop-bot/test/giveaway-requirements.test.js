@@ -68,7 +68,7 @@ test('/giveaway start buyers_only + min_invites: stored on the giveaway and list
   const { guild, mod } = await builtGuild();
   const vip = role(guild, 'customer');
   const start = await startCommand(guild, mod, { buyers_only: true, min_invites: 3, required_role: { id: vip } });
-  assert.match(textOf(lastResponse(start)), /started/);
+  assert.match(textOf(lastResponse(start)), /wystartował/);
   const gw = Object.values(db.guild(guild.id).giveaways)[0];
   assert.equal(gw.buyersOnly, true);
   assert.equal(gw.minInvites, 3);
@@ -76,28 +76,28 @@ test('/giveaway start buyers_only + min_invites: stored on the giveaway and list
   const card = ch(guild, 'giveaways').messageList.at(-1).body;
   validateMessage(card, guild);
   const body = textOf(card);
-  assert.match(body, /\*\*Required role:\*\* <@&\d+>\n(?:🛒|<:hs_cart:\d+>) Only customers can enter\n📨 Invited at least \*\*3\*\* members/);
-  assert.match(body, /when the timer ends – the requirements are checked again then\./);
+  assert.match(body, /\*\*Wymagana rola:\*\* <@&\d+>\n(?:🛒|<:hs_cart:\d+>) Tylko dla klientów\n📨 Trzeba zaprosić co najmniej \*\*3\*\* osoby/);
+  assert.match(body, /gdy skończy się czas – wtedy wymagania są sprawdzane ponownie\./);
 
   // One invite → "member"; no options → no requirement lines.
   const one = await giveaways.start(guild, mod, { prize: 'Key', durationMs: 3_600_000, winners: 1, minInvites: 1 });
-  assert.match(textOf(giveaways.card(guild, one.gw)), /Invited at least \*\*1\*\* member$/m);
+  assert.match(textOf(giveaways.card(guild, one.gw)), /Trzeba zaprosić co najmniej \*\*1\*\* osobę$/m);
   const plain = await giveaways.start(guild, mod, { prize: 'Plain', durationMs: 3_600_000, winners: 1 });
   assert.equal(plain.gw.buyersOnly, false);
   assert.equal(plain.gw.minInvites, null);
-  assert.doesNotMatch(textOf(giveaways.card(guild, plain.gw)), /Only customers|Invited at least|checked again/);
+  assert.doesNotMatch(textOf(giveaways.card(guild, plain.gw)), /Tylko dla klientów|Trzeba zaprosić|sprawdzane ponownie/);
 });
 
 test('/giveaway start min_invites is refused while invite tracking is off – buyers_only still works', async () => {
   const { guild, mod } = await builtGuild();
   await withInvites(false, async () => {
     const refused = await startCommand(guild, mod, { min_invites: 5 });
-    assert.match(textOf(lastResponse(refused)), /Invite tracking is turned off/);
+    assert.match(textOf(lastResponse(refused)), /Śledzenie zaproszeń jest wyłączone/);
     assert.equal(Object.keys(db.guild(guild.id).giveaways).length, 0, 'no giveaway was started');
-    await assert.rejects(giveaways.start(guild, mod, { prize: 'Key', durationMs: 3_600_000, winners: 1, minInvites: 2 }), /Invite tracking is turned off/);
+    await assert.rejects(giveaways.start(guild, mod, { prize: 'Key', durationMs: 3_600_000, winners: 1, minInvites: 2 }), /Śledzenie zaproszeń jest wyłączone/);
 
     const buyers = await startCommand(guild, mod, { buyers_only: true });
-    assert.match(textOf(lastResponse(buyers)), /started/);
+    assert.match(textOf(lastResponse(buyers)), /wystartował/);
     assert.equal(Object.values(db.guild(guild.id).giveaways)[0].buyersOnly, true);
   });
 });
@@ -112,15 +112,15 @@ test('buyers_only: members without a completed order are refused with a link to 
   const visitor = member(guild);
   const refused = lastResponse(await enter(guild, visitor, gw));
   assert.equal(refused.flags & 64, 64, 'ephemeral');
-  assert.match(textOf(refused), new RegExp(`Only customers can enter this giveaway[\\s\\S]*<#${shopId}>`));
+  assert.match(textOf(refused), new RegExp(`Ten giveaway jest tylko dla klientów[\\s\\S]*<#${shopId}>`));
   assert.ok(json(refused).includes(`https://discord.com/channels/${guild.id}/${shopId}`), 'Shop link button');
   assert.deepEqual(gw.entries, []);
 
   const buyer = member(guild);
   db.guild(guild.id).orders[buyer.id] = 1;
-  assert.match(textOf(lastResponse(await enter(guild, buyer, gw))), /You're in!/);
+  assert.match(textOf(lastResponse(await enter(guild, buyer, gw))), /Bierzesz udział!/);
   const customer = member(guild, ['member', 'customer']); // e.g. the role given by hand
-  assert.match(textOf(lastResponse(await enter(guild, customer, gw))), /You're in!/);
+  assert.match(textOf(lastResponse(await enter(guild, customer, gw))), /Bierzesz udział!/);
   assert.deepEqual(gw.entries, [buyer.id, customer.id]);
 });
 
@@ -132,20 +132,20 @@ test('min_invites: only valid invites count (verified and still here); leaving t
   invited(guild, inviter, 2, { verified: false }); // pending – not verified yet
 
   const short = lastResponse(await enter(guild, inviter, gw));
-  assert.match(textOf(short), /at least \*\*3\*\* valid invites to enter this giveaway – you have \*\*2\*\*/);
-  assert.match(textOf(short), /\/invites stats/);
+  assert.match(textOf(short), /Żeby dołączyć do tego giveawayu, potrzebujesz co najmniej \*\*3\*\* ważnych zaproszeń – masz \*\*2\*\*/);
+  assert.match(textOf(short), /\/zaproszenia statystyki/);
   assert.deepEqual(gw.entries, []);
 
   invited(guild, inviter, 1);
-  assert.match(textOf(lastResponse(await enter(guild, inviter, gw))), /You're in!/);
+  assert.match(textOf(lastResponse(await enter(guild, inviter, gw))), /Bierzesz udział!/);
   assert.deepEqual(gw.entries, [inviter.id]);
 
   // An invited friend leaves: below the minimum now – but leaving the giveaway still works.
   await leave(guild, friends[0]);
   assert.equal(invites.counts(guild.id, inviter.id).valid, 2);
-  assert.match(textOf(lastResponse(await enter(guild, inviter, gw))), /You left the giveaway/);
+  assert.match(textOf(lastResponse(await enter(guild, inviter, gw))), /Wypisano Cię z giveawayu/);
   assert.deepEqual(gw.entries, []);
-  assert.match(textOf(lastResponse(await enter(guild, inviter, gw))), /you have \*\*2\*\*/);
+  assert.match(textOf(lastResponse(await enter(guild, inviter, gw))), /masz \*\*2\*\*/);
 });
 
 test('the required role is checked together with the new requirements – the role first', async () => {
@@ -153,13 +153,13 @@ test('the required role is checked together with the new requirements – the ro
   const vip = role(guild, 'loyal');
   const { gw } = await giveaways.start(guild, mod, { prize: 'Nitro', durationMs: 3_600_000, winners: 1, requiredRole: { id: vip }, buyersOnly: true, minInvites: 1 });
   const who = member(guild);
-  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You need the <@&\d+> role/);
+  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /potrzebujesz roli <@&\d+>/);
   await who.roles.add(vip);
-  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /Only customers/);
+  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /tylko dla klientów/);
   db.guild(guild.id).orders[who.id] = 2;
-  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /valid invite to enter/);
+  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /co najmniej \*\*1\*\* ważnego zaproszenia/);
   invited(guild, who, 1);
-  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You're in!/);
+  assert.match(textOf(lastResponse(await enter(guild, who, gw))), /Bierzesz udział!/);
 });
 
 // ───────────── Draw ─────────────
@@ -170,13 +170,13 @@ test('the draw (and a reroll) skips entrants whose invites dropped below min_inv
   const [alice, bob] = [member(guild), member(guild)];
   invited(guild, alice, 2);
   const bobFriends = invited(guild, bob, 2);
-  for (const who of [alice, bob]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You're in!/);
+  for (const who of [alice, bob]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /Bierzesz udział!/);
 
   await leave(guild, bobFriends[1]);
   const winners = await giveaways.end(guild, gw);
   assert.deepEqual(winners, [alice.id], 'bob has 1 invite left – skipped, his place stays empty');
   assert.deepEqual(gw.winners, [alice.id]);
-  assert.match(textOf(ch(guild, 'giveaways').messageList.at(-1).body), new RegExp(`<@${alice.id}> won`));
+  assert.match(textOf(ch(guild, 'giveaways').messageList.at(-1).body), new RegExp(`<@${alice.id}> wygrywa`));
 
   // Reroll: still nobody else qualifies – until bob is back at 2 valid invites.
   assert.deepEqual(await giveaways.end(guild, gw, { reroll: true, count: 1 }), []);
@@ -190,7 +190,7 @@ test('the draw (and a reroll) skips entrants who lost the required role since th
   const vip = role(guild, 'loyal');
   const { gw } = await giveaways.start(guild, mod, { prize: 'Nitro', durationMs: 3_600_000, winners: 2, requiredRole: { id: vip } });
   const [alice, bob] = [member(guild, ['member', 'loyal']), member(guild, ['member', 'loyal'])];
-  for (const who of [alice, bob]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You're in!/);
+  for (const who of [alice, bob]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /Bierzesz udział!/);
 
   await bob.roles.remove(vip);
   assert.deepEqual(await giveaways.end(guild, gw), [alice.id], 'bob lost the role – skipped, his place stays empty');
@@ -206,7 +206,7 @@ test('buyers_only at the draw: a completed order always counts, the Customer rol
   const byRole = member(guild, ['member', 'customer']); // the role given by hand – no order
   const buyer = member(guild);
   db.guild(guild.id).orders[buyer.id] = 1;
-  for (const who of [byRole, buyer]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /You're in!/);
+  for (const who of [byRole, buyer]) assert.match(textOf(lastResponse(await enter(guild, who, gw))), /Bierzesz udział!/);
 
   await byRole.roles.remove(customerRole);
   await buyer.roles.remove(customerRole); // had no role – the order still counts
@@ -222,10 +222,10 @@ test('giveaways saved before the requirements existed: no requirement lines, any
   delete gw.minInvites;
   const card = giveaways.card(guild, gw);
   validateMessage(card, guild);
-  assert.doesNotMatch(textOf(card), /Only customers|Invited at least/);
+  assert.doesNotMatch(textOf(card), /Tylko dla klientów|Trzeba zaprosić/);
 
   const nobody = member(guild); // no orders, no invites
-  assert.match(textOf(lastResponse(await enter(guild, nobody, gw))), /You're in!/);
+  assert.match(textOf(lastResponse(await enter(guild, nobody, gw))), /Bierzesz udział!/);
   assert.deepEqual(await giveaways.end(guild, gw), [nobody.id]);
 });
 
