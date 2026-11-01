@@ -16,7 +16,8 @@ const hooks = require('../lib/hooks');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, COLORS } = require('../lib/theme');
-const { money, truncate, sendToChannel, ts } = require('../lib/utils');
+const { money, truncate, sendToChannel, ts, plural, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { container, text, divider, header, v2 } = require('../lib/v2');
 const { isCart } = require('../lib/orderItems');
 
@@ -25,13 +26,14 @@ const REPORT_CHECK = 10 * 60_000;
 const REPORT_GRACE = DAY; // a report missed by more than a day (bot offline) is skipped – the next one comes a week later
 const TOP = 5;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+// After "co" (every): co poniedziałek, co środę…
+const WEEKDAY_NAMES = ['niedzielę', 'poniedziałek', 'wtorek', 'środę', 'czwartek', 'piątek', 'sobotę'];
 
 const PERIODS = {
-  today: { label: 'Today', days: 1, before: 'yesterday up to this time' },
-  '7d': { label: 'Last 7 days', days: 7, before: 'the 7 days before' },
-  '30d': { label: 'Last 30 days', days: 30, before: 'the 30 days before' },
-  all: { label: 'All time', days: 0 },
+  today: { label: 'Dziś', days: 1, before: 'wczoraj do tej godziny' },
+  '7d': { label: 'Ostatnie 7 dni', days: 7, before: 'poprzednie 7 dni' },
+  '30d': { label: 'Ostatnie 30 dni', days: 30, before: 'poprzednie 30 dni' },
+  all: { label: 'Od początku', days: 0 },
 };
 
 // ───────────── Time zone maths ─────────────
@@ -109,15 +111,15 @@ function dateKey(ms, tz = timezone()) {
   return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 
-/** "3 Oct 2026" / "3 Oct" in the shop's time zone (Discord timestamps would use the reader's own time zone). */
+/** "3 paź 2026" / "3 paź" in the shop's time zone (Discord timestamps would use the reader's own time zone). */
 function dateText(ms, tz, year = true) {
   const p = localParts(ms, tz);
   return `${p.day} ${MONTHS[p.month - 1]}${year ? ` ${p.year}` : ''}`;
 }
 
-/** "27 Sep – 3 Oct 2026" for [from, to). */
+/** "27 wrz – 3 paź 2026" for [from, to). */
 function rangeText(from, to, tz) {
   const first = dateText(from, tz);
   const last = dateText(to - 1, tz);
@@ -151,7 +153,7 @@ function periodRange(period, now = Date.now(), tz = timezone()) {
 /** The weekly report: the 7 full days before the day of `at`, compared with the 7 days before those. */
 function weekRange(at, tz = timezone()) {
   const from = dayStart(at, tz, -7);
-  return { key: 'week', label: 'Last week', before: 'the week before', from, to: dayStart(at, tz), prev: { from: dayStart(at, tz, -14), to: from }, tz };
+  return { key: 'week', label: 'Ostatni tydzień', before: 'poprzedni tydzień', from, to: dayStart(at, tz), prev: { from: dayStart(at, tz, -14), to: from }, tz };
 }
 
 // ───────────── Numbers ─────────────
@@ -165,15 +167,15 @@ const completedAt = (s) => s.completedAt ?? s.createdAt ?? 0;
  * An exact name wins, then the longest name inside the answer – so "PaysafeCard" is never counted as "Card".
  */
 function methodName(sale) {
-  if (sale.paidWith === 'balance') return 'Store balance'; // features/balance.js
-  if (sale.paidWith === 'website') return 'Website'; // features/website.js
+  if (sale.paidWith === 'balance') return 'Saldo sklepu'; // features/balance.js
+  if (sale.paidWith === 'website') return 'Strona internetowa'; // features/website.js
   const raw = String(sale.method ?? '').trim().toLowerCase();
-  if (!raw) return 'Not given';
+  if (!raw) return 'Nie podano';
   const names = config.shop.paymentMethods.map((m) => String(m.name ?? '')).filter(Boolean);
   const exact = names.find((name) => name.toLowerCase() === raw);
   if (exact) return exact;
   const inside = names.filter((name) => raw.includes(name.toLowerCase())).sort((a, b) => b.length - a.length);
-  return inside[0] ?? 'Other';
+  return inside[0] ?? 'Inna';
 }
 
 /** Groups sales: [{ key, name, orders, known, revenue }] – highest revenue first, then most orders. */
@@ -237,7 +239,7 @@ function summarize(guildId, { from, to }) {
   // One row per product – and per option bought ("Netflix — 3 months"), under the product's current name.
   const productName = (s) => {
     const name = catalog.find((p) => p.id === s.productId)?.name;
-    if (!name) return String(s.product ?? '').trim() || 'Custom order';
+    if (!name) return String(s.product ?? '').trim() || 'Zamówienie indywidualne';
     return s.variant ? `${name} — ${s.variant}` : name;
   };
   const productKey = (s) => (s.productId == null ? `name:${productName(s).toLowerCase()}` : `${s.productId}${s.variant ? `:${String(s.variant).toLowerCase()}` : ''}`);
@@ -264,10 +266,10 @@ function change(cur, prev) {
   return Math.round(((cur - prev) / prev) * 100);
 }
 
-/** "📈 +25%", "📉 −10%", "➖ ±0%" or "📈 up" (from nothing in the period before). */
+/** "📈 +25%", "📉 −10%", "➖ ±0%" or "📈 wzrost" (from nothing in the period before). */
 function changeText(cur, prev) {
   const pct = change(cur, prev);
-  if (pct === null) return cur > 0 ? '📈 up' : '➖ ±0%';
+  if (pct === null) return cur > 0 ? '📈 wzrost' : '➖ ±0%';
   if (pct > 0) return `📈 +${pct}%`;
   if (pct < 0) return `📉 −${Math.abs(pct)}%`;
   return '➖ ±0%';
@@ -277,16 +279,16 @@ function changeText(cur, prev) {
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const place = (i) => MEDALS[i] ?? `**${i + 1}.**`;
-const plural = (n, word) => `${n} ${n === 1 ? word : `${word}s`}`;
-const worth = (x) => (x.known ? money(x.revenue) : 'amount unknown');
+const orders = (n) => count(n, 'zamówienie', 'zamówienia', 'zamówień');
+const worth = (x) => (x.known ? money(x.revenue) : 'kwota nieznana');
 
 function overview(guild, cur, prev, range) {
-  const lines = [`### ${e(guild, 'wallet')} Revenue: ${money(cur.revenue)}`];
-  if (prev) lines.push(`${changeText(cur.revenue, prev.revenue)} vs ${range.before} (${money(prev.revenue)})`);
-  lines.push(`**Orders:** ${cur.orders}${prev ? `${'  '}·${'  '}${changeText(cur.orders, prev.orders)} (${prev.orders} before)` : ''}`);
-  lines.push(`**Average order:** ${cur.average === null ? '—' : money(cur.average)}`);
-  if (cur.unknown) lines.push(`-# ⚠️ ${plural(cur.unknown, 'order')} without a known amount ${cur.unknown === 1 ? "isn't" : "aren't"} counted in revenue or the average.`);
-  if (cur.topUps?.count) lines.push(`-# 💰 ${plural(cur.topUps.count, 'balance top-up')} (${money(cur.topUps.amount)}) not counted – the orders paid with store balance are.`);
+  const lines = [`### ${e(guild, 'wallet')} Przychód: ${money(cur.revenue)}`];
+  if (prev) lines.push(`${changeText(cur.revenue, prev.revenue)} (${range.before}: ${money(prev.revenue)})`);
+  lines.push(`**Zamówienia:** ${cur.orders}${prev ? `${'  '}·${'  '}${changeText(cur.orders, prev.orders)} (wcześniej ${prev.orders})` : ''}`);
+  lines.push(`**Średnie zamówienie:** ${cur.average === null ? '—' : money(cur.average)}`);
+  if (cur.unknown) lines.push(`-# ⚠️ Pominięto w przychodzie i średniej: ${orders(cur.unknown)} bez znanej kwoty.`);
+  if (cur.topUps?.count) lines.push(`-# 💰 Pominięto ${count(cur.topUps.count, 'doładowanie salda', 'doładowania salda', 'doładowań salda')} (${money(cur.topUps.amount)}) – liczą się zamówienia opłacone saldem sklepu.`);
   return lines.join('\n');
 }
 
@@ -295,46 +297,46 @@ function topList(title, entries, line) {
 }
 
 function discountsText(guild, cur) {
-  if (!cur.discounted) return `### ${e(guild, 'gift')} Discounts\nNo promo codes or discounts used.`;
-  const codes = cur.promos.slice(0, TOP).map((p) => `\`${p.code}\`${'  '}·${'  '}${plural(p.uses, 'use')}${p.discount ? ` · −${money(p.discount)}` : ''}`);
-  return [`### ${e(guild, 'gift')} Discounts`, `**${money(cur.discount)}** given on **${plural(cur.discounted, 'order')}**`, ...codes].join('\n');
+  if (!cur.discounted) return `### ${e(guild, 'gift')} Rabaty\nNie użyto kodów rabatowych ani rabatów.`;
+  const codes = cur.promos.slice(0, TOP).map((p) => `\`${p.code}\`${'  '}·${'  '}${count(p.uses, 'użycie', 'użycia', 'użyć')}${p.discount ? ` · −${money(p.discount)}` : ''}`);
+  return [`### ${e(guild, 'gift')} Rabaty`, `**${money(cur.discount)}** rabatu w **${cur.discounted} ${plural(cur.discounted, 'zamówieniu', 'zamówieniach', 'zamówieniach')}**`, ...codes].join('\n');
 }
 
-/** "27 Sep – 3 Oct 2026 · Europe/Warsaw" (or "Since 12 Mar 2026" for all time). */
+/** "27 wrz – 3 paź 2026 · dni wg strefy Europe/Warsaw" (or "Od 12 mar 2026" for all time). */
 function rangeLine(range, cur) {
-  if (range.key === 'all') return Number.isFinite(cur.first) ? `Since ${dateText(cur.first, range.tz)} · ${range.tz}` : 'Everything recorded so far';
-  return `${rangeText(range.from, range.to, range.tz)} · days in ${range.tz}`;
+  if (range.key === 'all') return Number.isFinite(cur.first) ? `Od ${dateText(cur.first, range.tz)} · ${range.tz}` : 'Wszystko zapisane do tej pory';
+  return `${rangeText(range.from, range.to, range.tz)} · dni wg strefy ${range.tz}`;
 }
 
 /**
  * The sales card for a range (from periodRange or weekRange).
- * options: title (default "📈 Sales · <period>"), footer (small print at the bottom).
+ * options: title (default "📈 Sprzedaż · <period>"), footer (small print at the bottom).
  */
 function salesCard(guild, range, { title, footer } = {}) {
   const cur = summarize(guild.id, range);
   const prev = range.prev ? summarize(guild.id, range.prev) : null;
   const c = container(COLORS.brand);
-  header(c, `## ${title ?? `📈 Sales · ${range.label}`}\n-# ${rangeLine(range, cur)}`, guild.iconURL?.({ size: 128 }));
+  header(c, `## ${title ?? `📈 Sprzedaż · ${range.label}`}\n-# ${rangeLine(range, cur)}`, guild.iconURL?.({ size: 128 }));
   c.addSeparatorComponents(divider());
 
   if (!cur.orders) {
-    const before = prev?.orders ? `\n-# ${range.before[0].toUpperCase()}${range.before.slice(1)}: ${plural(prev.orders, 'order')} · ${money(prev.revenue)}` : '';
+    const before = prev?.orders ? `\n-# ${range.before[0].toUpperCase()}${range.before.slice(1)}: ${orders(prev.orders)} · ${money(prev.revenue)}` : '';
     c.addTextDisplayComponents(
       text(
-        `### 🌙 No sales ${range.key === 'all' ? 'yet' : 'in this period'}\n` +
-          `Sales are recorded when a seller marks a purchase ticket as **Order completed** (⚙️ ticket menu).${before}`,
+        `### 🌙 ${range.key === 'all' ? 'Jeszcze nie ma sprzedaży' : 'Brak sprzedaży w tym okresie'}\n` +
+          `Sprzedaż zapisuje się, gdy sprzedawca oznaczy ticket zakupu jako **Zamówienie zrealizowane** (menu ⚙️ ticketu).${before}`,
       ),
     );
   } else {
     c.addTextDisplayComponents(text(overview(guild, cur, prev, range)));
     c.addSeparatorComponents(divider());
-    c.addTextDisplayComponents(text(topList(`${e(guild, 'box')} Top products`, cur.products, (p) => `**${truncate(p.name, 60)}**${'  '}·${'  '}${plural(p.orders, 'order')} · ${worth(p)}`)));
-    if (cur.sellers.length) c.addTextDisplayComponents(text(topList(`${e(guild, 'person')} Sellers`, cur.sellers, (s) => `<@${s.key}>${'  '}·${'  '}${plural(s.orders, 'order')} · ${worth(s)}`)));
-    c.addTextDisplayComponents(text(topList(`${e(guild, 'card')} Payment methods`, cur.methods, (m) => `**${m.name}**${'  '}·${'  '}${plural(m.orders, 'order')} · ${worth(m)}`)));
+    c.addTextDisplayComponents(text(topList(`${e(guild, 'box')} Najlepsze produkty`, cur.products, (p) => `**${truncate(p.name, 60)}**${'  '}·${'  '}${orders(p.orders)} · ${worth(p)}`)));
+    if (cur.sellers.length) c.addTextDisplayComponents(text(topList(`${e(guild, 'person')} Sprzedawcy`, cur.sellers, (s) => `<@${s.key}>${'  '}·${'  '}${orders(s.orders)} · ${worth(s)}`)));
+    c.addTextDisplayComponents(text(topList(`${e(guild, 'card')} Metody płatności`, cur.methods, (m) => `**${m.name}**${'  '}·${'  '}${orders(m.orders)} · ${worth(m)}`)));
     c.addTextDisplayComponents(text(discountsText(guild, cur)));
   }
   c.addSeparatorComponents(divider());
-  const note = footer ?? (cur.orders ? 'Revenue = the amounts paid, as entered when the orders were completed' : 'Pick another range with the `period` option');
+  const note = footer ?? (cur.orders ? 'Przychód = zapłacone kwoty wpisane przy realizacji zamówień' : 'Wybierz inny zakres opcją `okres`');
   c.addTextDisplayComponents(text(`-# ${note} · ${ts(Date.now(), 'f')}`));
   return v2(c);
 }
@@ -346,7 +348,7 @@ function persist() {
   try {
     db.flush();
   } catch (err) {
-    console.warn('[salesReport] Failed to save data:', err.message);
+    console.warn('[salesReport] Nie udało się zapisać danych:', err.message);
     db.save();
   }
 }
@@ -373,8 +375,8 @@ function lastReportTime(now = Date.now(), tz = timezone()) {
 function weeklyCard(guild, at, tz = timezone()) {
   const { weekday, hour } = schedule();
   return salesCard(guild, weekRange(at, tz), {
-    title: '📊 Weekly sales report',
-    footer: `Sent every ${WEEKDAY_NAMES[weekday]} at ${pad2(hour)}:00 (${tz}) · /sales shows any period`,
+    title: '📊 Raport tygodniowy sprzedaży',
+    footer: `Wysyłany co ${WEEKDAY_NAMES[weekday]} o ${pad2(hour)}:00 (${tz}) · ${slash('sales')} pokazuje dowolny okres`,
   });
 }
 

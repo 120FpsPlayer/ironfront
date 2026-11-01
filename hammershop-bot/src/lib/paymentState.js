@@ -26,15 +26,15 @@ const activeMethods = (guildId) => config.shop.paymentMethods.map((m, index) => 
 /** All methods are configured but every one is off. */
 const allOff = (guildId) => config.shop.paymentMethods.length > 0 && activeMethods(guildId).length === 0;
 
-/** "⛔ temporarily unavailable (reason)" or null. */
+/** "⛔ chwilowo niedostępna – powód" or null. */
 function offNote(guildId, method) {
   const s = find(guildId, method?.name ?? method);
-  return s ? `⛔ temporarily unavailable${s.reason ? ` – ${s.reason}` : ''}` : null;
+  return s ? `⛔ chwilowo niedostępna${s.reason ? ` – ${s.reason}` : ''}` : null;
 }
 
 /** A form picked a switched-off method (an old form left open) → a clear error. */
 function assertOn(guildId, name) {
-  if (name && isOff(guildId, name)) throw new UserError(`**${name}** is temporarily unavailable – please pick another payment method.`);
+  if (name && isOff(guildId, name)) throw new UserError(`Metoda **${name}** jest chwilowo niedostępna – wybierz inną metodę płatności.`);
 }
 
 function set(guildId, name, off, { by = null, reason = null } = {}) {

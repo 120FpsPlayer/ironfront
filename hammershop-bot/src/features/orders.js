@@ -62,14 +62,14 @@ function publicMethod(sale) {
 
 /** Shop / vouches link buttons (only for channels that exist). */
 function linkButtons(guild, keys) {
-  const LINKS = { shop: ['Shop', 'cart'], vouches: ['Vouches', 'star'] };
+  const LINKS = { shop: ['Sklep', 'cart'], vouches: ['Opinie', 'star'] };
   return keys
     .map((key) => [db.channelId(guild.id, key), ...LINKS[key]])
     .filter(([id]) => id)
     .map(([id, label, icon]) => linkBtn(channelUrl(guild.id, id), label, ce(guild, icon)));
 }
 
-const vouchButton = (guild, ticketChannelId) => btn(`order:vouch:${guild.id}:${ticketChannelId}`, 'Leave a vouch', ce(guild, 'star'), ButtonStyle.Success);
+const vouchButton = (guild, ticketChannelId) => btn(`order:vouch:${guild.id}:${ticketChannelId}`, 'Wystaw opinię', ce(guild, 'star'), ButtonStyle.Success);
 
 const dm = (user, payload) => (user ? user.send(payload).then(() => true).catch(() => false) : Promise.resolve(false));
 
@@ -83,26 +83,26 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
   const c = container(COLORS.brand);
   header(
     c,
-    `## ${e(guild, 'check')} Thank you for your order!\n` +
-      `Here is your receipt from **${truncate(guild.name, 100)}**. Keep this message – it's your proof of purchase.`,
+    `## ${e(guild, 'check')} Dziękujemy za zamówienie!\n` +
+      `Oto Twoje potwierdzenie zakupu w **${truncate(guild.name, 100)}**. Zachowaj tę wiadomość – to Twój dowód zakupu.`,
     guild.iconURL?.({ size: 128 }),
   );
   c.addSeparatorComponents(divider());
-  const lines = [`**Order:** \`#${pad(sale.ticketNumber)}\`${SPACER}**Receipt:** \`${sale.id}\``, `**Status:** ${statusLabel('delivered')}`, ...productLines(guild, sale, order)];
-  if (order.giftTo && !sale.topUp) lines.push(`**Gift for:** <@${order.giftTo}> – they got the product`);
-  if (order.unitPrice != null && !isCart(sale) && !sale.topUp) lines.push(`**Unit price:** ${money(order.unitPrice)}`);
-  if (sale.promo) lines.push(`**Discount:** ${sale.discount > 0 ? `−${money(sale.discount)}` : 'applied'} (code \`${sale.promo}\`)`);
-  lines.push(`**Total paid:** ${sale.amount != null ? `**${money(sale.amount)}**` : 'as agreed in your ticket'}`);
-  if (sale.method) lines.push(`**Payment method:** ${truncate(sale.method, 100)}`);
-  lines.push(`**Date:** ${ts(sale.completedAt, 'f')}`);
-  if (sellerName) lines.push(`**Seller:** ${truncate(sellerName, 64)}`);
-  lines.push(`**Server:** ${truncate(guild.name, 100)}`);
-  if (sale.topUp) lines.push("-# ⚠️ Balance can't be refunded or paid out.");
+  const lines = [`**Zamówienie:** \`#${pad(sale.ticketNumber)}\`${SPACER}**Nr potwierdzenia:** \`${sale.id}\``, `**Status:** ${statusLabel('delivered')}`, ...productLines(guild, sale, order)];
+  if (order.giftTo && !sale.topUp) lines.push(`**Prezent dla:** <@${order.giftTo}> – produkt trafił do tej osoby`);
+  if (order.unitPrice != null && !isCart(sale) && !sale.topUp) lines.push(`**Cena za sztukę:** ${money(order.unitPrice)}`);
+  if (sale.promo) lines.push(`**Rabat:** ${sale.discount > 0 ? `−${money(sale.discount)}` : 'naliczony'} (kod \`${sale.promo}\`)`);
+  lines.push(`**Łącznie zapłacono:** ${sale.amount != null ? `**${money(sale.amount)}**` : 'zgodnie z ustaleniami w tickecie'}`);
+  if (sale.method) lines.push(`**Metoda płatności:** ${truncate(sale.method, 100)}`);
+  lines.push(`**Data:** ${ts(sale.completedAt, 'f')}`);
+  if (sellerName) lines.push(`**Sprzedawca:** ${truncate(sellerName, 64)}`);
+  lines.push(`**Serwer:** ${truncate(guild.name, 100)}`);
+  if (sale.topUp) lines.push('-# ⚠️ Saldo nie podlega zwrotowi ani wypłacie.');
   c.addTextDisplayComponents(text(lines.join('\n')));
   c.addSeparatorComponents(divider());
   const vouch = !sale.topUp; // a balance top-up isn't a purchase to vouch for
   c.addTextDisplayComponents(
-    text(`${vouch ? `${e(guild, 'star')} **Happy with your order?** A quick vouch helps us a lot.\n` : ''}-# Questions about this order? Open a ticket on the server. We never ask for payment in DMs.`),
+    text(`${vouch ? `${e(guild, 'star')} **Podoba Ci się zamówienie?** Krótka opinia bardzo nam pomoże.\n` : ''}-# Masz pytania o to zamówienie? Otwórz ticket na serwerze. Nigdy nie prosimy o płatność w DM.`),
   );
   const buttons = [];
   if (vouch && db.channelId(guild.id, 'vouches')) buttons.push(vouchButton(guild, sale.channelId));
@@ -113,11 +113,11 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
 
 /** "**Product:** 💎 Spotify × 2" – every item of a cart (sale.items), or the amount of a balance top-up. */
 function productLines(guild, sale, order) {
-  if (sale.topUp) return [`**Top-up:** 💰 ${money(order.topUp?.credited ?? sale.amount ?? order.topUp?.amount)} added to your store balance`];
-  if (!isCart(sale)) return [`**Product:** ${productEmoji(guild, catalogProduct(guild.id, sale))} ${truncate(sale.product ?? 'Custom order', 100)} × ${sale.quantity}`];
-  const items = sale.items.slice(0, ITEMS_SHOWN).map((i) => `> ${productEmoji(guild, catalogProduct(guild.id, i))} ${truncate(i.product ?? 'Product', 80)} × ${i.quantity ?? 1}${i.unitPrice != null ? ` · ${money(i.unitPrice)} each` : ''}`);
-  if (sale.items.length > ITEMS_SHOWN) items.push(`> +${sale.items.length - ITEMS_SHOWN} more`);
-  return ['**Products:**', ...items];
+  if (sale.topUp) return [`**Doładowanie:** 💰 ${money(order.topUp?.credited ?? sale.amount ?? order.topUp?.amount)} dodane do Twojego salda sklepu`];
+  if (!isCart(sale)) return [`**Produkt:** ${productEmoji(guild, catalogProduct(guild.id, sale))} ${truncate(sale.product ?? 'Zamówienie indywidualne', 100)} × ${sale.quantity}`];
+  const items = sale.items.slice(0, ITEMS_SHOWN).map((i) => `> ${productEmoji(guild, catalogProduct(guild.id, i))} ${truncate(i.product ?? 'Produkt', 80)} × ${i.quantity ?? 1}${i.unitPrice != null ? ` · ${money(i.unitPrice)} / szt.` : ''}`);
+  if (sale.items.length > ITEMS_SHOWN) items.push(`> +${sale.items.length - ITEMS_SHOWN} więcej`);
+  return ['**Produkty:**', ...items];
 }
 
 async function sendReceipt({ guild, ticket, member, staff, sale }) {
@@ -136,17 +136,17 @@ function proofCard(guild, sale) {
   const name = sale.productId ? sale.product : product?.name;
   // A cart lists its items (catalog names, stored when it was ordered).
   const what = isCart(sale)
-    ? sale.items.slice(0, ITEMS_SHOWN).map((i) => `${productEmoji(guild, catalogProduct(guild.id, i))} **${truncate(i.product || 'Product', 80)}** × ${i.quantity ?? 1}`).join('\n') + (sale.items.length > ITEMS_SHOWN ? `\n+${sale.items.length - ITEMS_SHOWN} more` : '')
-    : `${productEmoji(guild, product)} **${truncate(name || 'Custom order', 100)}** × ${sale.quantity}`;
+    ? sale.items.slice(0, ITEMS_SHOWN).map((i) => `${productEmoji(guild, catalogProduct(guild.id, i))} **${truncate(i.product || 'Produkt', 80)}** × ${i.quantity ?? 1}`).join('\n') + (sale.items.length > ITEMS_SHOWN ? `\n+${sale.items.length - ITEMS_SHOWN} więcej` : '')
+    : `${productEmoji(guild, product)} **${truncate(name || 'Zamówienie indywidualne', 100)}** × ${sale.quantity}`;
   const c = container(COLORS.success);
-  c.addTextDisplayComponents(text(`## ${e(guild, 'check')} Order #${pad(sale.ticketNumber)} delivered\n${what}`));
+  c.addTextDisplayComponents(text(`## ${e(guild, 'check')} Zamówienie #${pad(sale.ticketNumber)} dostarczone\n${what}`));
   c.addSeparatorComponents(divider());
   const facts = [];
   const method = publicMethod(sale);
-  if (method) facts.push(`${e(guild, 'card')} Paid with **${method}**`);
+  if (method) facts.push(`${e(guild, 'card')} Płatność: **${method}**`);
   const took = sale.completedAt - sale.createdAt;
-  facts.push(took < 60_000 ? `${e(guild, 'clock')} Delivered **directly**` : `${e(guild, 'clock')} Delivered in **${duration(took)}**`);
-  c.addTextDisplayComponents(text(`${facts.join(SPACER)}\n-# ${ts(sale.completedAt, 'R')} · Verified purchase at ${config.brand.name}`));
+  facts.push(took < 60_000 ? `${e(guild, 'clock')} Dostawa **od ręki**` : `${e(guild, 'clock')} Czas dostawy: **${duration(took)}**`);
+  c.addTextDisplayComponents(text(`${facts.join(SPACER)}\n-# ${ts(sale.completedAt, 'R')} · Zweryfikowany zakup w ${config.brand.name}`));
   const links = linkButtons(guild, ['shop', 'vouches']);
   if (links.length) c.addActionRowComponents(row(...links));
   return v2(c);
@@ -179,14 +179,14 @@ function reminderCard(guild, ticketChannelId, reminder) {
   const c = container(COLORS.brand);
   header(
     c,
-    `## ${e(guild, 'star')} How was your order?\n` +
-      `You recently bought **${truncate(reminder.product || 'something', 100)}** at **${truncate(guild.name, 100)}** (order \`#${pad(reminder.ticketNumber)}\`). ` +
-      'We hope everything works perfectly! 🧡\n\n' +
-      'Would you leave us a quick vouch? It takes 30 seconds, you can do it right here – and it helps other buyers trust us.',
+    `## ${e(guild, 'star')} Jak tam Twoje zamówienie?\n` +
+      `Twój ostatni zakup w **${truncate(guild.name, 100)}**: **${truncate(reminder.product || 'produkt', 100)}** (zamówienie \`#${pad(reminder.ticketNumber)}\`). ` +
+      'Mamy nadzieję, że wszystko działa idealnie! 🧡\n\n' +
+      'Wystawisz nam krótką opinię? To zajmie 30 sekund, możesz to zrobić od razu tutaj – a innym kupującym łatwiej będzie nam zaufać.',
     guild.iconURL?.({ size: 128 }),
   );
   c.addActionRowComponents(row(vouchButton(guild, ticketChannelId)));
-  c.addTextDisplayComponents(text('-# We only ask once. Something wrong with your order? Open a ticket on the server and we\'ll sort it out.'));
+  c.addTextDisplayComponents(text('-# Pytamy tylko raz. Coś nie tak z zamówieniem? Otwórz ticket na serwerze, a wszystko załatwimy.'));
   return v2(c);
 }
 
@@ -219,18 +219,18 @@ async function runReminders(client, now = Date.now()) {
 
 async function resolveMember(interaction, guildId) {
   const guild = interaction.client.guilds.cache.get(guildId);
-  if (!guild) throw new UserError("I can't find that server anymore.");
+  if (!guild) throw new UserError('Nie mogę już znaleźć tego serwera.');
   const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!member) throw new UserError(`You need to be a member of **${guild.name}** to leave a vouch there.`);
+  if (!member) throw new UserError(`Aby wystawić opinię, musisz być członkiem serwera **${guild.name}**.`);
   return { guild, member };
 }
 
 async function openVouchForm(interaction, [guildId, ticketChannelId]) {
   const { guild, member } = await resolveMember(interaction, guildId);
   const ticket = db.getTicket(ticketChannelId);
-  if (ticket && ticket.ownerId !== member.id) throw new UserError('This button belongs to someone else.');
+  if (ticket && ticket.ownerId !== member.id) throw new UserError('Ten przycisk należy do kogoś innego.');
   if (ticket?.completedAt && vouchedSince(guild.id, member.id, ticket.createdAt ?? ticket.completedAt)) {
-    throw new UserError("You've already left a vouch for this order – thank you! 🧡");
+    throw new UserError('Masz już opinię do tego zamówienia – dziękujemy! 🧡');
   }
   vouches.checkCanVouch(member);
   return interaction.showModal(vouches.vouchModal(guild, { customId: `order:vouched:${guild.id}`, productId: ticket?.order?.productId ?? null }));
@@ -245,8 +245,8 @@ async function submitVouchForm(interaction, [guildId]) {
 
 async function submitComplete(interaction) {
   const ticket = interaction.guild ? db.getTicket(interaction.channel?.id) : null;
-  if (!ticket) throw new UserError('This channel is no longer a ticket.');
-  if (!isStaff(interaction.member, config.getType(ticket.typeId))) throw new UserError('Only staff members can complete orders.');
+  if (!ticket) throw new UserError('Ten kanał nie jest już ticketem.');
+  if (!isStaff(interaction.member, config.getType(ticket.typeId))) throw new UserError('Tylko zespół może realizować zamówienia.');
   let raw = '';
   try {
     raw = interaction.fields.getTextInputValue('amount')?.trim() ?? '';
@@ -254,7 +254,7 @@ async function submitComplete(interaction) {
     raw = '';
   }
   const amount = raw ? parseAmount(raw) : null;
-  if (raw && amount == null) throw new UserError(`\`${truncate(raw, 20)}\` is not an amount – type a number like **19.99**, or leave the field empty.`);
+  if (raw && amount == null) throw new UserError(`\`${truncate(raw, 20)}\` to nie kwota – wpisz liczbę, np. **19.99**, albo zostaw pole puste.`);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   return tickets.completeOrder(interaction.channel, interaction.member, { amount, respond: (result) => reply(interaction, ui.orderCompletedReply(result)) });
 }
@@ -265,20 +265,20 @@ function welcomeCard(guild, member, promo) {
   const c = container(COLORS.brand);
   header(
     c,
-    `## ${e(guild, 'gift')} A welcome gift from ${config.brand.name}\n` +
-      `Thanks for joining, **${truncate(member.displayName ?? member.user?.username ?? 'friend', 64)}**! 🧡 ` +
-      `Here's **${promos.label(promo)} your first order** – just for you:`,
+    `## ${e(guild, 'gift')} Prezent powitalny od ${config.brand.name}\n` +
+      `Dzięki za dołączenie, **${truncate(member.displayName ?? member.user?.username ?? 'przyjacielu', 64)}**! 🧡 ` +
+      `Oto **${promos.label(promo)} na pierwsze zamówienie** – specjalnie dla Ciebie:`,
     guild.iconURL?.({ size: 128 }),
   );
   c.addTextDisplayComponents(text(`# \`${promo.code}\``));
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
     text(
-      `### ${e(guild, 'info')} How to use it\n` +
-        '> **1.** Open the shop and click **Buy** on any product\n' +
-        '> **2.** Paste the code into the **Promo code** field of the order form\n' +
-        '> **3.** The discount is taken off your total automatically\n\n' +
-        `-# Valid until ${ts(promo.expiresAt, 'f')} (${ts(promo.expiresAt, 'R')}) · only for your account · one use · first order only`,
+      `### ${e(guild, 'info')} Jak go użyć\n` +
+        '> **1.** Otwórz sklep i kliknij **Kup** przy dowolnym produkcie\n' +
+        '> **2.** Wklej kod w pole **Kod rabatowy** w formularzu zamówienia\n' +
+        '> **3.** Rabat odejmie się od kwoty automatycznie\n\n' +
+        `-# Ważny do ${ts(promo.expiresAt, 'f')} (${ts(promo.expiresAt, 'R')}) · tylko dla Twojego konta · jednorazowy · tylko na pierwsze zamówienie`,
     ),
   );
   const links = linkButtons(guild, ['shop']);

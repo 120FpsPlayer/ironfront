@@ -8,16 +8,17 @@ const paymentState = require('../lib/paymentState');
 const { COLORS } = require('../lib/theme');
 const { embed, logEmbed, replyError, sendLog, truncate } = require('../lib/utils');
 const { isShopManager } = require('../lib/permissions');
+const { slash } = require('../lib/commandsPl');
 
 /** ✅ / ⛔ for every payment method. */
 function stateEmbed(guildId) {
   const lines = config.shop.paymentMethods.map((m) => {
     const off = paymentState.offNote(guildId, m);
-    return off ? `⛔ **${m.name}** – ${off.replace(/^⛔ /, '')}` : `✅ **${m.name}** – on`;
+    return off ? `⛔ **${m.name}** – ${off.replace(/^⛔ /, '')}` : `✅ **${m.name}** – włączona`;
   });
   return embed(COLORS.brand)
-    .setTitle('💳 Payment methods')
-    .setDescription(truncate(`${lines.join('\n') || 'No payment methods in config.json.'}\n\n-# \`/disable\` switches one off, \`/enable\` back on – orders already placed keep working.`, 4000));
+    .setTitle('💳 Metody płatności')
+    .setDescription(truncate(`${lines.join('\n') || 'Brak metod płatności w config.json.'}\n\n-# \`${slash('disable')}\` wyłącza metodę, \`${slash('enable')}\` włącza ją z powrotem – złożone już zamówienia działają dalej.`, 4000));
 }
 
 /** The method the option names (autocomplete value = its name). */
@@ -38,11 +39,11 @@ const autocomplete = (interaction) => {
 
 /** Switches it, refreshes the #payments card, FAQ and shop panel, and logs it. */
 async function toggle(interaction, off) {
-  if (!isShopManager(interaction.member)) return replyError(interaction, 'Only administrators and sellers can switch payment methods.');
+  if (!isShopManager(interaction.member)) return replyError(interaction, 'Tylko administratorzy i sprzedawcy mogą włączać i wyłączać metody płatności.');
   const m = pick(interaction);
-  if (!m) return replyError(interaction, 'Pick a payment method from the list.');
+  if (!m) return replyError(interaction, 'Wybierz metodę płatności z listy.');
   const guild = interaction.guild;
-  if (paymentState.isOff(guild.id, m) === off) return interaction.reply({ embeds: [stateEmbed(guild.id)], content: `**${m.name}** is already ${off ? 'off' : 'on'}.`, flags: MessageFlags.Ephemeral });
+  if (paymentState.isOff(guild.id, m) === off) return interaction.reply({ embeds: [stateEmbed(guild.id)], content: `Metoda **${m.name}** jest już ${off ? 'wyłączona' : 'włączona'}.`, flags: MessageFlags.Ephemeral });
   const reason = off ? interaction.options.getString('reason') : null;
   paymentState.set(guild.id, m.name, off, { by: interaction.user.id, reason });
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -50,14 +51,14 @@ async function toggle(interaction, off) {
   const res = await require('../builder/refresh').refreshContent(guild).catch((err) => ({ errors: [err.message] }));
   await sendLog(guild, {
     embeds: [
-      logEmbed(off ? COLORS.warning : COLORS.success, off ? `⛔ ${m.name} switched off` : `✅ ${m.name} switched on`, interaction.user).setDescription(
-        off ? `New orders can't pick **${m.name}**${reason ? ` – ${truncate(reason, 300)}` : ''}.` : `**${m.name}** can be picked again.`,
+      logEmbed(off ? COLORS.warning : COLORS.success, off ? `⛔ Wyłączono metodę: ${m.name}` : `✅ Włączono metodę: ${m.name}`, interaction.user).setDescription(
+        off ? `Nowe zamówienia nie mogą wybrać metody **${m.name}**${reason ? ` – ${truncate(reason, 300)}` : ''}.` : `Metodę **${m.name}** można znowu wybrać.`,
       ),
     ],
   }).catch(() => null);
-  const note = res?.errors?.length ? `\n-# ⚠️ Some cards couldn't be updated: ${truncate(res.errors.join('; '), 300)}` : '\n-# The #payments card, FAQ and shop panel are updated.';
+  const note = res?.errors?.length ? `\n-# ⚠️ Nie udało się zaktualizować części kart: ${truncate(res.errors.join('; '), 300)}` : '\n-# Karta na #płatności, FAQ i panel sklepu są już zaktualizowane.';
   return interaction.editReply({
-    content: `${off ? `⛔ **${m.name}** is off – nobody can pick it for new orders until you run \`/enable\`.` : `✅ **${m.name}** is on again.`}${note}`,
+    content: `${off ? `⛔ Metoda **${m.name}** jest wyłączona – nikt nie wybierze jej w nowym zamówieniu, dopóki nie użyjesz \`${slash('enable')}\`.` : `✅ Metoda **${m.name}** znowu działa.`}${note}`,
     embeds: [stateEmbed(guild.id)],
   });
 }

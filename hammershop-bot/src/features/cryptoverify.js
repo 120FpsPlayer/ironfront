@@ -33,7 +33,7 @@ const hooks = require('../lib/hooks');
 const tickets = require('../tickets/tickets');
 const autopay = require('./autopay');
 const { COLORS } = require('../lib/theme');
-const { logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { logEmbed, money, pad, ts, truncate, sendLog, count } = require('../lib/utils');
 const { container, text, divider, linkBtn, row, v2 } = require('../lib/v2');
 
 const CHECK_EVERY = 60_000;
@@ -92,9 +92,9 @@ function autoText(list) {
   const coins = enabled() ? [...new Set(list.map((w) => w.code))].filter((code) => COINS[code]) : [];
   if (!coins.length) return null;
   return (
-    'Then click **Pay** and send the transaction ID (hash) – your order is confirmed here automatically once the network confirms it ' +
-    `(usually within ${coins.map((code) => `${eta(code)} for ${code}`).join(', ')}).\n` +
-    'No transaction ID? Send a screenshot instead – a seller checks it by hand.'
+    'Potem kliknij **Zapłać** i wyślij ID transakcji (hash) – zamówienie potwierdzi się tutaj automatycznie, gdy sieć potwierdzi transakcję ' +
+    `(zwykle w ciągu ${coins.map((code) => `${eta(code)} dla ${code}`).join(', ')}).\n` +
+    'Nie masz ID transakcji? Wyślij zamiast tego zrzut ekranu – sprzedawca sprawdzi go ręcznie.'
   );
 }
 
@@ -179,7 +179,7 @@ function sameAddress(coin, a, b) {
 async function getJson(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT) });
   if ([400, 404, 422].includes(res.status)) return null;
-  if (!res.ok) throw new Error(`${new URL(url).host} answered ${res.status}`);
+  if (!res.ok) throw new Error(`${new URL(url).host} odpowiedział ${res.status}`);
   return res.json();
 }
 
@@ -193,7 +193,7 @@ async function lookupBtc(txid, address) {
   const paid = (tx.vout ?? []).filter((o) => sameAddress('BTC', o?.scriptpubkey_address, address)).reduce((n, o) => n + big(o.value), 0n);
   if (!tx.status?.confirmed) return { found: true, paid, confirmations: 0, time: null };
   const tip = Number(await getJson(`${BTC_API}/blocks/tip/height`));
-  if (!(tip > 0)) throw new Error('mempool.space: no block height');
+  if (!(tip > 0)) throw new Error('mempool.space: brak wysokości bloku');
   return { found: true, paid, confirmations: Math.max(1, tip - Number(tx.status.block_height) + 1), time: Number(tx.status.block_time) * 1000 || null };
 }
 
@@ -386,7 +386,7 @@ async function confirmed(guild, ticket) {
   const c = ticket.order.crypto;
   const cur = paycards().rateCurrency();
   await autopay.paymentReceived(guild, ticket, {
-    gateway: `Crypto (${c.coin})`,
+    gateway: `Krypto (${c.coin})`,
     paidAmount: tickets.orderDetails(ticket).total,
     paidCurrency: cur,
     expectedCurrency: cur,
@@ -401,51 +401,51 @@ async function confirmed(guild, ticket) {
 function describe(ticket, c) {
   const coin = COINS[c.coin];
   const id = `\`${shortId(txKey(c.coin, c.txid))}\``;
-  const network = c.coins.map((x) => COINS[x].network).join(' or ');
-  const amount = c.amount ? `**${c.amount} ${c.coin}**` : 'the payment';
+  const network = c.coins.map((x) => COINS[x].network).join(' lub ');
+  const amount = c.amount ? `**${c.amount} ${c.coin}**` : 'płatność';
   const wallet = walletsOf(ticket.order)[c.coin];
   switch (c.state) {
     case 'confirmed':
-      return ['✅ Crypto payment confirmed', `${amount} received · transaction ${id} · ${c.confirmations} ${c.confirmations === 1 ? 'confirmation' : 'confirmations'}.`];
+      return ['✅ Płatność krypto potwierdzona', `Otrzymano ${amount} · transakcja ${id} · ${count(c.confirmations, 'potwierdzenie', 'potwierdzenia', 'potwierdzeń')}.`];
     case 'waiting':
       return [
-        '⏳ Payment found – waiting for confirmations',
-        `${amount} to our wallet · transaction ${id}\n**Confirmations:** ${Math.min(c.confirmations, c.needed)} / ${c.needed} – your order is confirmed here automatically, usually within ${eta(c.coin)}. No need to do anything.`,
+        '⏳ Płatność znaleziona – czekamy na potwierdzenia',
+        `${amount} na nasz portfel · transakcja ${id}\n**Potwierdzenia:** ${Math.min(c.confirmations, c.needed)} / ${c.needed} – zamówienie potwierdzi się tutaj automatycznie, zwykle w ciągu ${eta(c.coin)}. Nie musisz nic robić.`,
       ];
     case 'pending':
-      return ['⏳ Transaction found', `Transaction ${id} is waiting to be included in a block – it's checked again every minute and your order is confirmed here automatically.`];
+      return ['⏳ Transakcja znaleziona', `Transakcja ${id} czeka na dołączenie do bloku – sprawdzamy ją co minutę, a zamówienie potwierdzi się tutaj automatycznie.`];
     case 'unavailable':
-      return ['🔎 Checking your transaction', `Transaction ${id} can't be checked on the ${network} network right now – it's tried again automatically every minute. No need to send it again.`];
+      return ['🔎 Sprawdzamy Twoją transakcję', `Nie możemy teraz sprawdzić transakcji ${id} w sieci ${network} – próbujemy ponownie automatycznie co minutę. Nie musisz wysyłać jej jeszcze raz.`];
     case 'notfound':
       return c.status === 'checking'
         ? [
-            '🔎 Looking for your transaction',
-            `Transaction ${id} isn't on the ${network} network yet. Just sent it? It can take a minute – we keep looking until ${ts(c.startedAt + NOT_FOUND_FOR, 't')}.\n` +
-              '-# Please double-check the ID: copy the transaction ID (hash) of this payment from your wallet or exchange.',
+            '🔎 Szukamy Twojej transakcji',
+            `Transakcji ${id} nie ma jeszcze w sieci ${network}. Dopiero wysłana? To może chwilę potrwać – szukamy do ${ts(c.startedAt + NOT_FOUND_FOR, 't')}.\n` +
+              '-# Sprawdź dokładnie ID: skopiuj ID transakcji (hash) tej płatności ze swojego portfela lub giełdy.',
           ]
-        : ['❌ Transaction not found', `We couldn't find transaction ${id} on the ${network} network. Please check the ID and click **Pay** to send the right one – or a seller checks your payment by hand.`];
+        : ['❌ Nie znaleziono transakcji', `Nie znaleźliśmy transakcji ${id} w sieci ${network}. Sprawdź ID i kliknij **Zapłać**, żeby wysłać właściwe – albo sprzedawca sprawdzi Twoją płatność ręcznie.`];
     case 'short':
       return [
-        '⚠️ Not enough received',
-        `Transaction ${id} sends ${amount} – this order needs **${c.required} ${c.coin}**, so **${c.missing}** is missing. A seller sorts out the difference with you here – please wait for them before you send more.`,
+        '⚠️ Otrzymano za mało',
+        `Transakcja ${id} przesyła ${amount} – to zamówienie wymaga **${c.required} ${c.coin}**, więc brakuje **${c.missing}**. Sprzedawca wyjaśni z Tobą różnicę tutaj – zanim wyślesz więcej, poczekaj na odpowiedź.`,
       ];
     case 'address':
       return [
-        '❌ Not sent to our wallet',
-        `Transaction ${id} doesn't send ${c.coin} to our wallet${wallet ? ` \`${wallet}\`` : ''}. Please check the ID – it must be your payment to the address on the payment card – and click **Pay** to send the right one.`,
+        '❌ Nie wysłano na nasz portfel',
+        `Transakcja ${id} nie przesyła ${c.coin} na nasz portfel${wallet ? ` \`${wallet}\`` : ''}. Sprawdź ID – musi to być Twoja płatność na adres z karty płatności – i kliknij **Zapłać**, żeby wysłać właściwe.`,
       ];
     case 'failedtx':
-      return ['❌ Transaction failed', `Transaction ${id} failed on the ${coin.network} network – nothing arrived. Check it in your wallet or exchange; after paying again, click **Pay** with the new transaction ID.`];
+      return ['❌ Transakcja nieudana', `Transakcja ${id} nie powiodła się w sieci ${coin.network} – nic nie dotarło. Sprawdź ją w portfelu lub na giełdzie; po ponownej płatności kliknij **Zapłać** i podaj nowe ID transakcji.`];
     case 'old':
-      return ['❌ Transaction older than this order', `Transaction ${id} was sent before this order was placed. Please click **Pay** and send the ID of the payment for **this** order.`];
+      return ['❌ Transakcja starsza niż zamówienie', `Transakcja ${id} została wysłana przed złożeniem tego zamówienia. Kliknij **Zapłać** i wyślij ID płatności za **to** zamówienie.`];
     case 'used':
-      return ['❌ Transaction already used', `Transaction ${id} was already used for another order. Please click **Pay** and send the ID of the payment for this order.`];
+      return ['❌ Transakcja już użyta', `Transakcja ${id} została już użyta w innym zamówieniu. Kliknij **Zapłać** i wyślij ID płatności za to zamówienie.`];
     case 'internal':
-      return ['🔎 A seller confirms this payment', `Transaction ${id} sends ${amount} through a contract (e.g. an exchange withdrawal) – a seller checks that it arrived and confirms your order here.`];
+      return ['🔎 Tę płatność potwierdzi sprzedawca', `Transakcja ${id} przesyła ${amount} przez kontrakt (np. wypłata z giełdy) – sprzedawca sprawdzi, czy dotarła, i potwierdzi tutaj Twoje zamówienie.`];
     case 'timeout':
-      return ['⌛ Not confirmed after 48 hours', `Transaction ${id} still isn't confirmed on the ${network} network – a seller checks your payment by hand.`];
+      return ['⌛ Brak potwierdzenia po 48 godzinach', `Transakcja ${id} nadal nie jest potwierdzona w sieci ${network} – sprzedawca sprawdzi Twoją płatność ręcznie.`];
     default:
-      return ['🔎 Checking your transaction', `Transaction ${id} is being checked on the ${network} network…`];
+      return ['🔎 Sprawdzamy Twoją transakcję', `Sprawdzamy transakcję ${id} w sieci ${network}…`];
   }
 }
 
@@ -460,12 +460,12 @@ function statusCard(guild, ticket, c, pings = null) {
   if (problem) {
     const who = [...(pings?.users ?? []).map((id) => `<@${id}>`), ...(pings?.roles ?? []).map((id) => `<@&${id}>`)].join(' ');
     box.addSeparatorComponents(divider());
-    box.addTextDisplayComponents(text(`-# ${who ? `${who} – ` : ''}checked automatically on the blockchain. Staff: once you've checked the payment yourself, **Payment OK** confirms it by hand.`));
+    box.addTextDisplayComponents(text(`-# ${who ? `${who} – ` : ''}sprawdzone automatycznie w blockchainie. Zespół: gdy sami sprawdzicie płatność, **Płatność OK** potwierdzi ją ręcznie.`));
   } else if (c.internal) {
-    box.addTextDisplayComponents(text('-# Sent through a contract (internal transfer) – e.g. an exchange withdrawal.'));
+    box.addTextDisplayComponents(text('-# Wysłane przez kontrakt (transfer wewnętrzny) – np. wypłata z giełdy.'));
   }
   const buttons = [];
-  if (c.state && !['notfound', 'unavailable'].includes(c.state)) buttons.push(linkBtn(COINS[c.coin].url(txKey(c.coin, c.txid)), 'View transaction', '🔗'));
+  if (c.state && !['notfound', 'unavailable'].includes(c.state)) buttons.push(linkBtn(COINS[c.coin].url(txKey(c.coin, c.txid)), 'Zobacz transakcję', '🔗'));
   if (problem && ticket.status === 'open' && !ticket.completedAt) buttons.push(require('./delivery').confirmButtonFor(guild.id, ticket));
   if (buttons.length) box.addActionRowComponents(row(...buttons));
   const users = problem ? [ticket.ownerId, ...(pings?.users ?? [])] : [];
@@ -489,14 +489,14 @@ async function show(guild, ticket, { fresh = false } = {}) {
 }
 
 const PROBLEMS = {
-  short: 'Too little sent',
-  address: 'Not sent to our wallet',
-  failedtx: 'Failed transaction',
-  old: 'Sent before the order',
-  used: 'Already used for another order',
-  notfound: 'Not found',
-  timeout: 'Not confirmed after 48 h',
-  internal: 'Sent through a contract – check it arrived in your wallet',
+  short: 'Wysłano za mało',
+  address: 'Nie wysłano na nasz portfel',
+  failedtx: 'Nieudana transakcja',
+  old: 'Wysłano przed zamówieniem',
+  used: 'Już użyta w innym zamówieniu',
+  notfound: 'Nie znaleziono',
+  timeout: 'Brak potwierdzenia po 48 h',
+  internal: 'Wysłano przez kontrakt – sprawdź, czy dotarło do portfela',
 };
 
 /** The log: a crypto payment that needs the team (a reused transaction names the other order). */
@@ -504,14 +504,14 @@ async function logProblem(guild, ticket) {
   const c = ticket.order.crypto;
   const fields = [
     { name: 'Ticket', value: `<#${ticket.channelId}> (\`#${pad(ticket.number)}\`)`, inline: true },
-    { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
+    { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
     { name: 'Problem', value: PROBLEMS[c.state] ?? c.state, inline: true },
-    { name: 'Transaction', value: `[\`${shortId(txKey(c.coin, c.txid))}\`](${COINS[c.coin].url(txKey(c.coin, c.txid))})`, inline: true },
+    { name: 'Transakcja', value: `[\`${shortId(txKey(c.coin, c.txid))}\`](${COINS[c.coin].url(txKey(c.coin, c.txid))})`, inline: true },
   ];
-  if (c.amount) fields.push({ name: 'Received', value: `${c.amount} ${c.coin}${c.required ? ` of ${c.required} ${c.coin}` : ''}`, inline: true });
-  if (c.usedBy) fields.push({ name: 'Used by', value: `<#${c.usedBy}>${db.getTicket(c.usedBy) ? ` (\`#${pad(db.getTicket(c.usedBy).number)}\`)` : ''}`, inline: true });
+  if (c.amount) fields.push({ name: 'Otrzymano', value: `${c.amount} ${c.coin}${c.required ? ` z ${c.required} ${c.coin}` : ''}`, inline: true });
+  if (c.usedBy) fields.push({ name: 'Użyta w', value: `<#${c.usedBy}>${db.getTicket(c.usedBy) ? ` (\`#${pad(db.getTicket(c.usedBy).number)}\`)` : ''}`, inline: true });
   await sendLog(guild, {
-    embeds: [logEmbed(COLORS.warning, '🪙 Crypto payment needs a check', guild.client.user).setDescription(truncate(describe(ticket, c)[1], 1000)).addFields(fields)],
+    embeds: [logEmbed(COLORS.warning, '🪙 Płatność krypto do sprawdzenia', guild.client.user).setDescription(truncate(describe(ticket, c)[1], 1000)).addFields(fields)],
   }).catch(() => null);
 }
 
@@ -537,11 +537,11 @@ async function start(guild, channelId, tx, { now = Date.now() } = {}) {
 
 /** What the customer is answered after "Pay" with a transaction ID. */
 function replyFor(c) {
-  if (c?.status === 'confirmed') return 'Your crypto payment is confirmed – thank you! Your order is being completed in your ticket.';
-  if (c?.status === 'short' || c?.status === 'failed') return "Thanks! Your transaction couldn't be confirmed automatically – see your ticket, a seller has been told.";
-  if (c?.state === 'waiting') return `We found your payment on the blockchain – your order is confirmed in your ticket automatically after ${c.needed} ${c.needed === 1 ? 'confirmation' : 'confirmations'} (usually ${eta(c.coin)}).`;
-  if (c?.state === 'notfound') return "Thanks! We can't see your transaction on the blockchain yet – we keep looking for a few minutes. Please double-check the ID (see your ticket).";
-  return "Thanks! We're checking your transaction on the blockchain – your order is confirmed in your ticket automatically.";
+  if (c?.status === 'confirmed') return 'Twoja płatność krypto jest potwierdzona – dziękujemy! Zamówienie jest właśnie realizowane w Twoim tickecie.';
+  if (c?.status === 'short' || c?.status === 'failed') return 'Dzięki! Nie udało się automatycznie potwierdzić Twojej transakcji – zajrzyj do ticketu, sprzedawca już o tym wie.';
+  if (c?.state === 'waiting') return `Znaleźliśmy Twoją płatność w blockchainie – zamówienie potwierdzi się automatycznie w Twoim tickecie po ${count(c.needed, 'potwierdzeniu', 'potwierdzeniach', 'potwierdzeniach')} (zwykle ${eta(c.coin)}).`;
+  if (c?.state === 'notfound') return 'Dzięki! Nie widzimy jeszcze Twojej transakcji w blockchainie – szukamy jej przez kilka minut. Sprawdź dokładnie ID (szczegóły w tickecie).';
+  return 'Dzięki! Sprawdzamy Twoją transakcję w blockchainie – zamówienie potwierdzi się automatycznie w Twoim tickecie.';
 }
 
 let running = false;

@@ -120,8 +120,8 @@ async function cryptoQuote(m, total, now = Date.now()) {
 
 /** Which network each coin must be sent on – a wrong network can't be checked (or refunded). */
 const NETWORKS = {
-  BTC: 'Only on the **Bitcoin** network – not Lightning, BEP-20 or wrapped BTC.',
-  ETH: 'Only on the **Ethereum** network (ERC-20) – not Arbitrum, Base, Optimism, BSC or Polygon.',
+  BTC: 'Tylko w sieci **Bitcoin** – nie Lightning, BEP-20 ani wrapped BTC.',
+  ETH: 'Tylko w sieci **Ethereum** (ERC-20) – nie Arbitrum, Base, Optimism, BSC ani Polygon.',
 };
 
 // ───────────── PayPal.me ─────────────
@@ -159,33 +159,33 @@ async function paymentCard(guild, ticket, order, { now = Date.now(), quote = nul
   if (!m) return null;
   const type = methodType(m);
   const total = order.total > 0 ? order.total : null;
-  const amount = total != null ? `**${money(total)}**` : 'the amount the seller confirms';
+  const amount = total != null ? `**${money(total)}**` : 'kwotę potwierdzoną przez sprzedawcę';
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(
     text(
-      `## ${e(guild, m.emoji ?? 'card')} ${total != null ? `Pay ${money(total)}` : 'Payment'} – ${truncate(m.name, 60)}\n` +
-        `-# Order \`#${pad(ticket.number)}\` · ${orderTitle(order, { max: 80 })}`,
+      `## ${e(guild, m.emoji ?? 'card')} ${total != null ? `Zapłać ${money(total)}` : 'Płatność'} – ${truncate(m.name, 60)}\n` +
+        `-# Zamówienie \`#${pad(ticket.number)}\` · ${orderTitle(order, { max: 80 })}`,
     ),
   );
   c.addSeparatorComponents(divider());
   const buttons = [];
-  const paid = (label = 'Pay', emoji = '💳') => proofsOn() && buttons.push(btn('pay:open', label, emoji, ButtonStyle.Success));
-  const proofText = (what) => (proofsOn() ? `then click **Pay** and send ${what}` : `then send ${what} here in the ticket`);
-  const proofSentence = (what) => (proofsOn() ? `Then click **Pay** and send ${what}.` : `Then send ${what} here in the ticket.`);
+  const paid = (label = 'Zapłać', emoji = '💳') => proofsOn() && buttons.push(btn('pay:open', label, emoji, ButtonStyle.Success));
+  const proofText = (what) => (proofsOn() ? `potem kliknij **Zapłać** i wyślij ${what}` : `potem wyślij ${what} tutaj w tickecie`);
+  const proofSentence = (what) => (proofsOn() ? `Potem kliknij **Zapłać** i wyślij ${what}.` : `Potem wyślij ${what} tutaj w tickecie.`);
 
   if (type === 'paysafecard') {
     c.addTextDisplayComponents(
       text(
-        `**1.** Buy a **PaysafeCard** worth ${amount} – at a kiosk, petrol station or online.\n` +
-          `**2.** ${proofsOn() ? 'Click **Pay** and enter' : 'Send'} the 16-digit PIN – a photo of the receipt helps.\n` +
-          '-# 🔒 Only send the PIN here in your ticket – never in DMs.',
+        `**1.** Kup **PaysafeCard** na ${amount} – w kiosku, na stacji benzynowej lub online.\n` +
+          `**2.** ${proofsOn() ? 'Kliknij **Zapłać** i wpisz' : 'Wyślij'} 16-cyfrowy PIN – zdjęcie potwierdzenia zakupu też się przyda.\n` +
+          '-# 🔒 Wysyłaj PIN tylko tutaj, w swoim tickecie – nigdy w DM.',
       ),
     );
     paid();
   } else if (type === 'crypto') {
     const list = wallets(m);
     if (!list.length) {
-      c.addTextDisplayComponents(text(`A seller sends you the wallet address here – send ${amount}, ${proofText('the transaction ID or a screenshot')}.`));
+      c.addTextDisplayComponents(text(`Sprzedawca wyśle Ci tutaj adres portfela – wyślij ${amount}, ${proofText('ID transakcji lub zrzut ekranu')}.`));
     } else {
       const q = quote ?? (total != null ? await cryptoQuote(m, total, now) : null);
       const lines = list.map((w) => {
@@ -193,14 +193,14 @@ async function paymentCard(guild, ticket, order, { now = Date.now(), quote = nul
         const network = NETWORKS[w.code] ? `\n-# ${NETWORKS[w.code]}` : '';
         return `**${w.name} (${w.code})**${coins}${network}\n\`\`\`\n${w.address}\n\`\`\``;
       });
-      c.addTextDisplayComponents(text(`Send ${amount} to one of these wallets:\n${lines.join('\n')}`));
+      c.addTextDisplayComponents(text(`Wyślij ${amount} na jeden z tych portfeli:\n${lines.join('\n')}`));
       const rated = Object.keys(q?.amounts ?? {}).length > 0;
       // BTC / ETH with the transaction ID: confirmed by the bot (src/features/cryptoverify.js) – here, it needs this file.
       const auto = proofsOn() && total != null ? require('./cryptoverify').autoText(list) : null;
       c.addTextDisplayComponents(
         text(
-          `${auto ?? proofSentence('the transaction ID (hash) or a screenshot')}\n` +
-            `-# ${rated ? `Rates from CoinGecko ${ts(now, 'R')} – send at least this, in full: fees are on you. ` : ''}Double-check the network – crypto payments can't be reversed.`,
+          `${auto ?? proofSentence('ID transakcji (hash) lub zrzut ekranu')}\n` +
+            `-# ${rated ? `Kursy z CoinGecko ${ts(now, 'R')} – wyślij co najmniej tyle, w całości: opłaty pokrywasz Ty. ` : ''}Dokładnie sprawdź sieć – płatności krypto nie da się cofnąć.`,
         ),
       );
     }
@@ -209,24 +209,24 @@ async function paymentCard(guild, ticket, order, { now = Date.now(), quote = nul
     const name = paypalMeName(m.paypalMe);
     if (!name && String(m.paypalMe ?? '').trim() && !paypalMeWarned) {
       paypalMeWarned = true;
-      console.warn(`[paycards] "paypalMe": "${m.paypalMe}" isn't a paypal.me name – use just the name, e.g. "HammerShop".`);
+      console.warn(`[paycards] "paypalMe": "${m.paypalMe}" to nie jest nazwa paypal.me – wpisz samą nazwę, np. "HammerShop".`);
     }
     if (name) {
-      c.addTextDisplayComponents(text(`Pay ${amount} with the PayPal button below, ${proofText('a screenshot of the payment')}.`));
-      buttons.push(linkBtn(paypalMeUrl(name, total), truncate(total != null ? `Pay ${money(total)} with PayPal` : 'Pay with PayPal', 80), ce(guild, 'paypal')));
+      c.addTextDisplayComponents(text(`Zapłać ${amount} przyciskiem PayPal poniżej, ${proofText('zrzut ekranu płatności')}.`));
+      buttons.push(linkBtn(paypalMeUrl(name, total), truncate(total != null ? `Zapłać ${money(total)} przez PayPal` : 'Zapłać przez PayPal', 80), ce(guild, 'paypal')));
     } else {
-      c.addTextDisplayComponents(text(`A seller sends you the PayPal address here – pay ${amount}, ${proofText('a screenshot of the payment')}.`));
+      c.addTextDisplayComponents(text(`Sprzedawca wyśle Ci tutaj adres PayPal – zapłać ${amount}, ${proofText('zrzut ekranu płatności')}.`));
     }
     paid();
   } else {
-    c.addTextDisplayComponents(text(`A seller sends you the payment details here – pay ${amount}, ${proofText('a screenshot or the transaction ID')}.`));
+    c.addTextDisplayComponents(text(`Sprzedawca wyśle Ci tutaj dane do płatności – zapłać ${amount}, ${proofText('zrzut ekranu lub ID transakcji')}.`));
     paid();
   }
   c.addTextDisplayComponents(
     text(
       order.topUp // a balance top-up (features/balance.js) has no product
-        ? `-# 💰 ${proofsOn() ? 'After you click **Pay**, we' : 'We'} check your payment and add it to your store balance. Balance can't be refunded or paid out.`
-        : `-# 📦 ${proofsOn() ? 'After you click **Pay**, we' : 'We'} check your payment and send your product right here and in your DMs.`,
+        ? `-# 💰 ${proofsOn() ? 'Po kliknięciu **Zapłać** sprawdzimy' : 'Sprawdzimy'} płatność i dodamy ją do Twojego salda sklepu. Saldo nie podlega zwrotowi ani wypłacie.`
+        : `-# 📦 ${proofsOn() ? 'Po kliknięciu **Zapłać** sprawdzimy' : 'Sprawdzimy'} płatność i wyślemy Ci produkt tutaj oraz w DM.`,
     ),
   );
   if (buttons.length) c.addActionRowComponents(row(...buttons.slice(0, 5)));

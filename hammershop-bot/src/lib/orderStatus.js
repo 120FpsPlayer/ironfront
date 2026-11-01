@@ -14,12 +14,12 @@
  */
 
 const ORDER_STATUS = {
-  awaiting: { label: 'Awaiting payment', emoji: '⏳' },
-  sent: { label: 'Payment sent – being checked', emoji: '📨' },
-  paid: { label: 'Paid', emoji: '💳' },
-  progress: { label: 'In progress', emoji: '🔧' },
-  delivered: { label: 'Delivered', emoji: '✅' },
-  cancelled: { label: 'Cancelled', emoji: '❌' },
+  awaiting: { label: 'Oczekuje na płatność', emoji: '⏳' },
+  sent: { label: 'Płatność wysłana – sprawdzamy', emoji: '📨' },
+  paid: { label: 'Opłacone', emoji: '💳' },
+  progress: { label: 'W realizacji', emoji: '🔧' },
+  delivered: { label: 'Dostarczone', emoji: '✅' },
+  cancelled: { label: 'Anulowane', emoji: '❌' },
 };
 
 /** The status key of an order ticket (null for other tickets). */
@@ -30,7 +30,7 @@ function statusOf(ticket) {
   return ORDER_STATUS[ticket.order?.status] ? ticket.order.status : 'awaiting';
 }
 
-/** "💳 Paid" */
+/** "💳 Opłacone" */
 const statusLabel = (key) => (ORDER_STATUS[key] ? `${ORDER_STATUS[key].emoji} ${ORDER_STATUS[key].label}` : '—');
 
 module.exports = { ORDER_STATUS, statusOf, statusLabel };

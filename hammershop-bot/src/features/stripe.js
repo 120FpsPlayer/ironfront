@@ -76,7 +76,7 @@ async function call(method, path, params = null, { idempotencyKey } = {}) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data?.error?.message ?? `Stripe answered ${res.status}`);
+    const err = new Error(data?.error?.message ?? `Stripe odpowiedział ${res.status}`);
     err.status = res.status;
     err.refused = res.status === 401 || res.status === 403;
     if (err.refused) keyRefused = true;
@@ -112,7 +112,7 @@ function createSession(guild, ticket, order, cur, attempt) {
       'line_items[0][quantity]': 1,
       'line_items[0][price_data][currency]': cur,
       'line_items[0][price_data][unit_amount]': toUnits(order.total, cur),
-      'line_items[0][price_data][product_data][name]': truncate(`${config.brand.name} order #${pad(ticket.number)} – ${orderTitle(order, { max: 200 })}`, 250),
+      'line_items[0][price_data][product_data][name]': truncate(`Zamówienie ${config.brand.name} #${pad(ticket.number)} – ${orderTitle(order, { max: 200 })}`, 250),
       success_url: back,
       cancel_url: back,
       client_reference_id: ticket.channelId,
@@ -133,25 +133,25 @@ const deliveryNote = (ticket) =>
   ticket.order?.topUp
     ? require('./balance').PAID_NOTE // a balance top-up – no product
     : require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
-    ? "📦 **Instant delivery:** your product arrives right here and in your DMs as soon as you've paid – usually in under 30 seconds, at most 1–5 minutes. Didn't get it? Write here or click **Call support**."
-    : "📦 Once you've paid, your order is confirmed here automatically and a seller delivers it right away.";
+    ? '📦 **Dostawa natychmiastowa:** produkt trafi tutaj i do Twoich DM zaraz po zapłacie – zwykle w mniej niż 30 sekund, najpóźniej w 1–5 minut. Nie dotarł? Napisz tutaj albo kliknij **Wezwij pomoc**.'
+    : '📦 Po zapłacie zamówienie potwierdzi się tutaj automatycznie, a sprzedawca od razu je dostarczy.';
 
 function linkCard(ticket, s) {
   const c = container(s.status === 'paid' ? COLORS.success : s.status === 'expired' ? COLORS.warning : COLORS.brand);
   const total = money(s.amount);
   if (s.status === 'paid') {
-    c.addTextDisplayComponents(text(`## ✅ Paid with Stripe\n**${money(s.paidAmount ?? s.amount)}** for order \`#${pad(ticket.number)}\` – received ${ts(s.paidAt, 'R')}.`));
+    c.addTextDisplayComponents(text(`## ✅ Opłacone przez Stripe\n**${money(s.paidAmount ?? s.amount)}** za zamówienie \`#${pad(ticket.number)}\` – otrzymano ${ts(s.paidAt, 'R')}.`));
     return v2(c);
   }
   if (s.status === 'expired') {
-    c.addTextDisplayComponents(text(`## 💳 Payment link expired\nThe Stripe link for order \`#${pad(ticket.number)}\` (**${total}**) no longer works.\n-# Still want to pay by card? Get a new link.`));
-    c.addActionRowComponents(row(btn('stripe:new', 'New payment link', '🔄', ButtonStyle.Primary)));
+    c.addTextDisplayComponents(text(`## 💳 Link do płatności wygasł\nLink Stripe do zamówienia \`#${pad(ticket.number)}\` (**${total}**) już nie działa.\n-# Nadal chcesz zapłacić kartą? Wygeneruj nowy link.`));
+    c.addActionRowComponents(row(btn('stripe:new', 'Nowy link do płatności', '🔄', ButtonStyle.Primary)));
     return v2(c);
   }
   c.addTextDisplayComponents(
     text(
-      `## 💳 Pay by card – Stripe\n**Total:** ${total} · order \`#${pad(ticket.number)}\`\n` +
-        "Card, Apple Pay or Google Pay on Stripe's secure page – we never see your card details.",
+      `## 💳 Zapłać kartą – Stripe\n**Razem:** ${total} · zamówienie \`#${pad(ticket.number)}\`\n` +
+        'Karta, Apple Pay lub Google Pay na bezpiecznej stronie Stripe – nigdy nie widzimy danych Twojej karty.',
     ),
   );
   c.addTextDisplayComponents(text(deliveryNote(ticket)));
@@ -159,9 +159,9 @@ function linkCard(ticket, s) {
   // Link buttons take URLs up to 512 characters – a longer Checkout link goes into the text instead.
   const fits = s.url.length <= 512;
   c.addTextDisplayComponents(
-    text(`${fits ? '' : `**[💳 Pay ${total}](${s.url})**\n`}-# The link works until ${ts(s.expiresAt, 'f')} · your order is confirmed here automatically once you've paid.`),
+    text(`${fits ? '' : `**[💳 Zapłać ${total}](${s.url})**\n`}-# Link działa do ${ts(s.expiresAt, 'f')} · po zapłacie zamówienie potwierdzi się tutaj automatycznie.`),
   );
-  c.addActionRowComponents(row(...(fits ? [linkBtn(s.url, truncate(`Pay ${total}`, 80), '💳')] : []), btn('stripe:new', 'New link', '🔄')));
+  c.addActionRowComponents(row(...(fits ? [linkBtn(s.url, truncate(`Zapłać ${total}`, 80), '💳')] : []), btn('stripe:new', 'Nowy link', '🔄')));
   return v2(c);
 }
 
@@ -236,7 +236,7 @@ async function postLink(channel, ticket) {
   if (old?.status === 'open') {
     const state = await settle(guild, ticket, await stopSession(old.sessionId));
     if (state === 'paid') return { result: 'paid' };
-    if (state === 'open') throw new UserError("The current link is being paid right now – give it a minute, it's confirmed here automatically.");
+    if (state === 'open') throw new UserError('Obecny link jest właśnie opłacany – daj mu chwilę, płatność potwierdzi się tutaj automatycznie.');
   }
   // Counted before calling Stripe: every try has its own Idempotency-Key, also after one that failed half-way.
   const attempt = (db.getTicket(ticket.channelId).stripeAttempts ?? 0) + 1;
@@ -272,7 +272,7 @@ async function postLink(channel, ticket) {
 
 /** Stripe can't take payments this small – the customer is told what to do instead. */
 const tooSmall = (total) =>
-  `💳 Stripe takes card payments from **${money(MINIMUM[currency()])}** – this order is **${money(total)}**. Please pay another way (e.g. PayPal or PaysafeCard), or a seller helps you here.`;
+  `💳 Stripe przyjmuje płatności kartą od **${money(MINIMUM[currency()])}** – to zamówienie wynosi **${money(total)}**. Zapłać inną metodą (np. PayPal lub PaysafeCard) albo poczekaj na pomoc sprzedawcy tutaj.`;
 
 /** A new order with Stripe as its payment method → its payment link, right away. */
 async function onOrderPlaced({ channel, ticket }) {
@@ -280,17 +280,17 @@ async function onOrderPlaced({ channel, ticket }) {
   if (!enabled()) {
     if (config.stripe?.enabled !== false && currency() == null && !currencyWarned) {
       currencyWarned = true;
-      console.warn(`[stripe] No payment links: set config.json → stripe.currency (e.g. "sek") – "${config.shop.currency}" isn't clear.`);
+      console.warn(`[stripe] Brak linków do płatności: ustaw config.json → stripe.currency (np. "sek") – "${config.shop.currency}" nie jest jednoznaczne.`);
     }
     return;
   }
   try {
     const { result } = await postLink(channel, ticket);
-    if (result === 'none') await channel.send(notice(COLORS.brand, '💳 A seller sends you the Stripe payment link once the final price is confirmed.'));
+    if (result === 'none') await channel.send(notice(COLORS.brand, '💳 Sprzedawca wyśle Ci link do płatności Stripe, gdy potwierdzi ostateczną cenę.'));
     if (result === 'small') await channel.send(notice(COLORS.warning, tooSmall(tickets.orderDetails(ticket).total)));
   } catch (err) {
-    console.warn(`[stripe] Could not make a payment link for ticket ${ticket.channelId}:`, err.message);
-    await channel.send(notice(COLORS.warning, "💳 The card payment link couldn't be made right now – a seller sends you one shortly.")).catch(() => null);
+    console.warn(`[stripe] Nie udało się utworzyć linku do płatności dla ticketu ${ticket.channelId}:`, err.message);
+    await channel.send(notice(COLORS.warning, '💳 Nie udało się teraz utworzyć linku do płatności kartą – sprzedawca wkrótce wyśle Ci link.')).catch(() => null);
   }
 }
 
@@ -300,7 +300,7 @@ let checking = false;
 const warnedTickets = new Set();
 
 async function warnRefused(client) {
-  console.warn('[stripe] STRIPE_SECRET_KEY was refused by Stripe – check the key in .env.');
+  console.warn('[stripe] Stripe odrzucił STRIPE_SECRET_KEY – sprawdź klucz w .env.');
   const open = db.tickets((t) => t.order?.stripe?.status === 'open');
   for (const id of new Set(open.map((t) => t.guildId))) {
     const guild = client.guilds.cache.get(id);
@@ -308,8 +308,8 @@ async function warnRefused(client) {
     refusedWarned.add(id);
     await sendLog(guild, {
       embeds: [
-        logEmbed(COLORS.danger, '⚠️ Stripe refused the key', client.user).setDescription(
-          'Card payments **can\'t be confirmed automatically** right now – check open Stripe orders in your Stripe Dashboard and set them to Paid by hand. Fix `STRIPE_SECRET_KEY` in `.env` and restart the bot.',
+        logEmbed(COLORS.danger, '⚠️ Stripe odrzucił klucz', client.user).setDescription(
+          'Płatności kartą **nie mogą być teraz potwierdzane automatycznie** – sprawdź otwarte zamówienia Stripe w panelu Stripe (Dashboard) i ręcznie ustaw im status Opłacone. Popraw `STRIPE_SECRET_KEY` w `.env` i uruchom bota ponownie.',
         ),
       ],
     }).catch(() => null);
@@ -372,13 +372,13 @@ const lastNewLink = new Map();
 async function newLink(interaction) {
   const { channel } = interaction;
   const ticket = db.getTicket(channel?.id);
-  if (!ticket || ticket.typeId !== 'order') throw new UserError('This button only works in an order ticket.');
-  if (ticket.ownerId !== interaction.user.id && !isStaff(interaction.member, config.getType('order'))) throw new UserError('Only the customer or the team can make a new payment link.');
-  if (!enabled()) throw new UserError('Card payments by link are turned off right now – a seller will help you in the ticket.');
-  if (ticket.status !== 'open' || ticket.completedAt) throw new UserError('This order is closed.');
-  if (!['awaiting', 'sent'].includes(statusOf(ticket))) throw new UserError('This order is already paid.');
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('Ten przycisk działa tylko w tickecie zamówienia.');
+  if (ticket.ownerId !== interaction.user.id && !isStaff(interaction.member, config.getType('order'))) throw new UserError('Nowy link do płatności może utworzyć tylko klient lub zespół.');
+  if (!enabled()) throw new UserError('Płatności kartą przez link są teraz wyłączone – sprzedawca pomoże Ci w tickecie.');
+  if (ticket.status !== 'open' || ticket.completedAt) throw new UserError('To zamówienie jest zamknięte.');
+  if (!['awaiting', 'sent'].includes(statusOf(ticket))) throw new UserError('To zamówienie jest już opłacone.');
   const last = lastNewLink.get(ticket.channelId) ?? 0;
-  if (Date.now() - last < NEW_LINK_COOLDOWN) throw new UserError(`A new link was just made – you can make another ${ts(last + NEW_LINK_COOLDOWN, 'R')}.`);
+  if (Date.now() - last < NEW_LINK_COOLDOWN) throw new UserError(`Nowy link został właśnie utworzony – kolejny możesz utworzyć ${ts(last + NEW_LINK_COOLDOWN, 'R')}.`);
   lastNewLink.set(ticket.channelId, Date.now());
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   let done;
@@ -386,13 +386,13 @@ async function newLink(interaction) {
     done = await postLink(channel, ticket);
   } catch (err) {
     if (err instanceof UserError) throw err;
-    console.warn(`[stripe] New link for ticket ${ticket.channelId}:`, err.message);
-    throw new UserError("Stripe couldn't make a link right now – try again in a minute, or a seller helps you in the ticket.");
+    console.warn(`[stripe] Nowy link dla ticketu ${ticket.channelId}:`, err.message);
+    throw new UserError('Stripe nie może teraz utworzyć linku – spróbuj ponownie za minutę albo poproś o pomoc sprzedawcę w tickecie.');
   }
-  if (done.result === 'paid') return interaction.editReply({ content: '✅ Your payment just came in – no new link needed.' });
-  if (done.result === 'none') throw new UserError('This order has no fixed total yet – a seller confirms the price first.');
+  if (done.result === 'paid') return interaction.editReply({ content: '✅ Twoja płatność właśnie dotarła – nowy link nie jest potrzebny.' });
+  if (done.result === 'none') throw new UserError('To zamówienie nie ma jeszcze ustalonej kwoty – najpierw sprzedawca potwierdzi cenę.');
   if (done.result === 'small') throw new UserError(tooSmall(tickets.orderDetails(ticket).total));
-  return interaction.editReply({ content: `💳 Here's a new payment link for **${money(done.ticket.order.stripe.amount)}** – the old one no longer works.` });
+  return interaction.editReply({ content: `💳 Oto nowy link do płatności na **${money(done.ticket.order.stripe.amount)}** – stary już nie działa.` });
 }
 
 hooks.on('orderPlaced', onOrderPlaced);

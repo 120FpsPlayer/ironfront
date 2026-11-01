@@ -18,7 +18,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    if (!isShopManager(interaction.member)) return replyError(interaction, 'Only administrators and sellers can see the sales statistics.');
+    if (!isShopManager(interaction.member)) return replyError(interaction, 'Statystyki sprzedaży widzą tylko administratorzy i sprzedawcy.');
     const range = sales.periodRange(interaction.options.getString('period') ?? '7d');
     return reply(interaction, sales.salesCard(interaction.guild, range));
   },

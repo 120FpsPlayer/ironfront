@@ -4,6 +4,7 @@ const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const customers = require('../features/customers');
 const { UserError, reply, replyError, isStaff, truncate } = require('../lib/utils');
 const { isMod } = require('../lib/permissions');
+const { slash } = require('../lib/commandsPl');
 
 const userOption = (o) => o.setName('user').setDescription('The customer').setRequired(true);
 
@@ -48,11 +49,11 @@ module.exports = {
   },
 
   async execute(interaction) {
-    if (!isStaff(interaction.member)) return replyError(interaction, 'Customer profiles and notes are only available to staff members.');
+    if (!isStaff(interaction.member)) return replyError(interaction, 'Profile klientów i notatki są dostępne tylko dla zespołu.');
     const guild = interaction.guild;
     const sub = interaction.options.getSubcommand();
     const user = interaction.options.getUser('user');
-    if (user.bot) throw new UserError("Bots don't have customer profiles.");
+    if (user.bot) throw new UserError('Boty nie mają profili klientów.');
 
     if (sub === 'view') {
       const member = await guild.members.fetch(user.id).catch(() => null);
@@ -61,16 +62,16 @@ module.exports = {
 
     if (sub === 'add') {
       const note = customers.addNote(guild.id, user.id, { by: interaction.user.id, text: interaction.options.getString('text') });
-      return reply(interaction, `Note **#${note.id}** saved for ${user}. Only staff can see it – \`/customer view\` shows all notes.`);
+      return reply(interaction, `Notatka **#${note.id}** o ${user} zapisana. Widzi ją tylko zespół – wszystkie notatki pokazuje \`${slash('customer view')}\`.`);
     }
 
     const id = interaction.options.getInteger('id');
     const note = customers.notesOf(guild.id, user.id).find((n) => n.id === id);
-    if (!note) throw new UserError(`${user} has no note **#${id}**. Pick one from the suggestions.`);
+    if (!note) throw new UserError(`${user} nie ma notatki **#${id}**. Wybierz jedną z podpowiedzi.`);
     if (note.by !== interaction.user.id && !isMod(interaction.member)) {
-      throw new UserError(`Note #${id} was written by <@${note.by}> – you can only delete your own notes. Ask a moderator to delete it.`);
+      throw new UserError(`Autorem notatki #${id} jest <@${note.by}> – możesz usuwać tylko swoje notatki. Poproś moderatora o jej usunięcie.`);
     }
     customers.removeNote(guild.id, user.id, id);
-    return reply(interaction, `Deleted note **#${id}** about ${user}.`);
+    return reply(interaction, `Usunięto notatkę **#${id}** o ${user}.`);
   },
 };

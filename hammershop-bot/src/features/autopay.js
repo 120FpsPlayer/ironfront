@@ -54,34 +54,34 @@ async function paymentReceived(guild, ticket, { gateway, paidAmount, paidCurrenc
   if (refreshCard) await refreshCard(updated);
 
   const warnings = [];
-  if (twice) warnings.push(`⚠️ This order was already **${before === 'delivered' ? 'completed' : 'marked as paid'}** – the customer may have paid twice. Check it (refunds: your ${gateway} account).`);
-  else if (!matches) warnings.push(`⚠️ The order total is **${total == null ? 'not fixed' : money(total)}** – it was **not** set to Paid. Check the difference first.`);
-  if (updated.status !== 'open') warnings.push(`⚠️ The ticket was ${channel ? 'closed' : 'deleted'} when the payment came in${channel ? ' – reopen it to deliver' : ' – contact the customer'}.`);
+  if (twice) warnings.push(`⚠️ To zamówienie było już **${before === 'delivered' ? 'zrealizowane' : 'oznaczone jako opłacone'}** – klient mógł zapłacić dwa razy. Sprawdź to (zwroty: Twoje konto ${gateway}).`);
+  else if (!matches) warnings.push(`⚠️ Kwota zamówienia: **${total == null ? 'nieustalona' : money(total)}** – status **nie** został zmieniony na Opłacone. Najpierw sprawdź różnicę.`);
+  if (updated.status !== 'open') warnings.push(`⚠️ Gdy przyszła płatność, ticket był już ${channel ? 'zamknięty' : 'usunięty'}${channel ? ' – otwórz go ponownie, żeby dostarczyć zamówienie' : ' – skontaktuj się z klientem'}.`);
   // Paid in full on an open ticket and the product has files or text → delivered right away (src/features/delivery.js).
   const delivery = require('./delivery'); // here – it needs this file's neighbours loaded
   const instant = matches && !twice && channel && updated.status === 'open' && !updated.order?.delivered && delivery.deliverable(guild.id, updated);
   const pings = instant ? { users: [], roles: [] } : pingsFor(guild, updated); // nothing for the team to do when it's delivered automatically
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
-  const head = `💳 **${gateway} payment received – ${money(paidAmount)}** for order \`#${pad(updated.number)}\`.`;
+  const head = `💳 **Otrzymano płatność ${gateway} – ${money(paidAmount)}** za zamówienie \`#${pad(updated.number)}\`.`;
   if (channel) {
-    const done = updated.order?.topUp ? ' 💰 The balance is credited automatically.' : ' 📦 The product is delivered automatically.'; // a top-up: features/balance.js
-    const ask = instant ? done : matches && !twice && who ? ` ${who}, please deliver it.` : who ? ` ${who}` : '';
+    const done = updated.order?.topUp ? ' 💰 Saldo zostanie doładowane automatycznie.' : ' 📦 Produkt zostanie dostarczony automatycznie.'; // a top-up: features/balance.js
+    const ask = instant ? done : matches && !twice && who ? ` ${who}, czas dostarczyć zamówienie.` : who ? ` ${who}` : '';
     await channel.send(notice(warnings.length ? COLORS.warning : COLORS.success, `${head}${ask}${warnings.length ? `\n${warnings.join('\n')}` : ''}`, { mentions: pings })).catch(() => null);
   }
   await sendLog(guild, {
     // Without a ticket channel the log is the only place the team hears about it – ping them there.
     ...(!channel && who && { content: who, allowedMentions: pings }),
     embeds: [
-      logEmbed(warnings.length ? COLORS.warning : COLORS.success, `💳 ${gateway} payment received`, bot).addFields(
+      logEmbed(warnings.length ? COLORS.warning : COLORS.success, `💳 Otrzymano płatność ${gateway}`, bot).addFields(
         { name: 'Ticket', value: `<#${updated.channelId}> (\`#${pad(updated.number)}\`)`, inline: true },
-        { name: 'Customer', value: `<@${updated.ownerId}>`, inline: true },
-        { name: 'Amount', value: money(paidAmount), inline: true },
+        { name: 'Klient', value: `<@${updated.ownerId}>`, inline: true },
+        { name: 'Kwota', value: money(paidAmount), inline: true },
         { name: gateway, value: `\`${truncate(reference ?? '—', 100)}\``, inline: true },
-        ...(warnings.length ? [{ name: 'Check', value: truncate(warnings.join('\n'), 1024) }] : []),
+        ...(warnings.length ? [{ name: 'Do sprawdzenia', value: truncate(warnings.join('\n'), 1024) }] : []),
       ),
     ],
   }).catch(() => null);
-  if (instant) await delivery.deliverPaid(channel, db.getTicket(updated.channelId), { amount: paidAmount }).catch((err) => console.warn(`[${gateway}] delivery:`, err.message));
+  if (instant) await delivery.deliverPaid(channel, db.getTicket(updated.channelId), { amount: paidAmount }).catch((err) => console.warn(`[${gateway}] dostawa:`, err.message));
 }
 
 /** The order has a payment link that confirms itself – "Pay" isn't needed then. Here – stripe.js and paypal.js need this file. */

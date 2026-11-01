@@ -37,11 +37,11 @@ const COLOR = {
 };
 
 const HINTS = {
-  awaiting: "We're waiting for your payment – the payment details are in your ticket. Click **Pay** there to send it.",
-  sent: 'A seller is checking your payment right now.',
-  paid: 'Your payment is confirmed – thank you! A seller starts on your order shortly.',
-  progress: 'A seller is preparing your order right now – it is delivered in your ticket.',
-  delivered: 'Your order has been delivered – you find everything in your ticket. Enjoy! 🧡',
+  awaiting: 'Czekamy na Twoją płatność – dane do płatności są w Twoim tickecie. Kliknij tam **Zapłać**, żeby ją wysłać.',
+  sent: 'Sprzedawca właśnie sprawdza Twoją płatność.',
+  paid: 'Twoja płatność jest potwierdzona – dziękujemy! Sprzedawca zaraz zajmie się Twoim zamówieniem.',
+  progress: 'Sprzedawca właśnie przygotowuje Twoje zamówienie – dostarczymy je w Twoim tickecie.',
+  delivered: 'Twoje zamówienie zostało dostarczone – wszystko znajdziesz w swoim tickecie. Miłego korzystania! 🧡',
 };
 
 const statusDms = () => config.orders?.statusDms !== false;
@@ -49,10 +49,10 @@ const statusDms = () => config.orders?.statusDms !== false;
 /** The open, not yet completed order ticket in this channel (or a UserError). */
 function requireOpenOrder(channel) {
   const ticket = db.getTicket(channel?.id);
-  if (!ticket) throw new UserError('This action can only be used in a ticket channel.');
-  if (ticket.typeId !== 'order') throw new UserError('Only purchase tickets have an order status.');
-  if (ticket.status !== 'open') throw new UserError('This ticket is closed.');
-  if (ticket.completedAt) throw new UserError('This order is already completed.');
+  if (!ticket) throw new UserError('Tej akcji można użyć tylko na kanale ticketu.');
+  if (ticket.typeId !== 'order') throw new UserError('Status zamówienia mają tylko tickety zakupu.');
+  if (ticket.status !== 'open') throw new UserError('Ten ticket jest zamknięty.');
+  if (ticket.completedAt) throw new UserError('To zamówienie jest już zrealizowane.');
   return ticket;
 }
 
@@ -72,19 +72,19 @@ function statusCard(guild, ticket, status) {
   const order = tickets.orderDetails(ticket);
   const s = ORDER_STATUS[status] ?? ORDER_STATUS.awaiting;
   const c = container(COLOR[status] ?? COLORS.brand);
-  header(c, `## ${s.emoji} Order update\nYour order at **${truncate(guild.name, 100)}** is now **${s.label}**.`, guild.iconURL?.({ size: 128 }));
+  header(c, `## ${s.emoji} Aktualizacja zamówienia\nNowy status Twojego zamówienia w **${truncate(guild.name, 100)}**: **${s.label}**.`, guild.iconURL?.({ size: 128 }));
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
     text(
       [
-        `**Order:** \`#${pad(ticket.number)}\``,
-        `**Product:** ${orderTitle(order)}`,
+        `**Zamówienie:** \`#${pad(ticket.number)}\``,
+        `**Produkt:** ${orderTitle(order)}`,
         `**Status:** ${statusLabel(status)}`,
       ].join('\n'),
     ),
   );
-  c.addTextDisplayComponents(text(`${HINTS[status] ?? ''}\n-# We never ask for payment in DMs – only inside your ticket.`.trim()));
-  c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, ticket.channelId), 'Go to ticket', '🎫')));
+  c.addTextDisplayComponents(text(`${HINTS[status] ?? ''}\n-# Nigdy nie prosimy o płatność w DM – tylko w Twoim tickecie.`.trim()));
+  c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, ticket.channelId), 'Przejdź do ticketu', '🎫')));
   return v2(c);
 }
 
@@ -104,13 +104,13 @@ async function sendStatusDm(guild, ticket, status) {
  * to the customer. → { status, dm } (dm: whether the DM arrived)
  */
 async function setStatus(channel, status, staff) {
-  if (!MENU_STATUSES.includes(status)) throw new UserError('Unknown order status.');
+  if (!MENU_STATUSES.includes(status)) throw new UserError('Nieznany status zamówienia.');
   const ticket = requireOpenOrder(channel);
-  if (statusOf(ticket) === status) throw new UserError(`The order is already **${statusLabel(status)}**.`);
+  if (statusOf(ticket) === status) throw new UserError(`Zamówienie ma już status **${statusLabel(status)}**.`);
   const now = Date.now();
   const updated = recordStatus(ticket, status, { by: staff.id, now });
   await tickets.refreshControlMessage(channel, updated);
-  await channel.send(notice(COLOR[status], `${ORDER_STATUS[status].emoji} Order status: **${ORDER_STATUS[status].label}**\n-# Set by <@${staff.id}> ${ts(now, 'R')}`));
+  await channel.send(notice(COLOR[status], `${ORDER_STATUS[status].emoji} Status zamówienia: **${ORDER_STATUS[status].label}**\n-# Ustawiony przez <@${staff.id}> ${ts(now, 'R')}`));
   const dm = await sendStatusDm(channel.guild, updated, status);
   await hooks.emit('orderStatus', { guild: channel.guild, ticket: updated, status, staff });
   return { status, dm };

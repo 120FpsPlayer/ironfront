@@ -38,7 +38,7 @@ const ui = require('../tickets/ui');
 const orderstatus = require('./orderstatus');
 const { statusOf, statusLabel } = require('../lib/orderStatus');
 const { COLORS } = require('../lib/theme');
-const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog, maskPin, maskPins } = require('../lib/utils');
+const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog, maskPin, maskPins, count } = require('../lib/utils');
 const { alertRoleIds } = require('../lib/permissions');
 const { quantitySuffix } = require('../lib/orderItems');
 const { container, text, divider, gallery, linkBtn, btn, row, v2 } = require('../lib/v2');
@@ -96,17 +96,17 @@ const maskText = maskPins;
 /** The order ticket in this channel, if this member may send its payment now (or a UserError). */
 function requirePayable(channel, userId, now = Date.now()) {
   const ticket = db.getTicket(channel?.id);
-  if (!ticket || ticket.typeId !== 'order') throw new UserError('This button only works in an order ticket.');
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('Ten przycisk działa tylko w tickecie zamówienia.');
   if (ticket.ownerId !== userId) {
-    throw new UserError(`Only <@${ticket.ownerId}> can send the payment for this order. Staff confirm payments in the ⚙️ menu (**Status: Paid**).`);
+    throw new UserError(`Płatność za to zamówienie może wysłać tylko <@${ticket.ownerId}>. Zespół potwierdza płatności w menu ⚙️ (**Status: Opłacone**).`);
   }
-  if (config.orders?.paymentProofs === false) throw new UserError('Please write your payment details in the ticket – a seller checks them there.');
-  if (ticket.status !== 'open') throw new UserError('This ticket is closed.');
-  if (ticket.completedAt) throw new UserError('This order is already completed.');
-  if (require('./autopay').confirmsItself(ticket)) throw new UserError('Pay with the payment link in this ticket – your order is confirmed here automatically once you\'ve paid.');
-  if (!ui.acceptsPayment(ticket)) throw new UserError(`Your payment is already confirmed (${statusLabel(statusOf(ticket))}) – no need to send it again.`);
+  if (config.orders?.paymentProofs === false) throw new UserError('Napisz dane płatności w tickecie – sprzedawca sprawdzi je na miejscu.');
+  if (ticket.status !== 'open') throw new UserError('Ten ticket jest zamknięty.');
+  if (ticket.completedAt) throw new UserError('To zamówienie jest już zrealizowane.');
+  if (require('./autopay').confirmsItself(ticket)) throw new UserError('Zapłać przez link do płatności w tym tickecie – po zapłacie zamówienie potwierdzi się tutaj automatycznie.');
+  if (!ui.acceptsPayment(ticket)) throw new UserError(`Twoja płatność jest już potwierdzona (${statusLabel(statusOf(ticket))}) – nie musisz wysyłać jej ponownie.`);
   const last = ticket.order?.payment?.at;
-  if (last && now - last < COOLDOWN) throw new UserError(`You've just sent your payment. You can send a correction ${ts(last + COOLDOWN, 'R')}.`);
+  if (last && now - last < COOLDOWN) throw new UserError(`Płatność została właśnie wysłana. Poprawkę możesz wysłać ${ts(last + COOLDOWN, 'R')}.`);
   return ticket;
 }
 
@@ -115,32 +115,32 @@ function requirePayable(channel, userId, now = Date.now()) {
 function paymentModal(ticket) {
   const order = tickets.orderDetails(ticket);
   const summary =
-    `**${truncate(order.product || 'Your order', 100)}**${quantitySuffix(order)}` +
+    `**${truncate(order.product || 'Twoje zamówienie', 100)}**${quantitySuffix(order)}` +
     (order.method ? ` · ${truncate(order.method, 60)}` : '') +
-    (order.total != null ? ` · Total **${money(order.total)}**` : '');
+    (order.total != null ? ` · Razem **${money(order.total)}**` : '');
   const modal = new ModalBuilder()
     .setCustomId('pay:submit')
-    .setTitle(`💳 Pay · order #${pad(ticket.number)}`.slice(0, 45))
+    .setTitle(`💳 Zapłać · zamówienie #${pad(ticket.number)}`.slice(0, 45))
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`${summary}\nFill in at least one field – a seller checks your payment right away.\n-# Only send it here, in your ticket – never in DMs.`),
+      new TextDisplayBuilder().setContent(`${summary}\nWypełnij co najmniej jedno pole – sprzedawca od razu sprawdzi Twoją płatność.\n-# Wysyłaj ją tylko tutaj, w swoim tickecie – nigdy w DM.`),
     );
   if (ui.takesPins(order)) {
     modal.addLabelComponents(
       new LabelBuilder()
-        .setLabel('PaysafeCard PIN(s)')
-        .setDescription('16 digits each. Several PINs? Separate them with commas or new lines.')
+        .setLabel('PIN PaysafeCard (jeden lub kilka)')
+        .setDescription('Każdy PIN ma 16 cyfr. Kilka PIN-ów? Oddziel je przecinkami lub nowymi liniami.')
         .setTextInputComponent(
           new TextInputBuilder().setCustomId('pins').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(400).setPlaceholder('1234-5678-9012-3456'),
         ),
     );
   }
-  const note = new LabelBuilder().setLabel('Note or transaction ID');
+  const note = new LabelBuilder().setLabel('Notatka lub ID transakcji');
   // BTC / ETH: the transaction ID is checked on the blockchain (src/features/cryptoverify.js) – here, it needs this file's neighbours.
-  if (require('./cryptoverify').checksOrder(ticket.order)) note.setDescription('Paste the transaction ID (hash) – your order is then confirmed automatically.');
+  if (require('./cryptoverify').checksOrder(ticket.order)) note.setDescription('Wklej ID transakcji (hash) – zamówienie potwierdzi się wtedy automatycznie.');
   modal.addLabelComponents(
     new LabelBuilder()
-      .setLabel('Screenshots')
-      .setDescription(`Up to ${MAX_FILES} pictures of your payment (optional).`)
+      .setLabel('Zrzuty ekranu')
+      .setDescription(`Do ${MAX_FILES} zdjęć płatności (opcjonalnie).`)
       .setFileUploadComponent(new FileUploadBuilder().setCustomId('files').setMinValues(0).setMaxValues(MAX_FILES).setRequired(false)),
     note
       .setTextInputComponent(
@@ -149,7 +149,7 @@ function paymentModal(ticket) {
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(false)
           .setMaxLength(NOTE_MAX)
-          .setPlaceholder('E.g. the crypto transaction ID, or anything the seller should know'),
+          .setPlaceholder('Np. ID transakcji krypto albo coś, o czym sprzedawca powinien wiedzieć'),
       ),
   );
   return modal;
@@ -237,26 +237,26 @@ function paymentCard(ticket, { payment, files, pings, again, auto = false }) {
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
   c.addTextDisplayComponents(
     text(
-      `## 📨 Payment sent${again ? ' again' : ''}\n` +
-        `<@${ticket.ownerId}> sent the payment for order \`#${pad(ticket.number)}\`` +
-        (auto ? ' – 🔎 the transaction is checked on the blockchain automatically.' : who ? ` – ${who}, please check it.` : ' – a seller checks it shortly.'),
+      `## 📨 Płatność wysłana${again ? ' ponownie' : ''}\n` +
+        `Płatność za zamówienie \`#${pad(ticket.number)}\` od <@${ticket.ownerId}>` +
+        (auto ? ' – 🔎 transakcja jest sprawdzana automatycznie w blockchainie.' : who ? ` – ${who}, prośba o sprawdzenie.` : ' – sprzedawca wkrótce ją sprawdzi.'),
     ),
   );
   c.addSeparatorComponents(divider());
-  const facts = [`**Method:** ${payment.method ? truncate(payment.method, 100) : '—'}`];
+  const facts = [`**Metoda:** ${payment.method ? truncate(payment.method, 100) : '—'}`];
   // PINs only as the last 4 digits – the whole PIN only for config.orders.pinViewers (Show PIN).
-  if (payment.pins.length) facts.push(`**${payment.pins.length === 1 ? 'PIN' : 'PINs'}:** ${payment.pins.map(maskPin).join(' · ')}`);
-  if (payment.note) facts.push(`**Note:**\n${quote(maskText(payment.note))}`);
+  if (payment.pins.length) facts.push(`**${payment.pins.length === 1 ? 'PIN' : 'PIN-y'}:** ${payment.pins.map(maskPin).join(' · ')}`);
+  if (payment.note) facts.push(`**Notatka:**\n${quote(maskText(payment.note))}`);
   const lost = files.filter((f) => !f.buffer);
-  if (files.length) facts.push(`**Screenshots:** ${files.length}`);
-  if (lost.length) facts.push(`-# Too big to keep (the link expires): ${lost.map((f) => (f.url ? `[${f.name}](${f.url})` : f.name)).join(', ')}`);
+  if (files.length) facts.push(`**Zrzuty ekranu:** ${files.length}`);
+  if (lost.length) facts.push(`-# Za duże, by je zachować (link wygaśnie): ${lost.map((f) => (f.url ? `[${f.name}](${f.url})` : f.name)).join(', ')}`);
   c.addTextDisplayComponents(text(facts.join('\n')));
   const images = files.filter((f) => f.buffer && f.image);
   if (images.length) c.addMediaGalleryComponents(gallery(...images.map((f) => `attachment://${f.name}`)));
   for (const f of files.filter((x) => x.buffer && !x.image)) c.addFileComponents(new FileBuilder().setURL(`attachment://${f.name}`));
-  const next = auto ? 'Confirmed by the bot once the blockchain does – staff are pinged if it needs a hand' : 'Staff: check the payment, then click **Payment OK**';
+  const next = auto ? 'Bot potwierdzi płatność, gdy potwierdzi ją blockchain – zespół dostanie ping, jeśli będzie potrzebna pomoc' : 'Zespół: sprawdźcie płatność i kliknijcie **Płatność OK**';
   c.addTextDisplayComponents(text(`-# ${statusLabel('sent')} · ${ts(payment.at, 'f')} · ${next}`));
-  const showPin = payment.pins.length || maskText(payment.note) !== (payment.note ?? '') ? [btn(`pay:pin:${payment.at}`, payment.pins.length > 1 ? 'Show PINs' : 'Show PIN', '🔑', ButtonStyle.Secondary)] : [];
+  const showPin = payment.pins.length || maskText(payment.note) !== (payment.note ?? '') ? [btn(`pay:pin:${payment.at}`, payment.pins.length > 1 ? 'Pokaż PIN-y' : 'Pokaż PIN', '🔑', ButtonStyle.Secondary)] : [];
   c.addActionRowComponents(row(require('./delivery').confirmButtonFor(ticket.guildId, ticket), ...showPin)); // here – delivery.js needs this file's neighbours
   return v2(c, {
     mentions: { users: pings.users, roles: pings.roles },
@@ -268,15 +268,15 @@ function paymentCard(ticket, { payment, files, pings, again, auto = false }) {
 function logPayload(channel, ticket, member, { payment, files, again, message }) {
   const fields = [
     { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
-    { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
-    { name: 'Method', value: truncate(payment.method || '—', 1024), inline: true },
+    { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
+    { name: 'Metoda', value: truncate(payment.method || '—', 1024), inline: true },
   ];
-  if (payment.pins.length) fields.push({ name: payment.pins.length === 1 ? 'PIN' : 'PINs', value: payment.pins.map(maskPin).join('\n') });
-  if (payment.note) fields.push({ name: 'Note', value: truncate(maskText(payment.note), 1024) });
-  if (files.length) fields.push({ name: 'Screenshots', value: `${files.length} – in the ticket`, inline: true });
+  if (payment.pins.length) fields.push({ name: payment.pins.length === 1 ? 'PIN' : 'PIN-y', value: payment.pins.map(maskPin).join('\n') });
+  if (payment.note) fields.push({ name: 'Notatka', value: truncate(maskText(payment.note), 1024) });
+  if (files.length) fields.push({ name: 'Zrzuty ekranu', value: `${files.length} – w tickecie`, inline: true });
   return {
-    embeds: [logEmbed(COLORS.warning, again ? '📨 Payment sent again' : '📨 Payment sent', member.user ?? member).addFields(fields)],
-    components: message?.url ? [row(linkBtn(message.url, 'Open', '📨'))] : [],
+    embeds: [logEmbed(COLORS.warning, again ? '📨 Płatność wysłana ponownie' : '📨 Płatność wysłana', member.user ?? member).addFields(fields)],
+    components: message?.url ? [row(linkBtn(message.url, 'Otwórz', '📨'))] : [],
   };
 }
 
@@ -294,15 +294,15 @@ async function submit(interaction) {
   const order = tickets.orderDetails(ticket);
   const { pins, bad } = ui.takesPins(order) ? parsePins(field(interaction, 'pins')) : { pins: [], bad: null };
   if (bad) {
-    throw new UserError(`\`${truncate(bad, 30)}\` is not a PaysafeCard PIN – a PIN has 16 digits, like **1234-5678-9012-3456**. Several PINs? Put a comma between them.`);
+    throw new UserError(`\`${truncate(bad, 30)}\` to nie jest PIN PaysafeCard – PIN ma 16 cyfr, np. **1234-5678-9012-3456**. Kilka PIN-ów? Oddziel je przecinkami.`);
   }
-  if (pins.length > MAX_PINS) throw new UserError(`That's ${pins.length} PINs – you can send up to ${MAX_PINS} at once. Send the rest in a second message.`);
+  if (pins.length > MAX_PINS) throw new UserError(`To ${count(pins.length, 'PIN', 'PIN-y', 'PIN-ów')} – naraz możesz wysłać maks. ${MAX_PINS}. Resztę wyślij osobno.`);
   const note = field(interaction, 'note').slice(0, NOTE_MAX);
   const uploads = uploadsOf(interaction).slice(0, MAX_FILES);
   if (!pins.length && !note && !uploads.length) {
-    throw new UserError(`Fill in at least one field: ${ui.takesPins(order) ? 'your PaysafeCard PIN, ' : ''}a screenshot or a note / transaction ID.`);
+    throw new UserError(`Wypełnij co najmniej jedno pole: ${ui.takesPins(order) ? 'PIN PaysafeCard, ' : ''}zrzut ekranu albo notatkę / ID transakcji.`);
   }
-  if (sending.has(channel.id)) throw new UserError('Your payment is being sent – one moment…');
+  if (sending.has(channel.id)) throw new UserError('Twoja płatność jest właśnie wysyłana – chwileczkę…');
   const cryptoverify = require('./cryptoverify'); // here – it needs this file's neighbours
   let tx = null;
   sending.add(channel.id);
@@ -344,10 +344,10 @@ async function submit(interaction) {
     sending.delete(channel.id);
   }
   if (tx) {
-    const crypto = await cryptoverify.start(guild, channel.id, tx).catch((err) => console.warn(`[pay] crypto check ${channel.id}:`, err.message));
+    const crypto = await cryptoverify.start(guild, channel.id, tx).catch((err) => console.warn(`[pay] sprawdzanie krypto ${channel.id}:`, err.message));
     return reply(interaction, cryptoverify.replyFor(crypto));
   }
-  return reply(interaction, "Thanks! Your payment was sent to the seller – they'll check it and confirm it in your ticket.");
+  return reply(interaction, 'Dzięki! Płatność trafiła do sprzedawcy – sprawdzi ją i potwierdzi w Twoim tickecie.');
 }
 
 /** Who may see whole PINs: config.orders.pinViewers (user IDs), or the bot owners when that list is empty. */
@@ -358,19 +358,19 @@ function canSeePins(member) {
 
 /** Show PIN – the whole PINs, only to the PIN viewers, only for them (ephemeral), and logged. */
 async function showPins(interaction, at) {
-  if (!canSeePins(interaction.member)) throw new UserError('Only the owner can see the PaysafeCard PINs.');
+  if (!canSeePins(interaction.member)) throw new UserError('PIN-y PaysafeCard widzi tylko właściciel.');
   const ticket = db.getTicket(interaction.channel?.id);
   const payment = ticket?.order?.payment;
-  if (!payment) throw new UserError('No payment with a PIN in this ticket.');
+  if (!payment) throw new UserError('W tym tickecie nie ma płatności z PIN-em.');
   const old = String(payment.at) !== String(at);
   const lines = [
     ...(payment.pins ?? []).map((p) => `🔑 \`${formatPin(p)}\``),
-    ...(payment.note && maskText(payment.note) !== payment.note ? [`**Note:**\n${quote(payment.note)}`] : []),
+    ...(payment.note && maskText(payment.note) !== payment.note ? [`**Notatka:**\n${quote(payment.note)}`] : []),
   ];
   await sendLog(interaction.guild, {
-    embeds: [logEmbed(COLORS.warning, '🔑 PaysafeCard PIN viewed', interaction.user).setDescription(`Order \`#${pad(ticket.number)}\` in <#${ticket.channelId}>`)],
+    embeds: [logEmbed(COLORS.warning, '🔑 Wyświetlono PIN PaysafeCard', interaction.user).setDescription(`Zamówienie \`#${pad(ticket.number)}\` w <#${ticket.channelId}>`)],
   }).catch(() => null);
-  return reply(interaction, `${old ? '-# This is the newest payment sent in this ticket.\n' : ''}${lines.join('\n') || 'No PIN in this payment.'}`);
+  return reply(interaction, `${old ? '-# To najnowsza płatność wysłana w tym tickecie.\n' : ''}${lines.join('\n') || 'W tej płatności nie ma PIN-u.'}`);
 }
 
 hooks.route('pay', {

@@ -27,7 +27,8 @@ const files = require('../lib/deliveryFiles');
 const { statusOf } = require('../lib/orderStatus');
 const { isStaff } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
-const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { UserError, logEmbed, money, pad, ts, truncate, sendLog, plural } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { isCart, lineText } = require('../lib/orderItems');
 const { container, text, divider, btn, v2, notice } = require('../lib/v2');
 
@@ -78,16 +79,16 @@ const canDeliver = (guildId, ticket) => !ticket?.order?.topUp && sendable(guildI
  */
 async function setDelivery(guild, query, { attachments = [], text: deliveryText = null, clear = false }) {
   const p = shop().findProduct(guild.id, query);
-  if (!p) throw new UserError('There is no such product. Pick one from the suggestions.');
+  if (!p) throw new UserError('Nie ma takiego produktu. Wybierz produkt z podpowiedzi.');
   const current = clear ? { files: [], text: null } : { files: [...(p.delivery?.files ?? [])], text: p.delivery?.text ?? null };
   const uploads = attachments.filter(Boolean);
   const replaced = new Set(uploads.map((a) => files.cleanName(a.name)));
   const kept = current.files.filter((f) => !replaced.has(f.name));
-  if (kept.length + uploads.length > files.MAX_FILES) throw new UserError(`A product can deliver up to **${files.MAX_FILES} files** – use \`clear:True\` to start over.`);
+  if (kept.length + uploads.length > files.MAX_FILES) throw new UserError(`Produkt może dostarczać maks. **${files.MAX_FILES} ${plural(files.MAX_FILES, 'plik', 'pliki', 'plików')}** – użyj \`wyczysc:True\`, żeby zacząć od nowa.`);
   const downloaded = await files.download(uploads, kept.reduce((n, f) => n + (f.size || 0), 0));
   let nextText = current.text;
   if (deliveryText != null && String(deliveryText).trim()) {
-    nextText = /^(none|-)$/i.test(String(deliveryText).trim()) ? null : String(deliveryText).trim().slice(0, TEXT_MAX);
+    nextText = /^(none|brak|-)$/i.test(String(deliveryText).trim()) ? null : String(deliveryText).trim().slice(0, TEXT_MAX);
   }
   // Files last – only once everything is valid.
   if (clear) files.remove(p.id);
@@ -101,9 +102,9 @@ async function setDelivery(guild, query, { attachments = [], text: deliveryText 
 
 /** "📄 key.txt (1.2 KB) · 📄 guide.pdf (300 KB) · 💬 text" – for replies and /product list. */
 function deliverySummary(p) {
-  if (!hasDelivery(p)) return 'nothing – delivered by hand';
+  if (!hasDelivery(p)) return 'nic – dostawa ręczna';
   const size = (b) => (b >= 1024 * 1024 ? files.mb(b) : `${Math.max(1, Math.round(b / 1024))} KB`);
-  return [...(p.delivery.files ?? []).map((f) => `📄 ${f.name} (${size(f.size)})`), p.delivery.text ? `💬 text (${p.delivery.text.length} characters)` : null].filter(Boolean).join(' · ');
+  return [...(p.delivery.files ?? []).map((f) => `📄 ${f.name} (${size(f.size)})`), p.delivery.text ? `💬 tekst (${p.delivery.text.length} ${plural(p.delivery.text.length, 'znak', 'znaki', 'znaków')})` : null].filter(Boolean).join(' · ');
 }
 
 // ───────────── Cards ─────────────
@@ -112,16 +113,16 @@ function deliverySummary(p) {
 function onTheWayCard(ticket, { auto }) {
   if (ticket.order?.topUp) return topUpOnTheWay(ticket, { auto });
   const giftTo = gifts().recipientOf(ticket);
-  const where = giftTo ? `here and to <@${giftTo}>'s DMs (it's a gift 🎁)` : 'here and in your DMs';
+  const where = giftTo ? `tutaj i do DM <@${giftTo}> (to prezent 🎁)` : 'tutaj i do Twoich DM';
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(
     text(
       auto
-        ? `## 📦 Your product is on the way!\nPayment received for order \`#${pad(ticket.number)}\` – your product is being sent right now, ${where}.`
-        : `## 📦 Your product is on the way!\nWe're checking your payment for order \`#${pad(ticket.number)}\` – as soon as it's confirmed, your product is sent right ${where}.`,
+        ? `## 📦 Twój produkt jest w drodze!\nOtrzymaliśmy płatność za zamówienie \`#${pad(ticket.number)}\` – właśnie wysyłamy produkt ${where}.`
+        : `## 📦 Twój produkt jest w drodze!\nSprawdzamy Twoją płatność za zamówienie \`#${pad(ticket.number)}\` – gdy tylko ją potwierdzimy, wyślemy produkt ${where}.`,
     ),
   );
-  c.addTextDisplayComponents(text("-# Didn't get it after a few minutes? Write here or click **Call support**."));
+  c.addTextDisplayComponents(text('-# Nic nie dotarło po kilku minutach? Napisz tutaj albo kliknij **Wezwij pomoc**.'));
   return v2(c);
 }
 
@@ -132,11 +133,11 @@ function topUpOnTheWay(ticket, { auto }) {
   c.addTextDisplayComponents(
     text(
       auto
-        ? `## 💰 Topping up your balance\nPayment received for order \`#${pad(ticket.number)}\` – **${amount}** is being added to your store balance right now.`
-        : `## 💰 Your top-up is on its way!\nWe're checking your payment for order \`#${pad(ticket.number)}\` – as soon as it's confirmed, **${amount}** is added to your store balance.`,
+        ? `## 💰 Doładowujemy Twoje saldo\nOtrzymaliśmy płatność za zamówienie \`#${pad(ticket.number)}\` – właśnie dodajemy **${amount}** do Twojego salda sklepu.`
+        : `## 💰 Twoje doładowanie jest w drodze!\nSprawdzamy Twoją płatność za zamówienie \`#${pad(ticket.number)}\` – gdy tylko ją potwierdzimy, dodamy **${amount}** do Twojego salda sklepu.`,
     ),
   );
-  c.addTextDisplayComponents(text("-# Balance can't be refunded or paid out. Something wrong? Write here or click **Call support**."));
+  c.addTextDisplayComponents(text('-# Saldo nie podlega zwrotowi ani wypłacie. Coś nie tak? Napisz tutaj albo kliknij **Wezwij pomoc**.'));
   return v2(c);
 }
 
@@ -144,9 +145,9 @@ const safeBlock = (s) => String(s).replace(/```/g, 'ʼʼʼ');
 
 /** The heading of the product card – a gift says who it's from (in the DM) or who it's for (in the ticket). */
 function productHeading(guild, ticket, name, { inDm, giftTo, giftFrom }) {
-  if (giftFrom) return `## 🎁 A gift from @${giftFrom} – ${name}\n**@${giftFrom}** bought this for you at **${truncate(guild.name, 80)}** · enjoy! 🧡`;
-  if (giftTo) return `## 🎁 Your gift – ${name}\nOrder \`#${pad(ticket.number)}\` · a gift for <@${giftTo}> – it goes to their DMs too. Thank you for your purchase! 🧡`;
-  return `## 📦 Your product – ${name}\nOrder \`#${pad(ticket.number)}\`${inDm ? ` at **${truncate(guild.name, 80)}**` : ''} · thank you for your purchase! 🧡`;
+  if (giftFrom) return `## 🎁 Prezent od @${giftFrom} – ${name}\nKupiony dla Ciebie przez **@${giftFrom}** w **${truncate(guild.name, 80)}** · miłego korzystania! 🧡`;
+  if (giftTo) return `## 🎁 Twój prezent – ${name}\nZamówienie \`#${pad(ticket.number)}\` · prezent dla <@${giftTo}> – trafia też do DM tej osoby. Dziękujemy za zakup! 🧡`;
+  return `## 📦 Twój produkt – ${name}\nZamówienie \`#${pad(ticket.number)}\`${inDm ? ` w **${truncate(guild.name, 80)}**` : ''} · dziękujemy za zakup! 🧡`;
 }
 
 /**
@@ -165,10 +166,10 @@ function productCard(guild, ticket, product, { inDm = false, name = null, giftTo
   }
   for (const f of attached) c.addFileComponents(new FileBuilder().setURL(`attachment://${f.name}`));
   const footer = giftFrom
-    ? 'Keep it safe – never share it with anyone. Something wrong? Ask the friend who gave it to you.'
+    ? 'Przechowuj go bezpiecznie – nigdy nikomu go nie udostępniaj. Coś nie tak? Zapytaj osobę, która dała Ci prezent.'
     : giftTo
-      ? 'Keep it safe – never share it with anyone. Something wrong? Write here.'
-      : `${inDm ? 'Also in your ticket' : 'Also sent to your DMs'} · keep it safe – never share it with anyone. Something wrong? ${inDm ? 'Write in your ticket.' : 'Write here.'}`;
+      ? 'Przechowuj go bezpiecznie – nigdy nikomu go nie udostępniaj. Coś nie tak? Napisz tutaj.'
+      : `${inDm ? 'Kopia jest też w Twoim tickecie' : 'Kopia trafiła też do Twoich DM'} · przechowuj go bezpiecznie – nigdy nikomu go nie udostępniaj. Coś nie tak? ${inDm ? 'Napisz w tickecie.' : 'Napisz tutaj.'}`;
   c.addTextDisplayComponents(text(`-# ${footer}`));
   return { payload: v2(c, { files: attached }), missing };
 }
@@ -183,7 +184,7 @@ const isDelivering = (channelId) => delivering.has(channelId);
 /** "Alex" – how the buyer is named on a gift's DM (no markdown, no mention: it's read outside the server). */
 async function buyerName(guild, ticket) {
   const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
-  return escapeMarkdown(truncate(user?.globalName || user?.username || ticket.ownerName || 'a friend', 40));
+  return escapeMarkdown(truncate(user?.globalName || user?.username || ticket.ownerName || 'znajomy', 40));
 }
 
 /**
@@ -215,21 +216,21 @@ async function deliver(channel, ticket, { by, auto = false, again = false } = {}
     for (const x of cards) {
       if (dm) dm = await user.send(productCard(guild, ticket, x.product, { inDm: true, name: x.name, giftFrom }).payload).then(() => true).catch(() => false);
     }
-    const what = cards.length > 1 ? 'your products are' : 'your product is';
+    const what = cards.length > 1 ? 'Twoje produkty są' : 'Twój produkt jest';
     if (giftTo) await channel.send(gifts().deliveredNotice(ticket, giftTo, dm, { many: cards.length > 1 })).catch(() => null);
-    else if (!dm) await channel.send(notice(COLORS.warning, `📭 <@${ticket.ownerId}> I couldn't DM you – ${what} right above. Open your DMs for this server to get copies next time.`, { mentions: { users: [ticket.ownerId] } })).catch(() => null);
+    else if (!dm) await channel.send(notice(COLORS.warning, `📭 <@${ticket.ownerId}>, nie mogę wysłać Ci wiadomości prywatnej – ${what} tuż powyżej. Włącz DM dla tego serwera, żeby następnym razem dostać kopie.`, { mentions: { users: [ticket.ownerId] } })).catch(() => null);
     const order = tickets().orderDetails(db.getTicket(channel.id));
     db.updateTicket(channel.id, { order: { ...order, delivered: { at: Date.now(), by: by?.id ?? null, dm, auto, messageId: sent?.id ?? null, ...(giftTo && { giftTo }) } } });
     const missing = cards.flatMap((x) => x.card.missing);
     await sendLog(guild, {
       embeds: [
-        logEmbed(missing.length ? COLORS.warning : COLORS.success, auto ? '📦 Product delivered automatically' : '📦 Product delivered', by?.user ?? by ?? guild.client.user).addFields(
+        logEmbed(missing.length ? COLORS.warning : COLORS.success, auto ? '📦 Produkt dostarczony automatycznie' : '📦 Produkt dostarczony', by?.user ?? by ?? guild.client.user).addFields(
           { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
-          { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
-          { name: cards.length > 1 ? 'Products' : 'Product', value: truncate(cards.map((x) => x.name || x.product.name).join('\n'), 1024), inline: true },
-          ...(giftTo ? [{ name: '🎁 Gift for', value: `<@${giftTo}>`, inline: true }] : []),
-          { name: 'DM', value: dm ? (giftTo ? 'sent to the gift recipient' : 'sent') : giftTo ? "couldn't DM the recipient – the buyer has it in the ticket" : "couldn't DM – it's in the ticket", inline: true },
-          ...(missing.length ? [{ name: '⚠️ Missing files', value: truncate(`${missing.join(', ')} – set them again with /product delivery`, 1024) }] : []),
+          { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
+          { name: cards.length > 1 ? 'Produkty' : 'Produkt', value: truncate(cards.map((x) => x.name || x.product.name).join('\n'), 1024), inline: true },
+          ...(giftTo ? [{ name: '🎁 Prezent dla', value: `<@${giftTo}>`, inline: true }] : []),
+          { name: 'DM', value: dm ? (giftTo ? 'wysłany do odbiorcy prezentu' : 'wysłany') : giftTo ? 'nie udało się wysłać do odbiorcy prezentu – kupujący ma go w tickecie' : 'nie udało się wysłać – jest w tickecie', inline: true },
+          ...(missing.length ? [{ name: '⚠️ Brakujące pliki', value: truncate(`${missing.join(', ')} – dodaj je ponownie przez ${slash('product delivery')}`, 1024) }] : []),
         ),
       ],
     }).catch(() => null);
@@ -255,7 +256,7 @@ async function deliverPaid(channel, ticket, { amount }) {
   if (!done.ok) return false;
   await tickets()
     .completeOrder(channel, bot, { amount })
-    .catch((err) => console.warn(`[delivery] Could not complete order ${ticket.channelId}:`, err.message));
+    .catch((err) => console.warn(`[delivery] Nie udało się zrealizować zamówienia ${ticket.channelId}:`, err.message));
   return true;
 }
 
@@ -268,29 +269,29 @@ async function deliverPaid(channel, ticket, { amount }) {
  */
 async function confirmAndDeliver(channel, member, { again = false } = {}) {
   const ticket = db.getTicket(channel?.id);
-  if (!ticket || ticket.typeId !== 'order') throw new UserError('This only works in an order ticket.');
-  if (!isStaff(member, config.getType('order'))) throw new UserError('Only the team can confirm payments and deliver products.');
-  if (ticket.status !== 'open') throw new UserError('This ticket is closed – reopen it first.');
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('To działa tylko w tickecie zamówienia.');
+  if (!isStaff(member, config.getType('order'))) throw new UserError('Tylko zespół może potwierdzać płatności i dostarczać produkty.');
+  if (ticket.status !== 'open') throw new UserError('Ten ticket jest zamknięty – najpierw otwórz go ponownie.');
   if (ticket.order?.topUp) return confirmTopUp(channel, ticket, member);
   const cart = isCart(ticket.order);
   const product = cart ? null : productFor(channel.guild.id, ticket);
   if (ticket.order?.delivered && !again) {
-    throw new UserError(`The ${cart ? 'products were' : 'product was'} already delivered ${ts(ticket.order.delivered.at, 'R')}. Need to send ${cart ? 'them' : 'it'} again? ⚙️ → **Send product again**.`);
+    throw new UserError(`${cart ? 'Produkty zostały już dostarczone' : 'Produkt został już dostarczony'} ${ts(ticket.order.delivered.at, 'R')}. Chcesz wysłać ${cart ? 'je' : 'go'} ponownie? ⚙️ → **Wyślij produkt ponownie**.`);
   }
   if (!ticket.completedAt && ['awaiting', 'sent'].includes(statusOf(ticket))) await require('./orderstatus').setStatus(channel, 'paid', member);
   const giftTo = gifts().recipientOf(db.getTicket(channel.id));
-  const giftHint = giftTo ? ` 🎁 It's a gift – give it to <@${giftTo}>.` : '';
+  const giftHint = giftTo ? ` 🎁 To prezent – przekaż go <@${giftTo}>.` : '';
   if (cart && !canDeliver(channel.guild.id, ticket)) {
-    return `Payment confirmed – the order is **Paid**. No product in this cart has files or text to deliver – deliver them by hand, then ⚙️ → **Order completed**.${giftHint}`;
+    return `Płatność potwierdzona – zamówienie ma status **Opłacone**. Żaden produkt w tym koszyku nie ma plików ani tekstu do dostarczenia – dostarcz je ręcznie, a potem ⚙️ → **Zamówienie zrealizowane**.${giftHint}`;
   }
   if (!cart && !hasDelivery(product)) {
-    return `Payment confirmed – the order is **Paid**. ${product ? `**${product.name}** has no files or text to deliver` : 'This is a custom order'} – deliver it by hand, then ⚙️ → **Order completed**.${giftHint}`;
+    return `Płatność potwierdzona – zamówienie ma status **Opłacone**. ${product ? `**${product.name}** nie ma plików ani tekstu do dostarczenia` : 'To zamówienie indywidualne'} – dostarcz je ręcznie, a potem ⚙️ → **Zamówienie zrealizowane**.${giftHint}`;
   }
   const done = await deliver(channel, db.getTicket(channel.id), { by: member, again });
   if (!done.ok) {
-    if (done.reason === 'busy') throw new UserError('The product is being delivered right now.');
-    if (done.reason === 'missing') throw new UserError(`The product's files are missing on the bot (${done.missing.join(', ')}) – set them again with \`/product delivery\`.`);
-    throw new UserError('The product was already delivered.');
+    if (done.reason === 'busy') throw new UserError('Produkt jest właśnie dostarczany.');
+    if (done.reason === 'missing') throw new UserError(`Bot nie ma już plików produktu (${done.missing.join(', ')}) – dodaj je ponownie przez \`${slash('product delivery')}\`.`);
+    throw new UserError('Produkt został już dostarczony.');
   }
   const latest = db.getTicket(channel.id);
   // Cart items with nothing to send are delivered by hand – the seller completes the order after that.
@@ -298,31 +299,31 @@ async function confirmAndDeliver(channel, member, { again = false } = {}) {
   if (!latest.completedAt && !byHand.length) {
     await tickets()
       .completeOrder(channel, member)
-      .catch((err) => console.warn(`[delivery] Could not complete order ${channel.id}:`, err.message));
+      .catch((err) => console.warn(`[delivery] Nie udało się zrealizować zamówienia ${channel.id}:`, err.message));
   }
-  const note = done.missing.length ? ` ⚠️ Missing files: ${done.missing.join(', ')}.` : '';
+  const note = done.missing.length ? ` ⚠️ Brakujące pliki: ${done.missing.join(', ')}.` : '';
   const where = done.giftTo
-    ? `in the ticket${done.dm ? ` and to the gift's recipient <@${done.giftTo}> by DM` : ` (couldn't DM the gift's recipient <@${done.giftTo}> – the buyer has it in the ticket)`}`
-    : `in the ticket${done.dm ? ' and by DM' : " (the customer's DMs are closed)"}`;
-  if (!cart) return `📦 Delivered **${product.name}** ${where}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
+    ? `w tickecie${done.dm ? ` i w DM do odbiorcy prezentu <@${done.giftTo}>` : ` (nie udało się wysłać DM do odbiorcy prezentu <@${done.giftTo}> – kupujący ma go w tickecie)`}`
+    : `w tickecie${done.dm ? ' i w DM' : ' (klient ma zamknięte DM)'}`;
+  if (!cart) return `📦 Dostarczono **${product.name}** ${where}${latest.completedAt ? '' : ' – zamówienie zrealizowane'}.${note}`;
   const count = sendable(channel.guild.id, latest).length;
-  const delivered = `📦 Delivered **${count} ${count === 1 ? 'product' : 'products'}** ${where}`;
-  if (byHand.length) return `${delivered}. ⚠️ Deliver by hand: ${truncate(byHand.join(', '), 300)} – then ⚙️ → **Order completed**.${giftHint}${note}`;
-  return `${delivered}${latest.completedAt ? '' : ' – the order is completed'}.${note}`;
+  const delivered = `📦 Dostarczono **${count} ${plural(count, 'produkt', 'produkty', 'produktów')}** ${where}`;
+  if (byHand.length) return `${delivered}. ⚠️ Dostarcz ręcznie: ${truncate(byHand.join(', '), 300)} – a potem ⚙️ → **Zamówienie zrealizowane**.${giftHint}${note}`;
+  return `${delivered}${latest.completedAt ? '' : ' – zamówienie zrealizowane'}.${note}`;
 }
 
 /** Staff confirmed the payment of a balance top-up: Paid, then completed – which credits the balance once. */
 async function confirmTopUp(channel, ticket, member) {
-  if (ticket.completedAt) throw new UserError('This top-up is already completed – the balance was credited.');
+  if (ticket.completedAt) throw new UserError('To doładowanie jest już zrealizowane – środki są na saldzie.');
   if (['awaiting', 'sent'].includes(statusOf(ticket))) await require('./orderstatus').setStatus(channel, 'paid', member);
   const result = await tickets().completeOrder(channel, member);
   const credited = db.getTicket(channel.id)?.order?.topUp?.credited ?? result.sale.amount;
-  return `💰 Payment confirmed – **${money(credited)}** was added to <@${ticket.ownerId}>'s store balance and the top-up is completed.`;
+  return `💰 Płatność potwierdzona – **${money(credited)}** dodano do salda sklepu <@${ticket.ownerId}>, a doładowanie jest zrealizowane.`;
 }
 
 /** The button on the "Payment sent" card (src/features/payments.js). */
 async function confirmButton(interaction) {
-  if (!isStaff(interaction.member, config.getType('order'))) throw new UserError('Only the team can confirm payments and deliver products.');
+  if (!isStaff(interaction.member, config.getType('order'))) throw new UserError('Tylko zespół może potwierdzać płatności i dostarczać produkty.');
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await confirmAndDeliver(interaction.channel, interaction.member);
   return interaction.editReply({ content: result });
@@ -330,8 +331,8 @@ async function confirmButton(interaction) {
 
 /** "✅ Payment OK – deliver" – "Payment OK – credit balance" for a top-up, "Payment OK" when it's delivered by hand. */
 function confirmButtonFor(guildId, ticket) {
-  if (ticket?.order?.topUp) return btn('deliver:confirm', 'Payment OK – credit balance', '✅', ButtonStyle.Success);
-  return btn('deliver:confirm', canDeliver(guildId, ticket) ? 'Payment OK – deliver' : 'Payment OK', '✅', ButtonStyle.Success);
+  if (ticket?.order?.topUp) return btn('deliver:confirm', 'Płatność OK – doładuj saldo', '✅', ButtonStyle.Success);
+  return btn('deliver:confirm', canDeliver(guildId, ticket) ? 'Płatność OK – dostarcz' : 'Płatność OK', '✅', ButtonStyle.Success);
 }
 
 hooks.route('deliver', { button: (interaction, action) => (action === 'confirm' ? confirmButton(interaction) : null) });

@@ -65,7 +65,7 @@ const base = () => (env.paypalSandbox ? 'https://api-m.sandbox.paypal.com' : 'ht
 let token = { value: null, until: 0 };
 
 function apiError(res, data) {
-  const err = new Error(data?.details?.[0]?.description ?? data?.message ?? data?.error_description ?? `PayPal answered ${res.status}`);
+  const err = new Error(data?.details?.[0]?.description ?? data?.message ?? data?.error_description ?? `PayPal odpowiedział ${res.status}`);
   err.status = res.status;
   err.issue = data?.details?.[0]?.issue ?? data?.name ?? data?.error ?? null;
   return err;
@@ -131,7 +131,7 @@ function createOrder(guild, ticket, order, cur, attempt) {
         {
           reference_id: ticket.channelId,
           custom_id: ticket.channelId,
-          description: truncate(`${config.brand.name} order #${pad(ticket.number)} – ${orderTitle(order, { max: 120 })}`, 127),
+          description: truncate(`Zamówienie ${config.brand.name} #${pad(ticket.number)} – ${orderTitle(order, { max: 120 })}`, 127),
           amount: { currency_code: cur.toUpperCase(), value: decimalString(order.total, cur) },
         },
       ],
@@ -172,50 +172,50 @@ const deliveryNote = (ticket) =>
   ticket.order?.topUp
     ? require('./balance').PAID_NOTE // a balance top-up – no product
     : require('./delivery').deliverable(ticket.guildId, ticket) // here – delivery.js needs this file's neighbours
-    ? "📦 **Instant delivery:** your product arrives right here and in your DMs as soon as you've paid – usually in under 30 seconds, at most 1–5 minutes. Didn't get it? Write here or click **Call support**."
-    : "📦 Once you've paid, your order is confirmed here automatically and a seller delivers it right away.";
+    ? '📦 **Dostawa natychmiastowa:** produkt trafi tutaj i do Twoich DM zaraz po zapłacie – zwykle w mniej niż 30 sekund, najpóźniej w 1–5 minut. Nie dotarł? Napisz tutaj albo kliknij **Wezwij pomoc**.'
+    : '📦 Po zapłacie zamówienie potwierdzi się tutaj automatycznie, a sprzedawca od razu je dostarczy.';
 
 function linkCard(guild, ticket, p) {
   const total = money(p.amount);
   const c = container(p.status === 'paid' ? COLORS.success : ['expired', 'held'].includes(p.status) || p.captureError ? COLORS.warning : COLORS.brand);
   if (p.status === 'paid') {
-    c.addTextDisplayComponents(text(`## ✅ Paid with PayPal\n**${money(p.paidAmount ?? p.amount)}** for order \`#${pad(ticket.number)}\` – received ${ts(p.paidAt, 'R')}.`));
+    c.addTextDisplayComponents(text(`## ✅ Opłacone przez PayPal\n**${money(p.paidAmount ?? p.amount)}** za zamówienie \`#${pad(ticket.number)}\` – otrzymano ${ts(p.paidAt, 'R')}.`));
     return v2(c);
   }
   if (p.status === 'held') {
     c.addTextDisplayComponents(
       text(
-        `## ⏸️ PayPal payment not taken\nThe customer approved **${total}** on PayPal, but order \`#${pad(ticket.number)}\` was already marked as paid – so it was **not** taken.\n` +
-          "-# Staff: haven't received the money another way? Take it now.",
+        `## ⏸️ Płatność PayPal nie została pobrana\nKlient zatwierdził **${total}** w PayPal, ale zamówienie \`#${pad(ticket.number)}\` było już oznaczone jako opłacone – dlatego pieniądze **nie** zostały pobrane.\n` +
+          '-# Zespół: pieniądze nie dotarły inną drogą? Pobierz je teraz.',
       ),
     );
-    c.addActionRowComponents(row(btn('paypal:take', 'Take PayPal payment', '💰', ButtonStyle.Primary)));
+    c.addActionRowComponents(row(btn('paypal:take', 'Pobierz płatność PayPal', '💰', ButtonStyle.Primary)));
     return v2(c);
   }
   if (p.status === 'expired') {
-    c.addTextDisplayComponents(text(`## 💳 PayPal link no longer works\nThe PayPal link for order \`#${pad(ticket.number)}\` (**${total}**) has been closed.\n-# Still want to pay with PayPal? Get a new link.`));
-    c.addActionRowComponents(row(btn('paypal:new', 'New payment link', '🔄', ButtonStyle.Primary)));
+    c.addTextDisplayComponents(text(`## 💳 Link PayPal już nie działa\nLink PayPal do zamówienia \`#${pad(ticket.number)}\` (**${total}**) został zamknięty.\n-# Nadal chcesz zapłacić przez PayPal? Wygeneruj nowy link.`));
+    c.addActionRowComponents(row(btn('paypal:new', 'Nowy link do płatności', '🔄', ButtonStyle.Primary)));
     return v2(c);
   }
   if (p.pendingSince) {
     c.addTextDisplayComponents(
-      text(`## ⏳ PayPal is processing your payment\n**${total}** for order \`#${pad(ticket.number)}\` was paid – PayPal is still checking it. **No need to pay again** – it's confirmed here as soon as PayPal releases it.`),
+      text(`## ⏳ PayPal przetwarza Twoją płatność\nZapłacono **${total}** za zamówienie \`#${pad(ticket.number)}\` – PayPal jeszcze sprawdza płatność. **Nie płać ponownie** – potwierdzimy ją tutaj, gdy tylko PayPal ją zwolni.`),
     );
     return v2(c);
   }
   c.addTextDisplayComponents(
-    text(`## ${guild ? ce(guild, 'paypal') : '💳'} Pay ${total} – PayPal\n-# Order \`#${pad(ticket.number)}\`\nPay with your PayPal account or a card on PayPal's secure page.`),
+    text(`## ${guild ? ce(guild, 'paypal') : '💳'} Zapłać ${total} – PayPal\n-# Zamówienie \`#${pad(ticket.number)}\`\nZapłać kontem PayPal lub kartą na bezpiecznej stronie PayPal.`),
   );
   c.addTextDisplayComponents(text(deliveryNote(ticket)));
   if (p.captureError) {
-    c.addTextDisplayComponents(text("⚠️ **PayPal couldn't take the payment** – you were **not** charged. Open the link again and choose another card or your PayPal balance, or get a new link."));
+    c.addTextDisplayComponents(text('⚠️ **PayPal nie mógł pobrać płatności** – Twoje konto **nie** zostało obciążone. Otwórz link ponownie i wybierz inną kartę lub saldo PayPal albo wygeneruj nowy link.'));
   }
   c.addSeparatorComponents(divider());
   const fits = p.url.length <= 512;
   c.addTextDisplayComponents(
-    text(`${fits ? '' : `**[💳 Pay ${total} with PayPal](${p.url})**\n`}-# After you pay, your order is confirmed here automatically within a minute. Link not working? Get a new one.`),
+    text(`${fits ? '' : `**[💳 Zapłać ${total} przez PayPal](${p.url})**\n`}-# Po zapłacie zamówienie potwierdzi się tutaj automatycznie w ciągu minuty. Link nie działa? Wygeneruj nowy.`),
   );
-  c.addActionRowComponents(row(...(fits ? [linkBtn(p.url, truncate(`Pay ${total} with PayPal`, 80), '💳')] : []), btn('paypal:new', 'New link', '🔄')));
+  c.addActionRowComponents(row(...(fits ? [linkBtn(p.url, truncate(`Zapłać ${total} przez PayPal`, 80), '💳')] : []), btn('paypal:new', 'Nowy link', '🔄')));
   return v2(c);
 }
 
@@ -296,8 +296,8 @@ async function markPaid(guild, ticket, cap) {
 
 const declined = (guild, channelId) =>
   expire(guild, channelId, {
-    customer: '💳 PayPal declined the payment – you were **not** charged. Get a new link, or pay another way.',
-    staff: '💳 A PayPal payment for this order was declined by PayPal – nothing was taken.',
+    customer: '💳 PayPal odrzucił płatność – Twoje konto **nie** zostało obciążone. Wygeneruj nowy link albo zapłać inną metodą.',
+    staff: '💳 PayPal odrzucił płatność za to zamówienie – nic nie zostało pobrane.',
   });
 
 /** The money was taken – or PayPal is still processing it (pending: the customer is charged, the shop has to wait). */
@@ -310,15 +310,15 @@ async function captured(guild, channelId, o) {
   const reason = cap?.status_details?.reason ?? null;
   const manual = reason === 'RECEIVING_PREFERENCE_MANDATES_MANUAL_ACTION';
   const what =
-    `⏳ The PayPal payment of **${money(p.amount)}** is **pending**${reason ? ` (\`${truncate(reason, 60)}\`)` : ''} – the customer has paid, PayPal hasn't released it yet.` +
-    (manual ? ' **Accept it in your PayPal account** (Activity → the payment → Accept) – otherwise PayPal sends it back.' : ' The order is set to Paid here as soon as PayPal releases it.');
+    `⏳ Płatność PayPal na **${money(p.amount)}** jest **w toku**${reason ? ` (\`${truncate(reason, 60)}\`)` : ''} – klient zapłacił, ale PayPal jeszcze jej nie zwolnił.` +
+    (manual ? ' **Zaakceptuj ją na swoim koncie PayPal** (Aktywność → ta płatność → Akceptuj) – inaczej PayPal ją zwróci.' : ' Zamówienie dostanie tutaj status Opłacone, gdy tylko PayPal ją zwolni.');
   if (!p.pendingSince) {
     const updated = savePaypal(channelId, { pendingSince: Date.now(), pendingReason: reason });
     await editCard(guild, updated);
     await tell(guild, updated, { staff: what });
   } else if (!p.pendingReminded && Date.now() - p.pendingSince > PENDING_REMIND) {
     const updated = savePaypal(channelId, { pendingReminded: true });
-    await tell(guild, updated, { staff: `Still waiting: ${what}` });
+    await tell(guild, updated, { staff: `Nadal czekamy: ${what}` });
   }
   return 'open';
 }
@@ -333,17 +333,17 @@ async function approved(guild, channelId) {
     const updated = savePaypal(channelId, { status: 'held', heldAt: Date.now() });
     await editCard(guild, updated);
     await tell(guild, updated, {
-      staff: `⏸️ The customer approved a PayPal payment of **${money(p.amount)}**, but it was **not taken** because the order was already ${ticket.completedAt ? 'completed' : 'marked as paid'}. Haven't received the money another way? Click **Take PayPal payment**.`,
+      staff: `⏸️ Klient zatwierdził płatność PayPal na **${money(p.amount)}**, ale **nie została pobrana**, bo zamówienie było już ${ticket.completedAt ? 'zrealizowane' : 'oznaczone jako opłacone'}. Pieniądze nie dotarły inną drogą? Kliknij **Pobierz płatność PayPal**.`,
     });
     if (updated.status === 'open') await tickets.refreshControlMessage(guild.channels.cache.get(channelId), updated).catch(() => null);
     return 'held';
   }
   if (!want.ok && want.reason === 'closed') {
-    return expire(guild, channelId, { staff: `💳 The customer approved a PayPal payment of **${money(p.amount)}** after the ticket was ${ticket.status === 'deleted' ? 'deleted' : 'closed'} – it was **not taken**, the customer wasn't charged.` });
+    return expire(guild, channelId, { staff: `💳 Klient zatwierdził płatność PayPal na **${money(p.amount)}** po ${ticket.status === 'deleted' ? 'usunięciu' : 'zamknięciu'} ticketu – **nie została pobrana**, klient nie został obciążony.` });
   }
   if (!want.ok) {
     return expire(guild, channelId, {
-      customer: `💳 The order total changed to **${want.total == null ? 'a new price' : money(want.total)}** – the old PayPal link wasn't charged. Click **New payment link** for the new amount.`,
+      customer: `💳 Kwota zamówienia zmieniła się na **${want.total == null ? 'nową cenę' : money(want.total)}** – płatność przez stary link PayPal nie została pobrana. Kliknij **Nowy link do płatności**, żeby zapłacić nową kwotę.`,
     });
   }
   if (p.nextCaptureAt && Date.now() < p.nextCaptureAt) return 'open'; // PayPal said no a moment ago – the customer may re-approve
@@ -360,8 +360,8 @@ async function approved(guild, channelId) {
       if (tries === 1) {
         await editCard(guild, updated);
         await tell(guild, updated, {
-          customer: "💳 **PayPal couldn't take the payment** (e.g. the card was declined) – you were **not** charged. Open the PayPal link again and pick another card or your PayPal balance – or get a new link.",
-          staff: `💳 PayPal refused to take the approved payment (\`${truncate(err.issue ?? String(err.status), 60)}\`) – nothing was taken, the customer was asked to try again.`,
+          customer: '💳 **PayPal nie mógł pobrać płatności** (np. karta została odrzucona) – Twoje konto **nie** zostało obciążone. Otwórz link PayPal ponownie i wybierz inną kartę lub saldo PayPal – albo wygeneruj nowy link.',
+          staff: `💳 PayPal odmówił pobrania zatwierdzonej płatności (\`${truncate(err.issue ?? String(err.status), 60)}\`) – nic nie zostało pobrane, klient dostał prośbę o ponowną próbę.`,
         });
       }
       return 'open';
@@ -380,7 +380,7 @@ async function checkPrevious(guild, channelId) {
     const o = await getOrder(old.orderId).catch(() => undefined);
     if (o === undefined) keep.push(old); // PayPal unreachable – ask again next time
     else if (o?.status === 'APPROVED') {
-      await tell(guild, db.getTicket(channelId), { customer: '💳 You approved an **older** PayPal link – it was **not** charged. Please pay with the newest PayPal link in this ticket.' });
+      await tell(guild, db.getTicket(channelId), { customer: '💳 Zatwierdzona płatność dotyczy **starszego** linku PayPal – **nie** została pobrana. Zapłać najnowszym linkiem PayPal w tym tickecie.' });
     } else if (o && !['VOIDED', 'COMPLETED'].includes(o.status) && Date.now() - (old.createdAt ?? 0) < WATCH_FOR) keep.push(old);
   }
   if (keep.length !== previous.length) savePaypal(channelId, { previous: keep });
@@ -425,15 +425,15 @@ async function postLink(channel, ticket) {
   if (old?.status === 'open') {
     const state = await settle(guild, ticket.channelId);
     if (state === 'paid') return { result: 'paid' };
-    if (state === 'busy') throw new UserError('Your PayPal payment is being checked right now – give it a minute.');
-    if (state === 'held') throw new UserError('This order is already paid.');
+    if (state === 'busy') throw new UserError('Twoja płatność PayPal jest właśnie sprawdzana – daj jej chwilę.');
+    if (state === 'held') throw new UserError('To zamówienie jest już opłacone.');
     if (state === 'open') {
       const fresh = db.getTicket(ticket.channelId).order?.paypal;
-      if (fresh?.pendingSince) throw new UserError('Your PayPal payment is being processed by PayPal – no need to pay again, it shows up here as soon as PayPal releases it.');
+      if (fresh?.pendingSince) throw new UserError('PayPal przetwarza Twoją płatność – nie płać ponownie, pojawi się tutaj, gdy tylko PayPal ją zwolni.');
       // Approved and not refused – being taken right now; keep it rather than risk a second payment.
       const o = fresh?.status === 'open' ? await getOrder(fresh.orderId) : null;
       if (o?.status === 'COMPLETED' || (o?.status === 'APPROVED' && !fresh.captureError)) {
-        throw new UserError('Your PayPal payment is being processed – it shows up here within a minute.');
+        throw new UserError('Twoja płatność PayPal jest przetwarzana – pojawi się tutaj w ciągu minuty.');
       }
       // Never approved, or PayPal refused to take it – nothing was taken, so it's simply replaced.
     }
@@ -442,7 +442,7 @@ async function postLink(channel, ticket) {
   db.updateTicket(ticket.channelId, { paypalAttempts: attempt }); // before calling PayPal – every try has its own request id
   const created = await createOrder(guild, ticket, order, cur, attempt);
   const url = approveUrl(created);
-  if (!url) throw new Error('PayPal sent no payment link');
+  if (!url) throw new Error('PayPal nie przesłał linku do płatności');
   const latest = db.getTicket(ticket.channelId);
   if (latest.status !== 'open' || latest.completedAt || !['awaiting', 'sent'].includes(statusOf(latest))) return { result: 'none' }; // never approved → never charged
   // Replaced links are still watched for a while – an approval there is never taken, and the customer is told.
@@ -467,7 +467,7 @@ async function onOrderPlaced({ channel, ticket }) {
   if (!enabled()) {
     if (config.paypal?.enabled !== false && currency() == null && !currencyWarned) {
       currencyWarned = true;
-      console.warn(`[paypal] No payment links: set config.json → paypal.currency (e.g. "eur") – "${config.shop.currency}" isn't clear or not taken by PayPal.`);
+      console.warn(`[paypal] Brak linków do płatności: ustaw config.json → paypal.currency (np. "eur") – "${config.shop.currency}" nie jest jednoznaczne albo PayPal go nie obsługuje.`);
     }
     return; // paycards.js shows the manual PayPal card then
   }
@@ -475,7 +475,7 @@ async function onOrderPlaced({ channel, ticket }) {
     const { result } = await postLink(channel, ticket);
     if (result === 'none') await require('./paycards').postCard(channel, db.getTicket(ticket.channelId));
   } catch (err) {
-    console.warn(`[paypal] Could not make a payment link for ticket ${ticket.channelId}:`, err.message);
+    console.warn(`[paypal] Nie udało się utworzyć linku do płatności dla ticketu ${ticket.channelId}:`, err.message);
     await require('./paycards').postCard(channel, db.getTicket(ticket.channelId)); // the manual way still works
   }
 }
@@ -486,7 +486,7 @@ let checking = false;
 const warnedTickets = new Set();
 
 async function warnRefused(client) {
-  console.warn('[paypal] PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET were refused by PayPal – check them in .env.');
+  console.warn('[paypal] PayPal odrzucił PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET – sprawdź je w .env.');
   const open = db.tickets((t) => t.order?.paypal?.status === 'open');
   for (const id of new Set(open.map((t) => t.guildId))) {
     const guild = client.guilds.cache.get(id);
@@ -494,8 +494,8 @@ async function warnRefused(client) {
     refusedWarned.add(id);
     await sendLog(guild, {
       embeds: [
-        logEmbed(COLORS.danger, '⚠️ PayPal refused the keys', client.user).setDescription(
-          "PayPal payments **can't be confirmed automatically** right now. Approved payments are taken as soon as the keys work again (if the order still wants them) – check open PayPal orders in your PayPal account meanwhile. Fix `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` in `.env` and restart the bot.",
+        logEmbed(COLORS.danger, '⚠️ PayPal odrzucił klucze', client.user).setDescription(
+          'Płatności PayPal **nie mogą być teraz potwierdzane automatycznie**. Zatwierdzone płatności zostaną pobrane, gdy klucze znów zadziałają (jeśli zamówienie nadal na nie czeka) – do tego czasu sprawdzaj otwarte zamówienia PayPal na swoim koncie PayPal. Popraw `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` w `.env` i uruchom bota ponownie.',
         ),
       ],
     }).catch(() => null);
@@ -544,13 +544,13 @@ const lastNewLink = new Map();
 async function newLink(interaction) {
   const { channel } = interaction;
   const ticket = db.getTicket(channel?.id);
-  if (!ticket || ticket.typeId !== 'order') throw new UserError('This button only works in an order ticket.');
-  if (ticket.ownerId !== interaction.user.id && !isStaff(interaction.member, config.getType('order'))) throw new UserError('Only the customer or the team can make a new payment link.');
-  if (!enabled()) throw new UserError('PayPal links are turned off right now – a seller will help you in the ticket.');
-  if (ticket.status !== 'open' || ticket.completedAt) throw new UserError('This order is closed.');
-  if (!['awaiting', 'sent'].includes(statusOf(ticket))) throw new UserError('This order is already paid.');
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('Ten przycisk działa tylko w tickecie zamówienia.');
+  if (ticket.ownerId !== interaction.user.id && !isStaff(interaction.member, config.getType('order'))) throw new UserError('Nowy link do płatności może utworzyć tylko klient lub zespół.');
+  if (!enabled()) throw new UserError('Linki PayPal są teraz wyłączone – sprzedawca pomoże Ci w tickecie.');
+  if (ticket.status !== 'open' || ticket.completedAt) throw new UserError('To zamówienie jest zamknięte.');
+  if (!['awaiting', 'sent'].includes(statusOf(ticket))) throw new UserError('To zamówienie jest już opłacone.');
   const last = lastNewLink.get(ticket.channelId) ?? 0;
-  if (Date.now() - last < NEW_LINK_COOLDOWN) throw new UserError(`A new link was just made – you can make another ${ts(last + NEW_LINK_COOLDOWN, 'R')}.`);
+  if (Date.now() - last < NEW_LINK_COOLDOWN) throw new UserError(`Nowy link został właśnie utworzony – kolejny możesz utworzyć ${ts(last + NEW_LINK_COOLDOWN, 'R')}.`);
   lastNewLink.set(ticket.channelId, Date.now());
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   let done;
@@ -558,12 +558,12 @@ async function newLink(interaction) {
     done = await postLink(channel, ticket);
   } catch (err) {
     if (err instanceof UserError) throw err;
-    console.warn(`[paypal] New link for ticket ${ticket.channelId}:`, err.message);
-    throw new UserError("PayPal couldn't make a link right now – try again in a minute, or a seller helps you in the ticket.");
+    console.warn(`[paypal] Nowy link dla ticketu ${ticket.channelId}:`, err.message);
+    throw new UserError('PayPal nie może teraz utworzyć linku – spróbuj ponownie za minutę albo poproś o pomoc sprzedawcę w tickecie.');
   }
-  if (done.result === 'paid') return interaction.editReply({ content: '✅ Your payment just came in – no new link needed.' });
-  if (done.result === 'none') throw new UserError('This order has no fixed total yet – a seller confirms the price first.');
-  return interaction.editReply({ content: `💳 Here's a new PayPal link for **${money(done.ticket.order.paypal.amount)}** – use this one. An older link isn't charged, even if you approve it.` });
+  if (done.result === 'paid') return interaction.editReply({ content: '✅ Twoja płatność właśnie dotarła – nowy link nie jest potrzebny.' });
+  if (done.result === 'none') throw new UserError('To zamówienie nie ma jeszcze ustalonej kwoty – najpierw sprzedawca potwierdzi cenę.');
+  return interaction.editReply({ content: `💳 Oto nowy link PayPal na **${money(done.ticket.order.paypal.amount)}** – używaj tego. Płatność przez starszy link nie zostanie pobrana, nawet jeśli ją zatwierdzisz.` });
 }
 
 // ───────────── "Take PayPal payment" (staff) ─────────────
@@ -572,11 +572,11 @@ async function newLink(interaction) {
 async function takeHeld(interaction) {
   const { channel } = interaction;
   const ticket = db.getTicket(channel?.id);
-  if (!ticket || ticket.typeId !== 'order') throw new UserError('This button only works in an order ticket.');
-  if (!isStaff(interaction.member, config.getType('order'))) throw new UserError('Only the team can take a PayPal payment.');
+  if (!ticket || ticket.typeId !== 'order') throw new UserError('Ten przycisk działa tylko w tickecie zamówienia.');
+  if (!isStaff(interaction.member, config.getType('order'))) throw new UserError('Płatność PayPal może pobrać tylko zespół.');
   const p = ticket.order?.paypal;
-  if (p?.status !== 'held') throw new UserError('There is no PayPal payment waiting to be taken.');
-  if (busy.has(ticket.channelId)) throw new UserError('This PayPal payment is being handled right now – try again in a moment.');
+  if (p?.status !== 'held') throw new UserError('Nie ma płatności PayPal czekającej na pobranie.');
+  if (busy.has(ticket.channelId)) throw new UserError('Ta płatność PayPal jest właśnie obsługiwana – spróbuj ponownie za chwilę.');
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   busy.add(ticket.channelId);
   try {
@@ -586,28 +586,28 @@ async function takeHeld(interaction) {
     else if (o?.status !== 'COMPLETED') {
       const updated = savePaypal(ticket.channelId, { status: 'expired' });
       await editCard(channel.guild, updated);
-      throw new UserError(`PayPal no longer allows taking this payment (${o ? `status ${o.status}` : 'not found'}) – ask the customer to pay again.`);
+      throw new UserError(`PayPal nie pozwala już pobrać tej płatności (${o ? `status ${o.status}` : 'nie znaleziono'}) – poproś klienta o ponowną płatność.`);
     }
     const cap = captureOf(done);
-    if (cap?.status !== 'COMPLETED') throw new UserError(`PayPal didn't take it (${cap?.status ?? 'no capture'}) – check your PayPal account.`);
+    if (cap?.status !== 'COMPLETED') throw new UserError(`PayPal jej nie pobrał (${cap?.status ?? 'brak pobrania'}) – sprawdź swoje konto PayPal.`);
     const paidAmount = Number(cap.amount?.value ?? p.amount);
     const updated = savePaypal(ticket.channelId, { status: 'paid', paidAt: Date.now(), paidAmount, paidCurrency: String(cap.amount?.currency_code ?? p.currency).toLowerCase(), captureId: cap.id ?? null });
     await editCard(channel.guild, updated);
-    await channel.send(notice(COLORS.success, `💰 PayPal payment of **${money(paidAmount)}** taken by <@${interaction.user.id}>.`)).catch(() => null);
+    await channel.send(notice(COLORS.success, `💰 Płatność PayPal na **${money(paidAmount)}** pobrana przez <@${interaction.user.id}>.`)).catch(() => null);
     await sendLog(channel.guild, {
       embeds: [
-        logEmbed(COLORS.success, '💰 Held PayPal payment taken', interaction.user).addFields(
+        logEmbed(COLORS.success, '💰 Pobrano wstrzymaną płatność PayPal', interaction.user).addFields(
           { name: 'Ticket', value: `<#${ticket.channelId}> (\`#${pad(ticket.number)}\`)`, inline: true },
-          { name: 'Amount', value: money(paidAmount), inline: true },
+          { name: 'Kwota', value: money(paidAmount), inline: true },
           { name: 'PayPal', value: `\`${truncate(cap.id ?? p.orderId, 100)}\``, inline: true },
         ),
       ],
     }).catch(() => null);
-    return interaction.editReply({ content: `✅ Taken: **${money(paidAmount)}**.` });
+    return interaction.editReply({ content: `✅ Pobrano: **${money(paidAmount)}**.` });
   } catch (err) {
     if (err instanceof UserError) throw err;
-    console.warn(`[paypal] Take held payment for ticket ${ticket.channelId}:`, err.message);
-    throw new UserError("PayPal couldn't be reached – try again in a minute.");
+    console.warn(`[paypal] Pobieranie wstrzymanej płatności dla ticketu ${ticket.channelId}:`, err.message);
+    throw new UserError('Brak połączenia z PayPal – spróbuj ponownie za minutę.');
   } finally {
     busy.delete(ticket.channelId);
   }

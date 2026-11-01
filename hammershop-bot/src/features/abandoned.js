@@ -18,7 +18,7 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const promos = require('./promos');
 const { e, ce, COLORS } = require('../lib/theme');
-const { pad, ts, truncate } = require('../lib/utils');
+const { pad, ts, truncate, count } = require('../lib/utils');
 const { container, text, divider, linkBtn, row, header, v2, channelUrl } = require('../lib/v2');
 
 const MINUTE = 60_000;
@@ -77,25 +77,25 @@ function dueTickets(guildId, now = Date.now(), opts = settings()) {
 
 function comebackCard(guild, ticket, promo) {
   const c = container(COLORS.brand);
-  const product = truncate(ticket.order?.product ?? 'your order', 120);
+  const product = truncate(ticket.order?.product ?? 'produkt', 120);
   header(
     c,
-    `## ${e(guild, 'cart')} Still thinking about it?\n` +
-      `Your order **${product}** (\`#${pad(ticket.number)}\`) at **${config.brand.name}** was closed before it was paid. ` +
-      `Here's **${promos.label(promo)}** your next order – just for you:`,
+    `## ${e(guild, 'cart')} Nadal się zastanawiasz?\n` +
+      `Twoje zamówienie **${product}** (\`#${pad(ticket.number)}\`) w **${config.brand.name}** zostało zamknięte przed opłaceniem. ` +
+      `Oto **${promos.label(promo)}** na kolejne zamówienie – specjalnie dla Ciebie:`,
     guild.iconURL?.({ size: 128 }),
   );
   c.addTextDisplayComponents(text(`# \`${promo.code}\``));
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
     text(
-      '> Click **Buy** on any product and paste the code into the **Promo code** field – the discount comes off your total.\n' +
-        `-# Valid until ${ts(promo.expiresAt, 'f')} (${ts(promo.expiresAt, 'R')}) · only for your account · one use`,
+      '> Kliknij **Kup** przy dowolnym produkcie i wklej kod w pole **Kod rabatowy** – rabat odejmie się od kwoty.\n' +
+        `-# Ważny do ${ts(promo.expiresAt, 'f')} (${ts(promo.expiresAt, 'R')}) · tylko dla Twojego konta · jednorazowy`,
     ),
   );
   const shopId = db.channelId(guild.id, 'shop');
   const url = shopId ? channelUrl(guild.id, shopId) : `https://discord.com/channels/${guild.id}`;
-  c.addActionRowComponents(row(linkBtn(url, 'Back to the shop', ce(guild, 'cart'))));
+  c.addActionRowComponents(row(linkBtn(url, 'Wróć do sklepu', ce(guild, 'cart'))));
   return v2(c);
 }
 
@@ -107,7 +107,7 @@ async function sendCode(guild, ticket, opts = settings(), now = Date.now()) {
   db.save();
   const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
   if (!user) return null;
-  const promo = promos.personal(guild.id, ticket.ownerId, { percent: opts.percent, days: opts.days, prefix: 'COMEBACK', reason: `abandoned order #${pad(ticket.number)}` });
+  const promo = promos.personal(guild.id, ticket.ownerId, { percent: opts.percent, days: opts.days, prefix: 'COMEBACK', reason: `porzucone zamówienie #${pad(ticket.number)}` });
   const delivered = await user
     .send(comebackCard(guild, ticket, promo))
     .then(() => true)
@@ -133,7 +133,7 @@ async function sweep(client, now = Date.now()) {
       if (await sendCode(guild, t, opts, now).catch((err) => console.warn('[abandoned]', err.message))) sent += 1;
     }
   }
-  if (sent) console.log(`[abandoned] sent ${sent} comeback code${sent === 1 ? '' : 's'}`);
+  if (sent) console.log(`[abandoned] wysłano ${count(sent, 'kod powrotny', 'kody powrotne', 'kodów powrotnych')}`);
   return sent;
 }
 
