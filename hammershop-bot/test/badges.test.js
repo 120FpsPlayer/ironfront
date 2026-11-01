@@ -79,7 +79,7 @@ test('bestseller: most units sold, at least bestsellerMinSales, ties go to the p
   await panels.refresh(guild, 'shop');
   const panel = db.panels(guild.id, 'shop')[0];
   const text = textOf(guild.channels.cache.get(panel.channelId).messageList.find((m) => m.id === panel.messageId).body);
-  assert.match(text, /Gamma[^#]*-# 🟢 In stock · 🔥 Bestseller/);
+  assert.match(text, /Gamma[^#]*-# 🟢 Dostępny · 🔥 Bestseller/);
   assert.equal(text.match(/Bestseller/g).length, 1);
 });
 
@@ -106,7 +106,7 @@ test('rating: the average of a product\'s vouches from ratingMinVouches on – o
   // Both badges on one card.
   for (let i = 0; i < 3; i += 1) sell(guild, beta, 1);
   assert.deepEqual(badgeOf(guild, beta), ['🔥 Bestseller', '⭐ 4.7']);
-  assert.match(shop.cardText(guild, beta, { badges: badges.compute(guild.id) }), /\n-# 🟢 In stock · 🔥 Bestseller · ⭐ 4\.7$/);
+  assert.match(shop.cardText(guild, beta, { badges: badges.compute(guild.id) }), /\n-# 🟢 Dostępny · 🔥 Bestseller · ⭐ 4\.7$/);
 
   // Turned off in config.json: no badges at all.
   await withBadges({ enabled: false }, () => assert.equal(badges.compute(guild.id).size, 0));
@@ -162,10 +162,10 @@ test('shop panel: 5 products with 10 options each, a sale, a counter, badges, im
   const text = textOf(payload);
   assert.match(text, /🔥 Bestseller/);
   assert.match(text, /⭐ 4\.0/);
-  assert.match(text, /from ~~99999\.99€~~ \*\*66999\.99€\*\* · −33%/);
-  assert.match(text, /\+\d+ more/);
-  assert.equal(text.match(/Sale ends <t:\d+:R>/g).length, 5);
-  assert.equal(text.match(/99999 left/g).length, 5);
+  assert.match(text, /od ~~99999\.99€~~ \*\*66999\.99€\*\* · −33%/);
+  assert.match(text, /\+\d+ więcej/);
+  assert.equal(text.match(/Promocja kończy się <t:\d+:R>/g).length, 5);
+  assert.equal(text.match(/zostało 99999/g).length, 5);
   const ids = customIds(payload).filter((id) => id.startsWith('shop:buy:'));
   assert.equal(ids.length, 5, 'every product on the page can be bought');
   assert.equal(shop.measure(payload).chars, r.textLength);

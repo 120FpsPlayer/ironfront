@@ -106,7 +106,7 @@ test('a deal: one eligible product (number price, in stock, not on sale), 25–5
     assert.ok(Math.abs(product.sale.endsAt - before - DAY) < 5_000, '24 hours');
     assert.equal(announced, true);
     // Never two at once.
-    await assert.rejects(() => deals.startDeal(guild), /A deal is already running: \*\*.+\*\* −\d+% – only one at a time/);
+    await assert.rejects(() => deals.startDeal(guild), /Okazja już trwa: \*\*.+\*\* −\d+% – może być tylko jedna naraz/);
     stopAll(guild);
   }
   assert.ok(percents.size > 3, 'random percents');
@@ -114,7 +114,7 @@ test('a deal: one eligible product (number price, in stock, not on sale), 25–5
 
   const post = restocks(guild).at(-1).body;
   validateMessage(post, guild);
-  assert.match(textOf(post), /## 🔥 Deal of the week: .+ −\d+%/);
+  assert.match(textOf(post), /## 🔥 Okazja tygodnia: .+ −\d+%/);
 
   // Never above 50%, even when config.json asks for more.
   const saved = { ...config.deals };
@@ -130,7 +130,7 @@ test('a deal: one eligible product (number price, in stock, not on sale), 25–5
 
   // Nothing eligible → refused.
   for (const id of eligible) await shop.setStock(guild, id, 'out');
-  await assert.rejects(() => deals.startDeal(guild), /No product can be the deal right now/);
+  await assert.rejects(() => deals.startDeal(guild), /Żaden produkt nie może być teraz okazją/);
 });
 
 test('the timer starts the planned deal once at its time, waits for a running deal, skips when nothing is eligible, marks passed days missed', async () => {
@@ -182,18 +182,18 @@ test('the timer starts the planned deal once at its time, waits for a running de
 
 test('/sale deal: the week plan for staff; now:true starts one (only one at a time)', async () => {
   const { guild, seller } = await shopGuild();
-  assert.match(await sale(guild, member(guild)), /Only administrators and sellers can run flash sales/);
+  assert.match(await sale(guild, member(guild)), /Tylko administratorzy i sprzedawcy mogą prowadzić promocje błyskawiczne/);
 
   const plan = await sale(guild, seller);
-  assert.match(plan, /🔥 Deal of the week/);
-  assert.match(plan, /This week \(\d{4}-W\d{2}\):\*\* (\d deals?|no deal days left)/);
-  assert.match(plan, /25–50% off for 24h on a random product/);
+  assert.match(plan, /🔥 Okazja tygodnia/);
+  assert.match(plan, /Ten tydzień \(\d{4}-W\d{2}\):\*\* (\d okazj[aei]|nie zostały żadne dni z okazją)/);
+  assert.match(plan, /25–50% rabatu przez 24 h na losowy produkt/);
 
   const started = await sale(guild, seller, { now: true });
-  assert.match(started, /🔥 (Nitro|Netflix) is the deal of the week[\s\S]*\*\*−\d+%\*\* · ends <t:\d+:R>[\s\S]*Deal announced in #restocks/);
-  assert.match(textOf(restocks(guild).at(-1).body), /🔥 Deal of the week: /);
-  assert.match(await sale(guild, seller), /🔥 \*\*Running now:\*\* \*\*(Nitro|Netflix)\*\* · \*\*−\d+%\*\*/);
-  assert.match(await sale(guild, seller, { now: true }), /A deal is already running/);
+  assert.match(started, /🔥 (Nitro|Netflix) to okazja tygodnia[\s\S]*\*\*−\d+%\*\* · koniec <t:\d+:R>[\s\S]*Okazja ogłoszona na #dostawy/);
+  assert.match(textOf(restocks(guild).at(-1).body), /🔥 Okazja tygodnia: /);
+  assert.match(await sale(guild, seller), /🔥 \*\*Trwa teraz:\*\* \*\*(Nitro|Netflix)\*\* · \*\*−\d+%\*\*/);
+  assert.match(await sale(guild, seller, { now: true }), /Okazja już trwa/);
   const log = textOf(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1).body);
-  assert.match(log, /Deal of the week started/);
+  assert.match(log, /Okazja tygodnia uruchomiona/);
 });

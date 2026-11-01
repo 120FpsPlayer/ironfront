@@ -30,8 +30,8 @@ test('/build only:update adds channels and roles from a newer layout to an exist
   const i = createInteraction({ guild, member: owner, kind: 'command', commandName: 'build', options: { only: 'update' } });
   await handle(i, commands);
   const out = textOf(lastResponse(i));
-  assert.match(out, /Server updated/);
-  assert.match(out, /ᴘʀᴏᴏꜰꜱ/);
+  assert.match(out, /Serwer zaktualizowany/);
+  assert.match(out, /ʀᴇᴀʟɪᴢᴀᴄᴊᴇ/);
   assert.equal(guild.channels.cache.size, before, 'the 4 channels are back, nothing else was added');
   const now = db.build(guild.id);
   for (const key of ['proofs', 'sales', 'backups', 'statShop']) assert.ok(guild.channels.cache.has(now.channels[key]), key);
@@ -47,7 +47,7 @@ test('/build only:update adds channels and roles from a newer layout to an exist
   // Running it again changes nothing.
   const again = createInteraction({ guild, member: owner, kind: 'command', commandName: 'build', options: { only: 'update' } });
   await handle(again, commands);
-  assert.match(textOf(lastResponse(again)), /nothing – the server already has every channel and role/);
+  assert.match(textOf(lastResponse(again)), /nic – serwer ma już wszystkie kanały i role/);
   assert.equal(guild.channels.cache.size, before);
   assert.equal(CATEGORIES.flatMap((c) => c.channels).filter((ch) => !guild.channels.cache.has(now.channels[ch.key])).length, 0);
 });
@@ -79,10 +79,10 @@ test('/build only:update removes what the bot made earlier but no longer belongs
   const i = createInteraction({ guild, member: owner, kind: 'command', commandName: 'build', options: { only: 'update' }, channel: commandsChannel });
   await handle(i, commands);
   const out = textOf(lastResponse(i));
-  assert.match(out, /Removed \(no longer part of the server\)/);
+  assert.match(out, /Usunięte \(nie są już częścią serwera\)/);
   assert.match(out, /ᴠɪᴘ-ᴄʜᴀᴛ/);
   assert.match(out, /💎 VIP/);
-  assert.match(out, /kept because you ran the update in it/);
+  assert.match(out, /zostaje, bo na nim uruchomiono aktualizację/);
   const now = db.build(guild.id);
   for (const id of [vipCat.id, voiceCat.id, b.channels.vipChat, b.channels.lounge, b.channels.memes]) assert.ok(!guild.channels.cache.has(id), 'retired channel deleted');
   assert.ok(guild.channels.cache.has(commandsChannel.id), 'the channel the update ran in is kept');

@@ -62,7 +62,7 @@ test('rules.seller / rules.email appear in §1 once filled in, and /build only:p
   }
 });
 
-test('no regulamin.md → the built-in English server rules', async () => {
+test('no regulamin.md → the built-in server rules (Polish)', async () => {
   const guild = await built();
   const real = fs.readFileSync;
   fs.readFileSync = (file, ...rest) => {
@@ -72,7 +72,7 @@ test('no regulamin.md → the built-in English server rules', async () => {
   try {
     const list = cards(guild);
     assert.equal(list.length, 1);
-    assert.match(textOf(list[0].payload), /HammerShop — Server Rules/);
+    assert.match(textOf(list[0].payload), /HammerShop – Zasady serwera/);
   } finally {
     fs.readFileSync = real;
   }

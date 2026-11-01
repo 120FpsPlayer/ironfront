@@ -83,12 +83,12 @@ test('backup: a gzip of this server only – its guild record and its tickets, s
   assert.deepEqual({ ...data.backup, createdAt: undefined }, { app: 'hammershop-bot', version: 1, guildId: guild.id, guildName: guild.name, createdAt: undefined });
 
   const summary = textOf(message.body);
-  assert.match(summary, /💾 Backup/);
-  assert.match(summary, /Automatic backup \(every 24 h\)/);
-  assert.match(summary, /Size \d+ (B|KB) \(\d+ KB unpacked\)/);
-  assert.match(summary, /Tickets 2 \(1 open\)/);
-  assert.match(summary, /Sales 1/);
-  assert.match(summary, /How to restore[\s\S]*data\/db\.json/);
+  assert.match(summary, /💾 Kopia zapasowa/);
+  assert.match(summary, /Automatyczna kopia \(co 24 h\)/);
+  assert.match(summary, /Rozmiar \d+ (B|KB) \(\d+ KB po rozpakowaniu\)/);
+  assert.match(summary, /Tickety 2 \(otwarte: 1\)/);
+  assert.match(summary, /Sprzedaż 1/);
+  assert.match(summary, /Jak przywrócić[\s\S]*data\/db\.json/);
   assert.equal(other.channels.cache.get(db.channelId(other.id, 'backups')).messageList.length, 0, 'each server only gets its own');
 });
 
@@ -145,7 +145,7 @@ test('backup: over the size limit a warning is posted instead – once per perio
     assert.equal(channel.messageList.length, 1);
     const warning = channel.messageList[0];
     assert.equal(warning.files.length, 0, 'no file');
-    assert.match(textOf(warning.body), /Backup too big to upload[\s\S]*Discord only takes files up to 200 B[\s\S]*data\/db\.json/);
+    assert.match(textOf(warning.body), /Kopia zapasowa jest za duża[\s\S]*Discord przyjmuje tu pliki do 200 B[\s\S]*data\/db\.json/);
     assert.equal(db.guild(guild.id).stats.backup.tooBig, true);
   } finally {
     backups.LIMITS.maxBytes = limit;
@@ -221,7 +221,7 @@ test('/backup: admins only – posts in #backups now and counts as the latest ba
 
   for (const who of [member(guild), member(guild, ['member', 'moderator']), member(guild, ['member', 'seller'])]) {
     const denied = await backupCmd(who);
-    assert.match(textOf(lastResponse(denied)), /Only administrators can make backups/);
+    assert.match(textOf(lastResponse(denied)), /Kopie zapasowe mogą robić tylko administratorzy/);
   }
   assert.equal(channel.messageList.length, 0);
 
@@ -229,8 +229,8 @@ test('/backup: admins only – posts in #backups now and counts as the latest ba
   const i = await backupCmd(admin);
   assert.ok(i.deferred, 'deferred before the work');
   assert.equal(channel.messageList.length, 1);
-  assert.match(textOf(channel.messageList[0].body), new RegExp(`Made by <@${admin.id}>`));
-  assert.match(textOf(lastResponse(i)), new RegExp(`Backup saved in <#${channel.id}>: \\[\`hammershop-backup-[\\d-]+\\.json\\.gz\`\\]\\(https://discord\\.com/channels/`));
+  assert.match(textOf(channel.messageList[0].body), new RegExp(`Kopia wykonana na prośbę <@${admin.id}>`));
+  assert.match(textOf(lastResponse(i)), new RegExp(`Kopia zapasowa zapisana na <#${channel.id}>: \\[\`hammershop-backup-[\\d-]+\\.json\\.gz\`\\]\\(https://discord\\.com/channels/`));
   assert.equal(backups.isDue(guild.id), false, 'the automatic one waits a full period');
   await backups.runBackups(guild.client);
   assert.equal(channel.messageList.length, 1);
@@ -239,7 +239,7 @@ test('/backup: admins only – posts in #backups now and counts as the latest ba
   db.guild(guild.id).build.channels.backups = null;
   const here = await backupCmd(guild.members.cache.get(guild.ownerId));
   const res = lastResponse(here);
-  assert.match(res.content, /There is no #backups channel/);
+  assert.match(res.content, /Nie ma kanału #kopie-zapasowe/);
   assert.equal(res.files.length, 1);
   assert.deepEqual(Object.keys(JSON.parse(zlib.gunzipSync(res.files[0].attachment)).guilds), [guild.id]);
   assert.equal(channel.messageList.length, 1);

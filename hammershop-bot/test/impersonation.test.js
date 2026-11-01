@@ -126,12 +126,12 @@ test('a look-alike joining gets an alert card in #automod-logs: who, which staff
   const card = alerts(guild).at(-1).body;
   validateMessage(card, guild);
   const out = textOf(card);
-  assert.match(out, /Possible staff impersonation/);
+  assert.match(out, /Możliwe podszywanie się pod zespół/);
   assert.ok(out.includes(`<@${fake.id}>`) && out.includes(fake.id), 'the member and their ID');
-  assert.match(out, /joined the server/);
-  assert.match(out, /\*\*Display name\*\* “A1ex” – the same name as <@\d+> \(“Alex”\)/);
+  assert.match(out, /dołączyła do serwera/);
+  assert.match(out, /\*\*Wyświetlana nazwa\*\* „A1ex” – ta sama nazwa co <@\d+> \(„Alex”\)/);
   assert.ok(out.includes(`<@${staff.id}>`), 'the staff member they look like');
-  assert.match(out, /Account created:\*\* <t:\d+:D> \(<t:\d+:R>\).*new account/);
+  assert.match(out, /Konto utworzone:\*\* <t:\d+:D> \(<t:\d+:R>\).*nowe konto/);
   assert.deepEqual(customIds(card), ['ban', 'kick', 'timeout', 'ignore'].map((a) => `imp:${a}:${alert.id}`));
   assert.deepEqual(card.allowedMentions, { parse: [] }, 'nobody is pinged');
 
@@ -139,10 +139,10 @@ test('a look-alike joining gets an alert card in #automod-logs: who, which staff
   await join(guild, { username: 'helpdesk01', nickname: 'Alex • Support' });
   assert.equal(lastAlert(guild).matches[0].kind, 'title');
   await join(guild, { username: 'hammershop_support' });
-  assert.match(textOf(alerts(guild).at(-1).body), /poses as the \*\*HammerShop\*\* team/);
+  assert.match(textOf(alerts(guild).at(-1).body), /podszywa się pod zespół \*\*HammerShop\*\*/);
   await join(guild, { username: 'randomguy', avatar: 'a_staffhash' });
   assert.deepEqual(lastAlert(guild).matches.map((m) => [m.kind, m.staffId]), [['avatar', staff.id]]);
-  assert.match(textOf(alerts(guild).at(-1).body), /\*\*Avatar\*\* – the same picture as/);
+  assert.match(textOf(alerts(guild).at(-1).body), /\*\*Awatar\*\* – ten sam obrazek co/);
 });
 
 test('staff, bots and ordinary names are never flagged; alerts can be turned off', async () => {
@@ -206,7 +206,7 @@ test('one alert per user + name per 24 hours; Ignore silences that user + name f
   const ignore = await press(guild, mod, 'ignore', again);
   const card = ignore.state.updates[0];
   validateMessage(card, guild);
-  assert.match(textOf(card), new RegExp(`Ignored – this name won't be reported again\\*\\* by <@${mod.id}>`));
+  assert.match(textOf(card), new RegExp(`Zignorowano – ta nazwa nie będzie już zgłaszana\\*\\* \\(<@${mod.id}>\\)`));
   assert.deepEqual(customIds(card), [], 'no buttons after Ignore');
   assert.ok(imp.store(guild.id).ignored[`${fake.id}:danlel`]);
 
@@ -234,7 +234,7 @@ test('buttons: only moderators – timeout, ban and kick act on the member and s
 
   for (const who of [member, support]) {
     const denied = await press(guild, who, 'ban', alert);
-    assert.match(textOf(lastResponse(denied)), /Only moderators and administrators/);
+    assert.match(textOf(lastResponse(denied)), /tylko moderatorzy i administratorzy/);
     assert.equal(denied.state.updates.length, 0);
   }
   assert.ok(guild.members.cache.has(fake.id), 'nothing happened');
@@ -242,20 +242,20 @@ test('buttons: only moderators – timeout, ban and kick act on the member and s
   const timeout = await press(guild, mod, 'timeout', alert);
   assert.ok(Math.abs(fake.communicationDisabledUntilTimestamp - (Date.now() + DAY)) < 5000, 'timed out for 24 hours');
   const timedOut = timeout.state.updates[0];
-  assert.match(textOf(timedOut), new RegExp(`Timed out for 24 hours\\*\\* by <@${mod.id}>`));
+  assert.match(textOf(timedOut), new RegExp(`Wyciszono na 24 godziny\\*\\* \\(<@${mod.id}>\\)`));
   assert.deepEqual(customIds(timedOut), ['ban', 'kick', 'ignore'].map((a) => `imp:${a}:${alert.id}`), 'Ban / Kick / Ignore stay');
 
   const ban = await press(guild, mod, 'ban', alert);
   assert.ok(guild.bans.cache.has(fake.id), 'banned');
-  assert.match(guild.bans.cache.get(fake.id).reason, /impersonation alert/);
+  assert.match(guild.bans.cache.get(fake.id).reason, /alertu o podszywaniu się/);
   assert.ok(!guild.members.cache.has(fake.id));
   const banned = ban.state.updates[0];
   validateMessage(banned, guild);
-  assert.match(textOf(banned), /Banned\*\* by/);
+  assert.match(textOf(banned), /Zbanowano\*\* \(<@\d+>\)/);
   assert.deepEqual(customIds(banned), []);
 
   const twice = await press(guild, mod, 'kick', alert);
-  assert.match(textOf(lastResponse(twice)), /already handled: \*\*Banned\*\*/);
+  assert.match(textOf(lastResponse(twice)), /został już obsłużony: \*\*Zbanowano\*\*/);
 
   // Kick, and a member who already left
   const other = await join(guild, { username: 'danlel' });
@@ -267,11 +267,11 @@ test('buttons: only moderators – timeout, ban and kick act on the member and s
   const gone = await join(guild, { username: 'alex_admin' });
   guild.removeMember(gone.id);
   const late = await press(guild, mod, 'kick', lastAlert(guild));
-  assert.match(textOf(lastResponse(late)), /no longer on the server/);
+  assert.match(textOf(lastResponse(late)), /nie ma już na serwerze/);
 
   const old = createInteraction({ guild, member: mod, kind: 'button', customId: 'imp:ban:deadbeef' });
   await handle(old, commands);
-  assert.match(textOf(lastResponse(old)), /too old/);
+  assert.match(textOf(lastResponse(old)), /za stary/);
 });
 
 test('profile changes: username, display name, server nickname and avatars are checked', async () => {
@@ -285,7 +285,7 @@ test('profile changes: username, display name, server nickname and avatars are c
   await hooks.emit('userUpdate', old.user, m.user);
   assert.equal(count(), start + 1);
   assert.equal(lastAlert(guild).trigger, 'username');
-  assert.match(textOf(alerts(guild).at(-1).body), /changed their username/);
+  assert.match(textOf(alerts(guild).at(-1).body), /zmieniła nazwę użytkownika/);
 
   old = m.snapshot();
   m.user.globalName = 'Danie1';

@@ -23,16 +23,16 @@ test('delivery_time: instant, 1–7 days or up to 14 days on the card and the or
   await run({ name: 'Combo', price: '15', description: 'Five games.', delivery_time: '3' }, 'add');
   const p = shop.products(guild.id).find((x) => x.name === 'Combo');
   assert.equal(p.deliveryTime, '3');
-  assert.match(shop.cardText(guild, p), /🕒 Delivery: 3 days/);
-  assert.match(shop.orderModal(p, guild).toJSON().components[0].content, /15€ · 🕒 Delivery: 3 days/);
+  assert.match(shop.cardText(guild, p), /🕒 Dostawa: 3 dni/);
+  assert.match(shop.orderModal(p, guild).toJSON().components[0].content, /15€ · 🕒 Dostawa: 3 dni/);
 
   await run({ product: p.id, delivery_time: '14' }, 'edit');
-  assert.match(shop.cardText(guild, shop.findProduct(guild.id, p.id)), /🕒 Delivery: up to 14 days/);
+  assert.match(shop.cardText(guild, shop.findProduct(guild.id, p.id)), /🕒 Dostawa: do 14 dni/);
   await run({ product: p.id, delivery_time: 'instant' }, 'edit');
-  assert.match(shop.cardText(guild, shop.findProduct(guild.id, p.id)), /⚡ Instant delivery/);
+  assert.match(shop.cardText(guild, shop.findProduct(guild.id, p.id)), /⚡ Dostawa natychmiastowa/);
   const back = await run({ product: p.id, delivery_time: 'auto' }, 'edit');
-  assert.ok(!/error/i.test(textOf(lastResponse(back))));
+  assert.ok(!/❌|błąd/i.test(textOf(lastResponse(back))));
   assert.equal(shop.findProduct(guild.id, p.id).deliveryTime, null);
-  assert.doesNotMatch(shop.cardText(guild, shop.findProduct(guild.id, p.id)), /Delivery|Instant/);
+  assert.doesNotMatch(shop.cardText(guild, shop.findProduct(guild.id, p.id)), /Dostawa/);
   assert.equal(db.guild(guild.id).products.length > 0, true);
 });

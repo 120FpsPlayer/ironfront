@@ -37,10 +37,10 @@ test('config: features turned off in config.json are listed for the startup line
   raw.invites.enabled = false;
   raw.orders.vouchReminderHours = 0;
   assert.deepEqual(config.turnedOff(config.load(raw)), [
-    'invite tracking (invites.enabled)',
-    'automatic backups (backups.enabled)',
-    'weekly sales report (salesReport.enabled)',
-    'vouch reminders (orders.vouchReminderHours)',
+    'śledzenie zaproszeń (invites.enabled)',
+    'automatyczne kopie zapasowe (backups.enabled)',
+    'tygodniowy raport sprzedaży (salesReport.enabled)',
+    'przypomnienia o opinii (orders.vouchReminderHours)',
   ]);
   assert.deepEqual(config.turnedOff(), []);
 });

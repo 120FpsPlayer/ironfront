@@ -77,7 +77,7 @@ test('a giveaway ends once – a second end (or two at the same time) is refused
   const before = channel.messageList.length;
   const results = await Promise.allSettled([giveaways.end(guild, gw), giveaways.end(guild, gw)]);
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
-  await assert.rejects(giveaways.end(guild, gw), /already ended/);
+  await assert.rejects(giveaways.end(guild, gw), /już się zakończył/);
   assert.equal(channel.messageList.length - before, 1, 'one winner announcement');
 });
 
@@ -104,7 +104,7 @@ test('/build only:update keeps a retired category that still has your own channe
   const i = createInteraction({ guild, member: guild.members.cache.get(guild.ownerId), kind: 'command', commandName: 'build', options: { only: 'update' } });
   await handle(i, commands);
   assert.ok(guild.channels.cache.has(cat.id) && guild.channels.cache.get(mine.id).parentId === cat.id);
-  assert.match(textOf(lastResponse(i)), /was kept because it still has #my-channel/);
+  assert.match(textOf(lastResponse(i)), /zostaje, bo wciąż są w niej kanały: #my-channel/);
 });
 
 test('Wipe & Build during a /lockdown ends the lockdown and resumes invites', async () => {
@@ -120,7 +120,7 @@ test('Wipe & Build during a /lockdown ends the lockdown and resumes invites', as
   const R = await buildServer({ guild, mode: 'wipe', invokerId: guild.ownerId });
   assert.equal(db.guild(guild.id).security.lockdown, undefined);
   assert.ok(resumed);
-  assert.ok(R.warnings.some((w) => /wipe ended the lockdown/.test(w)));
+  assert.ok(R.warnings.some((w) => /czyszczenie zakończyło blokadę/.test(w)));
 });
 
 test('a server Discord reports as unavailable keeps its tickets and panels', async () => {

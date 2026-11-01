@@ -73,36 +73,36 @@ test('gift select: only the buyer, never themselves, a bot or someone who left �
 
   // The order card has the button.
   assert.ok(customIds(card(channel, ticket())).includes('gift:open'));
-  assert.match(textOf(card(channel, ticket())), /Buying for a friend\?/);
+  assert.match(textOf(card(channel, ticket())), /Kupujesz dla znajomego\?/);
 
   // Only the buyer opens the picker.
   for (const who of [seller, other]) {
     const denied = await run({ guild, member: who, kind: 'button', customId: 'gift:open', channel });
-    assert.match(textOf(lastResponse(denied)), /Only the buyer/);
+    assert.match(textOf(lastResponse(denied)), /Tylko kupujący/);
   }
   const open = await run({ guild, member: buyer, kind: 'button', customId: 'gift:open', channel });
   assert.ok(customIds(lastResponse(open)).includes('gift:pick'));
   assert.ok(!customIds(lastResponse(open)).includes('gift:remove'), 'nothing to remove yet');
 
   // Not yourself, not a bot, not someone who isn't on the server, and only the buyer can pick.
-  assert.match(textOf(lastResponse(await pick(guild, buyer, channel, buyer.id))), /That's you/);
-  assert.match(textOf(lastResponse(await pick(guild, buyer, channel, robot.id))), /Bots can't get gifts/);
+  assert.match(textOf(lastResponse(await pick(guild, buyer, channel, buyer.id))), /To Ty/);
+  assert.match(textOf(lastResponse(await pick(guild, buyer, channel, robot.id))), /Boty nie mogą dostawać prezentów/);
   const ghost = uid();
   guild.unknownMembers = new Set([ghost]);
-  assert.match(textOf(lastResponse(await pick(guild, buyer, channel, ghost))), /isn't on this server/);
+  assert.match(textOf(lastResponse(await pick(guild, buyer, channel, ghost))), /nie ma już na serwerze/);
   guild.unknownMembers = null;
-  assert.match(textOf(lastResponse(await pick(guild, other, channel, friend.id))), /Only the buyer/);
+  assert.match(textOf(lastResponse(await pick(guild, other, channel, friend.id))), /Tylko kupujący/);
   assert.equal(ticket().order.giftTo, undefined);
 
   // The buyer picks a friend → saved, the card and the ticket show it (without pinging the friend).
   const ok = await pick(guild, buyer, channel, friend.id);
   assert.equal(ok.state.deferredAs, 'update');
-  assert.match(textOf(lastResponse(ok)), new RegExp(`gift for <@${friend.id}>`));
+  assert.match(textOf(lastResponse(ok)), new RegExp(`prezent dla <@${friend.id}>`));
   assert.equal(ticket().order.giftTo, friend.id);
-  assert.match(textOf(card(channel, ticket())), new RegExp(`Gift for <@${friend.id}>`));
+  assert.match(textOf(card(channel, ticket())), new RegExp(`Prezent dla <@${friend.id}>`));
   assert.ok(customIds(card(channel, ticket())).includes('gift:open'), 'still changeable');
   const note = channel.messageList.at(-1);
-  assert.match(textOf(note.body), new RegExp(`made this order a gift for <@${friend.id}>`));
+  assert.match(textOf(note.body), new RegExp(`Zamówienie <@${buyer.id}> to teraz prezent dla <@${friend.id}>`));
   assert.deepEqual(note.body.allowedMentions, { parse: [] });
 
   // Changed to someone else, then removed.
@@ -110,12 +110,12 @@ test('gift select: only the buyer, never themselves, a bot or someone who left �
   assert.ok(customIds(lastResponse(reopen)).includes('gift:remove'));
   await pick(guild, buyer, channel, other.id);
   assert.equal(ticket().order.giftTo, other.id);
-  assert.match(textOf(channel.messageList.at(-1).body), new RegExp(`instead of <@${friend.id}>`));
+  assert.match(textOf(channel.messageList.at(-1).body), new RegExp(`\\(zamiast <@${friend.id}>\\)`));
   const removed = await run({ guild, member: buyer, kind: 'button', customId: 'gift:remove', channel });
-  assert.match(textOf(lastResponse(removed)), /Not a gift any more/);
+  assert.match(textOf(lastResponse(removed)), /To już nie prezent/);
   assert.equal(ticket().order.giftTo, undefined);
-  assert.match(textOf(channel.messageList.at(-1).body), /no longer a gift/);
-  assert.match(textOf(card(channel, ticket())), /Buying for a friend\?/);
+  assert.match(textOf(channel.messageList.at(-1).body), /nie jest już prezentem/);
+  assert.match(textOf(card(channel, ticket())), /Kupujesz dla znajomego\?/);
 });
 
 test('gift delivery: the product goes to the recipient by DM and into the ticket; the buyer keeps the receipt', async () => {
@@ -126,25 +126,25 @@ test('gift delivery: the product goes to the recipient by DM and into the ticket
   await pick(guild, buyer, channel, friend.id);
 
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
-  assert.match(texts(channel), new RegExp(`your product is sent right here and to <@${friend.id}>'s DMs`));
+  assert.match(texts(channel), new RegExp(`wyślemy produkt tutaj i do DM <@${friend.id}>`));
   const dmsBefore = guild.dms.length;
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), new RegExp(`Delivered \\*\\*Netflix Premium\\*\\* in the ticket and to the gift's recipient <@${friend.id}> by DM`));
+  assert.match(textOf(lastResponse(ok)), new RegExp(`Dostarczono \\*\\*Netflix Premium\\*\\* w tickecie i w DM do odbiorcy prezentu <@${friend.id}>`));
 
   // The recipient's DM: who it's from, the text and the file.
   const gift = guild.dms.slice(dmsBefore).find((d) => d.to === friend.id);
   assert.ok(gift, 'the recipient got a DM');
-  assert.match(textOf(gift.payload), new RegExp(`A gift from @user${buyer.id} – Netflix Premium[\\s\\S]*Login at netflix\\.com`));
+  assert.match(textOf(gift.payload), new RegExp(`Prezent od @user${buyer.id} – Netflix Premium[\\s\\S]*Login at netflix\\.com`));
   assert.deepEqual((gift.payload.files ?? []).map((f) => f.name ?? f.attachment?.name), ['account.txt']);
   // The buyer gets no copy of the product by DM – only the receipt.
   const toBuyer = guild.dms.slice(dmsBefore).filter((d) => d.to === buyer.id).map((d) => textOf(d.payload));
-  assert.ok(!toBuyer.some((x) => /Your product – |A gift from/.test(x)), 'no product DM to the buyer');
-  assert.ok(toBuyer.some((x) => /Thank you for your order![\s\S]*Gift for:\*\* <@/.test(x)), 'the receipt goes to the buyer and says it was a gift');
+  assert.ok(!toBuyer.some((x) => /Twój produkt – |Prezent od/.test(x)), 'no product DM to the buyer');
+  assert.ok(toBuyer.some((x) => /Dziękujemy za zamówienie![\s\S]*Prezent dla:\*\* <@/.test(x)), 'the receipt goes to the buyer and says it was a gift');
 
   // The ticket: the product for the buyer, and the note that the DM got through.
   const all = texts(channel);
-  assert.match(all, new RegExp(`Your gift – Netflix Premium[\\s\\S]*a gift for <@${friend.id}>`));
-  assert.match(all, new RegExp(`your gift is delivered – <@${friend.id}> got the product by DM`));
+  assert.match(all, new RegExp(`Twój prezent – Netflix Premium[\\s\\S]*prezent dla <@${friend.id}>`));
+  assert.match(all, new RegExp(`Twój prezent został dostarczony – produkt trafił do <@${friend.id}> w wiadomości prywatnej`));
   assert.ok(ticket().completedAt, 'order completed');
   assert.equal(statusOf(ticket()), 'delivered');
   assert.equal(ticket().order.delivered.giftTo, friend.id);
@@ -152,9 +152,9 @@ test('gift delivery: the product goes to the recipient by DM and into the ticket
 
   // Delivered → the gift can't change any more, and the card has no button.
   const late = await run({ guild, member: buyer, kind: 'button', customId: 'gift:open', channel });
-  assert.match(textOf(lastResponse(late)), /already delivered/);
+  assert.match(textOf(lastResponse(late)), /zostało już dostarczone/);
   assert.ok(!customIds(card(channel, ticket())).includes('gift:open'));
-  assert.match(textOf(card(channel, ticket())), new RegExp(`Gift for <@${friend.id}>`));
+  assert.match(textOf(card(channel, ticket())), new RegExp(`Prezent dla <@${friend.id}>`));
 });
 
 test("gift delivery: the recipient's DMs are closed → the buyer is told to pass it on", async () => {
@@ -166,12 +166,12 @@ test("gift delivery: the recipient's DMs are closed → the buyer is told to pas
   await pick(guild, buyer, channel, friend.id);
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), /couldn't DM the gift's recipient/);
-  const warn = channel.messageList.find((m) => /I couldn't DM/.test(textOf(m.body)));
-  assert.match(textOf(warn.body), new RegExp(`<@${buyer.id}> I couldn't DM <@${friend.id}>[\\s\\S]*pass it on`));
+  assert.match(textOf(lastResponse(ok)), /nie udało się wysłać DM do odbiorcy prezentu/);
+  const warn = channel.messageList.find((m) => /nie udało się wysłać wiadomości prywatnej do/.test(textOf(m.body)));
+  assert.match(textOf(warn.body), new RegExp(`<@${buyer.id}> nie udało się wysłać wiadomości prywatnej do <@${friend.id}>[\\s\\S]*przekaż go odbiorcy`));
   assert.deepEqual(warn.body.allowedMentions, { users: [buyer.id] }, 'pings the buyer only');
   assert.equal(ticket().order.delivered.dm, false);
-  assert.ok(channel.messageList.some((m) => /Your gift – Netflix Premium/.test(textOf(m.body))), 'the product is in the ticket');
+  assert.ok(channel.messageList.some((m) => /Twój prezent – Netflix Premium/.test(textOf(m.body))), 'the product is in the ticket');
 });
 
 test('gift + a product without delivery files: staff are told to hand it to the recipient; nothing is DMed', async () => {
@@ -184,15 +184,15 @@ test('gift + a product without delivery files: staff are told to hand it to the 
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { note: 'tx 0xabc' }, channel });
   const dmsBefore = guild.dms.length;
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), new RegExp(`deliver it by hand[\\s\\S]*It's a gift – give it to <@${friend.id}>`));
+  assert.match(textOf(lastResponse(ok)), new RegExp(`dostarcz je ręcznie[\\s\\S]*To prezent – przekaż go <@${friend.id}>`));
   assert.equal(statusOf(ticket()), 'paid');
   assert.ok(!guild.dms.slice(dmsBefore).some((d) => d.to === friend.id), 'nothing sent to the recipient automatically');
   // Still changeable until it's delivered by hand (completed).
   assert.ok(customIds(card(channel, ticket())).includes('gift:open'));
   await t.completeOrder(channel, seller);
   assert.ok(!customIds(card(channel, ticket())).includes('gift:open'));
-  const receipt = guild.dms.filter((d) => d.to === buyer.id).map((d) => textOf(d.payload)).find((x) => /Thank you for your order!/.test(x));
-  assert.match(receipt, new RegExp(`Gift for:\\*\\* <@${friend.id}>`));
+  const receipt = guild.dms.filter((d) => d.to === buyer.id).map((d) => textOf(d.payload)).find((x) => /Dziękujemy za zamówienie!/.test(x));
+  assert.match(receipt, new RegExp(`Prezent dla:\\*\\* <@${friend.id}>`));
 });
 
 test('normal orders are unchanged; turning gifts off hides the button', async () => {
@@ -201,8 +201,8 @@ test('normal orders are unchanged; turning gifts off hides the button', async ()
   const { channel } = await order(guild, buyer, product);
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), /Delivered \*\*Netflix Premium\*\* in the ticket and by DM/);
-  assert.ok(guild.dms.some((d) => d.to === buyer.id && /Your product – Netflix Premium/.test(textOf(d.payload))));
+  assert.match(textOf(lastResponse(ok)), /Dostarczono \*\*Netflix Premium\*\* w tickecie i w DM\./);
+  assert.ok(guild.dms.some((d) => d.to === buyer.id && /Twój produkt – Netflix Premium/.test(textOf(d.payload))));
 
   config.gifts.enabled = false;
   try {
@@ -210,7 +210,7 @@ test('normal orders are unchanged; turning gifts off hides the button', async ()
     const second = await order(guild, other, product);
     assert.ok(!customIds(card(second.channel, second.ticket())).includes('gift:open'));
     const off = await run({ guild, member: other, kind: 'button', customId: 'gift:open', channel: second.channel });
-    assert.match(textOf(lastResponse(off)), /Gifts are turned off/);
+    assert.match(textOf(lastResponse(off)), /Prezenty są wyłączone/);
   } finally {
     config.gifts.enabled = true;
   }

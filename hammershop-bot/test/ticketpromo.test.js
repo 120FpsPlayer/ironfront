@@ -31,7 +31,7 @@ test('a promo code added in the ticket: new total, the old payment card replaced
 
   const wrong = createInteraction({ guild, member: buyer, kind: 'modal', customId: 'tpromo:submit', fields: { code: 'NOPE' }, channel });
   await handle(wrong, commands);
-  assert.match(textOf(lastResponse(wrong)), /can't be used/);
+  assert.match(textOf(lastResponse(wrong)), /Nie można użyć kodu \*\*NOPE\*\*/);
 
   const i = createInteraction({ guild, member: buyer, kind: 'modal', customId: 'tpromo:submit', fields: { code: 'save10' }, channel });
   await handle(i, commands);
@@ -39,8 +39,8 @@ test('a promo code added in the ticket: new total, the old payment card replaced
   const t = db.getTicket(channel.id);
   assert.equal(t.order.total, 18);
   assert.equal(t.order.promo, 'SAVE10');
-  const cards = all().filter((b) => /Pay \d/.test(textOf(b)));
+  const cards = all().filter((b) => /Zapłać \d/.test(textOf(b)));
   assert.equal(cards.length, 1, 'only the new payment card is left');
-  assert.match(textOf(cards[0]), /Pay 18€/);
+  assert.match(textOf(cards[0]), /Zapłać 18€/);
   assert.ok(channel.messageList.some((m) => m.id === t.controlMessageId), 'the big ticket card stays');
 });

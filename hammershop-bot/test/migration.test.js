@@ -24,7 +24,7 @@ test('emojis of the old version (:nox_*:) are replaced by the new light orange :
   const res = await syncEmojis(guild);
   assert.equal(res.replaced, 49);
   assert.equal(res.uploaded, 49, 'the freed slots get the new ones (one slot stays with your own emoji)');
-  assert.match(describeEmojiResult(res), /49 old emojis replaced with the new design/);
+  assert.match(describeEmojiResult(res), /stare emotki zamienione na nowy wygląd: 49/);
   const names = [...guild.emojis.cache.values()].map((em) => em.name);
   assert.ok(names.includes('my_cat'), 'an emoji people uploaded is never touched');
   assert.ok(!names.some((n) => n.startsWith('nox_')), 'no old emoji left');

@@ -50,19 +50,19 @@ test('a fresh build uses the style for every category and channel', async () => 
   const guild = await builtGuild();
   for (const cat of CATEGORIES) {
     const category = guild.channels.cache.get(db.build(guild.id).categories[cat.key]);
-    assert.match(category.name, /^〔 \S+ [A-Z ]+ 〕$/u, cat.key);
+    assert.match(category.name, /^〔 \S+ [A-ZĄĆĘŁŃÓŚŹŻ ]+ 〕$/u, cat.key);
   }
   for (const ch of CATEGORIES.flatMap((c) => c.channels)) {
     const channel = byKey(guild, ch.key);
     const [emoji, label, ...rest] = channel.name.split('┃');
     assert.equal(rest.length, 0, channel.name);
     assert.ok(emoji && /\p{Extended_Pictographic}/u.test(emoji), `${channel.name} starts with an emoji`);
-    assert.doesNotMatch(label, /[a-wyz]/i, `${channel.name} is all small caps`);
+    assert.doesNotMatch(label, /[a-wyząćęłńóśźż]/i, `${channel.name} is all small caps`);
   }
-  assert.equal(byKey(guild, 'howToBuy').name, '📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ');
-  assert.equal(byKey(guild, 'vouches').name, '⭐┃ᴠᴏᴜᴄʜᴇꜱ');
-  assert.equal(byKey(guild, 'staffVoice').name, '🔒┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ');
-  assert.match(byKey(guild, 'statMembers').name, /^👥┃ᴍᴇᴍʙᴇʀꜱ: \d+$/);
+  assert.equal(byKey(guild, 'howToBuy').name, '📦┃ᴊᴀᴋ-ᴋᴜᴘɪᴄ');
+  assert.equal(byKey(guild, 'vouches').name, '⭐┃ᴏᴘɪɴɪᴇ');
+  assert.equal(byKey(guild, 'staffVoice').name, '🔒┃ᴘᴏᴋᴏᴊ ᴢᴇꜱᴘᴏᴌᴜ');
+  assert.match(byKey(guild, 'statMembers').name, /^👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: \d+$/);
   // Nothing to rename right after a build (also after Discord's own name rules for text channels).
   const res = await restyleNames(guild);
   assert.deepEqual(res, { renamed: 0, unchanged: wantedNames(guild).length, later: [], errors: [] });
@@ -76,19 +76,19 @@ test('/build only:names renames a server built with the old names – once – a
   const ticket = await t.openTicket(author, config.getType('support'), [{ label: 'Subject', value: 'x' }]);
   const custom = await t.openTicket(guild.addMember(uid(), [role(guild, 'member')]), config.getType('order'), [{ label: 'Product', value: 'x' }]);
   await t.renameTicket(custom, 'vip-order', staff);
-  // The old style: "✦ SHOP ✦" categories, "📦┃how-to-buy" channels, "support-0001" tickets.
+  // The old style: "✦ SKLEP ✦" categories, "📦┃jak-kupić" channels, "pomoc-0001" tickets.
   for (const cat of CATEGORIES) guild.channels.cache.get(db.build(guild.id).categories[cat.key]).name = `✦ ${cat.name.split(' ').slice(1).join(' ')} ✦`;
   for (const ch of CATEGORIES.flatMap((c) => c.channels)) byKey(guild, ch.key).name = ch.name.replace(' ', '┃').toLowerCase();
-  ticket.name = 'support-0001';
+  ticket.name = 'pomoc-0001';
 
   const i = createInteraction({ guild, member: owner, kind: 'command', commandName: 'build', options: { only: 'names' } });
   await handle(i, commands);
   const total = wantedNames(guild).length; // the custom-named ticket isn't in the list
   assert.equal(total, CATEGORIES.length + CATEGORIES.flatMap((c) => c.channels).length + 1);
-  assert.match(textOf(lastResponse(i)), new RegExp(`Renamed \\*\\*${total}\\*\\*`));
-  assert.equal(byKey(guild, 'howToBuy').name, '📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ');
-  assert.equal(guild.channels.cache.get(db.build(guild.id).categories.catShop).name, '〔 🛒 SHOP 〕');
-  assert.match(ticket.name, /^🧰┃ꜱᴜᴘᴘᴏʀᴛ-\d{4}$/u);
+  assert.match(textOf(lastResponse(i)), new RegExp(`Zmienione nazwy kanałów i kategorii: \\*\\*${total}\\*\\*`));
+  assert.equal(byKey(guild, 'howToBuy').name, '📦┃ᴊᴀᴋ-ᴋᴜᴘɪᴄ');
+  assert.equal(guild.channels.cache.get(db.build(guild.id).categories.catShop).name, '〔 🛒 SKLEP 〕');
+  assert.match(ticket.name, /^🧰┃ᴘᴏᴍᴏᴄ-\d{4}$/u);
   assert.equal(custom.name, 'vip-order', 'renamed with /ticket rename – kept');
   const again = await restyleNames(guild);
   assert.equal(again.renamed, 0, 'running it again changes nothing');
@@ -100,26 +100,26 @@ test('ticket channels, overflow categories and transcripts use the style', async
   const staff = guild.addMember(uid(), [role(guild, 'member'), role(guild, 'support')]);
   const channel = await t.openTicket(member, config.getType('order'), [{ label: 'Product', value: 'x' }]);
   const number = db.getTicket(channel.id).number;
-  assert.equal(channel.name, `🛒┃ᴏʀᴅᴇʀ-${String(number).padStart(4, '0')}`);
+  assert.equal(channel.name, `🛒┃ᴢᴀᴍᴏᴡɪᴇɴɪᴇ-${String(number).padStart(4, '0')}`);
   await t.setPriority(channel, 'urgent', staff);
-  assert.equal(channel.name, `🔴🛒┃ᴏʀᴅᴇʀ-${String(number).padStart(4, '0')}`);
+  assert.equal(channel.name, `🔴🛒┃ᴢᴀᴍᴏᴡɪᴇɴɪᴇ-${String(number).padStart(4, '0')}`);
   const { createTranscript } = require('../src/tickets/transcript');
   const { attachment } = await createTranscript(channel, db.getTicket(channel.id), config.getType('order'));
-  assert.equal(attachment.name, `transcript-order-${String(number).padStart(4, '0')}.html`);
-  // A full ticket category → 〔 🎫 TICKETS 2 〕
+  assert.equal(attachment.name, `transcript-zamowienie-${String(number).padStart(4, '0')}.html`);
+  // A full ticket category → 〔 🎫 TICKETY 2 〕
   const base = db.settings(guild.id).categoryId;
   for (let k = guild.channels.cache.filter((c) => c.parentId === base).size; k < 50; k += 1) {
     await guild.channels.create({ name: `filler-${k}`, type: ChannelType.GuildText, parent: base });
   }
   const next = await t.openTicket(guild.addMember(uid(), [role(guild, 'member')]), config.getType('support'), [{ label: 'Subject', value: 'x' }]);
-  assert.equal(guild.channels.cache.get(next.parentId).name, '〔 🎫 TICKETS 2 〕');
+  assert.equal(guild.channels.cache.get(next.parentId).name, '〔 🎫 TICKETY 2 〕');
 });
 
 test('Discord drops emoji variation selectors from text channel names – no endless renaming, defaults avoid them', async () => {
   // Every default name and ticket emoji shows in colour without the invisible U+FE0F.
   const names = [...CATEGORIES.map((c) => c.name), ...CATEGORIES.flatMap((c) => c.channels.map((ch) => ch.name)), ...config.ticketTypes.map((x) => x.emoji ?? '')];
   for (const name of names) assert.doesNotMatch(name, /[\uFE0E\uFE0F\u200D]/u, `${name} has a variation selector or joiner`);
-  // A ticket type someone gave 🛠️ (with U+FE0F): Discord stores 🛠┃ꜱᴜᴘᴘᴏʀᴛ-0001.
+  // A ticket type someone gave 🛠️ (with U+FE0F): Discord stores 🛠┃ᴘᴏᴍᴏᴄ-0001.
   const guild = await builtGuild();
   const type = config.getType('support');
   const prev = type.emoji;
@@ -145,12 +145,14 @@ test('/build only:names keeps ticket names staff picked before custom names were
   const pad = (x) => String(x).padStart(4, '0');
   // An older version renamed these without a customName flag.
   custom.name = 'john-paypal-order';
-  oldStyle.name = `🔴order-${pad(db.getTicket(oldStyle.id).number)}`;
+  oldStyle.name = `🔴zamowienie-${pad(db.getTicket(oldStyle.id).number)}`;
   assert.equal(record.customName, undefined);
   assert.ok(!looksGenerated(record, custom.name));
   assert.ok(looksGenerated(db.getTicket(oldStyle.id), oldStyle.name));
+  assert.ok(looksGenerated(db.getTicket(oldStyle.id), `🔴order-${pad(db.getTicket(oldStyle.id).number)}`), 'English names from before the translation too');
+  assert.ok(looksGenerated(db.getTicket(oldStyle.id), `🛒┃ᴏʀᴅᴇʀ-${pad(db.getTicket(oldStyle.id).number)}`));
   await restyleNames(guild);
   assert.equal(custom.name, 'john-paypal-order', 'kept');
   assert.equal(db.getTicket(custom.id).customName, true, 'remembered from now on');
-  assert.equal(oldStyle.name, `🛒┃ᴏʀᴅᴇʀ-${pad(db.getTicket(oldStyle.id).number)}`, 'old generated names get the new style');
+  assert.equal(oldStyle.name, `🛒┃ᴢᴀᴍᴏᴡɪᴇɴɪᴇ-${pad(db.getTicket(oldStyle.id).number)}`, 'old generated names get the new style');
 });

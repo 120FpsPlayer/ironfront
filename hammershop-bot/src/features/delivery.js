@@ -137,7 +137,7 @@ function topUpOnTheWay(ticket, { auto }) {
         : `## 💰 Twoje doładowanie jest w drodze!\nSprawdzamy Twoją płatność za zamówienie \`#${pad(ticket.number)}\` – gdy tylko ją potwierdzimy, dodamy **${amount}** do Twojego salda sklepu.`,
     ),
   );
-  c.addTextDisplayComponents(text('-# Saldo nie podlega zwrotowi ani wypłacie. Coś nie tak? Napisz tutaj albo kliknij **Wezwij pomoc**.'));
+  c.addTextDisplayComponents(text('-# Salda nie można zwrócić ani wypłacić. Coś nie tak? Napisz tutaj albo kliknij **Wezwij pomoc**.'));
   return v2(c);
 }
 

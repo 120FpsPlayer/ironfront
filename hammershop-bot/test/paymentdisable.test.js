@@ -31,10 +31,10 @@ test('/disable PayPal: gone from the order form (other indexes kept), an old for
   const product = shop.addProduct(guild, { name: 'Netflix', price: '10', description: 'UHD.' });
 
   const nope = await run({ guild, member: buyer, kind: 'command', commandName: 'disable', options: { method: 'PayPal' } });
-  assert.match(textOf(lastResponse(nope)), /Only administrators and sellers/);
+  assert.match(textOf(lastResponse(nope)), /Tylko administratorzy i sprzedawcy mogą włączać i wyłączać metody płatności/);
 
   const off = await run({ guild, member: owner, kind: 'command', commandName: 'disable', options: { method: 'PayPal', reason: 'maintenance' } });
-  assert.match(textOf(lastResponse(off)), /PayPal\*\* is off/);
+  assert.match(textOf(lastResponse(off)), /Metoda \*\*PayPal\*\* jest wyłączona/);
 
   const form = optionsOf(shop.orderModal(product, guild, { userId: buyer.id }));
   assert.doesNotMatch(form, /"label":"PayPal"/);
@@ -42,14 +42,14 @@ test('/disable PayPal: gone from the order form (other indexes kept), an old for
   assert.match(form, new RegExp(`"value":"${psc}"`), 'the other methods keep their index');
 
   const old = await run({ guild, member: buyer, kind: 'modal', customId: `shop:order:${product.id}`, fields: { quantity: '1' }, selects: { payment: [PAYPAL] } });
-  assert.match(textOf(lastResponse(old)), /PayPal\*\* is temporarily unavailable/);
+  assert.match(textOf(lastResponse(old)), /Metoda \*\*PayPal\*\* jest chwilowo niedostępna/);
   assert.equal(db.tickets((x) => x.guildId === guild.id && x.ownerId === buyer.id).length, 0);
 
   const posted = guild.channels.cache.get(db.channelId(guild.id, 'payments')).messageList.map((m) => textOf(m.body ?? m)).join('\n');
-  assert.match(posted, /~~PayPal~~[\s\S]*temporarily unavailable – maintenance/, 'the posted #payments card was updated in place');
+  assert.match(posted, /~~PayPal~~[\s\S]*chwilowo niedostępna – maintenance/, 'the posted #payments card was updated in place');
   const card = JSON.stringify(await content.postsFor('payments', guild));
-  assert.match(card, /temporarily unavailable – maintenance/);
-  assert.match(JSON.stringify(await content.postsFor('faq', guild)), /PayPal \(temporarily unavailable\)/);
+  assert.match(card, /chwilowo niedostępna – maintenance/);
+  assert.match(JSON.stringify(await content.postsFor('faq', guild)), /PayPal \(chwilowo niedostępna\)/);
 
   await run({ guild, member: owner, kind: 'command', commandName: 'enable', options: { method: 'PayPal' } });
   assert.match(optionsOf(shop.orderModal(product, guild, { userId: buyer.id })), /"label":"PayPal"/);
@@ -61,6 +61,6 @@ test('every method off → the order form says payments are paused', async () =>
   const ps = require('../src/lib/paymentState');
   for (const m of config.shop.paymentMethods) ps.set(guild.id, m.name, true);
   const product = shop.addProduct(guild, { name: 'Spotify', price: '5', description: 'Premium.' });
-  assert.throws(() => shop.orderModal(product, guild, { userId: uid() }), /Payments are paused/);
+  assert.throws(() => shop.orderModal(product, guild, { userId: uid() }), /Płatności są chwilowo wstrzymane/);
   for (const m of config.shop.paymentMethods) ps.set(guild.id, m.name, false);
 });

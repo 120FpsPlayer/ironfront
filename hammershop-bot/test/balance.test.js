@@ -134,7 +134,7 @@ test('Top up: 💰 Balance → Top up → an order ticket; completing it credits
   const before = texts(channel);
   assert.match(before, /Doładowanie salda\*\*\n> \*\*25€\*\* – trafi na Twoje saldo sklepu po potwierdzeniu płatności[\s\S]*Salda nie można zwrócić ani wypłacić/);
   assert.match(before, /Zapłać 25€ – PaysafeCard\n-# Zamówienie `#\d+` · Doładowanie salda 25€\n/);
-  assert.match(before, /sprawdzimy płatność i dodamy ją do Twojego salda sklepu\. Saldo nie podlega zwrotowi ani wypłacie/);
+  assert.match(before, /sprawdzimy płatność i dodamy ją do Twojego salda sklepu\. Salda nie można zwrócić ani wypłacić/);
   assert.equal(shop.ticketProduct(guild.id, ticket), null, 'no product');
 
   // Pay → "on its way" → staff confirm → credited, completed.
@@ -153,7 +153,7 @@ test('Top up: 💰 Balance → Top up → an order ticket; completing it credits
   assert.ok(!channel.messageList.some((m) => customIds(m.body).includes('vouch:open')), 'no vouch for a top-up');
 
   const receipt = guild.dms.filter((d) => d.to === buyer.id).map((d) => textOf(d.payload)).find((x) => /potwierdzenie zakupu/.test(x));
-  assert.match(receipt, /\*\*Doładowanie:\*\* 💰 25€ dodane do Twojego salda sklepu[\s\S]*Saldo nie podlega zwrotowi ani wypłacie/);
+  assert.match(receipt, /\*\*Doładowanie:\*\* 💰 25€ dodane do Twojego salda sklepu[\s\S]*Salda nie można zwrócić ani wypłacić/);
   assert.doesNotMatch(receipt, /Podoba Ci się zamówienie/);
   const proofs = guild.channels.cache.get(db.channelId(guild.id, 'proofs'));
   assert.ok(!proofs.messageList.some((m) => /Doładowanie salda/.test(textOf(m.body))), 'no #proofs post');

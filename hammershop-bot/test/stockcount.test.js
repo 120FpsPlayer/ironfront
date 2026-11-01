@@ -56,43 +56,43 @@ test('/product add | edit | stock: a count sets the status, a status alone turns
   const nitro = shop.findProduct(guild.id, 'Nitro');
   assert.equal(nitro.stockCount, 12);
   assert.equal(nitro.stock, 'in');
-  assert.match(said(add), /It is \*\*in stock\*\* · \*\*12 left\*\*/);
-  assert.equal(statusLine(guild, nitro), '-# 🟢 In stock · 12 left');
+  assert.match(said(add), /Stan: \*\*dostępny\*\* · \*\*zostało 12\*\*/);
+  assert.equal(statusLine(guild, nitro), '-# 🟢 Dostępny · zostało 12');
 
   const low = await product(guild, seller, 'stock', { product: nitro.id, count: 2 });
   assert.equal(nitro.stock, 'low', `2 is at most config.shop.lowStockAt (${config.shop.lowStockAt})`);
-  assert.match(said(low), /\*\*Nitro\*\* is now \*\*low stock – almost gone\*\* · \*\*2 left\*\*\. Completed orders count it down/);
-  assert.equal(statusLine(guild, nitro), '-# 🟠 Only 2 left');
+  assert.match(said(low), /\*\*Nitro\*\* – stan: \*\*mało sztuk – prawie wyprzedany\*\* · \*\*zostało 2\*\*\. Zrealizowane zamówienia zmniejszają licznik/);
+  assert.equal(statusLine(guild, nitro), '-# 🟠 Zostało tylko 2');
 
   await product(guild, seller, 'stock', { product: nitro.id, count: 0 });
   assert.equal(nitro.stock, 'out');
-  assert.equal(statusLine(guild, nitro), '-# 🔴 Sold out');
+  assert.equal(statusLine(guild, nitro), '-# 🔴 Wyprzedany');
 
   // A status on its own turns the counter off.
   const status = await product(guild, seller, 'stock', { product: nitro.id, status: 'in', announce: false });
   assert.equal(nitro.stockCount, null);
   assert.equal(nitro.stock, 'in');
-  assert.match(said(status), /is now \*\*in stock\*\*\. The stock counter is off now – set a \*\*count\*\* to turn it back on\./);
-  assert.equal(statusLine(guild, nitro), '-# 🟢 In stock');
+  assert.match(said(status), /stan: \*\*dostępny\*\*\. Licznik sztuk jest teraz wyłączony – ustaw \*\*ilosc\*\*, żeby go włączyć\./);
+  assert.equal(statusLine(guild, nitro), '-# 🟢 Dostępny');
   const again = await product(guild, seller, 'stock', { product: nitro.id, status: 'low' });
-  assert.doesNotMatch(said(again), /counter/, 'nothing to turn off');
+  assert.doesNotMatch(said(again), /licznik/i, 'nothing to turn off');
 
   const neither = await product(guild, seller, 'stock', { product: nitro.id });
-  assert.match(said(neither), /Give a \*\*status\*\*, or a \*\*count\*\* of how many are left/);
+  assert.match(said(neither), /Podaj \*\*status\*\* albo \*\*ilosc\*\* – ile sztuk zostało/);
 
   // /product edit: the same rules.
   const counted = await product(guild, seller, 'edit', { product: nitro.id, count: 50 });
-  assert.match(said(counted), /It is \*\*in stock\*\* · \*\*50 left\*\*\./);
+  assert.match(said(counted), /Stan: \*\*dostępny\*\* · \*\*zostało 50\*\*\./);
   assert.equal(nitro.stockCount, 50);
   const off = await product(guild, seller, 'edit', { product: nitro.id, stock: 'low' });
-  assert.match(said(off), /It is \*\*low stock – almost gone\*\* \(no stock counter\)\./);
+  assert.match(said(off), /Stan: \*\*mało sztuk – prawie wyprzedany\*\* \(bez licznika sztuk\)\./);
   assert.equal(nitro.stockCount, null);
   const both = await product(guild, seller, 'edit', { product: nitro.id, stock: 'out', count: 7 });
   assert.equal(nitro.stock, 'in', 'the count wins');
   assert.equal(nitro.stockCount, 7);
-  assert.match(said(both), /\*\*7 left\*\*/);
+  assert.match(said(both), /\*\*zostało 7\*\*/);
   const name = await product(guild, seller, 'edit', { product: nitro.id, name: 'Nitro Boost' });
-  assert.doesNotMatch(said(name), /left|counter/, 'no stock note when the stock was not changed');
+  assert.doesNotMatch(said(name), /zostało|licznik/i, 'no stock note when the stock was not changed');
   assert.equal(nitro.stockCount, 7, 'other edits keep the counter');
 
   // The low-stock limit comes from config.json.
@@ -104,13 +104,13 @@ test('/product add | edit | stock: a count sets the status, a status alone turns
   } finally {
     config.shop.lowStockAt = prev;
   }
-  await assert.rejects(() => shop.setStock(guild, nitro.id, null, { count: -1 }), /whole number from 0 to 100,000/);
-  await assert.rejects(() => shop.setStock(guild, nitro.id, null, { count: 2.5 }), /whole number/);
+  await assert.rejects(() => shop.setStock(guild, nitro.id, null, { count: -1 }), /liczbą całkowitą od 0 do 100\s000/);
+  await assert.rejects(() => shop.setStock(guild, nitro.id, null, { count: 2.5 }), /liczbą całkowitą/);
 
   // Added as sold out: no announcement, and the reply says so.
   const restocks = ch(guild, 'restocks').messageList.length;
   const soldOut = await product(guild, seller, 'add', { name: 'Spotify', price: '5', description: 'One month.', count: 0 });
-  assert.match(said(soldOut), /It is \*\*sold out\*\*\./);
+  assert.match(said(soldOut), /Stan: \*\*wyprzedany\*\*\./);
   assert.equal(ch(guild, 'restocks').messageList.length, restocks, 'nothing to announce');
 });
 
@@ -120,10 +120,10 @@ test('the order form shows how many are left; a bigger quantity is refused', asy
   const buyer = member(guild);
   const buy = await run({ guild, member: buyer, kind: 'button', customId: `shop:buy:${nitro.id}` });
   const quantity = buy.state.modals[0].components.find((c) => c.component?.custom_id === 'quantity');
-  assert.equal(quantity.description, '3 left');
+  assert.equal(quantity.description, 'Zostało: 3');
 
   const tooMany = await order(guild, buyer, nitro, '4');
-  assert.match(said(tooMany.i), /Only \*\*3\*\* left – lower the quantity to 3 or less\./);
+  assert.match(said(tooMany.i), /Zostało tylko \*\*3\*\* – zmniejsz ilość do 3 lub mniej\./);
   assert.equal(tooMany.ticket, undefined);
   const ok = await order(guild, buyer, nitro, '3');
   assert.equal(ok.ticket.order.quantity, 3);
@@ -150,16 +150,16 @@ test('completed orders count the stock down – at 0 it is sold out, with a note
   await t.completeOrder(second.channel, seller);
   assert.equal(nitro.stockCount, 0);
   assert.equal(nitro.stock, 'out');
-  assert.match(logText(guild), /Sold out[\s\S]*\*\*Nitro\*\* is sold out – the last one went with order `#\d{4}`\. Restock it with `\/product stock count:`/);
+  assert.match(logText(guild), /Wyprzedany[\s\S]*\*\*Nitro\*\* jest wyprzedany – ostatnia sztuka została sprzedana w zamówieniu `#\d{4}`\. Uzupełnij stan przez `\/produkt stan ilosc:`/);
   await panels.refresh(guild, 'shop');
   const ids = customIds(shopMessage(guild).body);
   assert.ok(ids.includes(`restock:notify:${nitro.id}`), 'Notify me instead of Buy');
-  assert.match(textOf(shopMessage(guild).body), /🔴 Sold out/);
+  assert.match(textOf(shopMessage(guild).body), /🔴 Wyprzedany/);
 
   const logs = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.length;
   await t.completeOrder(late.channel, seller);
   assert.equal(nitro.stockCount, 0, 'never below 0');
-  assert.equal(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.filter((m) => /is sold out/.test(textOf(m.body))).length, 1, 'only one sold-out note');
+  assert.equal(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.filter((m) => /jest wyprzedany –/.test(textOf(m.body))).length, 1, 'only one sold-out note');
   assert.ok(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.length > logs);
 
   // Products without a counter are not touched.
@@ -191,8 +191,8 @@ test('back from 0: a new count tells everyone waiting (Notify me) and can announ
   const restocked = await product(guild, seller, 'stock', { product: nitro.id, count: 4 });
   assert.equal(nitro.stock, 'in');
   assert.deepEqual(events, [nitro.id]);
-  assert.match(said(restocked), /\*\*Nitro\*\* is now \*\*in stock\*\* · \*\*4 left\*\*[\s\S]*Restock announced 📦 · 🔔 DM sent to the 1 person waiting/);
-  assert.equal(guild.dms.filter((d) => d.to === fan.id && /Back in stock/.test(textOf(d.payload))).length, 1);
+  assert.match(said(restocked), /\*\*Nitro\*\* – stan: \*\*dostępny\*\* · \*\*zostało 4\*\*[\s\S]*Dostawa ogłoszona 📦 · 🔔 Wysłano wiadomość prywatną do 1 oczekującej osoby/);
+  assert.equal(guild.dms.filter((d) => d.to === fan.id && /Znowu dostępny!/.test(textOf(d.payload))).length, 1);
 
   // More stock while it was not sold out – nothing to tell anyone.
   await product(guild, seller, 'stock', { product: nitro.id, count: 9 });
@@ -205,6 +205,6 @@ test('back from 0: a new count tells everyone waiting (Notify me) and can announ
   assert.equal(nitro.stock, 'out');
   await run({ guild, member: fan, kind: 'button', customId: `restock:notify:${nitro.id}` });
   const edit = await product(guild, seller, 'edit', { product: nitro.id, count: 2 });
-  assert.match(said(edit), /DM sent to the 1 person waiting/);
+  assert.match(said(edit), /Wysłano wiadomość prywatną do 1 oczekującej osoby/);
   assert.deepEqual(events, [nitro.id, nitro.id]);
 });

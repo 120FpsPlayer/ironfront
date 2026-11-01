@@ -97,7 +97,7 @@ function receiptCard(guild, { sale, ticket, sellerName }) {
   lines.push(`**Data:** ${ts(sale.completedAt, 'f')}`);
   if (sellerName) lines.push(`**Sprzedawca:** ${truncate(sellerName, 64)}`);
   lines.push(`**Serwer:** ${truncate(guild.name, 100)}`);
-  if (sale.topUp) lines.push('-# ⚠️ Saldo nie podlega zwrotowi ani wypłacie.');
+  if (sale.topUp) lines.push('-# ⚠️ Salda nie można zwrócić ani wypłacić.');
   c.addTextDisplayComponents(text(lines.join('\n')));
   c.addSeparatorComponents(divider());
   const vouch = !sale.topUp; // a balance top-up isn't a purchase to vouch for

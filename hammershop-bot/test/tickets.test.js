@@ -71,7 +71,7 @@ test('more than 50 open tickets go into an overflow category instead of failing'
   assert.equal(guild.channels.cache.filter((c) => c.parentId === openId).size, 50);
   const overflow = guild.channels.cache.get(opened.at(-1).parentId);
   assert.notEqual(overflow.id, openId);
-  assert.match(overflow.name, /TICKETS 2/);
+  assert.match(overflow.name, /TICKETY 2/);
   assert.equal(t.checkCanOpen(guild.addMember(uid(), [role(guild, 'member')])), null);
 });
 
@@ -93,10 +93,10 @@ test('ticket renames: Discord limit hit by renames the bot did not make → clea
   // Someone renamed the channel twice by hand (or the bot restarted after two renames).
   await channel.setName('by-hand-1');
   await channel.setName('by-hand-2');
-  await assert.rejects(t.renameTicket(channel, 'new-name'), (err) => err instanceof UserError && /twice per 10 minutes.*~\d+ min/.test(err.message));
+  await assert.rejects(t.renameTicket(channel, 'new-name'), (err) => err instanceof UserError && /tylko 2 razy na 10 minut.*~\d+ min/.test(err.message));
   await t.setPriority(channel, 'high', staff);
   assert.equal(db.getTicket(channel.id).priority, 'high');
-  assert.match(textOf(channel.messageList.at(-1).body), /Discord limit, ~\d+ min/);
+  assert.match(textOf(channel.messageList.at(-1).body), /limit Discorda, ~\d+ min/);
 });
 
 test('"Yes, close it" still works after the customer wrote "thanks, all good!" first', async () => {

@@ -45,7 +45,7 @@ test('a form answered too late (10062) gives one clear console line, no stack tr
   const lines = await capture(() => handle(i, commands));
   assert.deepEqual(lines.error, [], 'no stack trace');
   assert.equal(lines.warn.length, 1);
-  assert.match(lines.warn[0], /expired before the bot could answer \(Discord allows 3 s, it was 4\.\d s old\)/);
+  assert.match(lines.warn[0], /wygasła, zanim bot zdążył odpowiedzieć \(Discord daje 3 s, minęło 4\.\d s\)/);
   assert.match(lines.warn[0], /ticket:form:support:b/);
   assert.equal(replies, 0, 'no pointless reply attempt');
   assert.equal(db.tickets(() => true).length, before, 'no ticket was created');
@@ -61,5 +61,5 @@ test('an interaction already answered elsewhere (40060) points to a second bot p
   };
   const lines = await capture(() => handle(i, commands));
   assert.deepEqual(lines.error, []);
-  assert.match(lines.warn.join('\n'), /running twice with the same token/);
+  assert.match(lines.warn.join('\n'), /bot działa dwa razy na tym samym tokenie/);
 });

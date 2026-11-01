@@ -83,7 +83,7 @@ test('"I\'ve paid" sent again pings the team only after the Call support cooldow
     const logsBefore = logChannel(guild).messageList.length;
     await pay(guild, buyer, channel, { fields: { note: `x${i}` } });
     const posted = channel.messageList.at(-1);
-    assert.match(textOf(posted.body), /## 📨 Payment sent again/);
+    assert.match(textOf(posted.body), /## 📨 Płatność wysłana ponownie/);
     assert.deepEqual(posted.body.allowedMentions, nothing, `re-send ${i + 1} pings nobody`);
     assert.ok(!roles.some((id) => textOf(posted.body).includes(`<@&${id}>`)));
     assert.equal(logChannel(guild).messageList.length, logsBefore + 1, 'still logged');
@@ -94,7 +94,7 @@ test('"I\'ve paid" sent again pings the team only after the Call support cooldow
   // Call support is on the same cooldown
   db.getTicket(channel.id).createdAt -= 60 * MINUTE;
   const call = await run({ guild, member: buyer, kind: 'button', customId: 'ticket:ping', channel });
-  assert.match(textOf(lastResponse(call)), /Support has already been called/);
+  assert.match(textOf(lastResponse(call)), /Pomoc została już wezwana/);
 
   // Once the cooldown is over, a correction pings again (only the seller once they claimed it)
   await t.claimTicket(channel, seller);
@@ -110,7 +110,7 @@ test('"I\'ve paid" sent again pings the team only after the Call support cooldow
   later(channel, { payment: 2 * MINUTE });
   await pay(guild, buyer, channel, { fields: { note: 'fixed' } });
   assert.deepEqual(channel.messageList.at(-1).body.allowedMentions, { users: [seller.id], roles: [] });
-  assert.match(textOf(channel.messageList.at(-1).body), new RegExp(`<@${seller.id}>, please check it`));
+  assert.match(textOf(channel.messageList.at(-1).body), new RegExp(`<@${seller.id}>, prośba o sprawdzenie`));
 });
 
 // ───────────── Staff moved the order on while the payment was on its way ─────────────
@@ -149,7 +149,7 @@ test('"I\'ve paid": staff confirming or completing the order during the upload i
     const from = emitted.length;
     held.release();
     const i = await held.done;
-    assert.match(textOf(lastResponse(i)), /already confirmed \(💳 Paid\)/);
+    assert.match(textOf(lastResponse(i)), /jest już potwierdzona \(💳 Opłacone\)/);
     const saved = db.getTicket(channel.id).order;
     assert.equal(saved.status, 'paid');
     assert.deepEqual(saved.history.map((h) => h.status), ['paid']);
@@ -165,7 +165,7 @@ test('"I\'ve paid": staff confirming or completing the order during the upload i
     await t.completeOrder(second.channel, seller, { amount: 10 });
     held2.release();
     const i2 = await held2.done;
-    assert.match(textOf(lastResponse(i2)), /already completed/);
+    assert.match(textOf(lastResponse(i2)), /jest już zrealizowane/);
     assert.equal(db.getTicket(second.channel.id).order.status, 'delivered');
     assert.ok(!emitted.some((e) => e.ticket.channelId === second.channel.id && e.status === 'sent'));
   } finally {
@@ -186,7 +186,7 @@ test('"I\'ve paid": staff confirming it while the card is posted keeps the statu
   };
   const from = emitted.length;
   const i = await pay(guild, buyer, channel, { fields: { pins: '1234-5678-9012-3456' } });
-  assert.match(textOf(lastResponse(i)), /Thanks!/);
+  assert.match(textOf(lastResponse(i)), /Dzięki!/);
   const saved = db.getTicket(channel.id).order;
   assert.equal(saved.status, 'paid', 'not set back to "sent"');
   assert.deepEqual(saved.history.map((h) => h.status), ['paid']);
@@ -244,13 +244,13 @@ test('a status on an order ticket without a product (e.g. moved from Support) ke
   const channel = await t.openTicket(member(guild), config.getType('support'), [{ label: 'Subject', value: 'I want to buy something special' }]);
   await t.moveTicket(channel, 'order', seller);
   const before = t.completeForm(channel).toJSON();
-  assert.match(before.components[0].content, /Custom order – enter what the customer paid/);
+  assert.match(before.components[0].content, /Zamówienie indywidualne – wpisz, ile zapłacił klient/);
 
   await orderstatus.setStatus(channel, 'paid', seller);
   assert.equal(db.getTicket(channel.id).order.product, null);
   const form = t.completeForm(channel).toJSON();
   assert.ok(!form.components[0].content.includes('null'), form.components[0].content);
-  assert.match(form.components[0].content, /\*\*Custom order\*\* × 1/);
+  assert.match(form.components[0].content, /\*\*Zamówienie indywidualne\*\* × 1/);
 
   // The completed sale has no product either – the receipt says "Custom order"
   await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '15' }, channel });

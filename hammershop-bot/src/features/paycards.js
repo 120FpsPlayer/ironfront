@@ -225,7 +225,7 @@ async function paymentCard(guild, ticket, order, { now = Date.now(), quote = nul
   c.addTextDisplayComponents(
     text(
       order.topUp // a balance top-up (features/balance.js) has no product
-        ? `-# 💰 ${proofsOn() ? 'Po kliknięciu **Zapłać** sprawdzimy' : 'Sprawdzimy'} płatność i dodamy ją do Twojego salda sklepu. Saldo nie podlega zwrotowi ani wypłacie.`
+        ? `-# 💰 ${proofsOn() ? 'Po kliknięciu **Zapłać** sprawdzimy' : 'Sprawdzimy'} płatność i dodamy ją do Twojego salda sklepu. Salda nie można zwrócić ani wypłacić.`
         : `-# 📦 ${proofsOn() ? 'Po kliknięciu **Zapłać** sprawdzimy' : 'Sprawdzimy'} płatność i wyślemy Ci produkt tutaj oraz w DM.`,
     ),
   );

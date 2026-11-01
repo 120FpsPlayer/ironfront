@@ -77,7 +77,7 @@ test('every completed order of a catalog product refreshes the shop, so the 🔥
   const beta = shop.addProduct(guild, { name: 'Beta', price: '10', description: 'Instant delivery.' });
   db.addSale(guild.id, { id: uid(), productId: beta.id, product: 'Beta', quantity: 3 });
   await panels.refresh(guild, 'shop');
-  assert.match(shopText(guild), /Beta[^#]*-# 🟢 In stock · 🔥 Bestseller/);
+  assert.match(shopText(guild), /Beta[^#]*-# 🟢 Dostępny · 🔥 Bestseller/);
 
   const first = await order(guild, member(guild), alpha, { quantity: '2' });
   const second = await order(guild, member(guild), alpha, { quantity: '2' });
@@ -104,7 +104,7 @@ test('every completed order of a catalog product refreshes the shop, so the 🔥
   });
   await panels.refresh(guild, 'shop');
   const text = shopText(guild);
-  assert.match(text, /Alpha[^#]*-# 🟢 In stock · 🔥 Bestseller/);
+  assert.match(text, /Alpha[^#]*-# 🟢 Dostępny · 🔥 Bestseller/);
   assert.equal(text.match(/Bestseller/g).length, 1);
 });
 
@@ -112,14 +112,14 @@ test('a flash sale needs prices in the shop currency – "$20" in a € shop is 
   const { guild, seller } = await shopGuild();
   const dollars = shop.addProduct(guild, { name: 'US Gift Card', price: '$20', description: 'For the US store.' });
   const start = await run({ guild, member: seller, kind: 'command', commandName: 'sale', subcommand: 'start', options: { product: dollars.id, percent: 20, duration: '2h', announce: false } });
-  assert.match(said(start), /\*\*US Gift Card\*\* can't go on sale: its price "\$20" is in another currency than the shop's \(€\)/);
+  assert.match(said(start), /Nie można przecenić \*\*US Gift Card\*\*: cena „\$20” jest w innej walucie niż sklep \(€\)/);
   assert.equal(dollars.sale, null);
   assert.doesNotMatch(shop.cardText(guild, dollars), /~~/);
 
   // Options too.
   const netflix = shop.addProduct(guild, { name: 'Netflix', price: '5', description: 'Premium.' });
   shop.setVariants(guild, netflix.id, '1 month = 5, 1 year = £40');
-  assert.throws(() => flash.startSale(guild, netflix.id, { percent: 20, durationMs: HOUR }), /the price of the option \*\*1 year\*\* \("£40"\) is in another currency than the shop's \(€\)/);
+  assert.throws(() => flash.startSale(guild, netflix.id, { percent: 20, durationMs: HOUR }), /cena wariantu \*\*1 year\*\* \(„£40”\) jest w innej walucie niż sklep \(€\)/);
   assert.equal(netflix.sale, null);
 
   // The shop's own currency, before or after the number, is a number price.
@@ -133,7 +133,7 @@ test('a flash sale needs prices in the shop currency – "$20" in a € shop is 
   // While on sale, the price can't be changed to another currency either.
   const nitro = shop.findProduct(guild.id, 'Nitro 20€');
   const edit = await run({ guild, member: seller, kind: 'command', commandName: 'product', subcommand: 'edit', options: { product: nitro.id, price: '$25' } });
-  assert.match(said(edit), /is on a flash sale right now and its price "\$25" is in another currency than the shop's \(€\)/);
+  assert.match(said(edit), /jest teraz w promocji błyskawicznej, a cena „\$25” jest w innej walucie niż sklep \(€\)/);
   assert.equal(nitro.price, '20€');
 
   // A shop that sells in dollars: "$20" is fine, "20€" is not.
@@ -141,7 +141,7 @@ test('a flash sale needs prices in the shop currency – "$20" in a € shop is 
   config.shop.currency = '$';
   try {
     assert.equal(shop.saleProblem(dollars), null);
-    assert.match(shop.saleProblem(nitro), /is in another currency than the shop's \(\$\)/);
+    assert.match(shop.saleProblem(nitro), /jest w innej walucie niż sklep \(\$\)/);
   } finally {
     config.shop.currency = prev;
   }
@@ -154,14 +154,14 @@ test('reopening a flash-sale order that loses its promo code keeps the "was → 
   promos.create(guild.id, { code: 'HALF', percent: 50 });
   const { ticket, channel } = await order(guild, member(guild), nitro, { quantity: '3', promo: 'HALF' });
   assert.equal(ticket.order.listPrice, 20);
-  assert.equal(answer(ticket, 'Price'), '⚡ Flash sale −20%: 20€ → 16€ each\nSubtotal: 48€ (3 × 16€)\nDiscount (HALF · 50% off): −24€\n**Total to pay: 24€**');
+  assert.equal(answer(ticket, 'Cena'), '⚡ Promocja błyskawiczna −20%: 20€ → 16€ za sztukę\nSuma: 48€ (3 × 16€)\nRabat (HALF · 50% rabatu): −24€\n**Do zapłaty: 24€**');
 
   await t.closeTicket(channel, seller, 'No answer');
   promos.remove(guild.id, 'HALF');
   await t.reopenTicket(channel, seller);
   const reopened = db.getTicket(channel.id);
   assert.equal(reopened.order.total, 48);
-  assert.equal(answer(reopened, 'Price'), "⚡ Flash sale −20%: 20€ → 16€ each\n**Total to pay: 48€** (3 × 16€)\nPromo code HALF – not applied: This code doesn't exist.");
+  assert.equal(answer(reopened, 'Cena'), '⚡ Promocja błyskawiczna −20%: 20€ → 16€ za sztukę\n**Do zapłaty: 48€** (3 × 16€)\nKod rabatowy HALF – nie zastosowano: Taki kod nie istnieje.');
 
   // Without a sale the order has no listPrice – as before.
   const plain = shop.addProduct(guild, { name: 'Steam Key', price: '5', description: 'Any game.' });
@@ -187,7 +187,7 @@ test('the sales report lists every option of a product on its own row ("Netflix 
     ['Netflix Premium', 1, 5],
     ['Netflix Premium — 1 month', 1, 5],
   ]);
-  assert.match(textOf(sales.salesCard(guild, sales.periodRange('all', now))), /🥇 \*\*Netflix Premium — 3 months\*\*  ·  2 orders · 24€/);
+  assert.match(textOf(sales.salesCard(guild, sales.periodRange('all', now))), /🥇 \*\*Netflix Premium — 3 months\*\*  ·  2 zamówienia · 24€/);
 
   // A deleted product keeps the name it was sold under, option included.
   db.guild(guild.id).products = [];

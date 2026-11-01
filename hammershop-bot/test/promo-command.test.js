@@ -36,12 +36,12 @@ test('/promo create: sellers and admins only, percent or amount, sensible defaul
 
   for (const who of [buyer, support]) {
     const denied = await promo(who, 'create', { code: 'HACK', percent: 90 });
-    assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+    assert.match(textOf(lastResponse(denied)), /Tylko administratorzy i sprzedawcy mogą zarządzać kodami rabatowymi/);
   }
   assert.equal(promos.find(guild.id, 'HACK'), null);
 
   const made = await promo(seller, 'create', { code: 'nox10', percent: 10, expires_in_days: 7, max_uses: 50 });
-  assert.match(textOf(lastResponse(made)), /Promo code NOX10 created/);
+  assert.match(textOf(lastResponse(made)), /Kod rabatowy NOX10 utworzony/);
   const p = promos.find(guild.id, 'NOX10');
   assert.equal(p.percent, 10);
   assert.equal(p.maxUses, 50);
@@ -50,7 +50,7 @@ test('/promo create: sellers and admins only, percent or amount, sensible defaul
   assert.equal(p.createdBy, seller.id);
   assert.ok(Math.abs(p.expiresAt - (Date.now() + 7 * promos.DAY)) < 5000);
   const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
-  assert.match(textOf(log.body), /Promo code created[\s\S]*NOX10/, 'logged');
+  assert.match(textOf(log.body), /Kod rabatowy utworzony[\s\S]*NOX10/, 'logged');
 
   const owner = guild.members.cache.get(guild.ownerId);
   const fixed = await promo(owner, 'create', { code: 'FIVEOFF', amount: 5, once_per_user: false, first_order_only: true });
@@ -60,13 +60,13 @@ test('/promo create: sellers and admins only, percent or amount, sensible defaul
   assert.equal(promos.find(guild.id, 'FIVEOFF').firstOrderOnly, true);
 
   const neither = await promo(seller, 'create', { code: 'NOTHING' });
-  assert.match(textOf(lastResponse(neither)), /either \*\*percent\*\*/);
+  assert.match(textOf(lastResponse(neither)), /Podaj rabat: \*\*procent\*\*/);
   const both = await promo(seller, 'create', { code: 'BOTH', percent: 5, amount: 2 });
-  assert.match(textOf(lastResponse(both)), /not both/);
+  assert.match(textOf(lastResponse(both)), /nie oba naraz/);
   const dupe = await promo(seller, 'create', { code: 'NOX10', percent: 20 });
-  assert.match(textOf(lastResponse(dupe)), /already exists/);
+  assert.match(textOf(lastResponse(dupe)), /Kod \*\*NOX10\*\* już istnieje/);
   const bad = await promo(seller, 'create', { code: 'no spaces!', percent: 20 });
-  assert.match(textOf(lastResponse(bad)), /3–24 characters/);
+  assert.match(textOf(lastResponse(bad)), /3–24 znaki/);
 });
 
 test('/promo list, info and autocomplete: personal codes are marked, uses and expiry shown', async () => {
@@ -74,32 +74,32 @@ test('/promo list, info and autocomplete: personal codes are marked, uses and ex
   const buyer = member(guild);
   promos.create(guild.id, { code: 'LIST15', percent: 15, maxUses: 3 });
   promos.redeem(guild.id, 'LIST15', buyer.id, 'S-0009');
-  const personal = promos.personal(guild.id, buyer.id, { percent: 5, days: 7, prefix: 'WELCOME', reason: 'welcome', firstOrderOnly: true });
+  const personal = promos.personal(guild.id, buyer.id, { percent: 5, days: 7, prefix: 'WITAJ', reason: 'welcome', firstOrderOnly: true });
   promos.create(guild.id, { code: 'OLD', percent: 50, expiresAt: Date.now() - 1000 });
 
   const list = await promo(seller, 'list');
   const out = textOf(lastResponse(list));
-  assert.match(out, /`LIST15` · \*\*15% off\*\* · 1\/3 uses/);
-  assert.match(out, new RegExp(`${personal.code}\` · \\*\\*5% off\\*\\* · 0/1 uses · expires <t:\\d+:R> · first order only · 👤 personal: <@${buyer.id}> \\(welcome\\)`));
-  assert.match(out, /⌛ `OLD` · \*\*50% off\*\* · 0\/∞ uses · expired/);
+  assert.match(out, /`LIST15` · \*\*15% rabatu\*\* · 1\/3 użyć/);
+  assert.match(out, new RegExp(`${personal.code}\` · \\*\\*5% rabatu\\*\\* · 0/1 użyć · wygasa <t:\\d+:R> · tylko pierwsze zamówienie · 👤 osobisty: <@${buyer.id}> \\(powitalny\\)`));
+  assert.match(out, /⌛ `OLD` · \*\*50% rabatu\*\* · 0\/∞ użyć · wygasł/);
   assert.ok(out.indexOf('LIST15') < out.indexOf(personal.code), 'public codes come first');
 
   const info = await promo(seller, 'info', { code: 'list15' });
   const details = textOf(lastResponse(info));
   assert.match(details, /LIST15/);
-  assert.match(details, /Uses 1\/3 uses/);
+  assert.match(details, /Użycia 1\/3 użyć/);
   assert.match(details, new RegExp(`<@${buyer.id}> · \`S-0009\``));
 
-  const ac = createInteraction({ guild, member: seller, kind: 'autocomplete', commandName: 'promo', focused: 'welc' });
+  const ac = createInteraction({ guild, member: seller, kind: 'autocomplete', commandName: 'promo', focused: 'witaj' });
   await handle(ac, commands);
   assert.deepEqual(ac.state.responded.map((c) => c.value), [personal.code]);
-  assert.match(ac.state.responded[0].name, /personal/);
+  assert.match(ac.state.responded[0].name, /osobisty/);
   const hidden = createInteraction({ guild, member: buyer, kind: 'autocomplete', commandName: 'promo', focused: '' });
   await handle(hidden, commands);
   assert.deepEqual(hidden.state.responded, [], 'members do not see the codes');
 
   const denied = await promo(buyer, 'list');
-  assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+  assert.match(textOf(lastResponse(denied)), /Tylko administratorzy i sprzedawcy mogą zarządzać kodami rabatowymi/);
 });
 
 test('/promo delete: removes the code, unknown codes and members are refused', async () => {
@@ -107,27 +107,27 @@ test('/promo delete: removes the code, unknown codes and members are refused', a
   const buyer = member(guild);
   promos.create(guild.id, { code: 'BYE', percent: 10 });
   const denied = await promo(buyer, 'delete', { code: 'BYE' });
-  assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+  assert.match(textOf(lastResponse(denied)), /Tylko administratorzy i sprzedawcy mogą zarządzać kodami rabatowymi/);
   assert.ok(promos.find(guild.id, 'BYE'));
 
   const gone = await promo(seller, 'delete', { code: 'bye' });
-  assert.match(textOf(lastResponse(gone)), /Deleted the promo code \*\*BYE\*\*/);
+  assert.match(textOf(lastResponse(gone)), /Usunięto kod rabatowy \*\*BYE\*\*/);
   assert.equal(promos.find(guild.id, 'BYE'), null);
   const unknown = await promo(seller, 'delete', { code: 'BYE' });
-  assert.match(textOf(lastResponse(unknown)), /There is no promo code \*\*BYE\*\*/);
+  assert.match(textOf(lastResponse(unknown)), /Nie ma kodu rabatowego \*\*BYE\*\*/);
 });
 
 test('/promo list stays within Discord limits with hundreds of personal codes', async () => {
   const g = new FakeGuild();
   await buildServer({ guild: g, mode: 'add', invokerId: g.ownerId });
-  for (let i = 0; i < 300; i += 1) promos.personal(g.id, uid(), { percent: 5, days: 7, prefix: 'WELCOME', reason: 'welcome' });
+  for (let i = 0; i < 300; i += 1) promos.personal(g.id, uid(), { percent: 5, days: 7, prefix: 'WITAJ', reason: 'welcome' });
   promos.create(g.id, { code: 'PUBLIC-CODE-WITH-24-CHAR', percent: 10, maxUses: 100_000, expiresAt: Date.now() + promos.DAY, firstOrderOnly: true, oncePerUser: false });
   const i = createInteraction({ guild: g, member: g.members.cache.get(g.ownerId), kind: 'command', commandName: 'promo', subcommand: 'list' });
   await handle(i, commands);
   const res = lastResponse(i);
   validateMessage(res, g);
   const out = textOf(res);
-  assert.match(out, /Promo codes \(301\)/);
-  assert.ok(out.indexOf('PUBLIC-CODE-WITH-24-CHAR') < out.indexOf('WELCOME-'), 'the public code is listed first');
-  assert.match(out, /…and \d+ more/);
+  assert.match(out, /Kody rabatowe \(301\)/);
+  assert.ok(out.indexOf('PUBLIC-CODE-WITH-24-CHAR') < out.indexOf('WITAJ-'), 'the public code is listed first');
+  assert.match(out, /…i \d+ więcej/);
 });

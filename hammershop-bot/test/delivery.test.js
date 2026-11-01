@@ -56,7 +56,7 @@ async function setup() {
   const restore = fakeNet([upload]);
   try {
     const i = await run({ guild, member: owner, kind: 'command', commandName: 'product', subcommand: 'delivery', options: { product: product.id, file: upload, text: 'Login at netflix.com' } });
-    assert.match(textOf(lastResponse(i)), /account\.txt[\s\S]*text/);
+    assert.match(textOf(lastResponse(i)), /account\.txt[\s\S]*tekst/);
   } finally {
     restore();
   }
@@ -86,15 +86,15 @@ test('Stripe: paid → "on the way" → the product in the ticket and by DM → 
   const restore = fakeNet([]);
   try {
     const { channel, ticket } = await order(guild, buyer, product, 'stripe');
-    assert.match(texts(channel), /Instant delivery:\*\* your product arrives right here[\s\S]*1–5 minutes/);
+    assert.match(texts(channel), /Dostawa natychmiastowa:\*\* produkt trafi tutaj[\s\S]*1–5 minut/);
     await stripe.checkPayments(guild.client);
     const all = texts(channel);
-    assert.match(all, /📦 The product is delivered automatically/);
-    assert.match(all, /Your product is on the way![\s\S]*Payment received/);
-    assert.match(all, /Your product – Netflix Premium[\s\S]*Login at netflix\.com/);
-    const productMsg = channel.messageList.find((m) => /Your product – /.test(textOf(m.body ?? m)));
+    assert.match(all, /📦 Produkt zostanie dostarczony automatycznie/);
+    assert.match(all, /Twój produkt jest w drodze![\s\S]*Otrzymaliśmy płatność/);
+    assert.match(all, /Twój produkt – Netflix Premium[\s\S]*Login at netflix\.com/);
+    const productMsg = channel.messageList.find((m) => /Twój produkt – /.test(textOf(m.body ?? m)));
     assert.deepEqual(fileNames(productMsg.body ?? productMsg), ['account.txt']);
-    const dm = guild.dms.find((d) => d.to === buyer.id && /Your product – /.test(textOf(d.payload)));
+    const dm = guild.dms.find((d) => d.to === buyer.id && /Twój produkt – /.test(textOf(d.payload)));
     assert.ok(dm, 'sent by DM too');
     assert.deepEqual(fileNames(dm.payload), ['account.txt']);
     assert.ok(ticket().completedAt, 'order completed');
@@ -111,23 +111,23 @@ test('PaysafeCard: I\'ve paid → "on the way"; staff click Payment OK – deliv
   const { guild, product, seller } = await setup();
   const buyer = member(guild);
   const { channel, ticket } = await order(guild, buyer, product, 'paysafecard');
-  assert.match(texts(channel), /After you click \*\*Pay\*\*, we check your payment and send your product/);
+  assert.match(texts(channel), /Po kliknięciu \*\*Zapłać\*\* sprawdzimy płatność i wyślemy Ci produkt/);
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
-  assert.match(texts(channel), /Your product is on the way![\s\S]*We're checking your payment/);
+  assert.match(texts(channel), /Twój produkt jest w drodze![\s\S]*Sprawdzamy Twoją płatność/);
   const card = channel.messageList.at(-1);
   assert.ok(customIds(card.body ?? card).includes('deliver:confirm'));
 
   const nope = await run({ guild, member: buyer, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(nope)), /Only the team/);
+  assert.match(textOf(lastResponse(nope)), /Tylko zespół/);
   assert.equal(ticket().order.delivered, undefined);
 
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), /Delivered \*\*Netflix Premium\*\* in the ticket and by DM/);
+  assert.match(textOf(lastResponse(ok)), /Dostarczono \*\*Netflix Premium\*\* w tickecie i w DM\./);
   assert.ok(ticket().completedAt);
-  assert.ok(guild.dms.some((d) => d.to === buyer.id && /Your product – /.test(textOf(d.payload))));
+  assert.ok(guild.dms.some((d) => d.to === buyer.id && /Twój produkt – /.test(textOf(d.payload))));
 
   const twice = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(twice)), /already delivered/);
+  assert.match(textOf(lastResponse(twice)), /został już dostarczony/);
 });
 
 test('a product without files or text: Payment OK only sets Paid – the seller delivers by hand', async () => {
@@ -137,7 +137,7 @@ test('a product without files or text: Payment OK only sets Paid – the seller 
   const { channel, ticket } = await order(guild, buyer, plain, 'crypto');
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { note: 'tx 0xabc' }, channel });
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), /order is \*\*Paid\*\*[\s\S]*deliver it by hand/);
+  assert.match(textOf(lastResponse(ok)), /zamówienie ma status \*\*Opłacone\*\*[\s\S]*dostarcz je ręcznie/);
   assert.equal(statusOf(ticket()), 'paid');
   assert.equal(ticket().completedAt ?? null, null);
 });

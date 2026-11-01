@@ -25,7 +25,7 @@ test('refunds: the regulamin, the FAQ, How to buy, Payments and the staff handbo
   const guild = new FakeGuild();
   await buildServer({ guild, mode: 'add', invokerId: guild.ownerId });
   assert.ok(db.channelId(guild.id, 'tickets'));
-  assert.match(config.shop.refundPolicy, /Delivered digital products can't be returned/);
+  assert.match(config.shop.refundPolicy, /Dostarczonych produktów cyfrowych nie można zwrócić/);
 
   const rules = texts(guild, 'rules');
   assert.match(rules, /§6 · Odstąpienie od umowy, reklamacje i zwroty/);
@@ -36,29 +36,74 @@ test('refunds: the regulamin, the FAQ, How to buy, Payments and the staff handbo
   const faq = texts(guild, 'faq');
   assert.match(
     faq,
-    /Can I get a refund\?\*\*\n> Delivered digital products can't be returned – by ordering you ask for instant delivery\. Store balance can't be refunded or paid out either\. A product that doesn't work or doesn't match its description\? Open a \*\*Support\*\* ticket in <#\d+> – we fix or replace it, and if we can't, you get your money back\. Full terms: <#\d+>\./,
+    /Czy mogę dostać zwrot pieniędzy\?\*\*\n> Dostarczonych produktów cyfrowych nie można zwrócić – składając zamówienie, prosisz o natychmiastową dostawę\. Salda sklepu również nie zwracamy ani nie wypłacamy\. Produkt nie działa albo nie zgadza się z opisem\? Otwórz ticket \*\*Pomoc\*\* na <#\d+> – naprawimy go lub wymienimy, a jeśli się nie da, oddamy Ci pieniądze\. Pełne zasady: <#\d+>\./,
   );
 
   const howTo = texts(guild, 'howToBuy');
-  assert.ok(howTo.includes(`**Refunds:** ${config.shop.refundPolicy} A product that doesn't work? Open a support ticket – we fix or replace it, and if we can't, you get your money back.`));
-  assert.ok(texts(guild, 'payments').includes(`**Refunds:** ${config.shop.refundPolicy} Check the product and the price before you pay.`));
-  assert.match(texts(guild, 'staff'), /\*\*Refunds\*\* – delivered products can't be returned and store balance can't be refunded or paid out\. A product doesn't work\? Fix or replace it first – only if that's impossible, a manager sends the money back \(terms: <#\d+> §6\)/);
-  assert.match(texts(guild, 'staff'), /`\/sale deal` – the automatic deal of the week/);
+  assert.ok(howTo.includes(`**Zwroty:** ${config.shop.refundPolicy} Produkt nie działa? Otwórz ticket **Pomoc** – naprawimy go lub wymienimy, a jeśli się nie da, oddamy Ci pieniądze.`));
+  assert.ok(texts(guild, 'payments').includes(`**Zwroty:** ${config.shop.refundPolicy} Przed płatnością sprawdź produkt i cenę.`));
+  assert.match(texts(guild, 'staff'), /\*\*Zwroty\*\* – dostarczonych produktów nie można zwrócić, a salda sklepu nie zwracamy ani nie wypłacamy\. Produkt nie działa\? Najpierw go napraw lub wymień – dopiero gdy to niemożliwe, manager oddaje pieniądze \(zasady: <#\d+> §6\)/);
+  assert.match(texts(guild, 'staff'), /`\/promocja okazja` – automatyczna okazja tygodnia/);
+});
+
+// An unconditional refund promise. English: any of these phrases. Polish: giving the money back (or a refund
+// guarantee) is only allowed on a line that also says when – after fixing or replacing the product failed
+// ("a gdy to niemożliwe", "a jeśli się nie da", "jeśli nie możemy").
+const EN_PROMISE = /\b(we (will )?refund|you('ll| will) (get|be) refunded|money[- ]back guarantee|full refund)/i;
+const PL_PROMISE =
+  /(?<!\p{L})(?<!(?<!\p{L})nie )((zwróc|zwraca|odda|odzysk)\p{L}*( z powrotem)?( (Ci|Tobie|swoje|całe|wszystkie))* pieni(ądze|ędzy)|(dostaniesz|otrzymasz|odzyskasz)( z powrotem)?( (swoje|całe|wszystkie))* pieni(ądze|ędzy)|(dostaniesz|otrzymasz) (pełny |pełen |całkowity )?zwrot|pieniądze (wrócą|zostaną zwrócone)|gwarancj\p{L}* zwrotu|pełn\p{L}* zwrot|zwrot\p{L}* (pieniędzy )?gwarantowan|100 ?% zwrotu)/iu;
+const PL_CONDITION = /(?<!\p{L})(gdy|jeśli|jeżeli)( to)?( jest)? (niemożliwe|się nie da|nie (możemy|da się|uda się))(?!\p{L})/iu;
+const unconditional = (line) => EN_PROMISE.test(line) || (PL_PROMISE.test(line) && !PL_CONDITION.test(line));
+
+test('the refund check catches unconditional promises in English and Polish, and lets the conditional one through', () => {
+  for (const line of [
+    'We will refund you.',
+    "You'll get refunded within 24h.",
+    'Money-back guarantee!',
+    'Nie działa? Zwrócimy Ci pieniądze.',
+    'Nie podoba się? Oddamy pieniądze bez pytań.',
+    'Zawsze zwracamy pieniądze.',
+    'Dostaniesz pełny zwrot.',
+    'Otrzymasz z powrotem swoje pieniądze.',
+    'Gwarancja zwrotu pieniędzy!',
+    'Pełny zwrot w 14 dni.',
+    'Zwrócimy pieniądze, gdy produkt nie działa.',
+  ]) {
+    assert.ok(unconditional(line), line);
+  }
+  for (const line of [
+    'Produkt nie działa? Otwórz ticket **Pomoc** – naprawimy go lub wymienimy, a jeśli się nie da, oddamy Ci pieniądze.',
+    'Najpierw naprawimy lub wymienimy produkt, a gdy to niemożliwe – **zwrócimy pieniądze** lub obniżymy cenę.',
+    'Najpierw go napraw lub wymień – dopiero gdy to niemożliwe, manager oddaje pieniądze.',
+    'Naprawimy lub wymienimy produkt, a jeśli nie możemy – zwrócimy pieniądze.',
+    'Dostarczonych produktów cyfrowych nie można zwrócić. Salda sklepu nie wypłacamy ani nie zwracamy.',
+    'Czy mogę dostać zwrot pieniędzy?',
+    'Nie zwracamy pieniędzy za dostarczone produkty.',
+  ]) {
+    assert.ok(!unconditional(line), line);
+  }
 });
 
 test('no customer-facing text promises a refund without conditions', () => {
-  const dir = path.join(__dirname, '..', 'src');
+  const root = path.join(__dirname, '..');
+  const dir = path.join(root, 'src');
   const offenders = [];
+  const check = (p) => {
+    fs.readFileSync(p, 'utf8')
+      .split('\n')
+      .forEach((line) => {
+        if (unconditional(line)) offenders.push(`${path.relative(root, p)}: ${line.trim()}`);
+      });
+  };
   const walk = (d) => {
     for (const f of fs.readdirSync(d, { withFileTypes: true })) {
       const p = path.join(d, f.name);
       if (f.isDirectory()) walk(p);
-      else if (p.endsWith('.js')) {
-        const src = fs.readFileSync(p, 'utf8');
-        for (const m of src.matchAll(/[^\n]*\b(we (will )?refund|you('ll| will) (get|be) refunded|money[- ]back guarantee|full refund)[^\n]*/gi)) offenders.push(`${path.relative(dir, p)}: ${m[0].trim()}`);
-      }
+      else if (p.endsWith('.js')) check(p);
     }
   };
   walk(dir);
+  // The texts in config.json (canned replies, shop texts) and the regulamin reach customers too.
+  for (const file of ['config.json', 'regulamin.md']) check(path.join(root, file));
   assert.deepEqual(offenders, []);
 });

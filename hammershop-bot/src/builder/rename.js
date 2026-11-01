@@ -18,12 +18,13 @@ const TEXT_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement
 
 /**
  * Whether a ticket channel still has a name the bot gave it – old style ("🔴order-0001") or new
- * ("🔴🛒┃ᴏʀᴅᴇʀ-0001"). Any ticket type's prefix counts (a move may not have renamed it yet).
+ * ("🔴🛒┃ᴏʀᴅᴇʀ-0001"). Any ticket type's prefix counts (a move may not have renamed it yet), and so does its
+ * id – the prefix of the English version before the translation ("order-0001", now "zamowienie-0001").
  */
 function looksGenerated(ticket, name) {
   const number = String(ticket.number).padStart(4, '0');
   const core = style.bareName(name).replace(/^[^\p{L}\p{N}]+/u, '');
-  return ['ticket', ...config.ticketTypes.map((x) => x.channelPrefix)].some((prefix) => core === `${prefix}-${number}` || core === style.smallCaps(`${prefix}-${number}`));
+  return ['ticket', ...config.ticketTypes.flatMap((x) => [x.channelPrefix, x.id])].some((prefix) => core === `${prefix}-${number}` || core === style.smallCaps(`${prefix}-${number}`));
 }
 
 /** Every channel the bot manages, with the name it should have now. */

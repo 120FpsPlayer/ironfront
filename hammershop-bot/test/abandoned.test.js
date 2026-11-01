@@ -48,10 +48,10 @@ async function closedOrder(guild, seller, buyer, p, { patch = null, closedAgo = 
   return db.getTicket(ticket.channelId);
 }
 
-const comebacks = (guild, who) => guild.dms.filter((d) => d.to === who.id && /Still thinking about it/.test(textOf(d.payload)));
-const codeOf = (payload) => textOf(payload).match(/`(COMEBACK-[0-9A-F]{6})`/)?.[1];
+const comebacks = (guild, who) => guild.dms.filter((d) => d.to === who.id && /Nadal się zastanawiasz\?/.test(textOf(d.payload)));
+const codeOf = (payload) => textOf(payload).match(/`(POWROT-[0-9A-F]{6})`/)?.[1];
 
-test('abandoned order: after afterHours the buyer gets ONE personal 5% COMEBACK code by DM – and the code works', async () => {
+test('abandoned order: after afterHours the buyer gets ONE personal 5% POWROT code by DM – and the code works', async () => {
   const { guild, nitro, seller } = await shopGuild();
   const buyer = member(guild);
   const ticket = await order(guild, buyer, nitro);
@@ -65,9 +65,9 @@ test('abandoned order: after afterHours the buyer gets ONE personal 5% COMEBACK 
   assert.equal(dms.length, 1);
   validateMessage(dms[0].payload, guild);
   const out = textOf(dms[0].payload);
-  assert.match(out, /Your order \*\*Nitro\*\* \(`#\d{4}`\) at \*\*.+\*\* was closed before it was paid/);
-  assert.match(out, /\*\*5% off\*\* your next order/);
-  assert.match(out, /Back to the shop/);
+  assert.match(out, /Twoje zamówienie \*\*Nitro\*\* \(`#\d{4}`\) w \*\*.+\*\* zostało zamknięte przed opłaceniem/);
+  assert.match(out, /\*\*5% rabatu\*\* na kolejne zamówienie/);
+  assert.match(out, /Wróć do sklepu/);
   assert.equal(JSON.parse(JSON.stringify(dms[0].payload.components[0])).components.at(-1).components[0].url, `https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'shop')}`);
   assert.ok(dms[0].payload.allowedMentions, 'allowedMentions set');
 
@@ -88,7 +88,7 @@ test('abandoned order: after afterHours the buyer gets ONE personal 5% COMEBACK 
   assert.equal(next.order.promo, code);
   assert.equal(next.order.total, 19);
   // …and nobody else can use it.
-  assert.match(promos.check(guild.id, code, member(guild).id).error, /belongs to someone else/);
+  assert.match(promos.check(guild.id, code, member(guild).id).error, /należy do kogoś innego/);
 
   // Turned off → nothing is sent.
   const other = member(guild);
@@ -140,7 +140,7 @@ test('no code for paid, completed, top-up or newer orders, blacklisted members, 
   const g = db.guild(guild.id);
   for (const [why, ticket] of Object.entries({ ...cases, old, before, bannedTicket })) {
     assert.equal(g.abandoned[ticket.channelId], undefined, why);
-    assert.equal(guild.dms.filter((d) => d.to === ticket.ownerId && /Still thinking/.test(textOf(d.payload))).length, 0, why);
+    assert.equal(guild.dms.filter((d) => d.to === ticket.ownerId && /Nadal się zastanawiasz/.test(textOf(d.payload))).length, 0, why);
   }
   // Closed DMs: tried once, the code is deleted again, never retried.
   assert.deepEqual({ ...g.abandoned[shyTicket.channelId], sentAt: 0 }, { userId: shy.id, sentAt: 0, code: null });

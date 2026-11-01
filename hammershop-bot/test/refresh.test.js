@@ -61,7 +61,7 @@ test('/build only:panels re-sends a card someone deleted', async () => {
   const res = await refreshContent(guild);
   assert.equal(res.sent, 1);
   assert.equal(faq.messageList.length, 2);
-  assert.match(textOf(faq.messageList[1].body), /Frequently asked questions/);
+  assert.match(textOf(faq.messageList[1].body), /Najczęściej zadawane pytania/);
 });
 
 test('/build only:panels works on servers built before message tracking, without duplicates', async () => {
@@ -77,7 +77,7 @@ test('/build only:panels works on servers built before message tracking, without
   assert.equal(db.build(guild.id).posts.information.length, 10, 'posts are tracked from now on');
 });
 
-test('shop prices: plain numbers get the € sign, payments are PaysafeCard / Crypto / PayPal / Stripe / BLIK (Simpay)', async () => {
+test('shop prices: plain numbers get the € sign, payments are PaysafeCard / Kryptowaluty / PayPal / Stripe / BLIK (Simpay)', async () => {
   const guild = await builtGuild();
   const shop = require('../src/features/shop');
   const panels = require('../src/lib/panels');
@@ -90,5 +90,5 @@ test('shop prices: plain numbers get the € sign, payments are PaysafeCard / Cr
   const modal = shop.orderModal(db.guild(guild.id).products[0], guild).toJSON();
   assert.match(JSON.stringify(modal), /20€/);
   const payment = modal.components.find((c) => c.component?.custom_id === 'payment').component;
-  assert.deepEqual(payment.options.map((o) => o.label), ['PaysafeCard', 'Crypto', 'PayPal', 'Stripe', 'BLIK / Transfer (Simpay)']);
+  assert.deepEqual(payment.options.map((o) => o.label), ['PaysafeCard', 'Kryptowaluty', 'PayPal', 'Stripe', 'BLIK / przelew (Simpay)']);
 });

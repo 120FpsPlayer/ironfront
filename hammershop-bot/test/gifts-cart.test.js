@@ -64,27 +64,27 @@ test('a cart order as a gift: every product goes to the recipient by DM and into
 
   await run({ guild, member: buyer, kind: 'userselect', customId: 'gift:pick', values: [friend.id], channel });
   assert.equal(ticket().order.giftTo, friend.id);
-  assert.match(textOf(cardOf(channel, ticket())), new RegExp(`Gift for <@${friend.id}>`));
+  assert.match(textOf(cardOf(channel, ticket())), new RegExp(`Prezent dla <@${friend.id}>`));
 
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
   const dmsBefore = guild.dms.length;
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), new RegExp(`Delivered \\*\\*2 products\\*\\* in the ticket and to the gift's recipient <@${friend.id}> by DM`));
+  assert.match(textOf(lastResponse(ok)), new RegExp(`Dostarczono \\*\\*2 produkty\\*\\* w tickecie i w DM do odbiorcy prezentu <@${friend.id}>`));
 
   const sent = guild.dms.slice(dmsBefore);
   const gifts = sent.filter((d) => d.to === friend.id).map((d) => textOf(d.payload));
   assert.equal(gifts.length, 2, 'one DM per product to the recipient');
-  assert.match(gifts[0], new RegExp(`A gift from @user${buyer.id} – Netflix Premium × 1[\\s\\S]*NETFLIX-LOGIN-123`));
-  assert.match(gifts[1], new RegExp(`A gift from @user${buyer.id} – Nitro Boost × 1[\\s\\S]*NITRO-GIFT-456`));
+  assert.match(gifts[0], new RegExp(`Prezent od @user${buyer.id} – Netflix Premium × 1[\\s\\S]*NETFLIX-LOGIN-123`));
+  assert.match(gifts[1], new RegExp(`Prezent od @user${buyer.id} – Nitro Boost × 1[\\s\\S]*NITRO-GIFT-456`));
   const toBuyer = sent.filter((d) => d.to === buyer.id).map((d) => textOf(d.payload));
-  assert.ok(!toBuyer.some((x) => /Your product – |A gift from|NETFLIX-LOGIN/.test(x)), 'no product DM to the buyer');
-  assert.ok(toBuyer.some((x) => /Thank you for your order![\s\S]*Gift for:\*\* <@/.test(x)), 'the receipt goes to the buyer');
-  assert.ok(!sent.some((d) => d.to === friend.id && /Thank you for your order!/.test(textOf(d.payload))), 'no receipt to the recipient');
+  assert.ok(!toBuyer.some((x) => /Twój produkt – |Prezent od|NETFLIX-LOGIN/.test(x)), 'no product DM to the buyer');
+  assert.ok(toBuyer.some((x) => /Dziękujemy za zamówienie![\s\S]*Prezent dla:\*\* <@/.test(x)), 'the receipt goes to the buyer');
+  assert.ok(!sent.some((d) => d.to === friend.id && /Dziękujemy za zamówienie!/.test(textOf(d.payload))), 'no receipt to the recipient');
 
   const all = texts(channel);
-  assert.match(all, /Your gift – Netflix Premium × 1[\s\S]*NETFLIX-LOGIN-123/);
-  assert.match(all, /Your gift – Nitro Boost × 1[\s\S]*NITRO-GIFT-456/);
-  assert.match(all, new RegExp(`your gift is delivered – <@${friend.id}> got the products by DM`));
+  assert.match(all, /Twój prezent – Netflix Premium × 1[\s\S]*NETFLIX-LOGIN-123/);
+  assert.match(all, /Twój prezent – Nitro Boost × 1[\s\S]*NITRO-GIFT-456/);
+  assert.match(all, new RegExp(`Twój prezent został dostarczony – produkty trafiły do <@${friend.id}> w wiadomości prywatnej`));
   assert.ok(ticket().completedAt);
   assert.equal(statusOf(ticket()), 'delivered');
   assert.equal(ticket().order.delivered.giftTo, friend.id);
@@ -99,8 +99,8 @@ test("a cart gift whose recipient has closed DMs: the buyer is told to pass the 
   await run({ guild, member: buyer, kind: 'userselect', customId: 'gift:pick', values: [friend.id], channel });
   await run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { pins: '1234-5678-9012-3456' }, channel });
   const ok = await run({ guild, member: seller, kind: 'button', customId: 'deliver:confirm', channel });
-  assert.match(textOf(lastResponse(ok)), /couldn't DM the gift's recipient/);
-  assert.match(texts(channel), new RegExp(`I couldn't DM <@${friend.id}>[\\s\\S]*the products are right above, please pass them on`));
+  assert.match(textOf(lastResponse(ok)), /nie udało się wysłać DM do odbiorcy prezentu/);
+  assert.match(texts(channel), new RegExp(`nie udało się wysłać wiadomości prywatnej do <@${friend.id}>[\\s\\S]*produkty są tuż powyżej, przekaż je odbiorcy`));
   assert.equal(ticket().order.delivered.dm, false);
 });
 
@@ -128,5 +128,5 @@ test('a creator code in the cart promo field gives the discount and earns commis
   await t.completeOrder(channel, seller).catch(() => null); // completing again changes nothing
   assert.equal(entry().sales.length, 1);
   assert.equal(entry().earned, 2.97);
-  assert.equal(guild.dms.filter((d) => d.to === creator.id && /You earned \*\*2\.97€\*\*/.test(textOf(d.payload))).length, 1);
+  assert.equal(guild.dms.filter((d) => d.to === creator.id && /Dostajesz \*\*2\.97€\*\* prowizji/.test(textOf(d.payload))).length, 1);
 });
