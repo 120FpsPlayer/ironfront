@@ -4,6 +4,7 @@ const { SlashCommandBuilder, InteractionContextType, ChannelType, PermissionFlag
 const panels = require('../lib/panels');
 const { banner } = require('../lib/theme');
 const { reply, replyError, isAdmin } = require('../lib/utils');
+const { MAP } = require('../lib/commandsPl');
 const { verifyPanel } = require('../features/verification');
 const { rolesPanels } = require('../features/selfroles');
 require('../tickets/tickets'); // registers the ticket panel
@@ -40,14 +41,14 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member)) return replyError(interaction, 'Only administrators can use this command.');
+    if (!isAdmin(interaction.member)) return replyError(interaction, 'Tej komendy mogą używać tylko administratorzy.');
     const type = interaction.options.getString('type');
     const def = TYPES[type];
     const channel = interaction.options.getChannel('channel') ?? interaction.channel;
     const withBanner = interaction.options.getBoolean('banner') ?? true;
     const me = interaction.guild.members.me;
     if (!channel.permissionsFor(me).has(['ViewChannel', 'SendMessages', 'EmbedLinks', 'AttachFiles'])) {
-      return replyError(interaction, `I don't have permission to send messages in ${channel}.`);
+      return replyError(interaction, `Nie mam uprawnień do wysyłania wiadomości na ${channel}.`);
     }
     await interaction.deferReply({ flags: 64 });
     if (withBanner && def.banner) await channel.send({ files: [banner(def.banner)] });
@@ -59,6 +60,7 @@ module.exports = {
     } else if (type === 'roles') {
       for (const payload of rolesPanels(interaction.guild)) await channel.send(payload);
     }
-    return reply(interaction, `${def.label} sent to ${channel}.${def.live ? ' It updates automatically.' : ''}`);
+    const label = MAP.panel.options.type.choices?.[type] ?? def.label; // the Polish name, as in /panel typ:
+    return reply(interaction, `Wysłano: ${label} na ${channel}.${def.live ? ' Panel aktualizuje się automatycznie.' : ''}`);
   },
 };

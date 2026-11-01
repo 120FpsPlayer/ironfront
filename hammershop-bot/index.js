@@ -14,17 +14,17 @@ const { execSync } = require('node:child_process');
 
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 18 || (major === 18 && minor < 17)) {
-  console.error(`❌ HammerShop needs Node.js 18.17 or newer (you have ${process.versions.node}). Change the Node version / Docker image in your hosting panel.`);
+  console.error(`❌ HammerShop wymaga Node.js 18.17 lub nowszego (masz ${process.versions.node}). Zmień wersję Node / obraz Dockera w panelu hostingu.`);
   process.exit(1);
 }
 
 const root = __dirname;
 if (!fs.existsSync(path.join(root, 'node_modules', 'discord.js', 'package.json'))) {
-  console.log('ℹ️  Installing dependencies (first start only)…');
+  console.log('ℹ️  Instaluję zależności (tylko przy pierwszym uruchomieniu)…');
   try {
     execSync('npm install --omit=dev --no-audit --no-fund', { cwd: root, stdio: 'inherit' });
   } catch {
-    console.error(`❌ Could not install dependencies. Run "npm install" yourself in: ${root}`);
+    console.error(`❌ Nie udało się zainstalować zależności. Uruchom samodzielnie „npm install” w: ${root}`);
     process.exit(1);
   }
 }

@@ -6,79 +6,89 @@ const invites = require('../features/invites');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, isStaff, isAdmin, truncate } = require('../lib/utils');
 const { isMod, isShopManager } = require('../lib/permissions');
+const { MAP, slash } = require('../lib/commandsPl');
+const db = require('../lib/db');
 
 module.exports = {
   data: new SlashCommandBuilder().setName('help').setDescription(truncate(`All ${config.brand.name} bot commands you can use`, 100)).setContexts(InteractionContextType.Guild),
 
   async execute(interaction) {
     const member = interaction.member;
+    const cmd = (...paths) => paths.map((path) => `\`${slash(path)}\``).join(' · ');
+    const opt = (command, sub, name) => `\`${MAP[command]?.options?.[sub]?.options?.[name]?.name ?? name}\``;
+    const only = (value) => `\`${slash('build')} ${MAP.build.options.only.name}:${value}\``;
+    const channel = (key, name) => {
+      const id = db.channelId(interaction.guild.id, key);
+      return id ? `<#${id}>` : `#${name}`;
+    };
+    const shopId = db.channelId(interaction.guild.id, 'shop');
     // Only what is turned on in config.json.
     const rewards = config.promos.enabled !== false && invites.levels().length > 0;
-    const inviteLine = config.invites.enabled === false ? null : `\`/invites stats\` · \`/invites top\` – your invites${rewards ? ' and the rewards you can earn' : ' and the top inviters'}`;
+    const inviteLine = config.invites.enabled === false ? null : `${cmd('invites stats', 'invites top')} – Twoje zaproszenia${rewards ? ' i nagrody, które możesz zdobyć' : ' i ranking zapraszających'}`;
     const e = embed(COLORS.brand)
-      .setTitle(`📖 ${config.brand.name} – help`)
-      .setDescription('Buy something with the **Buy** buttons in the shop channel, get help with the **ticket panel**.')
+      .setTitle(`📖 ${config.brand.name} – pomoc`)
+      .setDescription(`Kupuj przyciskami **Kup** ${shopId ? `na <#${shopId}>` : 'na kanale sklepu'}, a pomoc dostaniesz przez **panel ticketów**.`)
       .addFields({
-        name: '👤 Everyone',
+        name: '👤 Wszyscy',
         value: [
-          '`/vouch` – leave a review after a purchase',
+          `${cmd('vouch')} – wystaw opinię po zakupie`,
           inviteLine,
-          '`/ticket info` · `/ticket close` – inside your ticket',
-          '🔔 **Call support** – a button in your ticket if you have been waiting a while',
-          config.orders.paymentProofs === false ? null : '💳 **Pay** – a button in your order ticket: send your PaysafeCard PIN, the crypto transaction ID or a screenshot',
-          '🧾 **My orders** – a button in the shop: your open orders, their status and all your receipts',
+          `${cmd('ticket info', 'ticket close')} – w Twoim tickecie`,
+          '🔔 **Wezwij pomoc** – przycisk w Twoim tickecie, gdy czekasz już dłuższą chwilę',
+          config.orders.paymentProofs === false ? null : '💳 **Zapłać** – przycisk w tickecie zamówienia: wyślij PIN PaysafeCard, ID transakcji krypto albo zrzut ekranu',
+          '🧾 **Moje zamówienia** – przycisk w sklepie: Twoje otwarte zamówienia, ich status i wszystkie potwierdzenia zakupu',
         ]
           .filter(Boolean)
           .join('\n'),
       });
     if (isStaff(member)) {
       e.addFields({
-        name: '🎧 Staff',
+        name: '🎧 Zespół',
         value: [
-          '`/ticket claim` · `/ticket unclaim` · `/ticket add` · `/ticket remove`',
-          '`/ticket priority` · `/ticket move` · `/ticket rename` · `/ticket request-close`',
-          '`/ticket complete` – mark a purchase as delivered (records the sale, receipt, proof, Customer role)',
-          `⚙️ ticket menu → **Status: Paid / In progress**${config.orders.statusDms === false ? '' : ' – the customer gets a DM'}${config.staffReminders.enabled === false ? '' : ' · unclaimed tickets are reminded in the staff chat'}`,
-          '`/customer view` · `/customer note add` – customer profiles and private notes',
-          '`/reply` – canned replies · `/blacklist` · `/stats`',
+          cmd('ticket claim', 'ticket unclaim', 'ticket add', 'ticket remove'),
+          cmd('ticket priority', 'ticket move', 'ticket rename', 'ticket request-close'),
+          `${cmd('ticket complete')} – oznacz zakup jako dostarczony (zapis sprzedaży, potwierdzenie zakupu, realizacja, rola Klient)`,
+          `⚙️ menu ticketu → **Status: Opłacone / W realizacji**${config.orders.statusDms === false ? '' : ' – klient dostaje DM'}${config.staffReminders.enabled === false ? '' : ' · przypomnienia o nieprzejętych ticketach trafiają na czat zespołu'}`,
+          `${cmd('customer view', 'customer note add')} – profile klientów i prywatne notatki`,
+          `${cmd('reply')} – gotowe odpowiedzi · ${cmd('blacklist', 'stats')}`,
         ].join('\n'),
       });
     }
     if (isShopManager(member)) {
       e.addFields({
-        name: '🛒 Shop',
+        name: '🛒 Sklep',
         value: [
-          '`/disable` · `/enable` – switch a payment method off for a while (e.g. while fixing PayPal) and back on',
-          '`/product add` · `/product edit` · `/product stock` · `/product variants` · `/product delivery` · `/product remove` · `/product list` – categories, images, options, stock, files the buyer gets',
-          '`/sale start` · `/sale stop` · `/sale list` – flash sales with a countdown in the shop',
-          '`/promo create` · `/promo list` · `/promo info` · `/promo delete` – discount codes',
-          '`/shop open` · `/shop close` · `/shop auto` · `/shop status` – open/closed status',
-          '`/sales` – revenue, orders, top products and sellers',
+          `${cmd('disable', 'enable')} – wyłącz na chwilę metodę płatności (np. na czas naprawy PayPala) i włącz ją z powrotem`,
+          `${cmd('product add', 'product edit', 'product stock', 'product variants', 'product delivery', 'product remove', 'product list')} – kategorie, obrazki, warianty, stan, pliki dla kupującego`,
+          `${cmd('sale start', 'sale stop', 'sale list')} – promocje błyskawiczne z odliczaniem w sklepie`,
+          `${cmd('promo create', 'promo list', 'promo info', 'promo delete')} – kody rabatowe`,
+          `${cmd('shop open', 'shop close', 'shop auto', 'shop status')} – sklep otwarty / zamknięty`,
+          `${cmd('sales')} – przychód, zamówienia, najlepsze produkty i sprzedawcy`,
         ].join('\n'),
       });
     }
     if (isMod(member)) {
       e.addFields({
-        name: '🎉 Community',
+        name: '🎉 Społeczność',
         value:
-          '`/giveaway start` · `/giveaway end` · `/giveaway reroll` · `/giveaway list` – `required_role` / `buyers_only` / `min_invites` limit who can enter (checked again at the draw)\n' +
-          '`/announce` – styled announcement with banner & ping',
+          `${cmd('giveaway start', 'giveaway end', 'giveaway reroll', 'giveaway list')} – ${opt('giveaway', 'start', 'required_role')} / ${opt('giveaway', 'start', 'buyers_only')} / ${opt('giveaway', 'start', 'min_invites')} ograniczają, kto może dołączyć (sprawdzane ponownie przy losowaniu)\n` +
+          `${cmd('announce')} – ładne ogłoszenie z banerem i pingiem`,
       });
       e.addFields({
-        name: '🚨 Security',
-        value: `\`/lockdown\` · \`/unlock\` – lock the server during a raid${config.security.impersonationAlerts ? '\nLook-alike staff accounts are reported in #automod-logs automatically' : ''}`,
+        name: '🚨 Bezpieczeństwo',
+        value: `${cmd('lockdown', 'unlock')} – blokada serwera podczas raidu${config.security.impersonationAlerts ? `\nKonta podszywające się pod zespół są automatycznie zgłaszane na ${channel('automodLogs', 'logi-automod')}` : ''}`,
       });
     }
     if (isAdmin(member)) {
       e.addFields({
-        name: '🛡️ Administration',
+        name: '🛡️ Administracja',
         value: [
-          '`/build` – build the whole server',
-          '`/build only:update` – after a bot update: new channels & roles, names, panels',
-          '`/build only:emojis` · `/build only:panels` · `/build only:names`',
-          `\`/backup\` – back up the bot data now${config.backups.enabled ? ' (also automatic, in #backups)' : ''}`,
-          '`/panel` – re-send a panel',
-          '`/setup show` · `/setup set` · `/setup role-add`',
+          `${cmd('build')} – zbuduj cały serwer`,
+          `${only('update')} – po aktualizacji bota: nowe kanały i role, nazwy, panele`,
+          [only('emojis'), only('panels'), only('names')].join(' · '),
+          `${cmd('backup')} – zrób teraz kopię zapasową danych bota${config.backups.enabled ? ` (robi się też automatycznie, na ${channel('backups', 'kopie-zapasowe')})` : ''}`,
+          `${cmd('panel')} – wyślij panel ponownie`,
+          cmd('setup show', 'setup set', 'setup role-add'),
         ].join('\n'),
       });
     }

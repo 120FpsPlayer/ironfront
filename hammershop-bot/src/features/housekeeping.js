@@ -59,7 +59,7 @@ function run(client, now = Date.now()) {
     const { codes, welcomeEntries, inviteRecords } = prune(guildId, now);
     if (!codes && !welcomeEntries && !inviteRecords) continue;
     const name = client?.guilds?.cache?.get(guildId)?.name ?? guildId;
-    console.log(`[housekeeping] ${name}: removed ${codes} expired welcome codes, ${welcomeEntries} welcome-code entries of customers and ${inviteRecords} invite records of people who left.`);
+    console.log(`[housekeeping] ${name}: usunięto wygasłe kody powitalne (${codes}), wpisy kodów powitalnych klientów (${welcomeEntries}) i zapisy zaproszeń osób, które wyszły (${inviteRecords}).`);
   }
 }
 

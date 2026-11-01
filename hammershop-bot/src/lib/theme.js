@@ -89,9 +89,19 @@ function bannerArt(key) {
   return bannerArts.get(key);
 }
 
+/** Polish alt text of the banners (the attachment description). */
+const BANNER_ALT = {
+  announcements: 'Ogłoszenia', boosters: 'Boosterzy', 'bot-commands': 'Komendy', channels: 'Kanały', chat: 'Czat', contact: 'Kontakt',
+  discord: 'Discord', events: 'Wydarzenia', faq: 'FAQ', giveaways: 'Giveawaye', help: 'Pomoc', 'how-to-buy': 'Jak kupić',
+  information: 'Informacje', 'join-us': 'Dołącz do nas', leaderboard: 'Ranking', media: 'Media', memes: 'Memy', partners: 'Partnerzy',
+  payments: 'Płatności', products: 'Produkty', proofs: 'Realizacje', purchase: 'Zakup', restocks: 'Dostawy', reviews: 'Opinie',
+  roles: 'Role', rules: 'Regulamin', shop: 'Sklep', staff: 'Zespół', support: 'Pomoc', tickets: 'Tickety', updates: 'Aktualizacje',
+  verification: 'Weryfikacja', vip: 'VIP', vouches: 'Opinie', welcome: 'Powitanie', 'whats-new': 'Nowości',
+};
+
 /** A banner image as an attachment (posted above channel cards). */
 function banner(key) {
-  return new AttachmentBuilder(bannerPath(key), { name: `hammershop-${key}.png`, description: `${config.brand.name} – ${key}` });
+  return new AttachmentBuilder(bannerPath(key), { name: `hammershop-${key}.png`, description: `${config.brand.name} – ${BANNER_ALT[key] ?? key}` });
 }
 
 module.exports = {

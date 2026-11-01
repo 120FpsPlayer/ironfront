@@ -4,13 +4,13 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
 const { e, COLORS } = require('../lib/theme');
-const { ts } = require('../lib/utils');
+const { ts, plural } = require('../lib/utils');
 const { container, text, divider, header, v2 } = require('../lib/v2');
 const { channelName, sameChannelName } = require('../builder/style');
 
 /**
  * Server stats: locked voice channels showing the member and vouch count, plus an
- * activity leaderboard (messages this week / all time) in #leaderboard.
+ * activity leaderboard (messages this week / all time) in #ranking.
  */
 
 const WEEK = 7 * 86_400_000;
@@ -19,8 +19,8 @@ const weekKey = (t = Date.now()) => Math.floor((t + 3 * 86_400_000) / WEEK);
 const weekEnds = (key) => (key + 1) * WEEK - 3 * 86_400_000;
 
 const STAT_NAMES = {
-  statMembers: (n) => channelName(`👥 Members: ${n.toLocaleString('en-US')}`),
-  statVouches: (n) => channelName(`⭐ Vouches: ${n.toLocaleString('en-US')}`),
+  statMembers: (n) => channelName(`👥 Członkowie: ${n.toLocaleString('en-US')}`),
+  statVouches: (n) => channelName(`⭐ Opinie: ${n.toLocaleString('en-US')}`),
 };
 
 function trackMessage(message) {
@@ -48,16 +48,16 @@ function leaderboardPanel(guild) {
   const key = weekKey();
   const week = a.weekKey === key ? a.week : {};
   const medal = (i) => ['🥇', '🥈', '🥉'][i] ?? `\`${String(i + 1).padStart(2, ' ')}.\``;
-  const list = (entries) => (entries.length ? entries.map(([id, n], i) => `${medal(i)} <@${id}> – **${n.toLocaleString('en-US')}** messages`).join('\n') : '*Nobody yet – start chatting!*');
+  const list = (entries) => (entries.length ? entries.map(([id, n], i) => `${medal(i)} <@${id}> – **${n.toLocaleString('en-US')}** ${plural(n, 'wiadomość', 'wiadomości', 'wiadomości')}`).join('\n') : '*Jeszcze nikogo – zacznij pisać!*');
 
   const c = container(COLORS.brand);
-  header(c, `# ${e(guild, 'trophy')} Leaderboard\nThe most active members of **${config.brand.name}**. Chat, help others and climb the ranks!`, guild.iconURL?.({ size: 256 }));
+  header(c, `# ${e(guild, 'trophy')} Ranking\nNajaktywniejsi członkowie **${config.brand.name}**. Pisz, pomagaj innym i wspinaj się w rankingu!`, guild.iconURL?.({ size: 256 }));
   c.addSeparatorComponents(divider());
-  c.addTextDisplayComponents(text(`### ${e(guild, 'flame')} This week\n${list(top(week))}\n-# Resets ${ts(weekEnds(key), 'R')}`));
+  c.addTextDisplayComponents(text(`### ${e(guild, 'flame')} Ten tydzień\n${list(top(week))}\n-# Wyniki zerują się ${ts(weekEnds(key), 'R')}`));
   c.addSeparatorComponents(divider());
-  c.addTextDisplayComponents(text(`### ${e(guild, 'crown')} All time\n${list(top(a.total))}`));
+  c.addTextDisplayComponents(text(`### ${e(guild, 'crown')} Od początku\n${list(top(a.total))}`));
   c.addSeparatorComponents(divider());
-  c.addTextDisplayComponents(text(`-# Updated ${ts(Date.now(), 'R')} · Ticket messages and bots don't count.`));
+  c.addTextDisplayComponents(text(`-# Zaktualizowano ${ts(Date.now(), 'R')} · Wiadomości w ticketach i boty się nie liczą.`));
   return v2(c);
 }
 
@@ -82,7 +82,7 @@ async function updateStatChannels(client) {
       const channel = guild.channels.cache.get(db.channelId(guildId, key) ?? '');
       if (!channel) continue;
       // Discord allows 2 renames per 10 minutes per channel – this runs every 10 minutes at most.
-      if (!sameChannelName(channel.name, name)) await channel.setName(name, 'Stats update').catch(() => null);
+      if (!sameChannelName(channel.name, name)) await channel.setName(name, 'Aktualizacja statystyk').catch(() => null);
     }
   }
 }

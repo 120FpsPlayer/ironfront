@@ -16,12 +16,12 @@ const hooks = require('../lib/hooks');
 const shopstatus = require('./shopstatus');
 const ui = require('../tickets/ui');
 const { COLORS } = require('../lib/theme');
-const { duration, pad, truncate, sendToChannel } = require('../lib/utils');
+const { duration, pad, truncate, sendToChannel, count } = require('../lib/utils');
 const { alertRoleIds } = require('../lib/permissions');
 const { container, text, divider, linkBtn, row, v2, channelUrl } = require('../lib/v2');
 
 const MINUTE = 60_000;
-const LISTED = 10; // tickets named in the message – the rest is "+N more"
+const LISTED = 10; // tickets named in the message – the rest is "+N więcej"
 const LINKS = 5; // link buttons (one row)
 
 /** Minutes from config.json in ms, or the default when the value is missing or not a number ≥ 0. */
@@ -65,19 +65,19 @@ function pingRoles(guild, list) {
 
 function reminderCard(guild, list, { roles, now, repeat }) {
   const c = container(COLORS.warning);
-  const head = `## 🔔 ${list.length === 1 ? '1 ticket is' : `${list.length} tickets are`} waiting to be claimed`;
+  const head = `## 🔔 ${count(list.length, 'ticket czeka', 'tickety czekają', 'ticketów czeka')} na przejęcie`;
   c.addTextDisplayComponents(text(roles.length ? `${head}\n${roles.map((id) => `<@&${id}>`).join(' ')}` : head));
   c.addSeparatorComponents(divider());
   const lines = list.slice(0, LISTED).map((t) => {
     const type = config.getType(t.typeId);
-    return `${ui.typeText(guild, type)} <#${t.channelId}> · ${truncate(type?.label ?? t.typeId, 40)} · <@${t.ownerId}> · waiting **${duration(now - waitingSince(t))}**`;
+    return `${ui.typeText(guild, type)} <#${t.channelId}> · ${truncate(type?.label ?? t.typeId, 40)} · <@${t.ownerId}> · czeka **${duration(now - waitingSince(t))}**`;
   });
-  if (list.length > LISTED) lines.push(`**+${list.length - LISTED} more**`);
+  if (list.length > LISTED) lines.push(`**+${list.length - LISTED} więcej**`);
   c.addTextDisplayComponents(text(lines.join('\n')));
   c.addActionRowComponents(
     row(...list.slice(0, LINKS).map((t) => linkBtn(channelUrl(guild.id, t.channelId), `#${pad(t.number)}`, ui.typeEmoji(guild, config.getType(t.typeId))))),
   );
-  c.addTextDisplayComponents(text(`-# Claim a ticket to stop its reminders.${repeat ? ` Still unclaimed? You'll be reminded again in ${duration(repeat)}.` : ''}`));
+  c.addTextDisplayComponents(text(`-# Przejmij ticket, żeby wyłączyć przypomnienia o nim.${repeat ? ` Nadal nieprzejęty? Kolejne przypomnienie za ${duration(repeat)}.` : ''}`));
   return v2(c, { mentions: { roles } });
 }
 

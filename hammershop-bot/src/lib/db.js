@@ -24,7 +24,7 @@ function load() {
     } catch (err) {
       const backup = `${FILE}.broken-${Date.now()}`;
       fs.copyFileSync(FILE, backup);
-      console.error(`[db] data/db.json was corrupted – saved a copy as ${path.basename(backup)} and started fresh.`, err.message);
+      console.error(`[db] Plik data/db.json był uszkodzony – zapisano jego kopię jako ${path.basename(backup)} i zaczęto od nowa.`, err.message);
       state = {};
     }
   }
@@ -49,7 +49,7 @@ function save() {
     try {
       flush();
     } catch (err) {
-      console.error('[db] Failed to save data:', err.message);
+      console.error('[db] Nie udało się zapisać danych:', err.message);
     }
   }, 500);
   saveTimer.unref?.();

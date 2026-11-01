@@ -17,7 +17,7 @@ function register(kind, render) {
 
 function render(kind, guild, panel = {}) {
   const fn = renderers.get(kind);
-  if (!fn) throw new Error(`No renderer for panel "${kind}"`);
+  if (!fn) throw new Error(`Brak renderera dla panelu "${kind}"`);
   return fn(guild, panel);
 }
 
@@ -26,11 +26,11 @@ const NETWORK = new Set(['EAI_AGAIN', 'ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'E
 let networkWarnedAt = 0;
 function warnRefresh(panelKind, channel, err) {
   if (NETWORK.has(err?.code) || NETWORK.has(err?.cause?.code)) {
-    if (Date.now() - networkWarnedAt > 60_000) console.warn(`[panel] Discord can't be reached right now (${err.code ?? err.cause?.code}) – panels refresh again on the next run.`);
+    if (Date.now() - networkWarnedAt > 60_000) console.warn(`[panel] Discord jest teraz nieosiągalny (${err.code ?? err.cause?.code}) – panele odświeżą się przy następnej próbie.`);
     networkWarnedAt = Date.now();
     return;
   }
-  console.warn(`[panel] Failed to refresh the ${panelKind} panel in #${channel.name}:`, err.message);
+  console.warn(`[panel] Nie udało się odświeżyć panelu ${panelKind} na #${channel.name}:`, err.message);
 }
 
 /**
@@ -90,7 +90,7 @@ function bump(guild, kind, channelId) {
   const key = `${guild.id}:${channelId}:${kind}`;
   const next = (bumpQueues.get(key) ?? Promise.resolve())
     .then(() => doBump(guild, kind, channelId))
-    .catch((err) => console.warn(`[panel] Failed to move the ${kind} panel down:`, err.message));
+    .catch((err) => console.warn(`[panel] Nie udało się przenieść panelu ${kind} na dół:`, err.message));
   bumpQueues.set(key, next);
   next.finally(() => {
     if (bumpQueues.get(key) === next) bumpQueues.delete(key);

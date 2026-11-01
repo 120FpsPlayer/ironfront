@@ -4,6 +4,7 @@ const { SlashCommandBuilder, InteractionContextType, ChannelType, PermissionFlag
 const db = require('../lib/db');
 const { env } = require('../env');
 const { embed, COLORS, reply, replyError, isAdmin } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -33,7 +34,7 @@ module.exports = {
     .addSubcommand((s) => s.setName('show').setDescription('Show the current configuration')),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member)) return replyError(interaction, 'Only administrators can use this command.');
+    if (!isAdmin(interaction.member)) return replyError(interaction, 'Tej komendy mogą używać tylko administratorzy.');
     const sub = interaction.options.getSubcommand();
     const guild = interaction.guild;
 
@@ -54,9 +55,9 @@ module.exports = {
         const value = get();
         if (value !== undefined && value !== null) patch[key] = value;
       }
-      if (!Object.keys(patch).length) return replyError(interaction, 'No options were provided to change.');
+      if (!Object.keys(patch).length) return replyError(interaction, 'Nie podano żadnych ustawień do zmiany.');
       db.updateSettings(guild.id, patch);
-      return reply(interaction, { embeds: [summary(guild).setTitle('✅ Configuration saved')] });
+      return reply(interaction, { embeds: [summary(guild).setTitle('✅ Ustawienia zapisane')] });
     }
 
     if (sub === 'role-add' || sub === 'role-remove') {
@@ -64,7 +65,7 @@ module.exports = {
       const current = db.settings(guild.id).staffRoleIds;
       const next = sub === 'role-add' ? [...new Set([...current, role.id])] : current.filter((id) => id !== role.id);
       db.updateSettings(guild.id, { staffRoleIds: next });
-      return reply(interaction, `${sub === 'role-add' ? 'Added' : 'Removed'} ${role}.\n-# Permissions in tickets that are already open don't change.`);
+      return reply(interaction, `${sub === 'role-add' ? 'Dodano' : 'Usunięto'} rolę ${role}.\n-# Uprawnienia w już otwartych ticketach się nie zmieniają.`);
     }
 
     return reply(interaction, { embeds: [summary(guild)] });
@@ -73,25 +74,25 @@ module.exports = {
 
 function summary(guild) {
   const s = db.settings(guild.id);
-  const ch = (id) => (id ? `<#${id}>` : '*not set*');
-  const roles = (list) => list.map((id) => `<@&${id}>`).join(', ') || '*none*';
-  const yesNo = (v) => (v ? 'yes' : 'no');
+  const ch = (id) => (id ? `<#${id}>` : '*nie ustawiono*');
+  const roles = (list) => list.map((id) => `<@&${id}>`).join(', ') || '*brak*';
+  const yesNo = (v) => (v ? 'tak' : 'nie');
   const build = db.build(guild.id);
   return embed(COLORS.brand)
-    .setTitle('⚙️ Configuration')
+    .setTitle('⚙️ Ustawienia')
     .addFields(
-      { name: 'Ticket category', value: ch(s.categoryId), inline: true },
-      { name: 'Closed category', value: ch(s.closedCategoryId), inline: true },
-      { name: 'Built with /build', value: build?.at ? `<t:${Math.floor(build.at / 1000)}:R>` : 'no', inline: true },
-      { name: 'Log channel', value: ch(s.logChannelId), inline: true },
-      { name: 'Transcript channel', value: ch(s.transcriptChannelId), inline: true },
-      { name: 'Verification role', value: s.verifyRoleId ? `<@&${s.verifyRoleId}>` : '*not set*', inline: true },
-      { name: 'Ticket roles', value: roles(s.staffRoleIds) },
-      { name: '👑 Bot owners (.env)', value: env.ownerIds.map((id) => `<@${id}>`).join(', ') || '*server owner only*', inline: true },
-      { name: '🛡️ Admin roles (.env)', value: roles(env.adminRoleIds), inline: true },
-      { name: '🎧 Support roles (.env)', value: roles(env.supportRoleIds), inline: true },
-      { name: 'Limit per user', value: s.maxOpenTicketsPerUser ? String(s.maxOpenTicketsPerUser) : 'no limit', inline: true },
-      { name: 'Auto-close', value: s.autoCloseHours ? `after ${s.autoCloseHours} h (warning after ${s.autoCloseWarningHours} h)` : 'off', inline: true },
-      { name: 'Ping staff', value: yesNo(s.pingStaffOnOpen), inline: true },
+      { name: 'Kategoria ticketów', value: ch(s.categoryId), inline: true },
+      { name: 'Kategoria zamkniętych', value: ch(s.closedCategoryId), inline: true },
+      { name: `Zbudowano (${slash('build')})`, value: build?.at ? `<t:${Math.floor(build.at / 1000)}:R>` : 'nie', inline: true },
+      { name: 'Kanał logów', value: ch(s.logChannelId), inline: true },
+      { name: 'Kanał transkrypcji', value: ch(s.transcriptChannelId), inline: true },
+      { name: 'Rola weryfikacji', value: s.verifyRoleId ? `<@&${s.verifyRoleId}>` : '*nie ustawiono*', inline: true },
+      { name: 'Role ticketów', value: roles(s.staffRoleIds) },
+      { name: '👑 Właściciele bota (.env)', value: env.ownerIds.map((id) => `<@${id}>`).join(', ') || '*tylko właściciel serwera*', inline: true },
+      { name: '🛡️ Role adminów (.env)', value: roles(env.adminRoleIds), inline: true },
+      { name: '🎧 Role pomocy (.env)', value: roles(env.supportRoleIds), inline: true },
+      { name: 'Limit na osobę', value: s.maxOpenTicketsPerUser ? String(s.maxOpenTicketsPerUser) : 'bez limitu', inline: true },
+      { name: 'Automatyczne zamykanie', value: s.autoCloseHours ? `po ${s.autoCloseHours} h (ostrzeżenie po ${s.autoCloseWarningHours} h)` : 'wyłączone', inline: true },
+      { name: 'Ping zespołu', value: yesNo(s.pingStaffOnOpen), inline: true },
     );
 }

@@ -15,7 +15,7 @@ const {
 const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
-const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money } = require('../lib/utils');
+const { PRIORITIES, pad, ts, duration, workingStatus, avgResponseTime, money, count } = require('../lib/utils');
 const shop = require('../features/shop'); // used at render time – safe with circular requires
 const productImages = require('../lib/productImages');
 const { ORDER_STATUS, statusOf, statusLabel } = require('../lib/orderStatus');
@@ -37,20 +37,20 @@ function panelPayload(guild, style = 'buttons') {
 
   if (p.rules.length) {
     c.addSeparatorComponents(divider());
-    c.addTextDisplayComponents(text(`**${e(guild, 'pin')} Before you open a ticket**\n${p.rules.map((r) => `> ${r}`).join('\n')}`));
+    c.addTextDisplayComponents(text(`**${e(guild, 'pin')} Zanim otworzysz ticket**\n${p.rules.map((r) => `> ${r}`).join('\n')}`));
   }
   c.addSeparatorComponents(divider(true));
 
   if (useSections) {
     const shopId = db.channelId(guild.id, 'shop');
     for (const t of types) {
-      // Shop-only types (Purchase) send people to #shop – buying works through the Buy buttons there.
+      // Shop-only types (Zakup) send people to #sklep – buying works through the Buy buttons there.
       const button =
         t.shopOnly && shopId
-          ? new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(channelUrl(guild.id, shopId)).setLabel('Go to shop').setEmoji(typeEmoji(guild, t))
+          ? new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(channelUrl(guild.id, shopId)).setLabel('Przejdź do sklepu').setEmoji(typeEmoji(guild, t))
           : new ButtonBuilder()
               .setCustomId(`ticket:open:${t.id}`)
-              .setLabel(p.buttonLabel ?? 'Open')
+              .setLabel(p.buttonLabel ?? 'Otwórz')
               .setEmoji(typeEmoji(guild, t))
               .setStyle(t.id === 'order' ? ButtonStyle.Primary : ButtonStyle.Secondary);
       c.addSectionComponents(
@@ -58,12 +58,12 @@ function panelPayload(guild, style = 'buttons') {
       );
     }
   } else {
-    c.addTextDisplayComponents(text(`**${e(guild, 'folder')} Choose a category from the list below:**`));
+    c.addTextDisplayComponents(text(`**${e(guild, 'folder')} Wybierz kategorię z listy poniżej:**`));
     c.addActionRowComponents(
       row(
         new StringSelectMenuBuilder()
           .setCustomId('ticket:open')
-          .setPlaceholder('Choose a ticket category…')
+          .setPlaceholder('Wybierz kategorię ticketu…')
           .addOptions(types.map((t) => ({ label: t.label, value: t.id, description: t.description?.slice(0, 100), emoji: typeEmoji(guild, t) }))),
       ),
     );
@@ -75,7 +75,7 @@ function panelPayload(guild, style = 'buttons') {
   if (p.showStats !== false) {
     const avg = avgResponseTime(guild.id);
     const open = db.tickets((t) => t.guildId === guild.id && t.status === 'open').length;
-    footer.push(`⏱️ Average response time: **${avg ? `~${duration(avg)}` : 'no data yet'}**${SPACER}📨 Open tickets: **${open}**`);
+    footer.push(`⏱️ Średni czas odpowiedzi: **${avg ? `~${duration(avg)}` : 'brak danych'}**${SPACER}📨 Otwarte tickety: **${open}**`);
   }
   if (footer.length) {
     c.addSeparatorComponents(divider(true));
@@ -84,22 +84,22 @@ function panelPayload(guild, style = 'buttons') {
   return v2(c);
 }
 
-/** "**Order:** 💳 Paid · <t:…:R>" for order tickets (null for other tickets). */
+/** "**Zamówienie:** 💳 Opłacone · <t:…:R>" for order tickets (null for other tickets). */
 function orderStatusLine(ticket) {
   const status = statusOf(ticket) ?? (ticket.completedAt ? 'delivered' : null);
   if (!status) return null;
   const at = { delivered: ticket.completedAt, cancelled: ticket.closedAt }[status] ?? (ticket.order?.status === status ? ticket.order.statusAt : null);
-  return `**Order:** ${statusLabel(status)}${at ? ` · ${ts(at, 'R')}` : ''}`;
+  return `**Zamówienie:** ${statusLabel(status)}${at ? ` · ${ts(at, 'R')}` : ''}`;
 }
 
 function statusLine(ticket) {
   const p = PRIORITIES[ticket.priority] ?? PRIORITIES.normal;
-  const status = ticket.status === 'open' ? '🟢 Open' : '🔴 Closed';
-  const claim = ticket.claimedBy ? `<@${ticket.claimedBy}>` : '*waiting to be claimed*';
+  const status = ticket.status === 'open' ? '🟢 Otwarty' : '🔴 Zamknięty';
+  const claim = ticket.claimedBy ? `<@${ticket.claimedBy}>` : '*czeka na przejęcie*';
   const order = orderStatusLine(ticket);
   return (
-    `**Status:** ${status}${SPACER}**Priority:** ${p.emoji} ${p.label}\n` +
-    `**Handled by:** ${claim}${SPACER}**Created:** ${ts(ticket.createdAt, 'R')}` +
+    `**Status:** ${status}${SPACER}**Priorytet:** ${p.emoji} ${p.label}\n` +
+    `**Obsługa:** ${claim}${SPACER}**Utworzony:** ${ts(ticket.createdAt, 'R')}` +
     (order ? `\n${order}` : '')
   );
 }
@@ -112,7 +112,7 @@ function takesPins(order) {
   return paycards.methodType(typeof order === 'string' ? { name: order } : paycards.methodOf(order)) === 'paysafecard';
 }
 
-/** Can the customer send their payment ("Pay") – an open order that waits for its payment. */
+/** Can the customer send their payment ("Zapłać") – an open order that waits for its payment. */
 function acceptsPayment(ticket) {
   return (
     config.orders?.paymentProofs !== false &&
@@ -124,15 +124,15 @@ function acceptsPayment(ticket) {
   );
 }
 
-/** "Pay" on the order card (src/features/payments.js). */
+/** "Zapłać" on the order card (src/features/payments.js). */
 function paymentSection(ticket) {
   const sent = statusOf(ticket) === 'sent' ? ticket.order?.payment : null; // not after staff set it back to awaiting
   const order = ticket.order ?? require('./tickets').orderDetails(ticket); // here – tickets.js needs this file
-  const proof = takesPins(order) ? 'your PaysafeCard PIN, a screenshot or the transaction ID' : 'a screenshot or the transaction ID';
+  const proof = takesPins(order) ? 'PIN PaysafeCard, zrzut ekranu albo ID transakcji' : 'zrzut ekranu albo ID transakcji';
   const content = sent?.at
-    ? `📨 **Payment sent ${ts(sent.at, 'R')}** – a seller is checking it.\n-# Made a mistake? Click **Pay** again to send a correction.`
-    : `💳 **Ready to pay?** Click **Pay** and send ${proof} – the seller is notified right away.`;
-  return buttonSection(content, btn('pay:open', 'Pay', '💳', ButtonStyle.Success));
+    ? `📨 **Płatność wysłana ${ts(sent.at, 'R')}** – sprzedawca ją sprawdza.\n-# Pomyłka? Kliknij ponownie **Zapłać**, żeby wysłać poprawkę.`
+    : `💳 **Chcesz zapłacić?** Kliknij **Zapłać** i wyślij ${proof} – sprzedawca od razu dostanie powiadomienie.`;
+  return buttonSection(content, btn('pay:open', 'Zapłać', '💳', ButtonStyle.Success));
 }
 
 function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [], previousCount = 0 } = {}) {
@@ -145,10 +145,10 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
   const closedNote = !status.open && !ticket.claimedBy && !ticket.firstResponseAt;
   const intro =
     `## ${typeText(guild, type)} ${type?.label ?? 'Ticket'}${SPACER}\`#${pad(ticket.number)}\`\n` +
-    `Hi <@${ticket.ownerId}>! 👋 Thanks for reaching out to **${config.brand.name}**.\n` +
+    `Cześć <@${ticket.ownerId}>! 👋 Dziękujemy za kontakt z **${config.brand.name}**.\n` +
     (type?.id === 'order'
-      ? 'A seller will confirm your order, the final price and payment details right here. **Never pay anyone in DMs.**'
-      : 'Please describe your request in as much detail as possible and attach screenshots if you can – our team will reply shortly.') +
+      ? 'Sprzedawca potwierdzi tutaj Twoje zamówienie, ostateczną cenę i szczegóły płatności. **Nigdy nie płać nikomu w prywatnych wiadomościach.**'
+      : 'Opisz swoją sprawę jak najdokładniej i w miarę możliwości dołącz zrzuty ekranu – nasz zespół wkrótce odpowie.') +
     (closedNote ? `\n-# ${status.text}` : '');
   c.addSectionComponents(section(intro, ownerUser?.displayAvatarURL?.({ size: 128 })));
 
@@ -160,43 +160,43 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
     const budget = Math.floor(2200 / ticket.answers.length);
     const answers = ticket.answers
       .map((a) => {
-        const value = (a.value || '*no answer*').slice(0, budget) + ((a.value?.length ?? 0) > budget ? '…' : '');
+        const value = (a.value || '*brak odpowiedzi*').slice(0, budget) + ((a.value?.length ?? 0) > budget ? '…' : '');
         return `**${a.label}**\n${value.split('\n').map((l) => `> ${l}`).join('\n')}`;
       })
       .join('\n');
-    if (picture) c.addSectionComponents(section(`### 📝 Form\n${answers}`, picture.url));
-    else c.addTextDisplayComponents(text(`### 📝 Form\n${answers}`));
+    if (picture) c.addSectionComponents(section(`### 📝 Formularz\n${answers}`, picture.url));
+    else c.addTextDisplayComponents(text(`### 📝 Formularz\n${answers}`));
   }
 
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(text(statusLine(ticket)));
   if (acceptsPayment(ticket)) c.addSectionComponents(paymentSection(ticket));
-  if (type?.id === 'order') require('../features/gifts').addToCard(c, ticket); // "🎁 Make it a gift" – here, as gifts.js needs this file
-  if (type?.id === 'order') require('../features/ticketpromo').addToCard(c, ticket); // "🏷️ Add promo code" while it waits for payment
+  if (type?.id === 'order') require('../features/gifts').addToCard(c, ticket); // "🎁 Kup jako prezent" – here, as gifts.js needs this file
+  if (type?.id === 'order') require('../features/ticketpromo').addToCard(c, ticket); // "🏷️ Dodaj kod rabatowy" while it waits for payment
 
   if (ticket.participants?.length) {
-    c.addTextDisplayComponents(text(`**Added members:** ${ticket.participants.map((id) => `<@${id}>`).join(', ')}`));
+    c.addTextDisplayComponents(text(`**Dodane osoby:** ${ticket.participants.map((id) => `<@${id}>`).join(', ')}`));
   }
 
   const meta = [];
-  if (ownerUser?.createdAt) meta.push(`👤 Account created ${ts(ownerUser.createdAt, 'D')}`);
-  if (ownerMember?.joinedAt) meta.push(`📥 Joined ${ts(ownerMember.joinedAt, 'D')}`);
-  meta.push(`🗂️ Previous tickets: ${previousCount}`);
+  if (ownerUser?.createdAt) meta.push(`👤 Konto założone ${ts(ownerUser.createdAt, 'D')}`);
+  if (ownerMember?.joinedAt) meta.push(`📥 Na serwerze od ${ts(ownerMember.joinedAt, 'D')}`);
+  meta.push(`🗂️ Poprzednie tickety: ${previousCount}`);
   c.addTextDisplayComponents(text(`-# ${meta.join(' · ')}`));
 
   if (ticket.status === 'open') {
     c.addSeparatorComponents(divider());
     c.addActionRowComponents(
       row(
-        btn('ticket:close', 'Close', '🔒', ButtonStyle.Danger),
-        ticket.claimedBy ? btn('ticket:unclaim', 'Unclaim', '↩️') : btn('ticket:claim', 'Claim', '🙋', ButtonStyle.Success),
-        btn('ticket:ping', 'Call support', '🔔'),
-        btn('ticket:transcript', 'Transcript', '📄'),
+        btn('ticket:close', 'Zamknij', '🔒', ButtonStyle.Danger),
+        ticket.claimedBy ? btn('ticket:unclaim', 'Oddaj', '↩️') : btn('ticket:claim', 'Przejmij', '🙋', ButtonStyle.Success),
+        btn('ticket:ping', 'Wezwij pomoc', '🔔'),
+        btn('ticket:transcript', 'Transkrypcja', '📄'),
       ),
     );
     c.addActionRowComponents(row(manageSelect(ticket, guild)));
     c.addActionRowComponents(
-      row(new UserSelectMenuBuilder().setCustomId('ticket:adduser').setPlaceholder('➕ Add someone to the ticket (staff)').setMinValues(1).setMaxValues(5)),
+      row(new UserSelectMenuBuilder().setCustomId('ticket:adduser').setPlaceholder('➕ Dodaj kogoś do ticketu (zespół)').setMinValues(1).setMaxValues(5)),
     );
   }
 
@@ -207,22 +207,22 @@ function ticketCard(ticket, type, { guild, ownerUser, ownerMember, pingRoles = [
 
 /** What the "Status: …" options of the ⚙️ menu do (src/features/orderstatus.js). */
 const STATUS_OPTIONS = {
-  paid: 'The payment is confirmed',
-  progress: 'You are preparing / delivering the order',
-  awaiting: 'Undo – still waiting for the payment',
+  paid: 'Płatność jest potwierdzona',
+  progress: 'Przygotowujesz / dostarczasz zamówienie',
+  awaiting: 'Cofnij – nadal czekamy na płatność',
 };
 
 function manageSelect(ticket, guild) {
   const options = [];
   if (ticket.typeId === 'order' && !ticket.completedAt) {
     options.push({
-      label: 'Order completed',
+      label: 'Zamówienie zrealizowane',
       value: 'complete',
       emoji: guild ? ce(guild, 'check') : '✅',
-      description: 'Confirm the amount paid – records the sale, gives the Customer role',
+      description: 'Potwierdź zapłaconą kwotę – zapisuje sprzedaż, daje rolę Klient',
     });
     const current = statusOf(ticket);
-    const dm = config.orders?.statusDms !== false ? ' – DMs the customer' : '';
+    const dm = config.orders?.statusDms !== false ? ' – klient dostaje DM' : '';
     for (const [key, what] of Object.entries(STATUS_OPTIONS)) {
       if (key === current) continue;
       options.push({ label: `Status: ${ORDER_STATUS[key].label}`, value: `status:${key}`, emoji: ORDER_STATUS[key].emoji, description: `${what}${dm}` });
@@ -232,48 +232,48 @@ function manageSelect(ticket, guild) {
   if (ticket.typeId === 'order' && guild && require('../features/delivery').canDeliver(guild.id, ticket)) {
     const sent = ticket.order?.delivered;
     options.push({
-      label: sent ? 'Send product again' : 'Deliver product',
+      label: sent ? 'Wyślij produkt ponownie' : 'Dostarcz produkt',
       value: 'deliver',
       emoji: '📦',
-      description: sent ? 'Sends the product files / text to the customer again' : 'Payment OK → sends the product and completes the order',
+      description: sent ? 'Wysyła klientowi pliki / tekst produktu jeszcze raz' : 'Płatność OK → wysyła produkt i realizuje zamówienie',
     });
   }
   for (const [value, p] of Object.entries(PRIORITIES)) {
     if (value === ticket.priority) continue;
-    options.push({ label: `Priority: ${p.label}`, value: `prio:${value}`, emoji: p.emoji, description: 'Change the ticket priority' });
+    options.push({ label: `Priorytet: ${p.label}`, value: `prio:${value}`, emoji: p.emoji, description: 'Zmień priorytet ticketu' });
   }
-  options.push({ label: 'Ask the author to close', value: 'closereq', emoji: '📨', description: 'The author confirms the issue is resolved' });
+  options.push({ label: 'Poproś autora o zamknięcie', value: 'closereq', emoji: '📨', description: 'Autor potwierdza, że sprawa jest załatwiona' });
   for (const t of config.ticketTypes) {
     if (t.id === ticket.typeId || options.length >= 25) continue;
-    options.push({ label: `Move to: ${t.label}`.slice(0, 100), value: `move:${t.id}`, emoji: typeEmoji(guild, t), description: 'Change the ticket category' });
+    options.push({ label: `Przenieś do: ${t.label}`.slice(0, 100), value: `move:${t.id}`, emoji: typeEmoji(guild, t), description: 'Zmień kategorię ticketu' });
   }
-  return new StringSelectMenuBuilder().setCustomId('ticket:manage').setPlaceholder('⚙️ Manage ticket (staff)').addOptions(options);
+  return new StringSelectMenuBuilder().setCustomId('ticket:manage').setPlaceholder('⚙️ Zarządzaj ticketem (zespół)').addOptions(options);
 }
 
 function closedCard(ticket, actorId, { messageCount, transcriptUrl } = {}) {
   const c = container(COLORS.danger);
   c.addTextDisplayComponents(
     text(
-      '## 🔒 Ticket closed\n' +
-        `Closed by <@${actorId}> ${ts(ticket.closedAt ?? Date.now(), 'R')}` +
-        (ticket.closeReason ? `\n**Reason:** ${ticket.closeReason}` : ''),
+      '## 🔒 Ticket zamknięty\n' +
+        `Zamknięty przez <@${actorId}> ${ts(ticket.closedAt ?? Date.now(), 'R')}` +
+        (ticket.closeReason ? `\n**Powód:** ${ticket.closeReason}` : ''),
     ),
   );
   c.addSeparatorComponents(divider());
   const lines = [
-    `⏱️ **Duration:** ${duration((ticket.closedAt ?? Date.now()) - ticket.createdAt)}`,
-    `⚡ **First response:** ${ticket.firstResponseAt ? `after ${duration(ticket.firstResponseAt - ticket.createdAt)}` : '—'}`,
-    `🙋 **Handled by:** ${ticket.claimedBy ? `<@${ticket.claimedBy}>` : '—'}`,
+    `⏱️ **Czas trwania:** ${duration((ticket.closedAt ?? Date.now()) - ticket.createdAt)}`,
+    `⚡ **Pierwsza odpowiedź:** ${ticket.firstResponseAt ? `po ${duration(ticket.firstResponseAt - ticket.createdAt)}` : '—'}`,
+    `🙋 **Obsługa:** ${ticket.claimedBy ? `<@${ticket.claimedBy}>` : '—'}`,
   ];
-  if (messageCount != null) lines.push(`💬 **Messages:** ${messageCount}`);
+  if (messageCount != null) lines.push(`💬 **Wiadomości:** ${messageCount}`);
   c.addTextDisplayComponents(text(lines.join('\n')));
   c.addSeparatorComponents(divider());
   const buttons = [
-    btn('ticket:reopen', 'Reopen', '🔓', ButtonStyle.Success),
-    btn('ticket:transcript', 'Transcript', '📄'),
-    btn('ticket:delete', 'Delete ticket', '🗑️', ButtonStyle.Danger),
+    btn('ticket:reopen', 'Otwórz ponownie', '🔓', ButtonStyle.Success),
+    btn('ticket:transcript', 'Transkrypcja', '📄'),
+    btn('ticket:delete', 'Usuń ticket', '🗑️', ButtonStyle.Danger),
   ];
-  if (transcriptUrl) buttons.push(linkBtn(transcriptUrl, 'Transcript', '📄'));
+  if (transcriptUrl) buttons.push(linkBtn(transcriptUrl, 'Transkrypcja', '📄'));
   c.addActionRowComponents(row(...buttons));
   return v2(c);
 }
@@ -283,17 +283,17 @@ function closeRequestCard(ticket, staffId, state = 'pending') {
   if (state === 'pending') {
     c.addTextDisplayComponents(
       text(
-        `## 📨 Can we close this ticket?\n<@${ticket.ownerId}>, <@${staffId}> believes your request has been handled.\n` +
-          'If everything is fine – click **Yes, close it**. If you still need help – just let us know!',
+        `## 📨 Czy możemy zamknąć ten ticket?\n<@${ticket.ownerId}>, <@${staffId}> uważa, że Twoja sprawa została załatwiona.\n` +
+          'Jeśli wszystko jest w porządku – kliknij **Tak, zamknij**. Jeśli nadal potrzebujesz pomocy – po prostu daj nam znać!',
       ),
     );
     c.addActionRowComponents(
-      row(btn('ticket:closereq_yes', 'Yes, close it', '✅', ButtonStyle.Success), btn('ticket:closereq_no', 'No, I still need help', '✋')),
+      row(btn('ticket:closereq_yes', 'Tak, zamknij', '✅', ButtonStyle.Success), btn('ticket:closereq_no', 'Nie, nadal potrzebuję pomocy', '✋')),
     );
   } else if (state === 'accepted') {
-    c.addTextDisplayComponents(text('✅ **The author confirmed everything is sorted** – the ticket is being closed.'));
+    c.addTextDisplayComponents(text('✅ **Autor potwierdza, że wszystko jest załatwione** – ticket jest zamykany.'));
   } else {
-    c.addTextDisplayComponents(text(`✋ **<@${ticket.ownerId}> still needs help** – the ticket stays open.`));
+    c.addTextDisplayComponents(text(`✋ **<@${ticket.ownerId}> nadal potrzebuje pomocy** – ticket pozostaje otwarty.`));
   }
   return v2(c, { mentions: { users: state === 'pending' ? [ticket.ownerId] : [] } });
 }
@@ -302,11 +302,11 @@ function inactivityWarning(ticket, closeAt) {
   const c = container(COLORS.warning);
   c.addTextDisplayComponents(
     text(
-      `## ⏰ Do you still need help?\n<@${ticket.ownerId}>, we haven't heard back from you in a while.\n` +
-        `This ticket will be **closed automatically ${ts(closeAt, 'R')}** unless you reply or click the button below.`,
+      `## ⏰ Czy nadal potrzebujesz pomocy?\n<@${ticket.ownerId}>, od dłuższego czasu nie mamy od Ciebie odpowiedzi.\n` +
+        `Ten ticket zostanie **automatycznie zamknięty ${ts(closeAt, 'R')}**, chyba że odpiszesz albo klikniesz przycisk poniżej.`,
     ),
   );
-  c.addActionRowComponents(row(btn('ticket:still', 'I still need help', '✋', ButtonStyle.Primary)));
+  c.addActionRowComponents(row(btn('ticket:still', 'Nadal potrzebuję pomocy', '✋', ButtonStyle.Primary)));
   return v2(c, { mentions: { users: [ticket.ownerId] } });
 }
 
@@ -316,51 +316,51 @@ function orderCompletedCard(guild, ticket, staffId, { loyal = false, orders = 1,
   const c = container(COLORS.success);
   c.addTextDisplayComponents(
     text(
-      `## ${e(guild, 'check')} Order completed!\n` +
-        `Thank you for shopping at **${config.brand.name}**, <@${ticket.ownerId}> 🧡\n` +
-        `You now have the **Customer** role${loyal ? ' and – with ' + orders + ' orders – the **Loyal Customer** role. You\'re one of the family!' : '.'}\n\n` +
-        `${e(guild, 'star')} **Happy with your order?** A quick vouch helps us a lot – click the button below.`,
+      `## ${e(guild, 'check')} Zamówienie zrealizowane!\n` +
+        `Dziękujemy za zakupy w **${config.brand.name}**, <@${ticket.ownerId}> 🧡\n` +
+        `Masz teraz rolę **Klient**${loyal ? ` oraz – po ${count(orders, 'zamówieniu', 'zamówieniach', 'zamówieniach')} – rolę **Stały Klient**. Jesteś już częścią rodziny!` : '.'}\n\n` +
+        `${e(guild, 'star')} **Podoba Ci się zamówienie?** Krótka opinia bardzo nam pomoże – kliknij przycisk poniżej.`,
     ),
   );
-  const receipt = sale ? `Receipt \`${sale.id}\`${sale.amount != null ? ` · Paid ${money(sale.amount)}` : ''} · ` : '';
-  c.addTextDisplayComponents(text(`-# ${receipt}Delivered by <@${staffId}> · ${ts(Date.now(), 'f')}`));
-  c.addActionRowComponents(row(btn('vouch:open', 'Leave a vouch', ce(guild, 'star'), ButtonStyle.Success)));
+  const receipt = sale ? `Potwierdzenie zakupu \`${sale.id}\`${sale.amount != null ? ` · Zapłacono ${money(sale.amount)}` : ''} · ` : '';
+  c.addTextDisplayComponents(text(`-# ${receipt}Dostarczone przez <@${staffId}> · ${ts(Date.now(), 'f')}`));
+  c.addActionRowComponents(row(btn('vouch:open', 'Wystaw opinię', ce(guild, 'star'), ButtonStyle.Success)));
   return v2(c, { mentions: { users: [ticket.ownerId] } });
 }
 
-/** "Order completed" form for staff: confirms the amount the customer actually paid. */
+/** "Zamówienie zrealizowane" form for staff: confirms the amount the customer actually paid. */
 function completeOrderModal(ticket, { promoWarning = null } = {}) {
   const o = ticket.order;
   let summary = o
-    ? `**${o.product || 'Custom order'}**${isCart(o) || o.topUp ? '' : ` × ${o.quantity ?? 1}`}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · code **${o.promo}**` : ''}\n` +
-      (o.total != null ? `Total to pay: **${money(o.total)}**` : 'The price was not a fixed number – enter what the customer paid.')
-    : 'Custom order – enter what the customer paid.';
+    ? `**${o.product || 'Zamówienie indywidualne'}**${isCart(o) || o.topUp ? '' : ` × ${o.quantity ?? 1}`}${o.method ? ` · ${o.method}` : ''}${o.promo ? ` · kod **${o.promo}**` : ''}\n` +
+      (o.total != null ? `Do zapłaty: **${money(o.total)}**` : 'Cena nie była stałą kwotą – wpisz, ile zapłacił klient.')
+    : 'Zamówienie indywidualne – wpisz, ile zapłacił klient.';
   if (o?.promo && promoWarning) {
-    summary += `\n⚠️ **Code ${o.promo} is over its limit** – ${promoWarning}. ${o.total != null ? 'The total above still includes its discount' : 'Its discount is still on this order'} – enter what the customer actually paid.`;
+    summary += `\n⚠️ **Kod ${o.promo} przekroczył swój limit** – ${promoWarning}. ${o.total != null ? 'Kwota powyżej nadal uwzględnia jego rabat' : 'Jego rabat nadal jest w tym zamówieniu'} – wpisz, ile klient faktycznie zapłacił.`;
   }
-  if (o?.topUp) summary += "\n💰 A balance top-up: the amount paid is added to the customer's store balance."; // features/balance.js
-  const input = new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(12).setPlaceholder('e.g. 19.99 – leave empty if unknown');
+  if (o?.topUp) summary += '\n💰 Doładowanie salda: zapłacona kwota trafi na saldo sklepu klienta.'; // features/balance.js
+  const input = new TextInputBuilder().setCustomId('amount').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(12).setPlaceholder('np. 19.99 – zostaw puste, jeśli nie wiesz');
   if (o?.total != null) input.setValue(Number.isInteger(o.total) ? String(o.total) : o.total.toFixed(2));
   return new ModalBuilder()
     .setCustomId('order:complete')
-    .setTitle(`✅ Complete order #${pad(ticket.number)}`)
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${summary}\n-# Records the sale and gives the customer the Customer role${config.orders.receipts ? ' and a receipt by DM' : ''}.`))
+    .setTitle(`✅ Zrealizuj zamówienie #${pad(ticket.number)}`)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${summary}\n-# Zapisuje sprzedaż i daje klientowi rolę Klient${config.orders.receipts ? ' oraz potwierdzenie zakupu w DM' : ''}.`))
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel(`Amount paid (${config.shop.currency ?? '€'})`.slice(0, 45))
-        .setDescription('What the customer actually paid. Leave empty if you don\'t know.')
+        .setLabel(`Zapłacona kwota (${config.shop.currency ?? '€'})`.slice(0, 45))
+        .setDescription('Ile klient faktycznie zapłacił. Zostaw puste, jeśli nie wiesz.')
         .setTextInputComponent(input),
     );
 }
 
 /** The staff member's confirmation after completing an order. */
 function orderCompletedReply({ orders, loyal, sale, promoWarning = null }) {
-  const paid = sale.amount != null ? ` – ${money(sale.amount)} paid` : '';
-  const discount = sale.discount > 0 ? `its −${money(sale.discount)} discount` : 'the code';
+  const paid = sale.amount != null ? ` – zapłacono ${money(sale.amount)}` : '';
+  const discount = sale.discount > 0 ? `jego rabat −${money(sale.discount)}` : 'kod';
   return (
-    `Order completed – sale \`${sale.id}\` recorded${paid}${sale.promo ? ` (code ${sale.promo})` : ''}. ` +
-    `The customer now has ${orders} ${orders === 1 ? 'order' : 'orders'}${loyal ? ' and is a Loyal Customer 🧡' : ''}.` +
-    (sale.promo && promoWarning ? `\n⚠️ Code ${sale.promo} was over its limit (${promoWarning}) – ${discount} is still recorded on this sale.` : '')
+    `Zamówienie zrealizowane – sprzedaż \`${sale.id}\` zapisana${paid}${sale.promo ? ` (kod ${sale.promo})` : ''}. ` +
+    `Klient ma teraz ${count(orders, 'zamówienie', 'zamówienia', 'zamówień')}${loyal ? ' i rolę Stały Klient 🧡' : ''}.` +
+    (sale.promo && promoWarning ? `\n⚠️ Kod ${sale.promo} przekroczył limit (${promoWarning}) – ${discount} nadal jest zapisany w tej sprzedaży.` : '')
   );
 }
 

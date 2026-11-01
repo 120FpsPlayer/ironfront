@@ -12,13 +12,13 @@ const {
 } = require('discord.js');
 const hooks = require('../lib/hooks');
 const config = require('../lib/config');
-const { unlocalize } = require('../lib/commandsPl');
+const { unlocalize, slash } = require('../lib/commandsPl');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
 const t = require('../tickets/tickets');
 const { createTranscript } = require('../tickets/transcript');
 const { env } = require('../env');
-const { UserError, COLORS, embed, reply, replyError, isStaff, isAdmin, pad } = require('../lib/utils');
+const { UserError, COLORS, embed, reply, replyError, isStaff, isAdmin, pad, count } = require('../lib/utils');
 const verification = require('../features/verification');
 const selfroles = require('../features/selfroles');
 const shop = require('../features/shop');
@@ -47,27 +47,27 @@ async function createAndRespond(interaction, type, answers) {
     await interaction.editReply({
       embeds: [
         embed(COLORS.success)
-          .setTitle(`${type.emoji ?? '🎫'} Ticket created!`)
-          .setDescription(`Your ticket is ready: ${channel}\nThe team has been notified – we'll reply as soon as possible.`),
+          .setTitle(`${type.emoji ?? '🎫'} Ticket utworzony!`)
+          .setDescription(`Twój ticket jest gotowy: ${channel}\nZespół dostał powiadomienie – odpowiemy najszybciej, jak to możliwe.`),
       ],
-      components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Go to ticket').setEmoji('🎫').setURL(channel.url))],
+      components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Przejdź do ticketu').setEmoji('🎫').setURL(channel.url))],
     });
   } catch (err) {
     if (!(err instanceof UserError)) console.error('[open]', err);
-    await replyError(interaction, err instanceof UserError ? err.message : 'Failed to create the ticket. Make sure the bot has permission to manage channels and roles.');
+    await replyError(interaction, err instanceof UserError ? err.message : 'Nie udało się utworzyć ticketu. Sprawdź, czy bot ma uprawnienia do zarządzania kanałami i rolami.');
   }
 }
 
-/** Purchases only go through the Buy buttons in #shop – older buttons and the ticket menu point there. */
+/** Purchases only go through the Buy (Kup) buttons in #sklep – older buttons and the ticket menu point there. */
 function replyShopOnly(interaction) {
   const shopId = db.channelId(interaction.guild.id, 'shop');
   const payload = {
     embeds: [
       embed(COLORS.brand).setDescription(
-        `🛒 **Buying something?** Go to ${shopId ? `<#${shopId}>` : 'the shop'} and click **Buy** next to the product you want – your private order ticket opens right away.`,
+        `🛒 **Chcesz coś kupić?** Przejdź do ${shopId ? `<#${shopId}>` : 'sklepu'} i kliknij **Kup** przy wybranym produkcie – Twój prywatny ticket z zamówieniem otworzy się od razu.`,
       ),
     ],
-    components: shopId ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Go to shop').setEmoji('🛒').setURL(`https://discord.com/channels/${interaction.guild.id}/${shopId}`))] : [],
+    components: shopId ? [new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Przejdź do sklepu').setEmoji('🛒').setURL(`https://discord.com/channels/${interaction.guild.id}/${shopId}`))] : [],
     flags: MessageFlags.Ephemeral,
   };
   return interaction.reply(payload);
@@ -76,7 +76,7 @@ function replyShopOnly(interaction) {
 async function handleOpen(interaction, typeId, origin) {
   if (origin === 's') resetSelectPanel(interaction, 'tickets');
   const type = config.getType(typeId);
-  if (!type) return replyError(interaction, 'This category no longer exists – ask the staff to refresh the panel.');
+  if (!type) return replyError(interaction, 'Ta kategoria już nie istnieje – poproś zespół o odświeżenie panelu.');
   if (type.shopOnly) return replyShopOnly(interaction);
   const error = t.checkCanOpen(interaction.member);
   if (error) return replyError(interaction, error);
@@ -86,7 +86,7 @@ async function handleOpen(interaction, typeId, origin) {
 
 async function handleForm(interaction, typeId) {
   const type = config.getType(typeId);
-  if (!type) return replyError(interaction, 'This category no longer exists.');
+  if (!type) return replyError(interaction, 'Ta kategoria już nie istnieje.');
   if (type.shopOnly) return replyShopOnly(interaction);
   const answers = type.questions.map((q) => {
     let value = '';
@@ -103,12 +103,12 @@ async function handleForm(interaction, typeId) {
 function closeReasonModal() {
   return new ModalBuilder()
     .setCustomId('ticket:close_modal')
-    .setTitle('🔒 Close ticket')
+    .setTitle('🔒 Zamknij ticket')
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel('Close reason')
+        .setLabel('Powód zamknięcia')
         .setTextInputComponent(
-          new TextInputBuilder().setCustomId('reason').setPlaceholder('E.g. order delivered, issue resolved…').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500),
+          new TextInputBuilder().setCustomId('reason').setPlaceholder('Np. zamówienie dostarczone, sprawa załatwiona…').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500),
         ),
     );
 }
@@ -116,7 +116,7 @@ function closeReasonModal() {
 async function handleTicketButton(interaction, action) {
   const { channel, member } = interaction;
   const ticket = db.getTicket(channel.id);
-  if (!ticket) return replyError(interaction, 'This channel is no longer a ticket.');
+  if (!ticket) return replyError(interaction, 'Ten kanał nie jest już ticketem.');
   const type = config.getType(ticket.typeId);
   const staff = isStaff(member, type);
   const isOwner = ticket.ownerId === member.id;
@@ -124,79 +124,79 @@ async function handleTicketButton(interaction, action) {
 
   switch (action) {
     case 'close':
-      if (!canClose) return replyError(interaction, 'You cannot close this ticket.');
-      if (ticket.status !== 'open') return replyError(interaction, 'This ticket is already closed.');
+      if (!canClose) return replyError(interaction, 'Nie możesz zamknąć tego ticketu.');
+      if (ticket.status !== 'open') return replyError(interaction, 'Ten ticket jest już zamknięty.');
       return reply(interaction, {
-        embeds: [embed(COLORS.warning).setTitle('❓ Close this ticket?').setDescription('After closing, the author loses access to the channel and the transcript is saved.')],
+        embeds: [embed(COLORS.warning).setTitle('❓ Zamknąć ten ticket?').setDescription('Po zamknięciu autor straci dostęp do kanału, a transkrypcja zostanie zapisana.')],
         components: [
           new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('ticket:close_confirm').setLabel('Yes, close it').setEmoji('🔒').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('ticket:close_reason').setLabel('Close with reason').setEmoji('📝').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket:close_confirm').setLabel('Tak, zamknij').setEmoji('🔒').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('ticket:close_reason').setLabel('Zamknij z powodem').setEmoji('📝').setStyle(ButtonStyle.Secondary),
           ),
         ],
       });
 
     case 'close_confirm':
-      if (!canClose) return replyError(interaction, 'You cannot close this ticket.');
-      await interaction.update({ embeds: [embed(COLORS.muted).setDescription('⏳ Closing the ticket and saving the transcript…')], components: [] });
+      if (!canClose) return replyError(interaction, 'Nie możesz zamknąć tego ticketu.');
+      await interaction.update({ embeds: [embed(COLORS.muted).setDescription('⏳ Zamykam ticket i zapisuję transkrypcję…')], components: [] });
       await t.closeTicket(channel, member);
-      return interaction.editReply({ embeds: [embed(COLORS.success).setDescription('✅ Ticket closed.')] }).catch(() => null);
+      return interaction.editReply({ embeds: [embed(COLORS.success).setDescription('✅ Ticket zamknięty.')] }).catch(() => null);
 
     case 'close_reason':
-      if (!canClose) return replyError(interaction, 'You cannot close this ticket.');
+      if (!canClose) return replyError(interaction, 'Nie możesz zamknąć tego ticketu.');
       return interaction.showModal(closeReasonModal());
 
     case 'claim':
-      if (!staff) return replyError(interaction, 'Only staff members can claim tickets.');
+      if (!staff) return replyError(interaction, 'Tylko zespół może przejmować tickety.');
       await interaction.deferReply(ephemeral);
       await t.claimTicket(channel, member);
-      return reply(interaction, 'You claimed this ticket. Good luck! 💪');
+      return reply(interaction, 'Przejmujesz ten ticket. Powodzenia! 💪');
 
     case 'unclaim':
-      if (!staff) return replyError(interaction, 'Only staff members can do this.');
+      if (!staff) return replyError(interaction, 'Tylko zespół może to zrobić.');
       await interaction.deferReply(ephemeral);
       await t.unclaimTicket(channel, member);
-      return reply(interaction, 'You are no longer handling this ticket.');
+      return reply(interaction, 'Nie obsługujesz już tego ticketu.');
 
     case 'ping':
       await interaction.deferReply(ephemeral);
       await t.pingStaff(channel, member);
-      return reply(interaction, 'Support has been notified 🔔');
+      return reply(interaction, 'Zespół dostał powiadomienie 🔔');
 
     case 'still':
       await interaction.deferReply(ephemeral);
       await t.stillNeedHelp(channel, member, interaction.message);
-      return reply(interaction, 'Thanks! The ticket stays open.');
+      return reply(interaction, 'Dzięki! Ticket pozostaje otwarty.');
 
     case 'closereq_yes':
     case 'closereq_no':
-      if (!isOwner && !staff) return replyError(interaction, 'Only the ticket author can answer this request.');
-      if (!isOwner && action === 'closereq_no') return replyError(interaction, 'Only the author can decline this request.');
+      if (!isOwner && !staff) return replyError(interaction, 'Na tę prośbę może odpowiedzieć tylko autor ticketu.');
+      if (!isOwner && action === 'closereq_no') return replyError(interaction, 'Tylko autor może odrzucić tę prośbę.');
       await interaction.deferReply(ephemeral);
       await t.answerCloseRequest(channel, member, action === 'closereq_yes', interaction.message);
-      return reply(interaction, action === 'closereq_yes' ? 'Ticket closed – thank you!' : 'Support has been notified that you still need help.');
+      return reply(interaction, action === 'closereq_yes' ? 'Ticket zamknięty – dziękujemy!' : 'Zespół dostał powiadomienie, że nadal potrzebujesz pomocy.');
 
     case 'reopen':
-      if (!staff) return replyError(interaction, 'Only staff members can reopen tickets.');
+      if (!staff) return replyError(interaction, 'Tylko zespół może ponownie otwierać tickety.');
       await interaction.deferReply(ephemeral);
       await t.reopenTicket(channel, member);
       await interaction.message.delete().catch(() => null);
-      return reply(interaction, 'The ticket has been reopened.');
+      return reply(interaction, 'Ticket został ponownie otwarty.');
 
     case 'delete':
       if (!(env.staffCanDelete ? staff : isAdmin(member))) {
-        return replyError(interaction, env.staffCanDelete ? 'Only staff members can delete tickets.' : 'Only administrators can delete tickets.');
+        return replyError(interaction, env.staffCanDelete ? 'Tylko zespół może usuwać tickety.' : 'Tylko administratorzy mogą usuwać tickety.');
       }
       await interaction.deferReply(ephemeral);
       await t.deleteTicket(channel, member);
-      return reply(interaction, 'The ticket will be deleted in a moment.');
+      return reply(interaction, 'Ticket zostanie za chwilę usunięty.');
 
     case 'transcript': {
-      if (!staff) return replyError(interaction, 'Transcripts are only available to staff members.');
+      if (!staff) return replyError(interaction, 'Transkrypcje są dostępne tylko dla zespołu.');
       await interaction.deferReply(ephemeral);
       const { attachment, messageCount } = await createTranscript(channel, ticket, type);
       return interaction.editReply({
-        embeds: [embed(COLORS.brand).setDescription(`📄 Current transcript of ticket \`#${pad(ticket.number)}\` · ${messageCount} messages`)],
+        embeds: [embed(COLORS.brand).setDescription(`📄 Aktualna transkrypcja ticketu \`#${pad(ticket.number)}\` · ${count(messageCount, 'wiadomość', 'wiadomości', 'wiadomości')}`)],
         files: [attachment],
       });
     }
@@ -208,10 +208,10 @@ async function handleTicketButton(interaction, action) {
 async function handleManage(interaction) {
   const { channel, member } = interaction;
   const ticket = db.getTicket(channel.id);
-  if (!ticket) return replyError(interaction, 'This channel is no longer a ticket.');
+  if (!ticket) return replyError(interaction, 'Ten kanał nie jest już ticketem.');
   if (!isStaff(member, config.getType(ticket.typeId))) {
     await t.refreshControlMessage(channel, ticket);
-    return replyError(interaction, 'This menu is only available to staff members.');
+    return replyError(interaction, 'To menu jest dostępne tylko dla zespołu.');
   }
   if (interaction.values[0] === 'complete') return showCompleteForm(interaction, channel);
   await interaction.deferReply(ephemeral);
@@ -219,16 +219,16 @@ async function handleManage(interaction) {
   try {
     if (kind === 'prio') {
       await t.setPriority(channel, value, member);
-      return await reply(interaction, 'Priority changed.');
+      return await reply(interaction, 'Priorytet zmieniony.');
     }
     if (kind === 'move') {
       await t.moveTicket(channel, value, member);
-      return await reply(interaction, 'The ticket has been moved.');
+      return await reply(interaction, 'Ticket został przeniesiony.');
     }
     if (kind === 'closereq') {
       await t.requestClose(channel, member);
       await t.refreshControlMessage(channel, ticket);
-      return await reply(interaction, 'Close request sent to the author.');
+      return await reply(interaction, 'Prośba o zamknięcie wysłana do autora.');
     }
     if (kind === 'deliver') {
       const done = await require('../features/delivery').confirmAndDeliver(channel, member, { again: Boolean(db.getTicket(channel.id)?.order?.delivered) });
@@ -236,7 +236,7 @@ async function handleManage(interaction) {
     }
     if (kind === 'status') {
       const { dm } = await orderstatus.setStatus(channel, value, member);
-      return await reply(interaction, `Order status set to **${statusLabel(value)}**${dm ? ' – the customer got a DM.' : '.'}`);
+      return await reply(interaction, `Status zamówienia zmieniony na **${statusLabel(value)}**${dm ? ' – klient dostał DM.' : '.'}`);
     }
     return null;
   } catch (err) {
@@ -245,12 +245,12 @@ async function handleManage(interaction) {
   }
 }
 
-/** "Order completed" → a form where the seller confirms the amount paid (handled in src/features/orders.js). */
+/** "Zamówienie zrealizowane" → a form where the seller confirms the amount paid (handled in src/features/orders.js). */
 async function showCompleteForm(interaction, channel) {
   try {
     await interaction.showModal(t.completeForm(channel));
   } finally {
-    // Reset the menu, so "Order completed" can be picked again if the form is closed.
+    // Reset the menu, so "Zamówienie zrealizowane" can be picked again if the form is closed.
     await t.refreshControlMessage(channel, db.getTicket(channel.id));
   }
 }
@@ -258,15 +258,15 @@ async function showCompleteForm(interaction, channel) {
 async function handleAddUser(interaction) {
   const { channel, member } = interaction;
   const ticket = db.getTicket(channel.id);
-  if (!ticket) return replyError(interaction, 'This channel is no longer a ticket.');
+  if (!ticket) return replyError(interaction, 'Ten kanał nie jest już ticketem.');
   if (!isStaff(member, config.getType(ticket.typeId))) {
     await t.refreshControlMessage(channel, ticket);
-    return replyError(interaction, 'Only staff members can add people.');
+    return replyError(interaction, 'Tylko zespół może dodawać osoby.');
   }
   await interaction.deferReply(ephemeral);
   try {
-    const count = await t.addUsers(channel, [...interaction.users.values()], member);
-    return await reply(interaction, `Added ${count} ${count === 1 ? 'member' : 'members'}.`);
+    const added = await t.addUsers(channel, [...interaction.users.values()], member);
+    return await reply(interaction, `Dodano ${count(added, 'osobę', 'osoby', 'osób')}.`);
   } catch (err) {
     await t.refreshControlMessage(channel, ticket);
     throw err;
@@ -276,12 +276,12 @@ async function handleAddUser(interaction) {
 function ratingModal(channelId, stars) {
   return new ModalBuilder()
     .setCustomId(`ratemodal:${channelId}:${stars}`)
-    .setTitle(`Your rating: ${'⭐'.repeat(stars)}`)
+    .setTitle(`Twoja ocena: ${'⭐'.repeat(stars)}`)
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel('Comment (optional)')
+        .setLabel('Komentarz (opcjonalnie)')
         .setTextInputComponent(
-          new TextInputBuilder().setCustomId('comment').setPlaceholder('What went well, and what could we improve?').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500),
+          new TextInputBuilder().setCustomId('comment').setPlaceholder('Co poszło dobrze, a co możemy poprawić?').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500),
         ),
     );
 }
@@ -295,11 +295,11 @@ async function handleRatingSubmit(interaction, channelId, stars) {
   }
   await t.saveRating(interaction.client, channelId, interaction.user.id, stars, comment);
   const thanks = embed(stars >= 4 ? COLORS.success : COLORS.brand)
-    .setTitle(stars >= 4 ? '🧡 Thanks for the great rating!' : '🧡 Thanks for your rating!')
+    .setTitle(stars >= 4 ? '🧡 Dziękujemy za świetną ocenę!' : '🧡 Dziękujemy za ocenę!')
     .setDescription(
       `## ${'⭐'.repeat(stars)}${'☆'.repeat(5 - stars)}\n` +
         (comment ? `>>> ${comment}` : '') +
-        (stars <= 2 ? "\n\nWe're sorry something went wrong – we'll pass your feedback on to the team." : ''),
+        (stars <= 2 ? '\n\nPrzykro nam, że coś poszło nie tak – przekażemy Twoją opinię zespołowi.' : ''),
     );
   if (interaction.isFromMessage()) return interaction.update({ embeds: [...interaction.message.embeds, thanks], components: [] });
   return reply(interaction, { embeds: [thanks] });
@@ -326,7 +326,7 @@ async function handleComponent(interaction) {
         return handleTicketButton(interaction, action);
       case 'rate': {
         const ticket = db.getTicket(action);
-        if (ticket?.rating) return replyError(interaction, 'This ticket has already been rated. Thank you!');
+        if (ticket?.rating) return replyError(interaction, 'Ten ticket ma już ocenę. Dziękujemy!');
         return interaction.showModal(ratingModal(action, Number(args[0])));
       }
       case 'verify':
@@ -367,16 +367,16 @@ async function handleComponent(interaction) {
           const ticket = db.getTicket(interaction.channel.id);
           const type = ticket && config.getType(ticket.typeId);
           if (!ticket || (!isStaff(interaction.member, type) && !(ticket.ownerId === interaction.user.id && env.ownerCanClose))) {
-            return replyError(interaction, 'You cannot close this ticket.');
+            return replyError(interaction, 'Nie możesz zamknąć tego ticketu.');
           }
           const reason = interaction.fields.getTextInputValue('reason');
           if (interaction.isFromMessage()) {
-            await interaction.update({ embeds: [embed(COLORS.muted).setDescription('⏳ Closing the ticket and saving the transcript…')], components: [] });
+            await interaction.update({ embeds: [embed(COLORS.muted).setDescription('⏳ Zamykam ticket i zapisuję transkrypcję…')], components: [] });
           } else {
             await interaction.deferReply(ephemeral);
           }
           await t.closeTicket(interaction.channel, interaction.member, reason);
-          return interaction.editReply({ embeds: [embed(COLORS.success).setDescription('✅ Ticket closed.')] }).catch(() => null);
+          return interaction.editReply({ embeds: [embed(COLORS.success).setDescription('✅ Ticket zamknięty.')] }).catch(() => null);
         }
         return null;
       case 'ratemodal':
@@ -407,18 +407,18 @@ async function handleComponent(interaction) {
 const TOO_LATE = new Set([10062, 40060]);
 const lateClicks = [];
 function reportTooLate(interaction, err) {
-  const what = interaction.customId ? `A click (${interaction.customId})` : `/${interaction.commandName}`;
+  const what = interaction.customId ? `Kliknięcie (${interaction.customId})` : slash(interaction.commandName);
   if (err.code === 40060) {
-    console.warn(`⚠️  ${what} was already answered by another bot process – is the bot running twice with the same token (e.g. on your PC and on the host)? Stop the extra copy.`);
+    console.warn(`⚠️  ${what}: odpowiedział już inny proces bota – czy bot działa dwa razy na tym samym tokenie (np. na Twoim komputerze i na hostingu)? Wyłącz dodatkową kopię.`);
     return;
   }
   const age = ((Date.now() - interaction.createdTimestamp) / 1000).toFixed(1);
-  console.warn(`⏳ ${what} expired before the bot could answer (Discord allows 3 s, it was ${age} s old). Nothing was created – the user can simply try again.`);
+  console.warn(`⏳ ${what}: interakcja wygasła, zanim bot zdążył odpowiedzieć (Discord daje 3 s, minęło ${age} s). Nic nie zostało utworzone – wystarczy spróbować ponownie.`);
   const now = Date.now();
   lateClicks.push(now);
   while (lateClicks.length && now - lateClicks[0] > 10 * 60_000) lateClicks.shift();
   if (lateClicks.length === 3) {
-    console.warn('   This keeps happening – the host is too slow or far away. Use Node.js 20 or newer and a faster plan or a host region close to Discord (EU/US).');
+    console.warn('   To się powtarza – hosting jest za wolny albo za daleko. Użyj Node.js 20 lub nowszego i szybszego planu albo regionu blisko Discorda (EU/US).');
   }
 }
 
@@ -431,7 +431,7 @@ module.exports = async function handleInteraction(interaction, commands) {
         await handleComponent(interaction);
         return;
       }
-      if (interaction.isRepliable()) await interaction.reply({ content: `${config.brand.name} commands work on the server only.`, flags: MessageFlags.Ephemeral });
+      if (interaction.isRepliable()) await interaction.reply({ content: `Komendy ${config.brand.name} działają tylko na serwerze.`, flags: MessageFlags.Ephemeral });
       return;
     }
     // Polish command names (/produkt dodaj nazwa:…) → the English names the commands use (src/lib/commandsPl.js).
@@ -459,8 +459,8 @@ module.exports = async function handleInteraction(interaction, commands) {
     await replyError(
       interaction,
       missing
-        ? "I'm missing permissions for that. Make sure my role has **Administrator** and is at the top of the role list."
-        : 'An unexpected error occurred. Please try again in a moment.',
+        ? 'Brakuje mi uprawnień, żeby to zrobić. Upewnij się, że moja rola ma uprawnienie **Administrator** i jest na samej górze listy ról.'
+        : 'Wystąpił nieoczekiwany błąd. Spróbuj ponownie za chwilę.',
     ).catch(() => null);
   }
 };

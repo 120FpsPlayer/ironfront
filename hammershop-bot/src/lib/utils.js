@@ -12,10 +12,10 @@ const { COLORS } = require('./theme');
 class UserError extends Error {}
 
 const PRIORITIES = {
-  low: { label: 'Low', emoji: '🟢', color: 0x57f287 },
-  normal: { label: 'Normal', emoji: '🟣', color: COLORS.brand },
-  high: { label: 'High', emoji: '🟠', color: 0xf0b232 },
-  urgent: { label: 'Urgent', emoji: '🔴', color: 0xed4245 },
+  low: { label: 'Niski', emoji: '🟢', color: 0x57f287 },
+  normal: { label: 'Normalny', emoji: '🟣', color: COLORS.brand },
+  high: { label: 'Wysoki', emoji: '🟠', color: 0xf0b232 },
+  urgent: { label: 'Pilny', emoji: '🔴', color: 0xed4245 },
 };
 
 function embed(color = COLORS.brand) {
@@ -81,7 +81,7 @@ function slug(text, max = 20) {
       .replace(/ø/g, 'o')
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, max) || 'user'
+      .slice(0, max) || 'klient'
   );
 }
 
@@ -95,7 +95,7 @@ function channelName(ticket, type) {
     .replace('{emoji}', type?.emoji ?? '🎫')
     .replace('{prefix}', type?.channelPrefix ?? 'ticket')
     .replace('{number}', pad(ticket.number))
-    .replace('{user}', slug(ticket.ownerName ?? 'user', 16));
+    .replace('{user}', slug(ticket.ownerName ?? 'klient', 16));
   return ((config.server.smallCaps === false ? name : smallCaps(name)).slice(0, 100) || `ticket-${pad(ticket.number)}`);
 }
 
@@ -119,7 +119,7 @@ function avgResponseTime(guildId) {
 
 function logEmbed(color, title, user) {
   const e = embed(color).setTitle(title);
-  if (user) e.setAuthor({ name: user.tag ?? user.username ?? 'User', iconURL: user.displayAvatarURL?.() });
+  if (user) e.setAuthor({ name: user.tag ?? user.username ?? 'Użytkownik', iconURL: user.displayAvatarURL?.() });
   return e;
 }
 
@@ -129,9 +129,9 @@ function duration(ms) {
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const parts = [];
-  if (d) parts.push(`${d}d`);
-  if (h) parts.push(`${h}h`);
-  if (m || parts.length === 0) parts.push(`${m}m`);
+  if (d) parts.push(`${d} d`);
+  if (h) parts.push(`${h} h`);
+  if (m || parts.length === 0) parts.push(`${m} min`);
   return parts.join(' ');
 }
 
@@ -158,7 +158,7 @@ async function sendToChannel(guild, channelId, payload) {
   const channel = guild.channels.cache.get(channelId) ?? (await guild.channels.fetch(channelId).catch(() => null));
   if (!channel?.isTextBased?.()) return null;
   return channel.send(payload).catch((err) => {
-    console.warn(`[log] Failed to send to #${channel.name}:`, err.message);
+    console.warn(`[log] Nie udało się wysłać wiadomości na #${channel.name}:`, err.message);
     return null;
   });
 }

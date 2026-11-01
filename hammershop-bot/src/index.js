@@ -6,12 +6,13 @@ const { env, validateEnv } = require('./env');
 const problems = validateEnv();
 if (problems.length) {
   for (const p of problems) console.error(`❌ ${p}`);
-  console.error('   Setup instructions: README.md');
+  console.error('   Instrukcja konfiguracji: README.md');
   process.exit(1);
 }
 
 const config = require('./lib/config');
-const { localizeCommand } = require('./lib/commandsPl');
+const { localizeCommand, slash } = require('./lib/commandsPl');
+const { count } = require('./lib/utils');
 const db = require('./lib/db');
 const panels = require('./lib/panels');
 const loadCommands = require('./commands');
@@ -52,10 +53,10 @@ const every = (ms, fn, firstDelay = ms) => {
 };
 
 client.once(Events.ClientReady, async (c) => {
-  console.log(`✅ Logged in as ${c.user.tag} · servers: ${c.guilds.cache.size} · commands: ${commands.size}`);
+  console.log(`✅ Zalogowano jako ${c.user.tag} · serwery: ${c.guilds.cache.size} · komendy: ${commands.size}`);
   const off = config.turnedOff();
-  if (off.length) console.log(`ℹ️  Turned off in config.json: ${off.join(', ')}.`);
-  if (!String(config.rules?.seller ?? '').trim()) console.log('ℹ️  Regulamin: wpisz dane sprzedawcy w config.json → rules.seller (i rules.email) – pojawią się w §1 regulaminu na #rules.');
+  if (off.length) console.log(`ℹ️  Wyłączone w config.json: ${off.join(', ')}.`);
+  if (!String(config.rules?.seller ?? '').trim()) console.log('ℹ️  Regulamin: wpisz dane sprzedawcy w config.json → rules.seller (i rules.email) – pojawią się w §1 regulaminu na #regulamin.');
   reportRoles([...c.guilds.cache.values()], config.ticketTypes);
 
   if (env.autoDeployCommands) {
@@ -64,22 +65,22 @@ client.once(Events.ClientReady, async (c) => {
     try {
       if (env.guildId) {
         await c.application.commands.set(body, env.guildId);
-        console.log(`✅ Slash commands registered on server ${env.guildId} (available instantly).`);
+        console.log(`✅ Komendy zarejestrowane na serwerze ${env.guildId} (dostępne od razu).`);
       } else {
         await c.application.commands.set(body);
-        console.log('✅ Slash commands registered globally (they can take a few minutes to appear – set GUILD_ID for instant updates).');
+        console.log('✅ Komendy zarejestrowane globalnie (mogą pojawić się dopiero po kilku minutach – ustaw GUILD_ID, żeby zmiany były widoczne od razu).');
       }
     } catch (err) {
-      console.error('❌ Failed to register slash commands:', err.message);
+      console.error('❌ Nie udało się zarejestrować komend:', err.message);
     }
   }
 
   const invite = c.generateInvite({ scopes: [OAuth2Scopes.Bot, OAuth2Scopes.ApplicationsCommands], permissions: [PermissionFlagsBits.Administrator] });
-  console.log(`🔗 Invite link:\n   ${invite}`);
-  if (!c.guilds.cache.size) console.log('ℹ️  The bot is not on any server yet – open the invite link above.');
+  console.log(`🔗 Link do zaproszenia bota:\n   ${invite}`);
+  if (!c.guilds.cache.size) console.log('ℹ️  Bot nie jest jeszcze na żadnym serwerze – otwórz link do zaproszenia powyżej.');
   for (const guild of c.guilds.cache.values()) {
     if (!guild.members.me?.permissions.has(PermissionFlagsBits.Administrator)) {
-      console.warn(`⚠️  ${guild.name}: the bot does not have the Administrator permission – /build will not work there.`);
+      console.warn(`⚠️  ${guild.name}: bot nie ma uprawnienia Administrator – ${slash('build')} nie zadziała na tym serwerze.`);
     }
     await welcome.migrateWelcomeVisibility(guild).catch((err) => console.warn(`[welcome] ${guild.name}:`, err.message));
   }
@@ -89,9 +90,9 @@ client.once(Events.ClientReady, async (c) => {
     const open = db.tickets((x) => x.status === 'open').length;
     const vouchCount = db.allGuildIds().reduce((n, id) => n + db.guild(id).vouches.length, 0);
     const list = [
-      { name: `🛒 ${config.brand.name} · /help`, type: ActivityType.Watching },
-      { name: `🎫 ${open} open ${open === 1 ? 'ticket' : 'tickets'}`, type: ActivityType.Watching },
-      ...(vouchCount ? [{ name: `⭐ ${vouchCount} vouches`, type: ActivityType.Watching }] : []),
+      { name: `🛒 ${config.brand.name} · ${slash('help')}`, type: ActivityType.Watching },
+      { name: `🎫 ${count(open, 'otwarty ticket', 'otwarte tickety', 'otwartych ticketów')}`, type: ActivityType.Watching },
+      ...(vouchCount ? [{ name: `⭐ ${count(vouchCount, 'opinia', 'opinie', 'opinii')}`, type: ActivityType.Watching }] : []),
     ];
     c.user.setActivity(list[presenceIndex++ % list.length]);
   };
@@ -150,11 +151,11 @@ client.on(Events.GuildEmojiUpdate, (before, after) => {
   if (before.available !== after.available) onEmojiChange(after);
 });
 
-client.on(Events.GuildCreate, (guild) => console.log(`➕ Added to server: ${guild.name} (${guild.id}) – run /build there to set it up.`));
+client.on(Events.GuildCreate, (guild) => console.log(`➕ Bot dodany do serwera: ${guild.name} (${guild.id}) – użyj tam ${slash('build')}, żeby go skonfigurować.`));
 client.on(Events.Error, (err) => console.error('[discord]', err));
 
 function shutdown() {
-  console.log('Saving data and shutting down…');
+  console.log('Zapisuję dane i wyłączam bota…');
   try {
     db.flush();
   } catch (err) {
@@ -169,14 +170,14 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
 client.login(env.token).catch((err) => {
   if (/disallowed intents/i.test(err.message)) {
     console.error(
-      '❌ Discord rejected the connection: privileged intents are not enabled.\n' +
-        '   Fix: https://discord.com/developers/applications → your bot → Bot tab → Privileged Gateway Intents →\n' +
-        '   turn ON "SERVER MEMBERS INTENT" and "MESSAGE CONTENT INTENT" → Save Changes, then restart the bot.',
+      '❌ Discord odrzucił połączenie: uprzywilejowane intencje (privileged intents) nie są włączone.\n' +
+        '   Rozwiązanie: https://discord.com/developers/applications → Twój bot → zakładka Bot → Privileged Gateway Intents →\n' +
+        '   włącz „SERVER MEMBERS INTENT” i „MESSAGE CONTENT INTENT” → Save Changes, potem uruchom bota ponownie.',
     );
   } else if (err.code === 'TokenInvalid' || /token/i.test(err.message)) {
-    console.error('❌ Invalid DISCORD_TOKEN. Generate a new one (Bot tab → Reset Token), paste it into .env and restart the bot.');
+    console.error('❌ Nieprawidłowy DISCORD_TOKEN. Wygeneruj nowy (zakładka Bot → Reset Token), wklej go do .env i uruchom bota ponownie.');
   } else {
-    console.error('❌ Failed to log in:', err);
+    console.error('❌ Nie udało się zalogować:', err);
   }
   process.exit(1);
 });

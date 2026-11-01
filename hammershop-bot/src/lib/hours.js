@@ -9,8 +9,10 @@
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const MONDAY_FIRST = [1, 2, 3, 4, 5, 6, 0];
-const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; // what the en-US formatter below gives – only for reading the weekday
+/** Polish names for people: short ("Pn–Pt") and "on <day>" ("w poniedziałek o 10:00"). */
+const SHORT_PL = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+const ON_DAY_PL = ['w niedzielę', 'w poniedziałek', 'we wtorek', 'w środę', 'w czwartek', 'w piątek', 'w sobotę'];
 
 const formats = new Map();
 function formatter(timeZone) {
@@ -89,40 +91,41 @@ function nextClosing(wh, now = new Date()) {
   return null;
 }
 
-/** "at 10:00" / "tomorrow at 10:00" / "on Monday at 10:00" – `at` seen from `now`, in that time zone. */
+/** "dziś o 10:00" / "jutro o 10:00" / "w poniedziałek o 10:00" – `at` seen from `now`, in that time zone. */
 function whenText(wh, at, now = new Date()) {
   const a = zoned(at, wh.timezone);
   const n = zoned(now, wh.timezone);
   const days = Math.round((Date.UTC(a.year, a.month - 1, a.day) - Date.UTC(n.year, n.month - 1, n.day)) / 86_400_000);
   const time = `${Math.floor(a.minutes / 60)}:${String(a.minutes % 60).padStart(2, '0')}`.padStart(5, '0');
-  if (days <= 0) return `at ${time}`;
-  if (days === 1) return `tomorrow at ${time}`;
-  return `on ${LONG[a.weekday]} at ${time}`;
+  if (days <= 0) return `dziś o ${time}`;
+  if (days === 1) return `jutro o ${time}`;
+  return `${ON_DAY_PL[a.weekday]} o ${time}`;
 }
 
-/** "Central European Time" for Europe/Warsaw, "UTC" for UTC. */
+/** "czas polski" for Europe/Warsaw, "UTC" for UTC, otherwise the Polish name ("czas środkowoeuropejski"). */
 function zoneLabel(timeZone = 'UTC') {
   if (/^(Etc\/)?(UTC|GMT)$/i.test(timeZone)) return 'UTC';
+  if (timeZone === 'Europe/Warsaw') return 'czas polski';
   try {
-    const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longGeneric' }).formatToParts(new Date()).find((x) => x.type === 'timeZoneName');
+    const part = new Intl.DateTimeFormat('pl-PL', { timeZone, timeZoneName: 'longGeneric' }).formatToParts(new Date()).find((x) => x.type === 'timeZoneName');
     return part?.value ?? timeZone;
   } catch {
     return timeZone;
   }
 }
 
-/** [1,2,3,4,5,6,0] → "Every day", [1,2,3,4,5] → "Mon–Fri", [6,0] → "Weekends", [1,3,5] → "Mon, Wed, Fri". */
+/** [1,2,3,4,5,6,0] → "Codziennie", [1,2,3,4,5] → "Pn–Pt", [6,0] → "W weekendy", [1,3,5] → "Pn, Śr, Pt". */
 function daysText(days = ALL_DAYS) {
   const list = MONDAY_FIRST.filter((d) => days.includes(d));
-  if (list.length === 7) return 'Every day';
-  if (list.length === 2 && list.includes(6) && list.includes(0)) return 'Weekends';
+  if (list.length === 7) return 'Codziennie';
+  if (list.length === 2 && list.includes(6) && list.includes(0)) return 'W weekendy';
   const idx = list.map((d) => MONDAY_FIRST.indexOf(d));
   const run = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
-  if (run && list.length >= 3) return `${SHORT[list[0]]}–${SHORT[list[list.length - 1]]}`;
-  return list.map((d) => SHORT[d]).join(', ');
+  if (run && list.length >= 3) return `${SHORT_PL[list[0]]}–${SHORT_PL[list[list.length - 1]]}`;
+  return list.map((d) => SHORT_PL[d]).join(', ');
 }
 
-/** "Every day 10:00–20:00 (Central European Time)" – null when working hours are off. */
+/** "Codziennie 10:00–20:00 (czas polski)" – null when working hours are off. */
 function hoursText(wh) {
   if (!wh?.enabled) return null;
   return `${daysText(wh.days)} ${wh.from ?? '00:00'}–${wh.to ?? '24:00'} (${zoneLabel(wh.timezone)})`;
@@ -134,15 +137,15 @@ function problem(wh) {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: wh.timezone ?? 'UTC' });
   } catch {
-    return `"timezone" must be a time zone like "Europe/Warsaw" (got ${JSON.stringify(wh.timezone)})`;
+    return `"timezone" musi być strefą czasową, np. "Europe/Warsaw" (jest: ${JSON.stringify(wh.timezone)})`;
   }
   for (const key of ['from', 'to']) {
-    if (wh[key] !== undefined && !/^([01]?\d|2[0-3]):[0-5]\d$|^24:00$/.test(String(wh[key]))) return `"${key}" must be a time like "10:00" (got ${JSON.stringify(wh[key])})`;
+    if (wh[key] !== undefined && !/^([01]?\d|2[0-3]):[0-5]\d$|^24:00$/.test(String(wh[key]))) return `"${key}" musi być godziną, np. "10:00" (jest: ${JSON.stringify(wh[key])})`;
   }
   const { from, to } = range(wh);
-  if (from === to) return '"from" and "to" must be different – for open all day use "00:00" and "24:00"';
+  if (from === to) return '"from" i "to" muszą się różnić – otwarte cały dzień to "00:00" i "24:00"';
   if (wh.days !== undefined && (!Array.isArray(wh.days) || !wh.days.length || wh.days.some((d) => !ALL_DAYS.includes(d)))) {
-    return '"days" must list days from 0 (Sunday) to 6 (Saturday), e.g. [1, 2, 3, 4, 5, 6, 0]';
+    return '"days" musi zawierać dni od 0 (niedziela) do 6 (sobota), np. [1, 2, 3, 4, 5, 6, 0]';
   }
   return null;
 }

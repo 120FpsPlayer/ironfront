@@ -25,13 +25,13 @@ module.exports = {
 
   async execute(interaction) {
     const ticket = db.getTicket(interaction.channel.id);
-    if (!ticket) return replyError(interaction, 'This command can only be used in a ticket channel.');
+    if (!ticket) return replyError(interaction, 'Tej komendy można użyć tylko na kanale ticketu.');
     if (!isStaff(interaction.member, config.getType(ticket.typeId))) {
-      return replyError(interaction, 'Canned replies are only available to staff members.');
+      return replyError(interaction, 'Gotowe odpowiedzi są dostępne tylko dla zespołu.');
     }
     const snippet = config.snippets.find((s) => s.id === interaction.options.getString('snippet'));
-    if (!snippet) return replyError(interaction, 'There is no such reply. Pick one of the suggestions.');
+    if (!snippet) return replyError(interaction, 'Nie ma takiej odpowiedzi. Wybierz jedną z podpowiedzi.');
     await t.sendSnippet(interaction.channel, snippet, interaction.member);
-    return reply(interaction, 'Sent.');
+    return reply(interaction, 'Wysłano.');
   },
 };

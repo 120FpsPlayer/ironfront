@@ -11,7 +11,7 @@ const esc = (s) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-// PaysafeCard PINs (the "Pay" card, or typed in the chat) never reach the archive in full – it's kept forever.
+// PaysafeCard PINs (the "Zapłać" card, or typed in the chat) never reach the archive in full – it's kept forever.
 const textOf = (s) => esc(maskPins(s));
 
 function formatContent(text, message) {
@@ -115,9 +115,9 @@ function componentText(components = []) {
 }
 
 const TZ = { timeZone: config.workingHours?.timezone ?? 'UTC' };
-const dayKey = (d) => d.toLocaleDateString('en-GB', TZ);
-const time = (d) => d.toLocaleTimeString('en-GB', { ...TZ, hour: '2-digit', minute: '2-digit' });
-const full = (d) => d.toLocaleString('en-GB', TZ);
+const dayKey = (d) => d.toLocaleDateString('pl-PL', TZ);
+const time = (d) => d.toLocaleTimeString('pl-PL', { ...TZ, hour: '2-digit', minute: '2-digit' });
+const full = (d) => d.toLocaleString('pl-PL', TZ);
 
 function markdown(textRaw, message) {
   const line = (prefix, cls) => new RegExp(`(^|<br>)${prefix} (.*?)(?=<br>|$)`, 'g');
@@ -147,7 +147,7 @@ async function createTranscript(channel, ticket, type) {
     participants.set(m.author.id, (participants.get(m.author.id) ?? 0) + 1);
     const day = dayKey(m.createdAt);
     if (day !== lastDay) {
-      rows.push(`<div class="day"><span>${esc(m.createdAt.toLocaleDateString('en-GB', { ...TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</span></div>`);
+      rows.push(`<div class="day"><span>${esc(m.createdAt.toLocaleDateString('pl-PL', { ...TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</span></div>`);
       lastDay = day;
       lastAuthor = null;
     }
@@ -171,18 +171,18 @@ async function createTranscript(channel, ticket, type) {
     ].join('');
 
     const replyHtml = ref
-      ? `<div class="reply">↪ <b>${esc(ref.member?.displayName ?? ref.author.username)}</b> ${textOf((ref.content || componentText(ref.components) || '📎 attachment').slice(0, 90))}</div>`
+      ? `<div class="reply">↪ <b>${esc(ref.member?.displayName ?? ref.author.username)}</b> ${textOf((ref.content || componentText(ref.components) || '📎 załącznik').slice(0, 90))}</div>`
       : '';
 
     if (grouped) {
-      rows.push(`<div class="msg cont" id="m${m.id}"><span class="side">${esc(time(m.createdAt))}</span><div class="content">${body}${m.editedAt ? '<span class="edited">(edited)</span>' : ''}</div></div>`);
+      rows.push(`<div class="msg cont" id="m${m.id}"><span class="side">${esc(time(m.createdAt))}</span><div class="content">${body}${m.editedAt ? '<span class="edited">(edytowano)</span>' : ''}</div></div>`);
     } else {
-      const badge = m.author.bot ? '<span class="bot">BOT</span>' : m.author.id === ticket.ownerId ? '<span class="tag owner">AUTHOR</span>' : isStaffMsg ? '<span class="tag staff">SUPPORT</span>' : '';
+      const badge = m.author.bot ? '<span class="bot">BOT</span>' : m.author.id === ticket.ownerId ? '<span class="tag owner">AUTOR</span>' : isStaffMsg ? '<span class="tag staff">ZESPÓŁ</span>' : '';
       rows.push(`<div class="msg" id="m${m.id}">${replyHtml ? `<div class="replywrap">${replyHtml}</div>` : ''}
         <img class="avatar" src="${esc(m.author.displayAvatarURL({ size: 64, extension: 'png' }))}" alt="">
         <div class="content">
           <div class="head"><span class="author" style="color:${esc(color)}" title="${esc(m.author.tag)} · ${esc(m.author.id)}">${esc(name)}</span>${badge}<span class="time">${esc(full(m.createdAt))}</span></div>
-          ${body}${m.editedAt ? '<span class="edited">(edited)</span>' : ''}
+          ${body}${m.editedAt ? '<span class="edited">(edytowano)</span>' : ''}
         </div>
       </div>`);
     }
@@ -205,8 +205,8 @@ async function createTranscript(channel, ticket, type) {
   })();
 
   const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Transcript · #${esc(channel.name)}</title>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transkrypcja · #${esc(channel.name)}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#313338;color:#dbdee1;font:15px/1.45 "gg sans","Segoe UI",Roboto,Arial,sans-serif}
 a{color:#00a8fc;text-decoration:none}a:hover{text-decoration:underline}
@@ -251,18 +251,18 @@ footer{text-align:center;color:#949ba4;font-size:12px;padding:20px;border-top:1p
     <div class="subtitle">${esc(guild.name)} · #${esc(channel.name)}</div></div>
   </div>
   <div class="stats">
-    ${stat('Author', esc(owner?.tag ?? ticket.ownerId))}
-    ${stat('Handled by', esc(staffNames.join(', ') || '—'))}
-    ${stat('Opened', esc(full(new Date(ticket.createdAt))))}
-    ${stat('Duration', esc(durationText))}
-    ${stat('Messages', String(messages.length))}
-    ${stat('Participants', String(participants.size))}
-    ${ticket.closeReason ? stat('Close reason', esc(ticket.closeReason)) : ''}
+    ${stat('Autor', esc(owner?.tag ?? ticket.ownerId))}
+    ${stat('Obsługa', esc(staffNames.join(', ') || '—'))}
+    ${stat('Otwarty', esc(full(new Date(ticket.createdAt))))}
+    ${stat('Czas trwania', esc(durationText))}
+    ${stat('Wiadomości', String(messages.length))}
+    ${stat('Uczestnicy', String(participants.size))}
+    ${ticket.closeReason ? stat('Powód zamknięcia', esc(ticket.closeReason)) : ''}
   </div>
-  ${answers ? `<div class="form"><h2>📝 Form</h2>${answers}</div>` : ''}
+  ${answers ? `<div class="form"><h2>📝 Formularz</h2>${answers}</div>` : ''}
 </header>
 <main>${rows.join('\n')}</main>
-<footer>Generated ${esc(full(new Date()))} · ${esc(guild.name)} · ${esc(config.brand.name)} ticket system</footer>
+<footer>Wygenerowano ${esc(full(new Date()))} · ${esc(guild.name)} · system ticketów ${esc(config.brand.name)}</footer>
 </body></html>`;
 
   const attachment = new AttachmentBuilder(Buffer.from(html, 'utf8'), {

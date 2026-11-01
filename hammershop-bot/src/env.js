@@ -41,7 +41,7 @@ function ids(name) {
     const raw = process.env[key];
     if (!raw) continue;
     const list = raw.match(/\d{17,20}/g) ?? [];
-    if (!list.length && raw.trim()) console.warn(`[.env] ${key}: no valid ID found (17–20 digits).`);
+    if (!list.length && raw.trim()) console.warn(`[.env] ${key}: nie znaleziono prawidłowego ID (17–20 cyfr).`);
     found.push(...list);
   }
   return [...new Set(found)];
@@ -50,7 +50,7 @@ function ids(name) {
 function bool(name, fallback) {
   const v = process.env[name]?.trim().toLowerCase();
   if (!v) return fallback;
-  return ['1', 'true', 'yes', 'y', 'on'].includes(v);
+  return ['1', 'true', 'yes', 'y', 'on', 'tak'].includes(v);
 }
 
 const env = {
@@ -108,10 +108,10 @@ function validateEnv() {
   const problems = [];
   if (!env.token || env.token === 'YOUR_BOT_TOKEN') {
     problems.push(loadedEnvFiles.length
-      ? `Missing bot token. Fill in DISCORD_TOKEN in: ${loadedEnvFiles.join(', ')}`
-      : `Missing bot token and no .env file found. Create a .env file (copy .env.example) in: ${ENV_CANDIDATES.join(' or ')}`);
+      ? `Brak tokenu bota. Uzupełnij DISCORD_TOKEN w: ${loadedEnvFiles.join(', ')}`
+      : `Brak tokenu bota i nie znaleziono pliku .env. Utwórz plik .env (skopiuj .env.example) w: ${ENV_CANDIDATES.join(' lub ')}`);
   } else if (env.token.split('.').length !== 3) {
-    problems.push('DISCORD_TOKEN looks invalid – copy it again from the Discord Developer Portal (Bot tab → Reset Token).');
+    problems.push('DISCORD_TOKEN wygląda na nieprawidłowy – skopiuj go jeszcze raz z Discord Developer Portal (zakładka Bot → Reset Token).');
   }
   return problems;
 }

@@ -107,14 +107,15 @@ function allStaffRoleIds(guild, types = []) {
 
 function openDeniedReason(member) {
   if (isAdmin(member)) return null;
-  if (hasRole(member, env.blockedRoleIds)) return 'Your role is not allowed to open tickets.';
+  if (hasRole(member, env.blockedRoleIds)) return 'Twoja rola nie może otwierać ticketów.';
   if (env.openRoleIds.length && !hasRole(member, env.openRoleIds)) {
-    return `To open a ticket, you need one of these roles: ${env.openRoleIds.map((id) => `<@&${id}>`).join(', ')}`;
+    return `Aby otworzyć ticket, potrzebujesz jednej z tych ról: ${env.openRoleIds.map((id) => `<@&${id}>`).join(', ')}`;
   }
   return null;
 }
 
 function reportRoles(guilds, ticketTypes) {
+  const { count } = require('./utils'); // here – utils.js needs this file
   const groups = [
     ['OWNER_IDS', env.ownerIds, 'user'],
     ['ADMIN_ROLE_IDS', env.adminRoleIds],
@@ -126,14 +127,14 @@ function reportRoles(guilds, ticketTypes) {
   for (const [name, list, kind] of groups) {
     if (!list.length) continue;
     if (kind === 'user') {
-      console.log(`🔐 ${name}: ${list.length} ${list.length === 1 ? 'user' : 'users'}`);
+      console.log(`🔐 ${name}: ${count(list.length, 'osoba', 'osoby', 'osób')}`);
       continue;
     }
     const names = list.map((id) => {
       const role = guilds.map((g) => g.roles.cache.get(id)).find(Boolean);
-      return role ? `@${role.name}` : `⚠️ ${id} (no such role on the server!)`;
+      return role ? `@${role.name}` : `⚠️ ${id} (nie ma takiej roli na serwerze!)`;
     });
-    console.log(`🔐 ${name}: ${list.length} ${list.length === 1 ? 'role' : 'roles'} → ${names.join(', ')}`);
+    console.log(`🔐 ${name}: ${count(list.length, 'rola', 'role', 'ról')} → ${names.join(', ')}`);
   }
 }
 

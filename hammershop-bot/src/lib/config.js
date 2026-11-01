@@ -43,65 +43,65 @@ const FEATURE_DEFAULTS = {
 
 /** Switches someone can turn off in config.json → [what is off, where, the same test the feature uses]. */
 const SWITCHES = [
-  ['promo codes', 'promos.enabled', (c) => c.promos.enabled === false],
-  ['first-purchase code', 'welcomeDiscount.enabled', (c) => !c.welcomeDiscount.enabled],
-  ['invite tracking', 'invites.enabled', (c) => c.invites.enabled === false],
-  ['shop status channel', 'shopStatus.enabled', (c) => !c.shopStatus.enabled],
-  ['automatic backups', 'backups.enabled', (c) => !c.backups.enabled],
-  ['weekly sales report', 'salesReport.enabled', (c) => !c.salesReport.enabled],
-  ['look-alike alerts', 'security.impersonationAlerts', (c) => !c.security.impersonationAlerts],
-  ['receipts by DM', 'orders.receipts', (c) => !c.orders.receipts],
-  ['#proofs posts', 'orders.proofs', (c) => !c.orders.proofs],
-  ['vouch reminders', 'orders.vouchReminderHours', (c) => !(Number(c.orders.vouchReminderHours) > 0)],
-  ['order status DMs', 'orders.statusDms', (c) => !c.orders.statusDms],
-  ['"Pay" button (PIN / proof form)', 'orders.paymentProofs', (c) => !c.orders.paymentProofs],
-  ['shop badges', 'badges.enabled', (c) => !c.badges.enabled],
-  ['unclaimed ticket reminders', 'staffReminders.enabled', (c) => !c.staffReminders.enabled],
-  ['opening hours', 'workingHours.enabled', (c) => !c.workingHours.enabled],
+  ['kody rabatowe', 'promos.enabled', (c) => c.promos.enabled === false],
+  ['kod na pierwszy zakup', 'welcomeDiscount.enabled', (c) => !c.welcomeDiscount.enabled],
+  ['śledzenie zaproszeń', 'invites.enabled', (c) => c.invites.enabled === false],
+  ['kanał statusu sklepu', 'shopStatus.enabled', (c) => !c.shopStatus.enabled],
+  ['automatyczne kopie zapasowe', 'backups.enabled', (c) => !c.backups.enabled],
+  ['tygodniowy raport sprzedaży', 'salesReport.enabled', (c) => !c.salesReport.enabled],
+  ['alerty o podszywaniu się', 'security.impersonationAlerts', (c) => !c.security.impersonationAlerts],
+  ['potwierdzenia zakupu w DM', 'orders.receipts', (c) => !c.orders.receipts],
+  ['posty na #realizacje', 'orders.proofs', (c) => !c.orders.proofs],
+  ['przypomnienia o opinii', 'orders.vouchReminderHours', (c) => !(Number(c.orders.vouchReminderHours) > 0)],
+  ['DM o statusie zamówienia', 'orders.statusDms', (c) => !c.orders.statusDms],
+  ['przycisk „Zapłać” (formularz z PIN-em / dowodem płatności)', 'orders.paymentProofs', (c) => !c.orders.paymentProofs],
+  ['odznaki w sklepie', 'badges.enabled', (c) => !c.badges.enabled],
+  ['przypomnienia o nieprzejętych ticketach', 'staffReminders.enabled', (c) => !c.staffReminders.enabled],
+  ['godziny pracy', 'workingHours.enabled', (c) => !c.workingHours.enabled],
 ];
 
-/** "automatic backups (backups.enabled), …" – the features config.json turns off (empty when none). */
+/** "automatyczne kopie zapasowe (backups.enabled), …" – the features config.json turns off (empty when none). */
 const turnedOff = (c) => SWITCHES.filter(([, , off]) => off(c)).map(([what, where]) => `${what} (${where})`);
 
 function read() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch (err) {
-    throw new Error(`config.json could not be read: ${err.message}`);
+    throw new Error(`Nie można odczytać pliku config.json: ${err.message}`);
   }
 }
 
 /** Checks the raw config.json object and fills in the defaults (changes and returns it). */
 function load(raw = read()) {
   if (!Array.isArray(raw.ticketTypes) || raw.ticketTypes.length === 0) {
-    throw new Error('config.json: "ticketTypes" must contain at least one ticket type.');
+    throw new Error('config.json: "ticketTypes" musi zawierać co najmniej jeden typ ticketu.');
   }
-  if (raw.ticketTypes.length > 25) throw new Error('config.json: a maximum of 25 ticket types is allowed (Discord limit).');
+  if (raw.ticketTypes.length > 25) throw new Error('config.json: dozwolone jest maksymalnie 25 typów ticketów (limit Discorda).');
   if (!raw.ticketTypes.some((t) => t.id === 'order')) {
-    throw new Error('config.json: the "order" ticket type is required (the shop uses it for purchases).');
+    throw new Error('config.json: typ ticketu "order" jest wymagany (sklep używa go do zakupów).');
   }
 
   const ids = new Set();
   for (const type of raw.ticketTypes) {
     if (!type.id || !/^[a-z0-9_-]{1,32}$/.test(type.id)) {
-      throw new Error(`config.json: invalid ticket type id "${type.id}" (allowed: a-z, 0-9, _ and -).`);
+      throw new Error(`config.json: nieprawidłowe id typu ticketu "${type.id}" (dozwolone: a-z, 0-9, _ i -).`);
     }
-    if (ids.has(type.id)) throw new Error(`config.json: duplicate ticket type id "${type.id}".`);
+    if (ids.has(type.id)) throw new Error(`config.json: id typu ticketu "${type.id}" występuje więcej niż raz.`);
     ids.add(type.id);
     type.questions ??= [];
     type.staffRoleIds ??= [];
     type.staffRoles ??= [];
     type.channelPrefix ??= type.id;
     type.shopOnly = Boolean(type.shopOnly); // only through Buy in #shop – the ticket panel links to the shop instead
-    if (type.questions.length > 5) throw new Error(`config.json: ticket type "${type.id}" has more than 5 questions (Discord form limit).`);
+    if (type.questions.length > 5) throw new Error(`config.json: typ ticketu "${type.id}" ma więcej niż 5 pytań (limit formularza na Discordzie).`);
     for (const q of type.questions) {
-      if (!q.id || !q.label) throw new Error(`config.json: every question in "${type.id}" needs an "id" and a "label".`);
+      if (!q.id || !q.label) throw new Error(`config.json: każde pytanie w "${type.id}" musi mieć "id" i "label".`);
     }
   }
 
   raw.snippets ??= [];
   for (const s of raw.snippets) {
-    if (!s.id || !s.content) throw new Error('config.json: every canned reply (snippets) needs an "id" and "content".');
+    if (!s.id || !s.content) throw new Error('config.json: każda gotowa odpowiedź (snippets) musi mieć "id" i "content".');
     s.name ??= s.id;
   }
 
@@ -109,7 +109,7 @@ function load(raw = read()) {
   raw.brand.name ??= 'HammerShop';
   raw.brand.name = String(raw.brand.name).trim();
   if (raw.brand.name.length < 2 || raw.brand.name.length > 100) {
-    throw new Error('config.json: "brand.name" must be 2–100 characters (Discord server name limit).');
+    throw new Error('config.json: "brand.name" musi mieć 2–100 znaków (limit nazwy serwera na Discordzie).');
   }
   raw.brand.colorInt = parseInt(String(raw.brand.color ?? '#FF9F43').replace('#', ''), 16) || 0xff9f43;
   raw.panel ??= {};
@@ -125,7 +125,7 @@ function load(raw = read()) {
   raw.server.smallCaps ??= true;
   for (const key of ['channelStyle', 'categoryStyle']) {
     if (typeof raw.server[key] !== 'string' || !raw.server[key].includes('{name}')) {
-      throw new Error(`config.json: "server.${key}" must contain {name} (e.g. "${key === 'channelStyle' ? '{emoji}┃{name}' : '〔 {name} 〕'}").`);
+      throw new Error(`config.json: "server.${key}" musi zawierać {name} (np. "${key === 'channelStyle' ? '{emoji}┃{name}' : '〔 {name} 〕'}").`);
     }
   }
   raw.emojis ??= {};
@@ -134,7 +134,7 @@ function load(raw = read()) {
   raw.welcome ??= { enabled: true };
   raw.shop ??= {};
   raw.shop.paymentMethods ??= [];
-  raw.shop.lowStockAt ??= 3; // a stock counter at or below this shows "Low stock"
+  raw.shop.lowStockAt ??= 3; // a stock counter at or below this shows "Mało sztuk"
   // Written from workingHours, so the panels and the info cards always show the same hours (set it to override).
   raw.shop.supportHours ??= hours.hoursText(raw.workingHours);
   raw.vouches ??= {};

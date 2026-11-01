@@ -18,7 +18,7 @@ function fetchAll(guild) {
       .then(() => true)
       .catch((err) => {
         loading.delete(guild);
-        console.warn(`[members] ${guild.name}: could not load the member list –`, err?.message ?? err);
+        console.warn(`[members] ${guild.name}: nie udało się pobrać listy członków –`, err?.message ?? err);
         return false;
       });
     loading.set(guild, job);
