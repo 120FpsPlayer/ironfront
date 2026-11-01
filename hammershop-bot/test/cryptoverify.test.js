@@ -113,9 +113,9 @@ async function order(guild, buyer, product) {
 
 const pay = (guild, buyer, channel, note) => run({ guild, member: buyer, kind: 'modal', customId: 'pay:submit', fields: { note }, channel });
 const texts = (channel) => channel.messageList.map((m) => textOf(m.body ?? m)).join('\n---\n');
-const cryptoCards = (channel) => channel.messageList.filter((m) => /^## (✅ Crypto|⏳|🔎|❌|⚠️ Not enough|⌛)/m.test(textOf(m.body ?? m)));
+const cryptoCards = (channel) => channel.messageList.filter((m) => /^## (✅ Płatność krypto|⏳|🔎|❌|⚠️ Otrzymano za mało|⌛)/m.test(textOf(m.body ?? m)));
 const logTexts = (guild) => guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.map((m) => textOf(m.body ?? m)).join('\n---\n');
-const productMessages = (channel) => channel.messageList.filter((m) => /Your product – /.test(textOf(m.body ?? m)));
+const productMessages = (channel) => channel.messageList.filter((m) => /Twój produkt – /.test(textOf(m.body ?? m)));
 
 const withChain = async (fn) => {
   const chain = fakeChain();
@@ -130,20 +130,20 @@ test('the crypto card: which network, the amount in coins (kept on the order) an
   const { guild, product } = await shopGuild();
   await withChain(async () => {
     const { channel, ticket } = await order(guild, member(guild), product);
-    const card = channel.messageList.map((m) => m.body ?? m).find((b) => /^## .*Pay 24€ – Crypto/m.test(textOf(b)));
+    const card = channel.messageList.map((m) => m.body ?? m).find((b) => /^## .*Zapłać 24€ – Kryptowaluty/m.test(textOf(b)));
     validateMessage(card, guild);
     const out = textOf(card);
-    assert.match(out, /Bitcoin \(BTC\)\*\* – \*\*≈ 0\.00040000 BTC\*\*\n-# Only on the \*\*Bitcoin\*\* network/);
-    assert.match(out, /Ethereum \(ETH\)\*\* – \*\*≈ 0\.009600 ETH\*\*\n-# Only on the \*\*Ethereum\*\* network \(ERC-20\) – not Arbitrum, Base, Optimism, BSC/);
-    assert.match(out, /Then click \*\*Pay\*\* and send the transaction ID \(hash\) – your order is confirmed here automatically .*~10 min for BTC, ~3 min for ETH/);
-    assert.match(out, /No transaction ID\? Send a screenshot instead – a seller checks it by hand/);
+    assert.match(out, /Bitcoin \(BTC\)\*\* – \*\*≈ 0\.00040000 BTC\*\*\n-# Tylko w sieci \*\*Bitcoin\*\*/);
+    assert.match(out, /Ethereum \(ETH\)\*\* – \*\*≈ 0\.009600 ETH\*\*\n-# Tylko w sieci \*\*Ethereum\*\* \(ERC-20\) – nie Arbitrum, Base, Optimism, BSC/);
+    assert.match(out, /Potem kliknij \*\*Zapłać\*\* i wyślij ID transakcji \(hash\) – zamówienie potwierdzi się tutaj automatycznie, .*~10 min dla BTC, ~3 min dla ETH/);
+    assert.match(out, /Nie masz ID transakcji\? Wyślij zamiast tego zrzut ekranu – sprzedawca sprawdzi go ręcznie/);
     const quote = ticket().order.cryptoQuote;
     assert.deepEqual(quote.amounts, { BTC: '0.00040000', ETH: '0.009600' });
     assert.deepEqual(quote.rates, { BTC: 60000, ETH: 2500 });
     assert.equal(quote.total, 24);
 
     const form = await run({ guild, member: guild.members.cache.get(ticket().ownerId), kind: 'button', customId: 'pay:open', channel });
-    assert.match(JSON.stringify(form.state.modals[0]), /Paste the transaction ID \(hash\) – your order is then confirmed automatically/);
+    assert.match(JSON.stringify(form.state.modals[0]), /Wklej ID transakcji \(hash\) – zamówienie potwierdzi się wtedy automatycznie/);
   });
 });
 
@@ -173,10 +173,10 @@ test('BTC: a confirmed payment → Paid, the product delivered and the order com
     const txid = hex('3f');
     chain.btcTx(txid, { sats: 39700 }); // 99.25% – exchange fees taken off still count
     const i = await pay(guild, buyer, channel, `Sent from Revolut ${txid}`);
-    assert.match(textOf(lastResponse(i)), /Your crypto payment is confirmed/);
+    assert.match(textOf(lastResponse(i)), /Twoja płatność krypto jest potwierdzona/);
 
-    const sent = channel.messageList.find((m) => /^## 📨 Payment sent/m.test(textOf(m.body)));
-    assert.match(textOf(sent.body), /checked on the blockchain automatically/);
+    const sent = channel.messageList.find((m) => /^## 📨 Płatność wysłana/m.test(textOf(m.body)));
+    assert.match(textOf(sent.body), /transakcja jest sprawdzana automatycznie w blockchainie/);
     assert.deepEqual(sent.body.allowedMentions, { users: [], roles: [] }, 'the team is not pinged');
     assert.ok(customIds(sent.body).includes('deliver:confirm'), 'staff can still confirm by hand');
 
@@ -187,13 +187,13 @@ test('BTC: a confirmed payment → Paid, the product delivered and the order com
     assert.equal(c.required, '0.0004');
     assert.equal(db.guild(guild.id).usedTxs[txid], channel.id);
     const all = texts(channel);
-    assert.match(all, /✅ Crypto payment confirmed\n\*\*0\.000397 BTC\*\* received/);
-    assert.match(all, /Crypto \(BTC\) payment received – 24€\*\* for order .* 📦 The product is delivered automatically/);
-    assert.match(all, /Your product – Netflix Premium[\s\S]*Login: nox@example\.com/);
+    assert.match(all, /✅ Płatność krypto potwierdzona\nOtrzymano \*\*0\.000397 BTC\*\*/);
+    assert.match(all, /Otrzymano płatność Krypto \(BTC\) – 24€\*\* za zamówienie .* 📦 Produkt zostanie dostarczony automatycznie/);
+    assert.match(all, /Twój produkt – Netflix Premium[\s\S]*Login: nox@example\.com/);
     assert.ok(ticket().completedAt, 'order completed');
     assert.equal(statusOf(ticket()), 'delivered');
     assert.equal(db.sales(guild.id).at(-1).amount, 24);
-    assert.match(logTexts(guild), /Crypto \(BTC\) payment received[\s\S]*3f3f3f/);
+    assert.match(logTexts(guild), /Otrzymano płatność Krypto \(BTC\)[\s\S]*3f3f3f/);
   });
 });
 
@@ -205,15 +205,15 @@ test('ETH: waiting for 12 confirmations – the card counts up, then the timer c
     const hash = `0x${hex('e1')}`;
     chain.ethTx(hash, { to: wallet('ETH').toLowerCase(), confirmations: 3 }); // Blockscout spells addresses in lower case
     const i = await pay(guild, buyer, channel, hash);
-    assert.match(textOf(lastResponse(i)), /found your payment[\s\S]*after 12 confirmations \(usually ~3 min\)/);
+    assert.match(textOf(lastResponse(i)), /Znaleźliśmy Twoją płatność[\s\S]*po 12 potwierdzeniach \(zwykle ~3 min\)/);
     assert.equal(ticket().order.crypto.status, 'checking');
     assert.equal(statusOf(ticket()), 'sent');
-    assert.match(texts(channel), /⏳ Payment found – waiting for confirmations\n\*\*0\.0096 ETH\*\* to our wallet[\s\S]*Confirmations:\*\* 3 \/ 12/);
+    assert.match(texts(channel), /⏳ Płatność znaleziona – czekamy na potwierdzenia\n\*\*0\.0096 ETH\*\* na nasz portfel[\s\S]*Potwierdzenia:\*\* 3 \/ 12/);
 
     chain.ethTx(hash, { confirmations: 7 });
     await cryptoverify.checkPending(guild.client);
     assert.equal(cryptoCards(channel).length, 1, 'the card is edited, not posted again');
-    assert.match(texts(channel), /Confirmations:\*\* 7 \/ 12/);
+    assert.match(texts(channel), /Potwierdzenia:\*\* 7 \/ 12/);
     assert.equal(ticket().completedAt ?? null, null);
 
     chain.ethTx(hash, { confirmations: 12 });
@@ -223,9 +223,9 @@ test('ETH: waiting for 12 confirmations – the card counts up, then the timer c
     assert.ok(ticket().completedAt);
     assert.equal(productMessages(channel).length, 1, 'delivered once');
     assert.equal(db.sales(guild.id).filter((s) => s.channelId === channel.id).length, 1, 'one sale');
-    assert.equal((texts(channel).match(/payment received/g) ?? []).length, 1);
+    assert.equal((texts(channel).match(/Otrzymano płatność/g) ?? []).length, 1);
     assert.doesNotMatch(texts(channel), /paid twice/);
-    assert.match(texts(channel), /✅ Crypto payment confirmed\n\*\*0\.0096 ETH\*\* received · transaction `0xe1e1e1e1…e1e1e1` · 12 confirmations/);
+    assert.match(texts(channel), /✅ Płatność krypto potwierdzona\nOtrzymano \*\*0\.0096 ETH\*\* · transakcja `0xe1e1e1e1…e1e1e1` · 12 potwierdzeń/);
   });
 });
 
@@ -237,16 +237,16 @@ test('too little: status short, the customer and the team are told the differenc
     const txid = hex('5a');
     chain.btcTx(txid, { sats: 30000 });
     const i = await pay(guild, buyer, channel, txid);
-    assert.match(textOf(lastResponse(i)), /couldn't be confirmed automatically/);
+    assert.match(textOf(lastResponse(i)), /Nie udało się automatycznie potwierdzić Twojej transakcji/);
     assert.equal(ticket().order.crypto.status, 'short');
     assert.equal(statusOf(ticket()), 'sent', 'not Paid');
     assert.equal(ticket().completedAt ?? null, null);
     const card = cryptoCards(channel).at(-1);
-    assert.match(textOf(card.body), /Not enough received\n<@\d+> Transaction `5a5a5a5a5a…5a5a5a` sends \*\*0\.0003 BTC\*\* – this order needs \*\*0\.0004 BTC\*\*, so \*\*0\.0001 BTC \(≈ 6€\)\*\* is missing/);
+    assert.match(textOf(card.body), /Otrzymano za mało\n<@\d+> Transakcja `5a5a5a5a5a…5a5a5a` przesyła \*\*0\.0003 BTC\*\* – to zamówienie wymaga \*\*0\.0004 BTC\*\*, więc brakuje \*\*0\.0001 BTC \(≈ 6€\)\*\*/);
     assert.ok(card.body.allowedMentions.users.includes(buyer.id), 'the customer is pinged');
     assert.ok(card.body.allowedMentions.roles.length > 0, 'and the team');
     assert.ok(customIds(card.body).includes('deliver:confirm'), 'Payment OK by hand');
-    assert.match(logTexts(guild), /Crypto payment needs a check[\s\S]*Too little sent[\s\S]*0\.0003 BTC of 0\.0004 BTC/);
+    assert.match(logTexts(guild), /Płatność krypto do sprawdzenia[\s\S]*Wysłano za mało[\s\S]*0\.0003 BTC z 0\.0004 BTC/);
     assert.equal(db.guild(guild.id).usedTxs[txid], channel.id, 'the transaction belongs to this order');
     await cryptoverify.checkPending(guild.client);
     assert.equal(cryptoCards(channel).length, 1, 'not checked again');
@@ -262,7 +262,7 @@ test('wrong wallet, a failed ETH transaction, a transaction older than the order
     await pay(guild, a, first.channel, hex('b1'));
     assert.equal(first.ticket().order.crypto.status, 'failed');
     assert.equal(first.ticket().order.crypto.state, 'address');
-    assert.match(texts(first.channel), new RegExp(`Not sent to our wallet\\n<@${a.id}> Transaction \`b1b1b1b1b1…b1b1b1\` doesn't send BTC to our wallet \`${wallet('BTC')}\`\\. Please check the ID`));
+    assert.match(texts(first.channel), new RegExp(`Nie wysłano na nasz portfel\\n<@${a.id}> Transakcja \`b1b1b1b1b1…b1b1b1\` nie przesyła BTC na nasz portfel \`${wallet('BTC')}\`\\. Sprawdź ID`));
     assert.equal(db.guild(guild.id).usedTxs[hex('b1')], undefined);
 
     const b = member(guild);
@@ -270,14 +270,14 @@ test('wrong wallet, a failed ETH transaction, a transaction older than the order
     chain.ethTx(`0x${hex('f0')}`, { status: 'error' });
     await pay(guild, b, second.channel, `0x${hex('f0')}`);
     assert.equal(second.ticket().order.crypto.state, 'failedtx');
-    assert.match(texts(second.channel), /❌ Transaction failed\n<@\d+> Transaction `0xf0f0f0f0…f0f0f0` failed on the Ethereum network/);
+    assert.match(texts(second.channel), /❌ Transakcja nieudana\n<@\d+> Transakcja `0xf0f0f0f0…f0f0f0` nie powiodła się w sieci Ethereum/);
 
     const c = member(guild);
     const third = await order(guild, c, product);
     chain.btcTx(hex('0d'), { time: nowSec() - 3 * 3600 });
     await pay(guild, c, third.channel, hex('0d'));
     assert.equal(third.ticket().order.crypto.state, 'old');
-    assert.match(texts(third.channel), /Transaction older than this order[\s\S]*send the ID of the payment for \*\*this\*\* order/);
+    assert.match(texts(third.channel), /Transakcja starsza niż zamówienie[\s\S]*wyślij ID płatności za \*\*to\*\* zamówienie/);
     for (const o of [first, second, third]) assert.equal(statusOf(o.ticket()), 'sent', 'never Paid');
   });
 });
@@ -299,8 +299,8 @@ test('a transaction ID can be used once: a second order with the same ID is refu
     assert.equal(second.ticket().order.crypto.state, 'used');
     assert.equal(chain.explorerCalls().length, calls, 'refused without asking the explorer');
     assert.equal(statusOf(second.ticket()), 'sent');
-    assert.match(texts(second.channel), /Transaction already used\n<@\d+> Transaction `c4c4c4c4c4…c4c4c4` was already used for another order/);
-    assert.match(logTexts(guild), new RegExp(`Already used for another order[\\s\\S]*Used by <#${first.channel.id}>`));
+    assert.match(texts(second.channel), /Transakcja już użyta\n<@\d+> Transakcja `c4c4c4c4c4…c4c4c4` została już użyta w innym zamówieniu/);
+    assert.match(logTexts(guild), new RegExp(`Już użyta w innym zamówieniu[\\s\\S]*Użyta w <#${first.channel.id}>`));
     assert.equal(db.guild(guild.id).usedTxs[txid], first.channel.id);
 
     // Two orders sending the same new ID at the same moment: only one of them gets it.
@@ -325,9 +325,9 @@ test('not found: looked for 15 minutes, then the customer is asked to check the 
     const { channel, ticket } = await order(guild, buyer, product);
     const txid = hex('9e');
     const i = await pay(guild, buyer, channel, txid);
-    assert.match(textOf(lastResponse(i)), /can't see your transaction on the blockchain yet/);
+    assert.match(textOf(lastResponse(i)), /Nie widzimy jeszcze Twojej transakcji w blockchainie/);
     assert.equal(ticket().order.crypto.status, 'checking');
-    assert.match(texts(channel), /🔎 Looking for your transaction\nTransaction `9e9e9e9e9e…9e9e9e` isn't on the Bitcoin or Ethereum network yet/);
+    assert.match(texts(channel), /🔎 Szukamy Twojej transakcji\nTransakcji `9e9e9e9e9e…9e9e9e` nie ma jeszcze w sieci Bitcoin lub Ethereum/);
     assert.ok(chain.calls.some((u) => u.includes(`mempool.space/api/tx/${txid}`)) && chain.calls.some((u) => u.includes(`blockscout.com/api/v2/transactions/0x${txid}`)), 'both coins are tried');
 
     await cryptoverify.checkPending(guild.client, { now: Date.now() + 5 * 60_000 });
@@ -335,7 +335,7 @@ test('not found: looked for 15 minutes, then the customer is asked to check the 
     await cryptoverify.checkPending(guild.client, { now: Date.now() + 16 * 60_000 });
     assert.equal(ticket().order.crypto.status, 'failed');
     const card = cryptoCards(channel).at(-1);
-    assert.match(textOf(card.body), /❌ Transaction not found\n<@\d+> We couldn't find transaction .* Please check the ID and click \*\*Pay\*\* to send the right one/);
+    assert.match(textOf(card.body), /❌ Nie znaleziono transakcji\n<@\d+> Nie znaleźliśmy transakcji .* Sprawdź ID i kliknij \*\*Zapłać\*\*, żeby wysłać właściwe/);
     assert.ok(card.body.allowedMentions.roles.length > 0);
     assert.equal(cryptoCards(channel).length, 1, 'the "looking" card is replaced');
 
@@ -368,7 +368,7 @@ test('ETH from an exchange through a contract (internal transfer) counts; Blocks
     const c = first.ticket().order.crypto;
     assert.equal(c.status, 'confirmed');
     assert.equal(c.internal, true);
-    assert.match(texts(first.channel), /internal transfer/);
+    assert.match(texts(first.channel), /transfer wewnętrzny/);
     assert.ok(first.ticket().completedAt);
 
     const b = member(guild);
@@ -394,7 +394,7 @@ test('ETH from an exchange through a contract (internal transfer) counts; Blocks
       assert.equal(statusOf(third.ticket()), 'sent');
       assert.equal(third.ticket().completedAt ?? null, null);
       const card = cryptoCards(third.channel).at(-1);
-      assert.match(textOf(card.body), /A seller confirms this payment\n<@\d+> Transaction `0x3c3c3c3c…3c3c3c` sends \*\*0\.0096 ETH\*\* through a contract/);
+      assert.match(textOf(card.body), /Tę płatność potwierdzi sprzedawca\n<@\d+> Transakcja `0x3c3c3c3c…3c3c3c` przesyła \*\*0\.0096 ETH\*\* przez kontrakt/);
       assert.ok(card.body.allowedMentions.roles.length > 0, 'the team is pinged');
       assert.equal(db.guild(guild.id).usedTxs[viaContract], third.channel.id);
     } finally {
@@ -413,7 +413,7 @@ test('a pending contract transaction waits for its block; without a quote today\
     chain.ethTx(hash, { to: '0x00000000000000000000000000000000000c0de0', wei: '0', status: null, confirmations: 0, time: null });
     await pay(guild, buyer, channel, hash);
     assert.equal(ticket().order.crypto.state, 'pending');
-    assert.match(texts(channel), /⏳ Transaction found\nTransaction `0x7b7b7b7b…7b7b7b` is waiting to be included in a block/);
+    assert.match(texts(channel), /⏳ Transakcja znaleziona\nTransakcja `0x7b7b7b7b…7b7b7b` czeka na dołączenie do bloku/);
 
     chain.ethTx(hash, { to: '0x00000000000000000000000000000000000c0de0', wei: '0', internal: [{ to: { hash: wallet('ETH') }, value: '9600000000000000', success: true }] });
     await cryptoverify.checkPending(guild.client);
@@ -431,12 +431,12 @@ test('confirmations: 48 hours without them → the team checks it by hand', asyn
     chain.btcTx(txid, { confirmations: 0 });
     await pay(guild, buyer, channel, txid);
     assert.equal(ticket().order.crypto.state, 'waiting');
-    assert.match(texts(channel), /Confirmations:\*\* 0 \/ 1 – your order is confirmed here automatically, usually within ~10 min/);
+    assert.match(texts(channel), /Potwierdzenia:\*\* 0 \/ 1 – zamówienie potwierdzi się tutaj automatycznie, zwykle w ciągu ~10 min/);
     await cryptoverify.checkPending(guild.client, { now: Date.now() + 49 * 3_600_000 });
     assert.equal(ticket().order.crypto.status, 'failed');
     assert.equal(ticket().order.crypto.state, 'timeout');
-    assert.match(texts(channel), /Not confirmed after 48 hours/);
-    assert.match(logTexts(guild), /Not confirmed after 48 h/);
+    assert.match(texts(channel), /Brak potwierdzenia po 48 godzinach/);
+    assert.match(logTexts(guild), /Brak potwierdzenia po 48 h/);
     assert.equal(statusOf(ticket()), 'sent');
   });
 });
@@ -469,14 +469,14 @@ test('crypto.autoVerify off: the old manual flow – no check, the team is pinge
     await withChain(async (chain) => {
       const { channel, ticket } = await order(guild, buyer, product);
       assert.doesNotMatch(texts(channel), /confirmed here automatically/);
-      assert.match(texts(channel), /Then click \*\*Pay\*\* and send the transaction ID \(hash\) or a screenshot/);
-      assert.match(texts(channel), /Only on the \*\*Bitcoin\*\* network/, 'the network is still named');
+      assert.match(texts(channel), /Potem kliknij \*\*Zapłać\*\* i wyślij ID transakcji \(hash\) lub zrzut ekranu/);
+      assert.match(texts(channel), /Tylko w sieci \*\*Bitcoin\*\*/, 'the network is still named');
       chain.btcTx(hex('ab'));
       const i = await pay(guild, buyer, channel, hex('ab'));
-      assert.match(textOf(lastResponse(i)), /Your payment was sent to the seller/);
+      assert.match(textOf(lastResponse(i)), /Płatność trafiła do sprzedawcy/);
       assert.equal(chain.explorerCalls().length, 0, 'no explorer is asked');
       assert.equal(ticket().order.crypto, undefined);
-      const sent = channel.messageList.find((m) => /^## 📨 Payment sent/m.test(textOf(m.body)));
+      const sent = channel.messageList.find((m) => /^## 📨 Płatność wysłana/m.test(textOf(m.body)));
       assert.ok(sent.body.allowedMentions.roles.length > 0, 'the team is pinged as before');
       await cryptoverify.checkPending(guild.client);
       assert.equal(statusOf(ticket()), 'sent');
@@ -496,9 +496,9 @@ test('the explorer is down: checked again on the next round, the customer isn\'t
     chain.state.blockscoutDown = true;
     chain.state.nodeDown = true;
     const i = await pay(guild, buyer, channel, hash);
-    assert.match(textOf(lastResponse(i)), /We're checking your transaction on the blockchain/);
+    assert.match(textOf(lastResponse(i)), /Sprawdzamy Twoją transakcję w blockchainie/);
     assert.equal(ticket().order.crypto.state, 'unavailable');
-    assert.match(texts(channel), /🔎 Checking your transaction\nTransaction `0x4e4e4e4e…4e4e4e` can't be checked on the Ethereum network right now – it's tried again automatically every minute\. No need to send it again\./);
+    assert.match(texts(channel), /🔎 Sprawdzamy Twoją transakcję\nNie możemy teraz sprawdzić transakcji `0x4e4e4e4e…4e4e4e` w sieci Ethereum – próbujemy ponownie automatycznie co minutę\. Nie musisz wysyłać jej jeszcze raz\./);
     await cryptoverify.checkPending(guild.client, { now: Date.now() + 30 * 60_000 });
     assert.equal(ticket().order.crypto.status, 'checking', 'an explorer that is down is no reason to give up');
     chain.state.blockscoutDown = false;

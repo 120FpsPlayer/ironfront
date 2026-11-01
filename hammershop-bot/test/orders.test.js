@@ -67,13 +67,13 @@ test('order form: optional promo code field (5 components), quantity must be a w
   const modal = buy.state.modals[0];
   assert.equal(modal.components.length, 5);
   const promoField = modal.components.at(-1);
-  assert.equal(promoField.label, 'Promo code');
+  assert.equal(promoField.label, 'Kod rabatowy');
   assert.equal(promoField.component.custom_id, 'promo');
   assert.equal(promoField.component.required, false);
 
   for (const quantity of ['abc', '0', '1000', '2.5', '-1', '1e2']) {
     const bad = await order(guild, buyer, product, { quantity });
-    assert.match(textOf(lastResponse(bad.i)), /whole number from \*\*1\*\* to \*\*999\*\*/, quantity);
+    assert.match(textOf(lastResponse(bad.i)), /liczbą całkowitą od \*\*1\*\* do \*\*999\*\*/, quantity);
     assert.equal(bad.ticket, undefined, `no ticket for quantity ${quantity}`);
   }
   const ok = await order(guild, buyer, product, { quantity: ' 999 ' });
@@ -86,9 +86,9 @@ test('order with a valid promo code: subtotal, discount and total in the ticket,
   promos.create(guild.id, { code: 'NOX10', percent: 10 });
   const { i, ticket, channel } = await order(guild, buyer, product, { quantity: '3', promo: ' nox10 ', notes: 'Fast please' });
 
-  assert.match(textOf(lastResponse(i)), /Total to pay: \*\*27€\*\* \(you save 3€ with \*\*NOX10\*\*\)/);
-  assert.deepEqual(ticket.answers.map((a) => a.label), ['Product', 'Quantity', 'Payment method', 'Notes', 'Price']);
-  assert.equal(answer(ticket, 'Price'), 'Subtotal: 30€ (3 × 10€)\nDiscount (NOX10 · 10% off): −3€\n**Total to pay: 27€**');
+  assert.match(textOf(lastResponse(i)), /Do zapłaty: \*\*27€\*\* \(oszczędzasz 3€ z kodem \*\*NOX10\*\*\)/);
+  assert.deepEqual(ticket.answers.map((a) => a.label), ['Produkt', 'Ilość', 'Metoda płatności', 'Uwagi', 'Cena']);
+  assert.equal(answer(ticket, 'Cena'), 'Suma: 30€ (3 × 10€)\nRabat (NOX10 · 10% rabatu): −3€\n**Do zapłaty: 27€**');
   assert.deepEqual(ticket.order, {
     productId: product.id,
     product: 'Nitro Boost',
@@ -102,7 +102,7 @@ test('order with a valid promo code: subtotal, discount and total in the ticket,
     total: 27,
   });
   const card = textOf(channel.messageList[0].body);
-  assert.match(card, /Total to pay: 27€/);
+  assert.match(card, /Do zapłaty: 27€/);
   assert.equal(promos.find(guild.id, 'NOX10').uses.length, 0, 'not redeemed before the order is completed');
 
   // Fixed amount codes and no code at all
@@ -110,7 +110,7 @@ test('order with a valid promo code: subtotal, discount and total in the ticket,
   const fixed = await order(guild, member(guild), product, { quantity: '2', promo: 'FIVE' });
   assert.equal(fixed.ticket.order.total, 15);
   const plain = await order(guild, member(guild), product, { quantity: '2' });
-  assert.equal(answer(plain.ticket, 'Price'), '**Total to pay: 20€** (2 × 10€)');
+  assert.equal(answer(plain.ticket, 'Cena'), '**Do zapłaty: 20€** (2 × 10€)');
   assert.equal(plain.ticket.order.promo, null);
 });
 
@@ -119,21 +119,21 @@ test('invalid, expired, foreign and first-order-only codes never block the order
   const buyer = member(guild);
   const other = member(guild);
   promos.create(guild.id, { code: 'OLD', percent: 50, expiresAt: Date.now() - 1000 });
-  const personal = promos.personal(guild.id, other.id, { percent: 20, days: 7, prefix: 'WELCOME', firstOrderOnly: true });
+  const personal = promos.personal(guild.id, other.id, { percent: 20, days: 7, prefix: 'WITAJ', firstOrderOnly: true });
 
   const cases = [
-    ['NOPE', "This code doesn't exist."],
-    ['OLD', 'This code has expired.'],
-    [personal.code, 'This code belongs to someone else.'],
+    ['NOPE', 'Taki kod nie istnieje.'],
+    ['OLD', 'Ten kod wygasł.'],
+    [personal.code, 'Ten kod należy do kogoś innego.'],
   ];
   for (const [code, reason] of cases) {
     const { i, ticket } = await order(guild, buyer, product, { promo: code });
     assert.ok(ticket, `ticket opened with ${code}`);
-    assert.match(answer(ticket, 'Price'), new RegExp(`Promo code ${code} – not applied: ${reason.replace('.', '\\.')}`));
-    assert.match(answer(ticket, 'Price'), /\*\*Total to pay: 10€\*\*/);
+    assert.match(answer(ticket, 'Cena'), new RegExp(`Kod rabatowy ${code} – nie zastosowano: ${reason.replace('.', '\\.')}`));
+    assert.match(answer(ticket, 'Cena'), /\*\*Do zapłaty: 10€\*\*/);
     assert.equal(ticket.order.promo, null);
     assert.equal(ticket.order.total, 10);
-    assert.match(textOf(lastResponse(i)), new RegExp(`Promo code \\*\\*${code}\\*\\* – not applied`));
+    assert.match(textOf(lastResponse(i)), new RegExp(`Kod rabatowy \\*\\*${code}\\*\\* – nie zastosowano`));
     await t.closeTicket(guild.channels.cache.get(ticket.channelId), seller);
   }
 
@@ -144,7 +144,7 @@ test('invalid, expired, foreign and first-order-only codes never block the order
   db.guild(guild.id).orders[other.id] = 1;
   await t.closeTicket(own.channel, seller);
   const again = await order(guild, other, product, { promo: personal.code });
-  assert.match(answer(again.ticket, 'Price'), /not applied: This code is only valid for your first order\./);
+  assert.match(answer(again.ticket, 'Cena'), /nie zastosowano: Ten kod działa tylko przy pierwszym zamówieniu\./);
 });
 
 test('codes in open orders are reserved: once-per-member and max uses count open orders too', async () => {
@@ -155,12 +155,12 @@ test('codes in open orders are reserved: once-per-member and max uses count open
   const first = await order(guild, buyer, product, { promo: 'ONCE' });
   assert.equal(first.ticket.order.promo, 'ONCE');
   const second = await order(guild, buyer, product, { promo: 'ONCE' });
-  assert.match(answer(second.ticket, 'Price'), /not applied: You're already using this code in another open order\./);
+  assert.match(answer(second.ticket, 'Cena'), /nie zastosowano: Używasz już tego kodu w innym otwartym zamówieniu\./);
 
   const a = await order(guild, member(guild), product, { promo: 'SINGLE' });
   assert.equal(a.ticket.order.promo, 'SINGLE');
   const b = await order(guild, member(guild), product, { promo: 'SINGLE' });
-  assert.match(answer(b.ticket, 'Price'), /not applied: All remaining uses of this code are held by other open orders right now/);
+  assert.match(answer(b.ticket, 'Cena'), /nie zastosowano: Wszystkie pozostałe użycia tego kodu są teraz zarezerwowane przez inne otwarte zamówienia/);
 });
 
 test('prices that are not a number: no totals, a valid code is passed on to the seller', async () => {
@@ -168,12 +168,12 @@ test('prices that are not a number: no totals, a valid code is passed on to the 
   const product = shop.addProduct(guild, { name: 'Custom Logo', price: 'from 5€', description: 'Made for you.' });
   promos.create(guild.id, { code: 'ART', percent: 15 });
   const { i, ticket } = await order(guild, member(guild), product, { quantity: '2', promo: 'ART' });
-  assert.equal(answer(ticket, 'Promo code'), 'ART – 15% off, the seller applies it to the final price');
-  assert.equal(answer(ticket, 'Price'), undefined);
+  assert.equal(answer(ticket, 'Kod rabatowy'), 'ART – 15% rabatu, sprzedawca uwzględni go w ostatecznej cenie');
+  assert.equal(answer(ticket, 'Cena'), undefined);
   assert.equal(ticket.order.total, null);
   assert.equal(ticket.order.unitPrice, null);
   assert.equal(ticket.order.promo, 'ART');
-  assert.match(textOf(lastResponse(i)), /Promo code \*\*ART\*\* \(15% off\) – the seller applies it/);
+  assert.match(textOf(lastResponse(i)), /Kod rabatowy \*\*ART\*\* \(15% rabatu\) – sprzedawca uwzględni go/);
 });
 
 // ───────────── Completing an order ─────────────
@@ -186,21 +186,21 @@ test('completing from the ⚙️ menu: amount form → sale recorded, promo rede
 
   // Members can't use the staff menu or the form
   const notStaff = await run({ guild, member: buyer, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel });
-  assert.match(textOf(lastResponse(notStaff)), /only available to staff/);
+  assert.match(textOf(lastResponse(notStaff)), /dostępne tylko dla zespołu/);
   const forged = await run({ guild, member: buyer, kind: 'modal', customId: 'order:complete', fields: { amount: '1' }, channel });
-  assert.match(textOf(lastResponse(forged)), /Only staff members can complete orders/);
+  assert.match(textOf(lastResponse(forged)), /Tylko zespół może realizować zamówienia/);
 
   const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel });
   const form = pick.state.modals[0];
   assert.equal(form.custom_id, 'order:complete');
-  assert.equal(form.title, `✅ Complete order #${String(ticket.number).padStart(4, '0')}`);
+  assert.equal(form.title, `✅ Zrealizuj zamówienie #${String(ticket.number).padStart(4, '0')}`);
   const amountField = form.components.find((c) => c.component?.custom_id === 'amount');
   assert.equal(amountField.component.value, '27', 'prefilled with the order total');
   assert.equal(amountField.component.required, false);
-  assert.match(form.components[0].content, /Nitro Boost\*\* × 3 · PaysafeCard · code \*\*NOX10\*\*/);
+  assert.match(form.components[0].content, /Nitro Boost\*\* × 3 · PaysafeCard · kod \*\*NOX10\*\*/);
 
   const garbage = await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: 'twenty' }, channel });
-  assert.match(textOf(lastResponse(garbage)), /is not an amount/);
+  assert.match(textOf(lastResponse(garbage)), /to nie kwota/);
   assert.equal(db.getTicket(channel.id).completedAt, null);
 
   let replied = null;
@@ -210,7 +210,7 @@ test('completing from the ⚙️ menu: amount form → sale recorded, promo rede
   });
   replied = createInteraction({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '25,50' }, channel });
   await handle(replied, commands);
-  assert.match(textOf(lastResponse(replied)), /Order completed – sale `S-0001` recorded – 25\.50€ paid \(code NOX10\)/);
+  assert.match(textOf(lastResponse(replied)), /Zamówienie zrealizowane – sprzedaż `S-0001` zapisana – zapłacono 25\.50€ \(kod NOX10\)/);
   assert.equal(hookSawReply, true, 'orderCompleted runs after the staff member got an answer');
 
   const sale = db.sales(guild.id)[0];
@@ -238,14 +238,14 @@ test('completing from the ⚙️ menu: amount form → sale recorded, promo rede
   assert.equal(uses.length, 1);
   assert.deepEqual([uses[0].userId, uses[0].saleId], [buyer.id, 'S-0001']);
   assert.ok(buyer.roles.cache.has(role(guild, 'customer')));
-  assert.match(textOf(channel.messageList.at(-1).body), /Receipt `S-0001` · Paid 25\.50€/);
+  assert.match(textOf(channel.messageList.at(-1).body), /Potwierdzenie zakupu `S-0001` · Zapłacono 25\.50€/);
   const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
-  assert.match(textOf(log.body), /Amount paid 25\.50€/);
+  assert.match(textOf(log.body), /Zapłacona kwota 25\.50€/);
 
   // Only once
   const twice = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel });
-  assert.match(textOf(lastResponse(twice)), /already marked as completed/);
-  await assert.rejects(() => t.completeOrder(channel, seller), /already marked/);
+  assert.match(textOf(lastResponse(twice)), /już oznaczone jako zrealizowane/);
+  await assert.rejects(() => t.completeOrder(channel, seller), /już oznaczone/);
   assert.equal(promos.find(guild.id, 'NOX10').uses.length, 1, 'redeemed once');
   assert.equal(db.sales(guild.id).length, 1);
 });
@@ -254,7 +254,7 @@ test('/ticket complete: optional amount (default: the order total), empty form a
   const { guild, product, seller } = await shopGuild();
   const a = await order(guild, member(guild), product, { quantity: '2' });
   const cmd = await run({ guild, member: seller, kind: 'command', commandName: 'ticket', subcommand: 'complete', channel: a.channel });
-  assert.match(textOf(lastResponse(cmd)), /sale `S-0001` recorded – 20€ paid/);
+  assert.match(textOf(lastResponse(cmd)), /sprzedaż `S-0001` zapisana – zapłacono 20€/);
   assert.equal(db.sales(guild.id)[0].amount, 20);
 
   const b = await order(guild, member(guild), product);
@@ -263,7 +263,7 @@ test('/ticket complete: optional amount (default: the order total), empty form a
 
   const c = await order(guild, member(guild), product);
   const empty = await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '' }, channel: c.channel });
-  assert.match(textOf(lastResponse(empty)), /sale `S-0003` recorded\./);
+  assert.match(textOf(lastResponse(empty)), /sprzedaż `S-0003` zapisana\./);
   assert.equal(db.sales(guild.id)[2].amount, null);
 
   // A Purchase ticket from the ticket panel (no shop form): product, quantity and method come from its answers
@@ -272,7 +272,7 @@ test('/ticket complete: optional amount (default: the order total), empty form a
   const answers = type.questions.map((q) => ({ label: q.label, value: { product: 'Spotify Premium', quantity: '2', payment: 'PayPal', notes: '' }[q.id] }));
   const channel = await t.openTicket(buyer, type, answers);
   const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel });
-  assert.match(pick.state.modals[0].components[0].content, /Custom order/);
+  assert.match(pick.state.modals[0].components[0].content, /Zamówienie indywidualne/);
   await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '12' }, channel });
   const sale = db.sales(guild.id)[3];
   assert.deepEqual([sale.product, sale.quantity, sale.method, sale.amount, sale.productId], ['Spotify Premium', 2, 'PayPal', 12, null]);
@@ -291,19 +291,19 @@ test('receipt by DM: order details, total paid, seller, server and a vouch butto
   validateMessage(receipt, guild);
   const out = textOf(receipt);
   for (const part of [
-    `Order:** \`#${String(ticket.number).padStart(4, '0')}\``,
-    'Receipt:** `S-0001`',
+    `Zamówienie:** \`#${String(ticket.number).padStart(4, '0')}\``,
+    'Nr potwierdzenia:** `S-0001`',
     'Nitro Boost × 3',
-    'Unit price:** 10€',
-    'Discount:** −3€ (code `NOX10`)',
-    'Total paid:** **27€**',
-    'Payment method:** PaysafeCard',
-    `Seller:** ${seller.displayName}`,
-    `Server:** ${guild.name}`,
+    'Cena za sztukę:** 10€',
+    'Rabat:** −3€ (kod `NOX10`)',
+    'Łącznie zapłacono:** **27€**',
+    'Metoda płatności:** PaysafeCard',
+    `Sprzedawca:** ${seller.displayName}`,
+    `Serwer:** ${guild.name}`,
   ]) {
     assert.ok(out.includes(part), `receipt shows ${part}`);
   }
-  assert.match(out, /Date:\*\* <t:\d+:f>/);
+  assert.match(out, /Data:\*\* <t:\d+:f>/);
   assert.ok(customIds(receipt).includes(`order:vouch:${guild.id}:${channel.id}`));
 
   // Closed DMs: the order is still completed, nothing breaks
@@ -311,7 +311,7 @@ test('receipt by DM: order details, total paid, seller, server and a vouch butto
   guild.closedDms.add(shy.id);
   const o2 = await order(guild, shy, product);
   const done = await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '10' }, channel: o2.channel });
-  assert.match(textOf(lastResponse(done)), /Order completed/);
+  assert.match(textOf(lastResponse(done)), /Zamówienie zrealizowane/);
   assert.equal(guild.dms.filter((d) => d.to === shy.id).length, 0);
 
   // Receipts turned off (the short "✅ Delivered" status DM of features/orderstatus.js goes out instead)
@@ -319,7 +319,7 @@ test('receipt by DM: order details, total paid, seller, server and a vouch butto
   try {
     const quiet = member(guild);
     const o3 = await order(guild, quiet, product);
-    const receipts = () => guild.dms.filter((d) => d.to === quiet.id && /Here is your receipt/.test(textOf(d.payload))).length;
+    const receipts = () => guild.dms.filter((d) => d.to === quiet.id && /Oto Twoje potwierdzenie zakupu/.test(textOf(d.payload))).length;
     await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '10' }, channel: o3.channel });
     assert.equal(receipts(), 0);
   } finally {
@@ -338,10 +338,10 @@ test('proof in #proofs: anonymous – product, quantity, method and delivery tim
   const proof = proofs.messageList.at(-1).body;
   validateMessage(proof, guild);
   const out = textOf(proof);
-  assert.match(out, new RegExp(`Order #${String(ticket.number).padStart(4, '0')} delivered`));
+  assert.match(out, new RegExp(`Zamówienie #${String(ticket.number).padStart(4, '0')} dostarczone`));
   assert.match(out, /💎 \*\*Nitro Boost\*\* × 2/);
-  assert.match(out, /Paid with \*\*PayPal\*\*/);
-  assert.match(out, /Delivered in \*\*12m\*\*/);
+  assert.match(out, /Płatność: \*\*PayPal\*\*/);
+  assert.match(out, /Czas dostawy: \*\*12 min\*\*/);
   assert.match(out, /<t:\d+:R>/);
   const json = JSON.stringify(proof);
   for (const secret of [buyer.id, seller.id, buyer.user.username, seller.displayName, '<@', 'avatars', '20€', '€']) {
@@ -356,8 +356,8 @@ test('proof in #proofs: anonymous – product, quantity, method and delivery tim
   const c2 = await t.openTicket(other, type, answers);
   await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '5' }, channel: c2 });
   const anon = textOf(proofs.messageList.at(-1).body);
-  assert.match(anon, /\*\*Custom order\*\* × 1/);
-  assert.match(anon, /Paid with \*\*PayPal\*\*/);
+  assert.match(anon, /\*\*Zamówienie indywidualne\*\* × 1/);
+  assert.match(anon, /Płatność: \*\*PayPal\*\*/);
   assert.ok(!anon.includes('john'), 'no personal details from the form');
 
   config.orders.proofs = false;
@@ -382,7 +382,7 @@ test('vouch reminder: one DM after the configured hours, skipped when the custom
   assert.equal(reminder.dueAt, completedAt + config.orders.vouchReminderHours * HOUR);
   assert.equal(reminder.sent, false);
 
-  const dms = () => guild.dms.filter((d) => d.to === buyer.id && /How was your order/.test(textOf(d.payload)));
+  const dms = () => guild.dms.filter((d) => d.to === buyer.id && /Jak tam Twoje zamówienie/.test(textOf(d.payload)));
   await orders.runReminders(guild.client, reminder.dueAt - 60_000);
   assert.equal(dms().length, 0, 'not due yet');
   await orders.runReminders(guild.client, reminder.dueAt + 1);
@@ -404,7 +404,7 @@ test('vouch reminder: one DM after the configured hours, skipped when the custom
   await orders.runReminders(guild.client, r2.dueAt + 1);
   assert.equal(r2.sent, true);
   assert.equal(r2.result, 'already vouched');
-  assert.equal(guild.dms.filter((d) => d.to === happy.id && /How was your order/.test(textOf(d.payload))).length, 0);
+  assert.equal(guild.dms.filter((d) => d.to === happy.id && /Jak tam Twoje zamówienie/.test(textOf(d.payload))).length, 0);
 
   // Turned off
   config.orders.vouchReminderHours = 0;
@@ -426,7 +426,7 @@ test('vouching from a DM: the button opens the vouch form, the vouch is posted i
 
   const stranger = member(guild);
   const notYours = await runDm(guild, stranger, { kind: 'button', customId: buttonId });
-  assert.match(textOf(lastResponse(notYours)), /belongs to someone else/);
+  assert.match(textOf(lastResponse(notYours)), /należy do kogoś innego/);
 
   const click = await runDm(guild, buyer, { kind: 'button', customId: buttonId });
   const form = click.state.modals[0];
@@ -440,23 +440,23 @@ test('vouching from a DM: the button opens the vouch form, the vouch is posted i
     selects: { rating: ['5'], product: [product.id] },
     fields: { review: 'Delivered in minutes, works perfectly!' },
   });
-  assert.match(textOf(lastResponse(submit)), /Thank you for your vouch/);
+  assert.match(textOf(lastResponse(submit)), /Dziękujemy za opinię/);
   const vouchChannel = ch(guild, 'vouches');
   const posted = vouchChannel.messageList.at(-2);
-  assert.match(textOf(posted.body), /Vouch #1/);
+  assert.match(textOf(posted.body), /Opinia #1/);
   assert.match(textOf(posted.body), /Delivered in minutes/);
-  assert.match(textOf(posted.body), new RegExp(`Vouched by <@${buyer.id}>`));
+  assert.match(textOf(posted.body), new RegExp(`Opinia od <@${buyer.id}>`));
   assert.ok(customIds(vouchChannel.messageList.at(-1).body).includes('vouch:open'), 'the vouch panel jumped to the bottom');
   assert.equal(db.guild(guild.id).vouches[0].userId, buyer.id);
 
   const again = await runDm(guild, buyer, { kind: 'button', customId: buttonId });
-  assert.match(textOf(lastResponse(again)), /already left a vouch for this order/);
+  assert.match(textOf(lastResponse(again)), /Masz już opinię do tego zamówienia/);
 
   // Someone who left the server can't vouch
   guild.members.cache.delete(buyer.id);
   guild.unknownMembers = new Set([buyer.id]);
   const gone = await runDm(guild, buyer, { kind: 'modal', customId: form.custom_id, selects: { rating: ['5'] }, fields: { review: 'Trying again after leaving', product_other: 'x' } });
-  assert.match(textOf(lastResponse(gone)), /need to be a member/);
+  assert.match(textOf(lastResponse(gone)), /musisz być członkiem serwera/);
 });
 
 // ───────────── First-purchase discount ─────────────
@@ -473,7 +473,7 @@ test('welcome discount: one personal first-order code by DM after verifying, rem
   const codes = () => promos.list(guild.id).filter((p) => p.reason === 'welcome');
   assert.equal(codes().length, 1);
   const code = codes()[0];
-  assert.match(code.code, /^WELCOME-[0-9A-F]{6}$/);
+  assert.match(code.code, /^WITAJ-[0-9A-F]{6}$/);
   assert.equal(code.userId, visitor.id);
   assert.equal(code.percent, config.welcomeDiscount.percent);
   assert.equal(code.firstOrderOnly, true);
@@ -484,16 +484,16 @@ test('welcome discount: one personal first-order code by DM after verifying, rem
   validateMessage(dm, guild);
   const out = textOf(dm);
   assert.ok(out.includes(code.code));
-  assert.match(out, /5% off your first order/);
-  assert.match(out, /Promo code/);
-  assert.match(out, /Valid until <t:\d+:f>/);
+  assert.match(out, /5% rabatu na pierwsze zamówienie/);
+  assert.match(out, /Kod rabatowy/);
+  assert.match(out, /Ważny do <t:\d+:f>/);
   const shopLink = dm.components[0].toJSON().components.at(-1).components[0];
   assert.equal(shopLink.url, `https://discord.com/channels/${guild.id}/${db.channelId(guild.id, 'shop')}`);
 
   // Once per member ever
   await hooks.emit('verified', visitor);
   assert.equal(codes().length, 1);
-  assert.equal(guild.dms.filter((d) => d.to === visitor.id && textOf(d.payload).includes('welcome gift')).length, 1);
+  assert.equal(guild.dms.filter((d) => d.to === visitor.id && textOf(d.payload).includes('Prezent powitalny')).length, 1);
 
   // DMs closed → no code is left behind, and nothing is marked as given
   const shy = guild.addMember(uid(), []);
@@ -526,7 +526,7 @@ test('receipt, proof, reminder, welcome cards and the completion form stay withi
   validateMessage(orders.receiptCard(guild, { sale, ticket, sellerName: 'S'.repeat(100) }), guild);
   validateMessage(orders.proofCard(guild, sale), guild);
   validateMessage(orders.reminderCard(guild, '123456789012345678', { product: long, ticketNumber: 9999 }), guild);
-  const promo = promos.personal(guild.id, '2', { percent: 100, days: 7, prefix: 'WELCOME' });
+  const promo = promos.personal(guild.id, '2', { percent: 100, days: 7, prefix: 'WITAJ' });
   validateMessage(orders.welcomeCard(guild, { displayName: 'D'.repeat(32) }, promo), guild);
   validateModal(ui.completeOrderModal(ticket), guild);
   validateModal(ui.completeOrderModal({ number: 1 }), guild);

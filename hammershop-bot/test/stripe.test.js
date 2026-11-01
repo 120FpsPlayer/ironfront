@@ -109,8 +109,8 @@ test('Stripe is a payment method in the shop and the order form', async () => {
   assert.ok(methods.includes('Stripe'));
   const modal = shop.orderModal(product, guild).toJSON();
   const payment = modal.components.find((c) => c.component?.custom_id === 'payment').component;
-  assert.ok(payment.options.some((o) => o.label === 'Stripe' && /Card, Apple Pay or Google Pay/.test(o.description)));
-  assert.match(textOf(shop.shopPanel(guild)), /We accept: PaysafeCard · Crypto · PayPal · Stripe/);
+  assert.ok(payment.options.some((o) => o.label === 'Stripe' && /Karta, Apple Pay lub Google Pay/.test(o.description)));
+  assert.match(textOf(shop.shopPanel(guild)), /Akceptujemy: PaysafeCard · Kryptowaluty · PayPal · Stripe/);
   assert.equal(stripe.currency(), 'eur', '€ → eur');
 });
 
@@ -143,7 +143,7 @@ test('with a key: a Stripe order gets a payment link for its total right away �
     assert.equal(create.params.mode, 'payment');
     assert.equal(create.params['line_items[0][price_data][unit_amount]'], '2400');
     assert.equal(create.params['line_items[0][price_data][currency]'], 'eur');
-    assert.match(create.params['line_items[0][price_data][product_data][name]'], /^HammerShop order #\d{4} – Netflix Premium × 2$/);
+    assert.match(create.params['line_items[0][price_data][product_data][name]'], /^Zamówienie HammerShop #\d{4} – Netflix Premium × 2$/);
     assert.equal(create.params.success_url, `https://discord.com/channels/${guild.id}/${channel.id}`);
     assert.equal(create.params['metadata[channelId]'], channel.id);
     assert.equal(create.params.client_reference_id, channel.id);
@@ -155,10 +155,10 @@ test('with a key: a Stripe order gets a payment link for its total right away �
     assert.deepEqual([s.status, s.amount, s.sessionId], ['open', 24, 'cs_test_1']);
     const card = stripeCard(channel);
     validateMessage(card.body ?? card, guild);
-    assert.match(textOf(card.body ?? card), /Pay by card – Stripe[\s\S]*24€/);
+    assert.match(textOf(card.body ?? card), /Zapłać kartą – Stripe[\s\S]*24€/);
     const links = JSON.stringify((card.body ?? card).components.map((c) => c.toJSON?.() ?? c));
     assert.ok(links.includes('https://checkout.stripe.com/c/pay/cs_test_1'));
-    assert.ok(links.includes('Pay 24€'));
+    assert.ok(links.includes('Zapłać 24€'));
     const control = channel.messageList.find((m) => m.id === ticket().controlMessageId);
     assert.ok(!customIds(control.body ?? control).includes('pay:open'), "no I've paid with a Stripe link");
 
@@ -173,14 +173,14 @@ test('with a key: a Stripe order gets a payment link for its total right away �
     assert.equal(statusOf(ticket()), 'paid');
     assert.equal(ticket().order.stripe.status, 'paid');
     assert.equal(ticket().order.stripe.paymentIntent, 'pi_cs_test_1');
-    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Paid with Stripe[\s\S]*24€/);
+    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Opłacone przez Stripe[\s\S]*24€/);
     const posted = channel.messageList.slice(before).map((m) => m.body ?? m);
-    const ping = posted.find((p) => /Stripe payment received – 24€/.test(textOf(p)));
+    const ping = posted.find((p) => /Otrzymano płatność Stripe – 24€/.test(textOf(p)));
     assert.ok(ping);
     assert.deepEqual(ping.allowedMentions, { users: [], roles: [role(guild, 'seller')] });
     const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
     const logText = JSON.stringify(log.body ?? log);
-    assert.match(logText, /Stripe payment received/);
+    assert.match(logText, /Otrzymano płatność Stripe/);
     assert.ok(!logText.includes(KEY));
 
     // Checked again → nothing twice
@@ -204,20 +204,20 @@ test('an expired link offers a new one; New link makes a fresh session and stops
     await stripe.checkPayments(guild.client);
     assert.equal(ticket().order.stripe.status, 'expired');
     assert.ok(customIds(stripeCard(channel).body ?? stripeCard(channel)).includes('stripe:new'));
-    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Payment link expired/);
+    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Link do płatności wygasł/);
 
     const stranger = await run({ guild, member: member(guild), kind: 'button', customId: 'stripe:new', channel });
-    assert.match(textOf(lastResponse(stranger)), /Only the customer or the team/);
+    assert.match(textOf(lastResponse(stranger)), /może utworzyć tylko klient lub zespół/);
 
     const again = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
-    assert.match(textOf(lastResponse(again)), /new payment link for \*\*24€\*\*/);
+    assert.match(textOf(lastResponse(again)), /nowy link do płatności na \*\*24€\*\*/);
     assert.equal(ticket().order.stripe.sessionId, 'cs_test_2');
     assert.equal(ticket().order.stripe.attempt, 2);
     assert.equal(api.calls.filter((c) => c.path === '/v1/checkout/sessions').at(-1).idempotencyKey, `hs-${channel.id}-2`);
 
     // Straight away again → cooldown
     const spam = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
-    assert.match(textOf(lastResponse(spam)), /A new link was just made/);
+    assert.match(textOf(lastResponse(spam)), /Nowy link został właśnie utworzony/);
     assert.equal(api.sessions.size, 2);
   });
 });
@@ -246,7 +246,7 @@ test('a payment that comes in after the ticket was closed is still recorded and 
     api.pay('cs_test_1');
     await stripe.checkPayments(guild.client);
     assert.equal(ticket().order.stripe.status, 'paid');
-    assert.ok(channel.messageList.some((m) => /reopen it to deliver/.test(textOf(m.body ?? m))));
+    assert.ok(channel.messageList.some((m) => /otwórz go ponownie, żeby dostarczyć zamówienie/.test(textOf(m.body ?? m))));
   });
 });
 
@@ -259,13 +259,13 @@ test('other payment methods, no fixed total or a refused key → no link, a clea
     const custom = shop.addProduct(guild, { name: 'Custom bundle', price: 'from 5€', description: 'Ask us.' });
     const { channel } = await order(guild, member(guild), custom, { quantity: '1' });
     assert.equal(api.calls.length, 0);
-    assert.ok(channel.messageList.some((m) => /sends you the Stripe payment link once the final price is confirmed/.test(textOf(m.body ?? m))));
+    assert.ok(channel.messageList.some((m) => /wyśle Ci link do płatności Stripe, gdy potwierdzi ostateczną cenę/.test(textOf(m.body ?? m))));
 
     // Stripe down / refusing → the customer is told a seller sends a link, the order is still there
     global.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: { message: 'boom' } }) });
     const failed = await order(guild, member(guild), product);
     assert.equal(failed.ticket().order.stripe, undefined);
-    assert.ok(failed.channel.messageList.some((m) => /link couldn't be made right now/.test(textOf(m.body ?? m))));
+    assert.ok(failed.channel.messageList.some((m) => /Nie udało się teraz utworzyć linku do płatności/.test(textOf(m.body ?? m))));
   });
 });
 
@@ -278,7 +278,7 @@ test('a link paid moments before "New link" is recorded – no second link, nobo
     const { channel, ticket } = await order(guild, buyer, product);
     api.pay('cs_test_1'); // paid – the next check is still up to 30 s away
     const i = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
-    assert.match(textOf(lastResponse(i)), /Your payment just came in/);
+    assert.match(textOf(lastResponse(i)), /Twoja płatność właśnie dotarła/);
     assert.equal(api.sessions.size, 1, 'no new session');
     assert.equal(ticket().order.stripe.status, 'paid');
     assert.equal(statusOf(ticket()), 'paid');
@@ -293,8 +293,8 @@ test('staff set Paid while the customer also paid by Stripe → recorded as paid
     await orderstatus.setStatus(channel, 'paid', seller);
     assert.equal(ticket().order.stripe.status, 'paid');
     assert.equal(ticket().order.stripe.paymentIntent, 'pi_cs_test_1');
-    assert.ok(channel.messageList.some((m) => /may have paid twice/.test(textOf(m.body ?? m))));
-    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Paid with Stripe/);
+    assert.ok(channel.messageList.some((m) => /mógł zapłacić dwa razy/.test(textOf(m.body ?? m))));
+    assert.match(textOf(stripeCard(channel).body ?? stripeCard(channel)), /Opłacone przez Stripe/);
   });
 });
 
@@ -314,7 +314,7 @@ test('deleted tickets: the link is stopped – and a payment that still comes in
     assert.equal(second.ticket().order.stripe.status, 'paid');
     const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
     const body = log.body ?? log;
-    assert.match(JSON.stringify(body), /Stripe payment received[\s\S]*deleted/);
+    assert.match(JSON.stringify(body), /Otrzymano płatność Stripe[\s\S]*usunięty/);
     assert.deepEqual(body.allowedMentions, { users: [], roles: [role(guild, 'seller')] });
   });
 });
@@ -328,13 +328,13 @@ test('a link made half-way (Stripe created it, the answer got lost) never blocks
     await stripe.checkPayments(guild.client);
     api.failNextCreate();
     const failed = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
-    assert.match(textOf(lastResponse(failed)), /Stripe couldn't make a link right now/);
+    assert.match(textOf(lastResponse(failed)), /Stripe nie może teraz utworzyć linku/);
     // A minute later
     const prev = Date.now;
     Date.now = () => prev() + 61_000;
     try {
       const ok = await run({ guild, member: buyer, kind: 'button', customId: 'stripe:new', channel });
-      assert.match(textOf(lastResponse(ok)), /new payment link/);
+      assert.match(textOf(lastResponse(ok)), /nowy link do płatności/);
     } finally {
       Date.now = prev;
     }
@@ -379,7 +379,7 @@ test('paid amount different from the order total → not set to Paid, the team i
     await stripe.checkPayments(guild.client);
     assert.equal(ticket().order.stripe.status, 'paid');
     assert.equal(statusOf(ticket()), 'awaiting', 'not Paid');
-    assert.ok(channel.messageList.some((m) => /order total is \*\*24€\*\* – it was \*\*not\*\* set to Paid/.test(textOf(m.body ?? m))));
+    assert.ok(channel.messageList.some((m) => /Kwota zamówienia: \*\*24€\*\* – status \*\*nie\*\* został zmieniony na Opłacone/.test(textOf(m.body ?? m))));
   });
 });
 
@@ -407,7 +407,7 @@ test('a refused key: the team is told once in the log, and I\'ve paid comes back
     const before = logs.length;
     await stripe.checkPayments(guild.client);
     await stripe.checkPayments(guild.client);
-    const warnings = logs.slice(before).filter((m) => /Stripe refused the key/.test(JSON.stringify(m.body ?? m)));
+    const warnings = logs.slice(before).filter((m) => /Stripe odrzucił klucz/.test(JSON.stringify(m.body ?? m)));
     assert.equal(warnings.length, 1, 'once');
     assert.equal(stripe.confirmsItself(ticket()), false);
     const pay = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
@@ -427,7 +427,7 @@ test('a link Stripe no longer knows (test key → live key) stops being checked;
     const { channel } = await order(guild, member(guild), product);
     const card = stripeCard(channel).body ?? stripeCard(channel);
     validateMessage(card, guild);
-    assert.match(textOf(card), /\[💳 Pay 24€\]\(https:\/\/checkout\.stripe\.com/);
+    assert.match(textOf(card), /\[💳 Zapłać 24€\]\(https:\/\/checkout\.stripe\.com/);
   });
 });
 
@@ -438,7 +438,7 @@ test('below Stripe\'s smallest charge (0.50€): no link, and the customer is to
     const { channel, ticket } = await order(guild, member(guild), tiny, { quantity: '1' });
     assert.equal(api.calls.length, 0, 'not even asked – Stripe would refuse it');
     assert.equal(ticket().order.stripe, undefined);
-    assert.ok(channel.messageList.some((m) => /Stripe takes card payments from \*\*0\.50€\*\* – this order is \*\*0\.10€\*\*/.test(textOf(m.body ?? m))));
+    assert.ok(channel.messageList.some((m) => /Stripe przyjmuje płatności kartą od \*\*0\.50€\*\* – to zamówienie wynosi \*\*0\.10€\*\*/.test(textOf(m.body ?? m))));
     const fifty = shop.addProduct(guild, { name: 'Fifty', price: '0.5', description: 'Fifty cents.' });
     await order(guild, member(guild), fifty, { quantity: '1' });
     assert.equal(api.calls.filter((c) => c.path === '/v1/checkout/sessions').length, 1, '0.50€ works');

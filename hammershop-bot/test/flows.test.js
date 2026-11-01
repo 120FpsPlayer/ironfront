@@ -45,20 +45,20 @@ test('verification: math check → Member role, wrong answers and new accounts a
   const [, , a, b] = modalId.split(':');
 
   const wrong = await run({ guild, member: visitor, kind: 'modal', customId: modalId, fields: { answer: String(Number(a) + Number(b) + 1) }, channel: verify });
-  assert.match(textOf(lastResponse(wrong)), /Wrong answer/);
+  assert.match(textOf(lastResponse(wrong)), /Zła odpowiedź/);
   assert.ok(!visitor.roles.cache.has(role(guild, 'member')));
 
   const forged = await run({ guild, member: visitor, kind: 'modal', customId: `verify:answer:1:1:${'x'.repeat(12)}`, fields: { answer: '2' }, channel: verify });
-  assert.match(textOf(lastResponse(forged)), /expired/);
+  assert.match(textOf(lastResponse(forged)), /To pytanie wygasło/);
 
   const right = await run({ guild, member: visitor, kind: 'modal', customId: modalId, fields: { answer: String(Number(a) + Number(b)) }, channel: verify });
-  assert.match(textOf(lastResponse(right)), /You're verified/);
+  assert.match(textOf(lastResponse(right)), /Konto zweryfikowane!/);
   assert.ok(visitor.roles.cache.has(role(guild, 'member')));
   assert.ok(ch(guild, 'verifyLogs').messageList.length >= 2, 'attempts are logged');
 
   const fresh = guild.addMember(uid(), [], { createdTimestamp: Date.now() - 3600_000 });
   const tooNew = await run({ guild, member: fresh, kind: 'button', customId: 'verify:start', channel: verify });
-  assert.match(textOf(lastResponse(tooNew)), /too new/);
+  assert.match(textOf(lastResponse(tooNew)), /jest za nowe/);
 });
 
 test('self roles: notification buttons toggle the ping roles', async () => {
@@ -81,14 +81,14 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
 
   // A seller adds a product (announced in #restocks with the Restocks ping)
   const add = await run({ guild, member: seller, kind: 'command', commandName: 'product', subcommand: 'add', options: { name: 'Nitro Boost 1 Month', price: '€6.99', description: 'Instant delivery, full warranty.', emoji: '💎' } });
-  assert.match(textOf(lastResponse(add)), /Added \*\*Nitro Boost 1 Month\*\*/);
+  assert.match(textOf(lastResponse(add)), /Dodano \*\*Nitro Boost 1 Month\*\*/);
   const restock = ch(guild, 'restocks').messageList.at(-1);
-  assert.match(textOf(restock.body), /New product/);
+  assert.match(textOf(restock.body), /Nowy produkt/);
   assert.deepEqual(restock.body.allowedMentions, { roles: [role(guild, 'pingRestocks')] });
 
   // Members can't manage products
   const denied = await run({ guild, member: buyer, kind: 'command', commandName: 'product', subcommand: 'add', options: { name: 'x', price: '1', description: 'y' } });
-  assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+  assert.match(textOf(lastResponse(denied)), /Tylko administratorzy i sprzedawcy/);
 
   // The live shop panel shows the product with a Buy button
   const panels = require('../src/lib/panels');
@@ -104,10 +104,10 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   assert.ok(modal.components.some((c) => c.component?.custom_id === 'payment' && c.component.options.length === config.shop.paymentMethods.length));
 
   const submit = await run({ guild, member: buyer, kind: 'modal', customId: `shop:order:${product.id}`, fields: { quantity: '2', notes: 'Thanks!' }, selects: { payment: ['0'] } });
-  assert.match(textOf(lastResponse(submit)), /Order started/);
+  assert.match(textOf(lastResponse(submit)), /Zamówienie rozpoczęte/);
   const ticket = db.tickets((t) => t.ownerId === buyer.id)[0];
   assert.equal(ticket.typeId, 'order');
-  assert.deepEqual(ticket.answers.map((a) => a.label), ['Product', 'Quantity', 'Payment method', 'Notes', 'Price']);
+  assert.deepEqual(ticket.answers.map((a) => a.label), ['Produkt', 'Ilość', 'Metoda płatności', 'Uwagi', 'Cena']);
   assert.match(ticket.answers[2].value, /PaysafeCard/);
   const ticketChannel = guild.channels.cache.get(ticket.channelId);
   assert.equal(ticketChannel.parentId, db.settings(guild.id).categoryId);
@@ -121,7 +121,7 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['complete'], channel: ticketChannel });
   assert.equal(pick.state.modals[0].custom_id, 'order:complete');
   const done = await run({ guild, member: seller, kind: 'modal', customId: 'order:complete', fields: { amount: '13.98' }, channel: ticketChannel });
-  assert.match(textOf(lastResponse(done)), /Order completed/);
+  assert.match(textOf(lastResponse(done)), /Zamówienie zrealizowane/);
   assert.ok(buyer.roles.cache.has(role(guild, 'customer')));
   const completedCard = ticketChannel.messageList.at(-1);
   assert.ok(customIds(completedCard.body).includes('vouch:open'));
@@ -130,10 +130,10 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
   const open = await run({ guild, member: buyer, kind: 'button', customId: 'vouch:open', channel: ticketChannel });
   assert.equal(open.state.modals[0].custom_id, 'vouch:submit');
   const vouch = await run({ guild, member: buyer, kind: 'modal', customId: 'vouch:submit', selects: { rating: ['5'], product: [product.id] }, fields: { review: 'Super fast delivery, works perfectly!', product_other: '' } });
-  assert.match(textOf(lastResponse(vouch)), /Thank you for your vouch/);
+  assert.match(textOf(lastResponse(vouch)), /Dziękujemy za opinię/);
   const vouchChannel = ch(guild, 'vouches');
   const posted = vouchChannel.messageList.at(-2);
-  assert.match(textOf(posted.body), /Vouch #1/);
+  assert.match(textOf(posted.body), /Opinia #1/);
   assert.match(textOf(posted.body), /Nitro Boost 1 Month/);
   // The "Leave a vouch" panel jumped below the new vouch – it's always the newest message.
   const sticky = vouchChannel.messageList.at(-1);
@@ -144,12 +144,12 @@ test('shop: products, Buy → order form → ticket → order completed → Cust
 
   // Cooldown: a second vouch right away is refused
   const again = await run({ guild, member: buyer, kind: 'button', customId: 'vouch:open' });
-  assert.match(textOf(lastResponse(again)), /already left a vouch/);
+  assert.match(textOf(lastResponse(again)), /Masz już niedawno wystawioną opinię/);
 
   // Sold out → Buy offers Notify me instead of the order form, restock is announced
   await run({ guild, member: owner, kind: 'command', commandName: 'product', subcommand: 'stock', options: { product: product.id, status: 'out' } });
   const soldOut = await run({ guild, member: buyer, kind: 'button', customId: `shop:buy:${product.id}` });
-  assert.match(textOf(lastResponse(soldOut)), /Sold out right now/);
+  assert.match(textOf(lastResponse(soldOut)), /Teraz wyprzedany/);
   assert.ok(customIds(lastResponse(soldOut)).includes(`restock:notify:${product.id}`));
   assert.equal(soldOut.state.modals.length, 0);
   const before = ch(guild, 'restocks').messageList.length;
@@ -164,11 +164,11 @@ test('loyal customers: the Loyal Customer role after enough completed orders', a
   const t = require('../src/tickets/tickets');
   const g = db.guild(guild.id);
   g.orders[buyer.id] = config.shop.loyalAfterOrders - 1;
-  const channel = await t.openTicket(buyer, config.getType('order'), [{ label: 'Product', value: 'X' }]);
+  const channel = await t.openTicket(buyer, config.getType('order'), [{ label: 'Produkt', value: 'X' }]);
   const res = await t.completeOrder(channel, seller);
   assert.equal(res.loyal, true);
   assert.ok(buyer.roles.cache.has(role(guild, 'loyal')));
-  await assert.rejects(() => t.completeOrder(channel, seller), /already marked/);
+  await assert.rejects(() => t.completeOrder(channel, seller), /już oznaczone/);
 });
 
 // ───────────── Tickets ─────────────
@@ -182,7 +182,7 @@ test('tickets: panel → form → ticket → claim → close with transcript and
   const form = open.state.modals[0];
   assert.equal(form.custom_id, 'ticket:form:support:b');
   const created = await run({ guild, member: user, kind: 'modal', customId: form.custom_id, fields: { subject: 'Order missing', details: 'I paid an hour ago.' } });
-  assert.match(textOf(lastResponse(created)), /Ticket created/);
+  assert.match(textOf(lastResponse(created)), /Ticket utworzony/);
   const ticket = db.tickets((t) => t.ownerId === user.id)[0];
   const channel = guild.channels.cache.get(ticket.channelId);
   assert.ok(channel.messageList[0].pinned, 'ticket card pinned');
@@ -214,11 +214,11 @@ test('tickets: limit per user and blacklist', async () => {
   const t = require('../src/tickets/tickets');
   await t.openTicket(user, config.getType('reward'), []);
   db.updateSettings(guild.id, { maxOpenTicketsPerUser: 1 });
-  assert.match(t.checkCanOpen(user), /open ticket limit/);
+  assert.match(t.checkCanOpen(user), /limit otwartych ticketów/);
   await run({ guild, member: staff, kind: 'command', commandName: 'blacklist', subcommand: 'add', options: { user: member(guild).user } });
   const listed = db.blacklist(guild.id)[0];
   const blocked = guild.members.cache.get(listed.userId);
-  assert.match(t.checkCanOpen(blocked), /blocked/);
+  assert.match(t.checkCanOpen(blocked), /Masz blokadę tworzenia ticketów/);
 });
 
 // ───────────── Giveaways ─────────────
@@ -228,18 +228,18 @@ test('giveaways: start → enter / leave → end draws a winner who claims via t
   const mod = member(guild, ['member', 'moderator']);
   const users = [member(guild), member(guild), member(guild)];
   const start = await run({ guild, member: mod, kind: 'command', commandName: 'giveaway', subcommand: 'start', options: { prize: 'Discord Nitro', duration: '1h', winners: 1 } });
-  assert.match(textOf(lastResponse(start)), /started/);
+  assert.match(textOf(lastResponse(start)), /wystartował/);
   const gw = Object.values(db.guild(guild.id).giveaways)[0];
   const card = ch(guild, 'giveaways').messageList.at(-1);
   assert.deepEqual(card.body.allowedMentions, { roles: [role(guild, 'pingGiveaways')] });
 
   for (const u of users) await run({ guild, member: u, kind: 'button', customId: `gw:enter:${gw.id}` });
   const leave = await run({ guild, member: users[2], kind: 'button', customId: `gw:enter:${gw.id}` });
-  assert.match(textOf(lastResponse(leave)), /left the giveaway/);
+  assert.match(textOf(lastResponse(leave)), /Wypisano Cię z giveawayu/);
   assert.equal(gw.entries.length, 2);
 
   const notMod = await run({ guild, member: users[0], kind: 'command', commandName: 'giveaway', subcommand: 'end', options: { giveaway: gw.id } });
-  assert.match(textOf(lastResponse(notMod)), /Only moderators/);
+  assert.match(textOf(lastResponse(notMod)), /tylko moderatorzy/);
 
   gw.endsAt = Date.now() - 1;
   await require('../src/features/giveaways').tick(guild.client);
@@ -250,7 +250,7 @@ test('giveaways: start → enter / leave → end draws a winner who claims via t
   assert.ok(customIds(announcement.body).includes('ticket:open:reward'));
 
   const reroll = await run({ guild, member: mod, kind: 'command', commandName: 'giveaway', subcommand: 'reroll', options: { giveaway: gw.id } });
-  assert.match(textOf(lastResponse(reroll)), /Winner/);
+  assert.match(textOf(lastResponse(reroll)), /Zwycięzc[ay]/);
   assert.equal(new Set(gw.winners).size, 2, 'reroll picks someone new');
 });
 
@@ -272,7 +272,7 @@ test('announce: form → card with banner and role ping in #announcements', asyn
   const cmd = await run({ guild, member: mod, kind: 'command', commandName: 'announce', options: { ping: 'pingAnnouncements', banner: 'updates' } });
   const modal = cmd.state.modals[0];
   const submit = await run({ guild, member: mod, kind: 'modal', customId: modal.custom_id, fields: { title: 'Big update', message: '**New products** are live!', url: 'https://example.com' } });
-  assert.match(textOf(lastResponse(submit)), /Announcement posted/);
+  assert.match(textOf(lastResponse(submit)), /Ogłoszenie opublikowane/);
   const post = ch(guild, 'announcements').messageList.at(-1);
   assert.equal(post.files[0].name, 'hammershop-updates.png');
   assert.deepEqual(post.body.allowedMentions, { roles: [role(guild, 'pingAnnouncements')] });
@@ -284,16 +284,16 @@ test('welcome + logs: join card in #welcome, joins/leaves/deletes in #server-log
   const welcome = require('../src/features/welcome');
   const newbie = guild.addMember(uid(), []);
   await welcome.onMemberAdd(newbie);
-  assert.match(textOf(ch(guild, 'welcome').messageList.at(-1).body), /Welcome to HammerShop/);
+  assert.match(textOf(ch(guild, 'welcome').messageList.at(-1).body), /Witaj w HammerShop/);
   await welcome.onMemberRemove(newbie);
   const chat = ch(guild, 'chat');
   const msg = chat.userMessage(newbie.id, 'spam link');
   msg.author.tag = 'x';
   await welcome.onMessageDelete(msg);
   const logs = ch(guild, 'serverLogs').messageList.map((m) => textOf(m.body)).join('\n');
-  assert.match(logs, /Member joined/);
-  assert.match(logs, /Member left/);
-  assert.match(logs, /Message deleted/);
+  assert.match(logs, /Nowy członek/);
+  assert.match(logs, /Członek opuścił serwer/);
+  assert.match(logs, /Wiadomość usunięta/);
 });
 
 test('stats: member + vouch counters and the activity leaderboard', async () => {
@@ -303,9 +303,9 @@ test('stats: member + vouch counters and the activity leaderboard', async () => 
   const chat = ch(guild, 'chat');
   for (let i = 0; i < 3; i += 1) stats.trackMessage({ guild, author: m.user, channel: chat });
   const board = stats.leaderboardPanel(guild);
-  assert.match(textOf(board), new RegExp(`<@${m.id}> – \\*\\*3\\*\\* messages`));
+  assert.match(textOf(board), new RegExp(`<@${m.id}> – \\*\\*3\\*\\* wiadomości`));
   await stats.updateStatChannels(guild.client);
-  assert.equal(ch(guild, 'statMembers').name, `👥┃ᴍᴇᴍʙᴇʀꜱ: ${guild.memberCount}`);
+  assert.equal(ch(guild, 'statMembers').name, `👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: ${guild.memberCount}`);
 });
 
 // ───────────── /build control panel ─────────────
@@ -315,7 +315,7 @@ test('/build: preview → Build → live progress → result card; members canno
   const owner = guild.members.cache.get(guild.ownerId);
   const nobody = guild.addMember(uid(), []);
   const denied = await run({ guild, member: nobody, kind: 'command', commandName: 'build' });
-  assert.match(textOf(lastResponse(denied)), /Only the server owner/);
+  assert.match(textOf(lastResponse(denied)), /mogą korzystać tylko właściciel serwera/);
 
   const preview = await run({ guild, member: owner, kind: 'command', commandName: 'build' });
   const card = lastResponse(preview);
@@ -324,7 +324,7 @@ test('/build: preview → Build → live progress → result card; members canno
 
   const go = await run({ guild, member: owner, kind: 'button', customId: 'build:go', message: { id: 'preview' } });
   const final = lastResponse(go);
-  assert.match(textOf(final), /HammerShop is ready!/);
+  assert.match(textOf(final), /Serwer HammerShop jest gotowy!/);
   assert.deepEqual(final.attachments, [], 'the preview banner is removed');
   assert.ok(db.build(guild.id)?.finishedAt);
 });
@@ -334,25 +334,25 @@ test('/build: Wipe & Build needs the exact server name and the owner', async () 
   const owner = guild.members.cache.get(guild.ownerId);
   const admin = guild.addMember(uid(), [], { permissions: require('discord.js').PermissionFlagsBits.Administrator });
   const notOwner = await run({ guild, member: admin, kind: 'button', customId: 'build:wipe' });
-  assert.match(textOf(lastResponse(notOwner)), /Only the server owner/);
+  assert.match(textOf(lastResponse(notOwner)), /Tylko właściciel serwera może wyczyścić serwer/);
   const modal = await run({ guild, member: owner, kind: 'button', customId: 'build:wipe' });
   assert.equal(modal.state.modals[0].custom_id, 'build:wipeconfirm');
   const wrong = await run({ guild, member: owner, kind: 'modal', customId: 'build:wipeconfirm', fields: { name: 'nope' }, message: { id: 'm' } });
-  assert.match(textOf(lastResponse(wrong)), /does not match/);
+  assert.match(textOf(lastResponse(wrong)), /Nazwa się nie zgadza/);
   const before = guild.channels.cache.size;
   assert.ok(before > 0);
   const ok = await run({ guild, member: owner, kind: 'modal', customId: 'build:wipeconfirm', fields: { name: 'my server' }, message: { id: 'm' } });
-  assert.match(textOf(lastResponse(ok)), /is ready!/);
+  assert.match(textOf(lastResponse(ok)), /jest gotowy!/);
   assert.ok(!guild.channels.cache.some((c) => c.name.startsWith('old-channel-') && c.id !== ok.channelId), 'old channels removed');
 });
 
 test('/help adapts to the member, /panel re-sends panels', async () => {
   const guild = await builtGuild();
   const help = await run({ guild, member: member(guild), kind: 'command', commandName: 'help' });
-  assert.doesNotMatch(textOf(lastResponse(help)), /Administration/);
+  assert.doesNotMatch(textOf(lastResponse(help)), /Administracja/);
   const owner = guild.members.cache.get(guild.ownerId);
   const adminHelp = await run({ guild, member: owner, kind: 'command', commandName: 'help' });
-  assert.match(textOf(lastResponse(adminHelp)), /Administration/);
+  assert.match(textOf(lastResponse(adminHelp)), /Administracja/);
   const target = ch(guild, 'chat');
   const before = target.messageList.length;
   await run({ guild, member: owner, kind: 'command', commandName: 'panel', options: { type: 'verify', channel: target } });
@@ -365,19 +365,19 @@ test('/help only lists what is turned on in config.json', async () => {
   const owner = guild.members.cache.get(guild.ownerId);
   const help = async (who) => textOf(lastResponse(await run({ guild, member: who, kind: 'command', commandName: 'help' })));
   const on = await help(member(guild));
-  assert.match(on, /`\/invites stats` · `\/invites top` – your invites and the rewards you can earn/);
-  assert.match(await help(owner), /`\/backup` – back up the bot data now \(also automatic, in #backups\)/);
-  assert.match(await help(owner), /Look-alike staff accounts are reported/);
+  assert.match(on, /`\/zaproszenia statystyki` · `\/zaproszenia ranking` – Twoje zaproszenia i nagrody, które możesz zdobyć/);
+  assert.match(await help(owner), new RegExp(`\`/kopia\` – zrób teraz kopię zapasową danych bota \\(robi się też automatycznie, na <#${db.channelId(guild.id, 'backups')}>\\)`));
+  assert.match(await help(owner), /Konta podszywające się pod zespół są automatycznie zgłaszane/);
 
   const saved = { invites: config.invites, backups: config.backups, security: config.security };
   Object.assign(config, { invites: { ...config.invites, enabled: false }, backups: { ...config.backups, enabled: false }, security: { ...config.security, impersonationAlerts: false } });
   try {
-    assert.doesNotMatch(await help(member(guild)), /\/invites/, 'invite tracking is off');
+    assert.doesNotMatch(await help(member(guild)), /\/zaproszenia/, 'invite tracking is off');
     const admin = await help(owner);
-    assert.doesNotMatch(admin, /\/invites/);
-    assert.match(admin, /`\/backup` – back up the bot data now\n/, 'no "also automatic" while automatic backups are off');
-    assert.doesNotMatch(admin, /also automatic|Look-alike/);
-    assert.match(admin, /`\/lockdown` · `\/unlock`/);
+    assert.doesNotMatch(admin, /\/zaproszenia/);
+    assert.match(admin, /`\/kopia` – zrób teraz kopię zapasową danych bota\n/, 'no "also automatic" while automatic backups are off');
+    assert.doesNotMatch(admin, /robi się też automatycznie|podszywające/);
+    assert.match(admin, /`\/zablokuj` · `\/odblokuj`/);
   } finally {
     Object.assign(config, saved);
   }
@@ -388,7 +388,7 @@ test('ticket rating works from the DM (outside the server)', async () => {
   const user = member(guild);
   const support = member(guild, ['member', 'support']);
   const t = require('../src/tickets/tickets');
-  const channel = await t.openTicket(user, config.getType('support'), [{ label: 'Subject', value: 'x' }]);
+  const channel = await t.openTicket(user, config.getType('support'), [{ label: 'Temat', value: 'x' }]);
   await t.closeTicket(channel, support);
   const dmInteraction = (extra) => {
     const i = createInteraction({ guild, member: user, ...extra });
@@ -403,7 +403,7 @@ test('ticket rating works from the DM (outside the server)', async () => {
   const submit = dmInteraction({ kind: 'modal', customId: `ratemodal:${channel.id}:5`, fields: { comment: 'Great help!' } });
   await handle(submit, commands);
   assert.equal(db.getTicket(channel.id).rating.stars, 5);
-  assert.match(textOf(lastResponse(submit)), /Thanks for the great rating/);
+  assert.match(textOf(lastResponse(submit)), /Dziękujemy za świetną ocenę/);
 });
 
 test('staff commands: /ticket info + complete, /stats, /setup show, /product list, /giveaway list', async () => {
@@ -412,17 +412,17 @@ test('staff commands: /ticket info + complete, /stats, /setup show, /product lis
   const seller = member(guild, ['member', 'seller']);
   const buyer = member(guild);
   const t = require('../src/tickets/tickets');
-  const channel = await t.openTicket(buyer, config.getType('order'), [{ label: 'Product', value: 'X' }]);
+  const channel = await t.openTicket(buyer, config.getType('order'), [{ label: 'Produkt', value: 'X' }]);
   const info = await run({ guild, member: buyer, kind: 'command', commandName: 'ticket', subcommand: 'info', channel });
   assert.match(textOf(lastResponse(info)), /Ticket #0001/);
   const notStaff = await run({ guild, member: buyer, kind: 'command', commandName: 'ticket', subcommand: 'complete', channel });
-  assert.match(textOf(lastResponse(notStaff)), /only available to staff/);
+  assert.match(textOf(lastResponse(notStaff)), /dostępna tylko dla zespołu/);
   const complete = await run({ guild, member: seller, kind: 'command', commandName: 'ticket', subcommand: 'complete', channel });
-  assert.match(textOf(lastResponse(complete)), /Order completed/);
+  assert.match(textOf(lastResponse(complete)), /Zamówienie zrealizowane/);
   for (const [commandName, subcommand] of [['stats', null], ['setup', 'show'], ['product', 'list'], ['giveaway', 'list']]) {
     const i = await run({ guild, member: owner, kind: 'command', commandName, subcommand });
     assert.ok(lastResponse(i), `/${commandName} ${subcommand ?? ''} replied`);
-    assert.doesNotMatch(textOf(lastResponse(i)), /unexpected error/i);
+    assert.doesNotMatch(textOf(lastResponse(i)), /nieoczekiwany błąd/i);
   }
 });
 
@@ -463,7 +463,7 @@ test('products: custom emojis from servers the bot is not in are refused, delete
   const shop = require('../src/features/shop');
   const panels = require('../src/lib/panels');
   const guild = await builtGuild();
-  assert.throws(() => shop.addProduct(guild, { name: 'Nitro', price: '5', description: 'x', emoji: '<:other:123456789012345678>' }), /server the bot is not in/);
+  assert.throws(() => shop.addProduct(guild, { name: 'Nitro', price: '5', description: 'x', emoji: '<:other:123456789012345678>' }), /z serwera, na którym bota nie ma/);
   const own = guild.emojis.cache.first();
   const p = shop.addProduct(guild, { name: 'Nitro', price: '5', description: 'x', emoji: `<:${own.name}:${own.id}>` });
   assert.match(textOf(await panels.render('shop', guild)), new RegExp(own.id));
@@ -481,5 +481,5 @@ test('/blacklist list fits in one embed even with many long reasons', async () =
   const i = await run({ guild, member: staff, kind: 'command', commandName: 'blacklist', subcommand: 'list' });
   const description = lastResponse(i).embeds[0].toJSON().description;
   assert.ok(description.length <= 4096, `${description.length} characters`);
-  assert.match(description, /…and \d+ more/);
+  assert.match(description, /…i jeszcze \d+ os(oba|oby|ób)\*/);
 });
