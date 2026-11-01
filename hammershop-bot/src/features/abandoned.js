@@ -4,7 +4,7 @@
  * Abandoned orders (config.abandonedOrders: { enabled, afterHours: 24, percent: 5, validDays: 3 }).
  * Every 10 minutes: order tickets that were CLOSED without being completed and without a payment (status
  * "awaiting" – not paid with balance, no Pay / crypto transaction, not a balance top-up) more than afterHours ago
- * get ONE personal single-use code by DM ("COMEBACK-…", percent off, valid validDays) with a "Back to the shop"
+ * get ONE personal single-use code by DM ("POWROT-…", percent off, valid validDays) with a "Back to the shop"
  * button – as long as the owner has placed no newer order, completed no order since, isn't blacklisted and got no
  * such code in the last 30 days. Tickets closed long ago (more than afterHours + 7 days) are left alone, so turning
  * this on doesn't message everyone who ever left an order.
@@ -107,7 +107,7 @@ async function sendCode(guild, ticket, opts = settings(), now = Date.now()) {
   db.save();
   const user = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
   if (!user) return null;
-  const promo = promos.personal(guild.id, ticket.ownerId, { percent: opts.percent, days: opts.days, prefix: 'COMEBACK', reason: `porzucone zamówienie #${pad(ticket.number)}` });
+  const promo = promos.personal(guild.id, ticket.ownerId, { percent: opts.percent, days: opts.days, prefix: 'POWROT', reason: `porzucone zamówienie #${pad(ticket.number)}` });
   const delivered = await user
     .send(comebackCard(guild, ticket, promo))
     .then(() => true)

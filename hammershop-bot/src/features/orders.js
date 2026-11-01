@@ -295,7 +295,7 @@ async function giveWelcomeCode(member) {
   g.welcomeCodes ??= {}; // { [userId]: { code, at } } – who already got their welcome code
   if (g.welcomeCodes[member.id] || (g.orders[member.id] ?? 0) > 0) return null;
   g.welcomeCodes[member.id] = { code: null, at: Date.now() }; // claimed first, so a double "verified" can't send two codes
-  const promo = promos.personal(guild.id, member.id, { percent: cfg.percent, days: cfg.validDays, prefix: 'WELCOME', firstOrderOnly: true, reason: 'welcome' });
+  const promo = promos.personal(guild.id, member.id, { percent: cfg.percent, days: cfg.validDays, prefix: 'WITAJ', firstOrderOnly: true, reason: 'welcome' });
   if (!(await dm(member, welcomeCard(guild, member, promo)))) {
     promos.remove(guild.id, promo.code);
     delete g.welcomeCodes[member.id];

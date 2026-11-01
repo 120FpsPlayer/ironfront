@@ -61,7 +61,7 @@ function create(guildId, { code, percent = null, amount = null, expiresAt = null
   return promo;
 }
 
-/** A unique single-use code for one member, e.g. "WELCOME-4F2A9C". */
+/** A unique single-use code for one member, e.g. "WITAJ-4F2A9C". */
 function personal(guildId, userId, { percent, days = 7, prefix = 'HS', reason = null, firstOrderOnly = false } = {}) {
   for (let i = 0; i < 20; i += 1) {
     const code = `${normalize(prefix).replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'HS'}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;

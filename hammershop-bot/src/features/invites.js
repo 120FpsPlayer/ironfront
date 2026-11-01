@@ -255,7 +255,7 @@ async function checkRewards(guild, inviterId) {
   }
   const given = [];
   for (const l of due) {
-    const promo = promos.personal(guild.id, inviterId, { percent: l.percent, days: REWARD_DAYS, prefix: 'INVITE', reason: count(l.invites, 'zaproszenie', 'zaproszenia', 'zaproszeń') });
+    const promo = promos.personal(guild.id, inviterId, { percent: l.percent, days: REWARD_DAYS, prefix: 'ZAPROSZENIE', reason: count(l.invites, 'zaproszenie', 'zaproszenia', 'zaproszeń') });
     Object.assign(rewarded[l.invites], { code: promo.code, delivered: await dm(inviter, rewardCard(guild, inviter, promo, l)) });
     db.save();
     given.push(promo);
