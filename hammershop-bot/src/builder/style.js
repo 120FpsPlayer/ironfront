@@ -3,9 +3,9 @@
 /**
  * How channel and category names look on the server.
  *
- * Names in layout.js are plain ("📦 how-to-buy", "🛒 SHOP"). config.json → server turns them into the style:
- *   channelStyle  "{emoji}┃{name}"  + smallCaps → 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ
- *   categoryStyle "〔 {name} 〕"                 → 〔 🛒 SHOP 〕
+ * Names in layout.js are plain ("📦 jak-kupić", "🛒 SKLEP"). config.json → server turns them into the style:
+ *   channelStyle  "{emoji}┃{name}"  + smallCaps → 📦┃ᴊᴀᴋ-ᴋᴜᴘɪᴄ
+ *   categoryStyle "〔 {name} 〕"                 → 〔 🛒 SKLEP 〕
  * Change the style there and run /build only:names to rename an existing server.
  */
 
@@ -16,8 +16,11 @@ const SMALL_CAPS = {
   n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ǫ', r: 'ʀ', s: 'ꜱ', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x', y: 'ʏ', z: 'ᴢ',
 };
 
-/** "how-to-buy" → "ʜᴏᴡ-ᴛᴏ-ʙᴜʏ" (only a–z change; digits, emojis and symbols stay). */
-const smallCaps = (text) => String(text).replace(/[a-z]/gi, (c) => SMALL_CAPS[c.toLowerCase()]);
+/** Polish letters: ł has its own small capital (ᴌ); the others have none, so they lose the accent in small caps. */
+Object.assign(SMALL_CAPS, { ą: 'ᴀ', ć: 'ᴄ', ę: 'ᴇ', ł: 'ᴌ', ń: 'ɴ', ó: 'ᴏ', ś: 'ꜱ', ź: 'ᴢ', ż: 'ᴢ' });
+
+/** "jak-kupić" → "ᴊᴀᴋ-ᴋᴜᴘɪᴄ" (letters change – Polish ones too; digits, emojis and symbols stay). */
+const smallCaps = (text) => String(text).replace(/[a-ząćęłńóśźż]/gi, (c) => SMALL_CAPS[c.toLowerCase()]);
 
 const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
 

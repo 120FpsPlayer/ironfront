@@ -11,6 +11,7 @@ if (problems.length) {
 }
 
 const config = require('./lib/config');
+const { localizeCommand } = require('./lib/commandsPl');
 const db = require('./lib/db');
 const panels = require('./lib/panels');
 const loadCommands = require('./commands');
@@ -58,7 +59,8 @@ client.once(Events.ClientReady, async (c) => {
   reportRoles([...c.guilds.cache.values()], config.ticketTypes);
 
   if (env.autoDeployCommands) {
-    const body = [...commands.values()].map((cmd) => cmd.data.toJSON());
+    // Discord gets the Polish names (/produkt, /sklep …) – src/lib/commandsPl.js; the code keeps the English ones.
+    const body = [...commands.values()].map((cmd) => localizeCommand(cmd.data.toJSON()));
     try {
       if (env.guildId) {
         await c.application.commands.set(body, env.guildId);

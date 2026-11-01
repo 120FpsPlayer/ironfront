@@ -10,6 +10,7 @@ const { e, ce, COLORS } = require('../lib/theme');
 const { ts } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, header, v2, channelUrl } = require('../lib/v2');
 const { verifyPanel } = require('../features/verification');
+const { slash } = require('../lib/commandsPl');
 const { rolesPanels } = require('../features/selfroles');
 
 /**
@@ -44,7 +45,7 @@ const RULES_MAX_TEXT = 3800; // Discord allows 4000 characters of text per messa
 const EMPTY = '\u0000';
 
 /**
- * regulamin.md with its placeholders filled in: {brand}, {#channel}, {e:emoji}, {paymentMethods}, {supportHours},
+ * regulamin.md with its placeholders filled in: {brand}, {#channel}, {/command}, {e:emoji}, {paymentMethods}, {supportHours},
  * {seller}, {email}. A line whose placeholder is empty (e.g. no seller details yet) is left out; <!-- comments --> too.
  */
 function fillRules(src, x) {
@@ -58,6 +59,7 @@ function fillRules(src, x) {
   };
   return String(src)
     .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\{\/([a-z][a-z -]*)\}/g, (_, path) => slash(path))
     .replace(/\{e:([a-z0-9_]+)\}/g, (_, name) => x.E(name))
     .replace(/\{#([A-Za-z0-9_]+)\}/g, (_, key) => x.ch(key))
     .replace(/\{([A-Za-z]+)\}/g, (all, key) => (key in values ? values[key] || EMPTY : all))

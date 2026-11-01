@@ -12,6 +12,7 @@ const {
 } = require('discord.js');
 const hooks = require('../lib/hooks');
 const config = require('../lib/config');
+const { unlocalize } = require('../lib/commandsPl');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
 const t = require('../tickets/tickets');
@@ -433,6 +434,8 @@ module.exports = async function handleInteraction(interaction, commands) {
       if (interaction.isRepliable()) await interaction.reply({ content: `${config.brand.name} commands work on the server only.`, flags: MessageFlags.Ephemeral });
       return;
     }
+    // Polish command names (/produkt dodaj nazwa:…) → the English names the commands use (src/lib/commandsPl.js).
+    if (interaction.isAutocomplete() || interaction.isChatInputCommand()) unlocalize(interaction);
     if (interaction.isAutocomplete()) {
       const command = commands.get(interaction.commandName);
       if (command?.autocomplete) await command.autocomplete(interaction);

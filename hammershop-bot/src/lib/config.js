@@ -35,7 +35,7 @@ const FEATURE_DEFAULTS = {
       { invites: 30, percent: 20 },
     ],
   },
-  shopStatus: { enabled: true, openName: '🟢 Shop open', closedName: '🔴 Shop closed' },
+  shopStatus: { enabled: true, openName: '🟢 Sklep otwarty', closedName: '🔴 Sklep zamknięty' },
   security: { impersonationAlerts: true, lockdownPausesInvites: true },
   backups: { enabled: true, everyHours: 24 },
   salesReport: { enabled: true, weekday: 1, hour: 10 },

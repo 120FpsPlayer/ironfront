@@ -46,45 +46,45 @@ const THEME = {
 };
 
 // ───────────── Banners (1080 × 400) ─────────────
-// 25 remakes of the original pack (translated to English) + shop extras.
+// 25 remakes of the original pack + shop extras – titles in Polish.
 const BANNERS = [
-  ['shop', 'SHOP', 'solid/store'],
-  ['purchase', 'PURCHASE', 'solid/cart-shopping', { badge: 'check' }],
-  ['rules', 'RULES', 'solid/gavel'],
-  ['support', 'SUPPORT', 'solid/headset'],
-  ['giveaways', 'GIVEAWAYS', 'solid/gift'],
-  ['announcements', 'ANNOUNCEMENTS', 'solid/bullhorn'],
+  ['shop', 'SKLEP', 'solid/store'],
+  ['purchase', 'ZAKUP', 'solid/cart-shopping', { badge: 'check' }],
+  ['rules', 'REGULAMIN', 'solid/gavel'],
+  ['support', 'POMOC', 'solid/headset'],
+  ['giveaways', 'GIVEAWAYE', 'solid/gift'],
+  ['announcements', 'OGŁOSZENIA', 'solid/bullhorn'],
   ['discord', 'DISCORD', 'brands/discord'],
-  ['join-us', 'JOIN US', 'solid/user-plus'],
-  ['vouches', 'VOUCHES', 'solid/comment-dots'],
-  ['partners', 'PARTNERS', 'solid/handshake'],
-  ['staff', 'STAFF', 'solid/user-shield'],
-  ['updates', 'UPDATES', 'solid/bell'],
-  ['help', 'HELP', 'solid/circle-question'],
-  ['verification', 'VERIFICATION', 'solid/shield-halved', { badge: 'check' }],
-  ['channels', 'CHANNELS', 'solid/hashtag'],
-  ['boosters', 'BOOSTERS', 'solid/rocket'],
-  ['leaderboard', 'LEADERBOARD', 'solid/trophy'],
+  ['join-us', 'DOŁĄCZ DO NAS', 'solid/user-plus'],
+  ['vouches', 'OPINIE', 'solid/comment-dots'],
+  ['partners', 'PARTNERZY', 'solid/handshake'],
+  ['staff', 'ZESPÓŁ', 'solid/user-shield'],
+  ['updates', 'AKTUALIZACJE', 'solid/bell'],
+  ['help', 'POMOC', 'solid/circle-question'],
+  ['verification', 'WERYFIKACJA', 'solid/shield-halved', { badge: 'check' }],
+  ['channels', 'KANAŁY', 'solid/hashtag'],
+  ['boosters', 'BOOSTERZY', 'solid/rocket'],
+  ['leaderboard', 'RANKING', 'solid/trophy'],
   ['media', 'MEDIA', 'solid/photo-film'],
-  ['memes', 'MEMES', 'solid/face-laugh-squint'],
-  ['events', 'EVENTS', 'solid/calendar-days'],
+  ['memes', 'MEMY', 'solid/face-laugh-squint'],
+  ['events', 'WYDARZENIA', 'solid/calendar-days'],
   ['vip', 'VIP', 'solid/crown'],
-  ['bot-commands', 'BOT COMMANDS', 'solid/robot'],
-  ['contact', 'CONTACT', 'solid/envelope'],
-  ['whats-new', "WHAT'S NEW", 'solid/newspaper'],
-  ['welcome', 'WELCOME', 'solid/hand'],
+  ['bot-commands', 'KOMENDY', 'solid/robot'],
+  ['contact', 'KONTAKT', 'solid/envelope'],
+  ['whats-new', 'NOWOŚCI', 'solid/newspaper'],
+  ['welcome', 'WITAMY', 'solid/hand'],
   // extras for the shop layout
-  ['tickets', 'TICKETS', 'solid/ticket'],
-  ['payments', 'PAYMENTS', 'solid/credit-card'],
-  ['roles', 'ROLES', 'solid/masks-theater'],
+  ['tickets', 'TICKETY', 'solid/ticket'],
+  ['payments', 'PŁATNOŚCI', 'solid/credit-card'],
+  ['roles', 'ROLE', 'solid/masks-theater'],
   ['faq', 'FAQ', 'solid/circle-question'],
-  ['restocks', 'RESTOCKS', 'solid/box-open'],
-  ['information', 'INFORMATION', 'solid/circle-info'],
-  ['how-to-buy', 'HOW TO BUY', 'solid/bag-shopping'],
-  ['products', 'PRODUCTS', 'solid/tags'],
-  ['chat', 'CHAT', 'solid/comments'],
-  ['reviews', 'REVIEWS', 'solid/star'],
-  ['proofs', 'PROOFS', 'solid/receipt', { badge: 'check' }],
+  ['restocks', 'DOSTAWY', 'solid/box-open'],
+  ['information', 'INFORMACJE', 'solid/circle-info'],
+  ['how-to-buy', 'JAK KUPIĆ', 'solid/bag-shopping'],
+  ['products', 'PRODUKTY', 'solid/tags'],
+  ['chat', 'CZAT', 'solid/comments'],
+  ['reviews', 'OPINIE', 'solid/star'],
+  ['proofs', 'REALIZACJE', 'solid/receipt', { badge: 'check' }],
 ];
 
 // ───────────── Emojis (128 × 128) ─────────────
@@ -170,9 +170,14 @@ function svg(name, { fill = 'currentColor', id } = {}) {
 }
 
 // Fonts are embedded as data URLs – Chromium blocks file:// fonts on pages created with setContent().
-const fontUrl = (weight) => `data:font/woff2;base64,${fs.readFileSync(path.join(FONT_DIR, `montserrat-latin-${weight}-normal.woff2`)).toString('base64')}`;
+// Two subsets: latin (A–Z, Ó) and latin-ext (Ą Ć Ę Ł Ń Ś Ź Ż …) – the Polish titles need both.
+const fontUrl = (weight, subset) => `data:font/woff2;base64,${fs.readFileSync(path.join(FONT_DIR, `montserrat-${subset}-${weight}-normal.woff2`)).toString('base64')}`;
+const RANGES = {
+  'latin-ext': 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF',
+  latin: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+};
 const FONTS = [500, 600, 700, 800, 900]
-  .map((w) => `@font-face{font-family:Montserrat;font-weight:${w};src:url("${fontUrl(w)}") format("woff2");}`)
+  .flatMap((w) => Object.entries(RANGES).map(([subset, range]) => `@font-face{font-family:Montserrat;font-weight:${w};src:url("${fontUrl(w, subset)}") format("woff2");unicode-range:${range};}`))
   .join('');
 
 const SPARKLE = 'M50 0 C53 30 70 47 100 50 C70 53 53 70 50 100 C47 70 30 53 0 50 C30 47 47 30 50 0Z';
@@ -460,7 +465,7 @@ function logoWordmarkSvg() {
   <circle cx="${f.x}" cy="${f.y}" r="44" fill="#ffd2a0" opacity=".55" filter="url(#glow)"/>
   ${sparks(f.x, f.y, 0.82)}
   ${wordmark({ x: 512, y: 832, size: 106, spacing: 2, outlineWidth: 11 })}
-  <text x="512" y="902" text-anchor="middle" font-family="Montserrat" font-weight="700" font-size="28" letter-spacing="12" fill="#ffc27e" opacity=".9">PREMIUM · TRUSTED · FAST</text>
+  <text x="512" y="902" text-anchor="middle" font-family="Montserrat" font-weight="700" font-size="28" letter-spacing="12" fill="#ffc27e" opacity=".9">SZYBKO · BEZPIECZNIE · UCZCIWIE</text>
   ${svgSparkle(190, 180, 40, 0.75)}${svgSparkle(850, 640, 26, 0.5, THEME.accent)}
 </svg>`;
 }
@@ -557,7 +562,7 @@ function serverBannerHtml() {
   <g filter="url(#shadow)">${hammer(h)}</g>
   ${sparks(f.x, f.y, 0.5)}
   ${wordmark({ x: 618, y: 300, size: 70, spacing: 2, outlineWidth: 9 })}
-  <text x="618" y="350" text-anchor="middle" font-family="Montserrat" font-weight="600" font-size="18" letter-spacing="9" fill="#ffc27e" opacity=".9">PREMIUM · TRUSTED · FAST</text>
+  <text x="618" y="350" text-anchor="middle" font-family="Montserrat" font-weight="600" font-size="17" letter-spacing="7" fill="#ffc27e" opacity=".9">SZYBKO · BEZPIECZNIE · UCZCIWIE</text>
   ${svgSparkle(880, 90, 30, 0.7)}${svgSparkle(90, 470, 18, 0.45, THEME.accent)}${svgSparkle(900, 470, 14, 0.4)}
 </svg>`;
   return page(body, 'svg{display:block}', { width: 960, height: 540 });
@@ -602,8 +607,8 @@ function gamesArtHtml() {
   const body = `${iconGradient}<div class="art">
   ${sparkle(140, 120, 34, 0.8)}${sparkle(850, 170, 22, 0.6)}${sparkle(880, 560, 16, 0.5, THEME.accent)}${sparkle(110, 600, 14, 0.4)}
   <div class="ring"></div><div class="pad">${svg('solid/gamepad', { fill: 'url(#ig)' })}</div>
-  <div class="t">GAME <em>COLLECTION</em></div><div class="sub">BY ${THEME.brand}</div>
-  <div class="row">${feature('solid/bolt', 'INSTANT', 'DELIVERY')}${feature('solid/shield-halved', 'SECURE', 'PAYMENT')}${feature('solid/desktop', 'PC', 'GAMES')}</div>
+  <div class="t">KOLEKCJA <em>GIER</em></div><div class="sub">OD ${THEME.brand}</div>
+  <div class="row">${feature('solid/bolt', 'SZYBKA', 'DOSTAWA')}${feature('solid/shield-halved', 'BEZPIECZNA', 'PŁATNOŚĆ')}${feature('solid/desktop', 'GRY', 'NA PC')}</div>
 </div>`;
   return page(body, css, { width: 1024, height: 1024 });
 }

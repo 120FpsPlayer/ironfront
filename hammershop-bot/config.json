@@ -3,8 +3,8 @@
     "name": "HammerShop",
     "color": "#FF9F43",
     "footer": "HammerShop • hammershop.pl",
-    "tagline": "Premium products · Instant delivery · Trusted service",
-    "about": "**HammerShop** is a premium store and community. We focus on fast delivery, fair prices and support that actually answers – every order is handled personally by our team through a private ticket.",
+    "tagline": "Produkty premium · Szybka dostawa · Zaufany sklep",
+    "about": "**HammerShop** to sklep i społeczność. Stawiamy na szybką dostawę, uczciwe ceny i pomoc, która naprawdę odpisuje – każde zamówienie obsługuje nasz zespół w prywatnym tickecie.",
     "logo": null
   },
 
@@ -16,7 +16,7 @@
     "community": true,
     "verificationLevel": 2,
     "explicitContentFilter": 2,
-        "locale": "en-US",
+    "locale": "pl",
     "createInvite": true,
     "rolesWithIcons": true,
     "channelStyle": "{emoji}┃{name}",
@@ -47,16 +47,16 @@
   "shop": {
     "currency": "€",
     "currencyPosition": "after",
-    "deliveryTime": "Usually within 5–30 minutes",
-    "refundPolicy": "Delivered digital products can't be returned – by ordering you ask for instant delivery. Store balance can't be paid out or refunded.",
+    "deliveryTime": "Zwykle w 5–30 minut",
+    "refundPolicy": "Dostarczonych produktów cyfrowych nie można zwrócić – składając zamówienie, prosisz o natychmiastową dostawę. Salda sklepu nie wypłacamy ani nie zwracamy.",
     "loyalAfterOrders": 5,
     "lowStockAt": 3,
     "paymentMethods": [
-      { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Checked by hand (up to 24 hours) – send the PIN only inside your ticket", "type": "paysafecard" },
-      { "name": "Crypto", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)", "type": "crypto", "addresses": { "BTC": "bc1qmrgmhzq5v0ynr4fdwepp8yk5mrs64cl2g8vnkm", "ETH": "0x57A092596977975FdB6988dcB9Ce6aE84aDc4d0d" } },
-      { "name": "PayPal", "emoji": "paypal", "details": "A PayPal payment link in your ticket", "type": "paypal", "paypalMe": "" },
-      { "name": "Stripe", "emoji": "card", "details": "Card, Apple Pay or Google Pay – a secure payment link in your ticket", "type": "stripe" },
-      { "name": "BLIK / Transfer (Simpay)", "emoji": "blik", "details": "BLIK or a fast bank transfer – the seller sends you a Simpay payment link in your ticket" }
+      { "name": "PaysafeCard", "emoji": "paysafecard", "details": "Sprawdzana ręcznie (do 24 godzin) – kod podajesz tylko w swoim tickecie", "type": "paysafecard" },
+      { "name": "Kryptowaluty", "emoji": "crypto", "details": "Bitcoin (BTC) · Ethereum (ETH)", "type": "crypto", "addresses": {"BTC": "bc1qmrgmhzq5v0ynr4fdwepp8yk5mrs64cl2g8vnkm", "ETH": "0x57A092596977975FdB6988dcB9Ce6aE84aDc4d0d"} },
+      { "name": "PayPal", "emoji": "paypal", "details": "Link do płatności PayPal w Twoim tickecie", "type": "paypal", "paypalMe": "" },
+      { "name": "Stripe", "emoji": "card", "details": "Karta, Apple Pay lub Google Pay – bezpieczny link do płatności w Twoim tickecie", "type": "stripe" },
+      { "name": "BLIK / przelew (Simpay)", "emoji": "blik", "details": "BLIK lub szybki przelew – sprzedawca wyśle Ci link Simpay w tickecie" }
     ]
   },
 
@@ -139,6 +139,7 @@
     "strikeMinutes": 10,
     "timeoutMinutes": 10
   },
+
   "deals": {
     "enabled": true,
     "minPercent": 25,
@@ -174,8 +175,8 @@
 
   "shopStatus": {
     "enabled": true,
-    "openName": "🟢 Shop open",
-    "closedName": "🔴 Shop closed"
+    "openName": "🟢 Sklep otwarty",
+    "closedName": "🔴 Sklep zamknięty"
   },
 
   "security": {
@@ -195,16 +196,11 @@
   },
 
   "panel": {
-    "title": "Support Center",
-    "description": "Need help, want to buy something or have a question? Pick a category below – we'll open a **private channel** that only you and our team can see.",
-    "rules": [
-      "Describe your request in as much detail as possible",
-      "Don't ping the staff – they're notified automatically",
-      "One issue = one ticket",
-      "Tickets without a reply are closed automatically"
-    ],
+    "title": "Centrum pomocy",
+    "description": "Potrzebujesz pomocy, chcesz coś kupić albo masz pytanie? Wybierz kategorię poniżej – otworzymy **prywatny kanał**, który widzisz tylko Ty i nasz zespół.",
+    "rules": ["Opisz sprawę jak najdokładniej", "Nie oznaczaj zespołu – dostaje powiadomienie automatycznie", "Jedna sprawa = jeden ticket", "Tickety bez odpowiedzi zamykają się automatycznie"],
     "image": null,
-    "buttonLabel": "Open",
+    "buttonLabel": "Otwórz",
     "showStats": true
   },
 
@@ -219,101 +215,23 @@
   "channelNameFormat": "{prio}{emoji}┃{prefix}-{number}",
 
   "ticketTypes": [
-    {
-      "id": "order",
-      "label": "Purchase",
-      "emoji": "🛒",
-      "icon": "cart",
-      "description": "Buying? Click Buy next to a product in the shop",
-      "shopOnly": true,
-      "channelPrefix": "order",
-      "staffRoles": ["seller"],
-      "questions": [
-        { "id": "product", "label": "What would you like to buy?", "style": "short", "placeholder": "Product name (and variant)", "required": true, "maxLength": 100 },
-        { "id": "quantity", "label": "Quantity", "style": "short", "placeholder": "1", "required": false, "maxLength": 10 },
-        { "id": "payment", "label": "Payment method", "style": "short", "placeholder": "BLIK / Transfer, PaysafeCard, Crypto, PayPal or Stripe", "required": true, "maxLength": 60 },
-        { "id": "notes", "label": "Anything else we should know?", "style": "paragraph", "required": false, "maxLength": 500 }
-      ]
-    },
-    {
-      "id": "support",
-      "label": "Support",
-      "emoji": "🧰",
-      "icon": "question",
-      "description": "Questions, order problems and technical help",
-      "channelPrefix": "support",
-      "staffRoles": [],
-      "questions": [
-        { "id": "subject", "label": "Subject", "style": "short", "placeholder": "E.g. I didn't receive my order", "required": true, "maxLength": 100 },
-        { "id": "details", "label": "Describe your issue in detail", "style": "paragraph", "placeholder": "What happened, when, and what have you already tried? Order ID if you have one.", "required": true, "maxLength": 1000 }
-      ]
-    },
-    {
-      "id": "reward",
-      "label": "Claim a Reward",
-      "emoji": "🎁",
-      "icon": "gift",
-      "description": "Won a giveaway? Claim your prize here",
-      "channelPrefix": "reward",
-      "staffRoles": [],
-      "questions": [
-        { "id": "prize", "label": "Which giveaway did you win?", "style": "short", "placeholder": "Prize name", "required": true, "maxLength": 100 },
-        { "id": "link", "label": "Link to the winning message (optional)", "style": "short", "required": false, "maxLength": 200 }
-      ]
-    },
-    {
-      "id": "report",
-      "label": "Report a User",
-      "emoji": "🚨",
-      "icon": "warning",
-      "description": "Report a scammer or someone breaking the rules",
-      "channelPrefix": "report",
-      "staffRoles": [],
-      "questions": [
-        { "id": "who", "label": "Who are you reporting? (name / ID)", "style": "short", "required": true, "maxLength": 100 },
-        { "id": "what", "label": "What happened?", "style": "paragraph", "required": true, "maxLength": 1000 },
-        { "id": "proof", "label": "Evidence (links to screenshots)", "style": "paragraph", "required": false, "maxLength": 500 }
-      ]
-    },
-    {
-      "id": "apply",
-      "label": "Staff Application",
-      "emoji": "📝",
-      "icon": "pencil",
-      "description": "Want to join the HammerShop team? Apply here",
-      "channelPrefix": "apply",
-      "staffRoles": [],
-      "questions": [
-        { "id": "age", "label": "How old are you?", "style": "short", "required": true, "maxLength": 3 },
-        { "id": "time", "label": "Timezone & hours per week", "style": "short", "placeholder": "E.g. CET, ~15 h/week", "required": true, "maxLength": 100 },
-        { "id": "experience", "label": "Previous experience", "style": "paragraph", "required": true, "maxLength": 800 },
-        { "id": "why", "label": "Why should we pick you?", "style": "paragraph", "required": true, "maxLength": 800 }
-      ]
-    },
-    {
-      "id": "appeal",
-      "label": "Punishment Appeal",
-      "emoji": "🙏",
-      "icon": "info",
-      "description": "Appeal a mute, timeout or warning",
-      "channelPrefix": "appeal",
-      "staffRoles": [],
-      "questions": [
-        { "id": "punishment", "label": "What punishment did you get and when?", "style": "short", "required": true, "maxLength": 150 },
-        { "id": "why", "label": "Why should it be lifted?", "style": "paragraph", "required": true, "maxLength": 1000 }
-      ]
-    }
+    { "id": "order", "label": "Zakup", "emoji": "🛒", "icon": "cart", "description": "Chcesz coś kupić? Kliknij Kup przy produkcie w sklepie", "shopOnly": true, "channelPrefix": "zamowienie", "staffRoles": ["seller"], "questions": [{"id": "product", "label": "Co chcesz kupić?", "style": "short", "placeholder": "Nazwa produktu (i wariant)", "required": true, "maxLength": 100}, {"id": "quantity", "label": "Ilość", "style": "short", "placeholder": "1", "required": false, "maxLength": 10}, {"id": "payment", "label": "Metoda płatności", "style": "short", "placeholder": "BLIK / przelew, PaysafeCard, kryptowaluty, PayPal lub Stripe", "required": true, "maxLength": 60}, {"id": "notes", "label": "Coś jeszcze, o czym mamy wiedzieć?", "style": "paragraph", "required": false, "maxLength": 500}] },
+    { "id": "support", "label": "Pomoc", "emoji": "🧰", "icon": "question", "description": "Pytania, problemy z zamówieniem i pomoc techniczna", "channelPrefix": "pomoc", "staffRoles": [], "questions": [{"id": "subject", "label": "Temat", "style": "short", "placeholder": "Np. nie dotarło moje zamówienie", "required": true, "maxLength": 100}, {"id": "details", "label": "Opisz dokładnie swój problem", "style": "paragraph", "placeholder": "Co się stało, kiedy i co już zostało sprawdzone? Podaj numer zamówienia, jeśli go masz.", "required": true, "maxLength": 1000}] },
+    { "id": "reward", "label": "Odbierz nagrodę", "emoji": "🎁", "icon": "gift", "description": "Wygrana w giveawayu? Odbierz nagrodę tutaj", "channelPrefix": "nagroda", "staffRoles": [], "questions": [{"id": "prize", "label": "Który giveaway wygrałeś/aś?", "style": "short", "placeholder": "Nazwa nagrody", "required": true, "maxLength": 100}, {"id": "link", "label": "Link do wiadomości z wygraną (opcjonalnie)", "style": "short", "required": false, "maxLength": 200}] },
+    { "id": "report", "label": "Zgłoś użytkownika", "emoji": "🚨", "icon": "warning", "description": "Zgłoś oszusta albo kogoś, kto łamie zasady", "channelPrefix": "zgloszenie", "staffRoles": [], "questions": [{"id": "who", "label": "Kogo zgłaszasz? (nick / ID)", "style": "short", "required": true, "maxLength": 100}, {"id": "what", "label": "Co się stało?", "style": "paragraph", "required": true, "maxLength": 1000}, {"id": "proof", "label": "Dowody (linki do zrzutów ekranu)", "style": "paragraph", "required": false, "maxLength": 500}] },
+    { "id": "apply", "label": "Rekrutacja", "emoji": "📝", "icon": "pencil", "description": "Chcesz dołączyć do zespołu HammerShop? Aplikuj tutaj", "channelPrefix": "rekrutacja", "staffRoles": [], "questions": [{"id": "age", "label": "Ile masz lat?", "style": "short", "required": true, "maxLength": 3}, {"id": "time", "label": "Strefa czasowa i godziny w tygodniu", "style": "short", "placeholder": "Np. CET, ok. 15 h tygodniowo", "required": true, "maxLength": 100}, {"id": "experience", "label": "Wcześniejsze doświadczenie", "style": "paragraph", "required": true, "maxLength": 800}, {"id": "why", "label": "Dlaczego mamy wybrać właśnie Ciebie?", "style": "paragraph", "required": true, "maxLength": 800}] },
+    { "id": "appeal", "label": "Odwołanie od kary", "emoji": "🙏", "icon": "info", "description": "Odwołaj się od wyciszenia, przerwy lub ostrzeżenia", "channelPrefix": "odwolanie", "staffRoles": [], "questions": [{"id": "punishment", "label": "Jaka to kara i kiedy ją nałożono?", "style": "short", "required": true, "maxLength": 150}, {"id": "why", "label": "Dlaczego powinniśmy ją zdjąć?", "style": "paragraph", "required": true, "maxLength": 1000}] }
   ],
 
   "snippets": [
-    { "id": "greeting", "name": "👋 Greeting", "content": "Hi {user}! My name is {staff} and I'll be handling your ticket. Give me a moment to look into it." },
-    { "id": "quote", "name": "💰 Order quote", "content": "Thanks for your order, {user}! {staff} will send you the final price and payment details right here in a moment." },
-    { "id": "payment", "name": "💳 Payment received", "content": "Payment received, {user} – thank you! 🎉 We're processing your order now and will deliver it right here." },
-    { "id": "delivered", "name": "📦 Delivered", "content": "Your order has been delivered, {user}! 🧡 If everything works, we'd love a vouch in the vouches channel – it really helps us." },
-    { "id": "details", "name": "🔍 Ask for details", "content": "{user}, we need a bit more information. Please describe exactly what happened and attach screenshots if you can." },
-    { "id": "wait", "name": "⏳ Please wait", "content": "I've passed this on, {user}. We'll get back to you as soon as possible – thanks for your patience!" },
-    { "id": "resolved", "name": "✅ Resolved", "content": "Looks like everything is sorted 🎉 If you need anything else, just write here – otherwise we'll close the ticket." },
-    { "id": "rules", "name": "📜 Rules", "content": "{user}, please make sure you've read the rules of **{server}**. Thank you!" }
+    { "id": "greeting", "name": "👋 Powitanie", "content": "Cześć {user}! Tu {staff} – zajmę się Twoim ticketem. Daj mi chwilę, już sprawdzam." },
+    { "id": "quote", "name": "💰 Wycena zamówienia", "content": "Dzięki za zamówienie, {user}! {staff} za chwilę poda tutaj ostateczną cenę i dane do płatności." },
+    { "id": "payment", "name": "💳 Płatność otrzymana", "content": "Płatność otrzymana, {user} – dziękujemy! 🎉 Realizujemy zamówienie i dostarczymy je tutaj." },
+    { "id": "delivered", "name": "📦 Dostarczone", "content": "Zamówienie dostarczone, {user}! 🧡 Jeśli wszystko działa, zostaw nam opinię na kanale z opiniami – to naprawdę pomaga." },
+    { "id": "details", "name": "🔍 Prośba o szczegóły", "content": "{user}, potrzebujemy trochę więcej informacji. Opisz dokładnie, co się stało, i dołącz zrzuty ekranu, jeśli możesz." },
+    { "id": "wait", "name": "⏳ Prosimy o cierpliwość", "content": "Sprawa przekazana dalej, {user}. Odezwiemy się najszybciej, jak to możliwe – dzięki za cierpliwość!" },
+    { "id": "resolved", "name": "✅ Rozwiązane", "content": "Wygląda na to, że wszystko załatwione 🎉 Jeśli potrzebujesz czegoś jeszcze, napisz tutaj – w przeciwnym razie zamkniemy ticket." },
+    { "id": "rules", "name": "📜 Regulamin", "content": "{user}, zapoznaj się proszę z regulaminem **{server}**. Dziękujemy!" }
   ],
 
   "defaults": {

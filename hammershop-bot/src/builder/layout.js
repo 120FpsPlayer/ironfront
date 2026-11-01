@@ -16,11 +16,12 @@
  *   feature  – config.json section: with "enabled": false there, the channel is left out
  */
 
-const SEPARATOR = (key, label) => ({ key, name: `━━━━━ ${label} ━━━━━`, color: 0, perms: 'none', separator: true });
+const SEPARATOR = (key, label, was) => ({ key, name: `━━━━━ ${label} ━━━━━`, color: 0, perms: 'none', separator: true, was: [`━━━━━ ${was} ━━━━━`] });
 
 /**
  * Role colours of the NØX version (purple) – /build only:update recolours roles that still have one of them.
- * `was` – the old default names, renamed by /build only:update (a name you chose yourself is never touched).
+ * `was` – the old default names (NØX and the English HammerShop version), renamed by /build only:update – a name you
+ * chose yourself is never touched.
  */
 const OLD_COLORS = [0xd8b4fe, 0xc77dff, 0xb565ff, 0xa855f7, 0x9333ea, 0x8b5cf6, 0x7c3aed, 0xe0aaff, 0xe879f9, 0xc4b5fd, 0x7b61ff, 0xb9a7e8];
 
@@ -28,24 +29,24 @@ const ROLES = [
   // The bot's own role – only the bot has it (src/features/brandrole.js takes it away from anyone else). /build puts
   // it right under the bot's integration role, so it's the highest role of the server and the bot is listed first.
   { key: 'brand', name: '🔨 HammerShop', color: 0xff9f43, perms: 'none', hoist: true, icon: '🔨', botOnly: true },
-  { key: 'founder', name: '👑 CEO', color: 0xffe0b8, perms: 'owner', hoist: true, icon: '👑', staff: true, was: ['👑 Founder', 'Founder'] },
-  { key: 'coowner', name: '🔱 Co-CEO', color: 0xffcf96, perms: 'owner', hoist: true, icon: '🔱', staff: true, was: ['💠 Co-Founder', 'Co-Founder'] },
+  { key: 'founder', name: '👑 CEO', color: 0xffe0b8, perms: 'owner', hoist: true, icon: '👑', staff: true, was: ['👑 Founder'] },
+  { key: 'coowner', name: '🔱 Co-CEO', color: 0xffcf96, perms: 'owner', hoist: true, icon: '🔱', staff: true, was: ['💠 Co-Founder'] },
   { key: 'manager', name: '🔥 Manager', color: 0xffbb70, perms: 'admin', hoist: true, icon: '🔥', staff: true, was: ['🌙 Manager'] },
   { key: 'admin', name: '🛡️ Administrator', color: 0xffa94d, perms: 'admin', hoist: true, icon: '🛡️', staff: true },
   { key: 'moderator', name: '⚔️ Moderator', color: 0xff9233, perms: 'mod', hoist: true, icon: '⚔️', staff: true, was: ['🔨 Moderator'] },
   { key: 'support', name: '🎧 Support', color: 0xf97d1f, perms: 'support', hoist: true, icon: '🎧', staff: true },
-  { key: 'trialSupport', name: '🌱 Trial Support', color: 0xe46a12, perms: 'trial', hoist: true, icon: '🌱', staff: true },
-  { key: 'seller', name: '💼 Seller', color: 0xffc785, perms: 'seller', hoist: true, icon: '💼', staff: true },
-  SEPARATOR('sepSpecial', 'CUSTOMERS'),
-  { key: 'loyal', name: '🧡 Loyal Customer', color: 0xffad66, perms: 'none', hoist: true, icon: '🧡', was: ['💜 Loyal Customer'] },
-  { key: 'customer', name: '🛍️ Customer', color: 0xffdcb8, perms: 'none', hoist: true, icon: '🛍️' },
-  SEPARATOR('sepMembers', 'MEMBERS'),
-  { key: 'bots', name: '🤖 Bots', color: 0xd9894a, perms: 'bot', hoist: true, icon: '🤖' },
-  { key: 'member', name: '✅ Member', color: 0xf0c9a3, perms: 'member', hoist: true, icon: '✅' },
-  SEPARATOR('sepPings', 'NOTIFICATIONS'),
-  { key: 'pingAnnouncements', name: '📢 Announcements', color: 0, perms: 'none' },
-  { key: 'pingGiveaways', name: '🎉 Giveaways', color: 0, perms: 'none' },
-  { key: 'pingRestocks', name: '📦 Restocks', color: 0, perms: 'none' },
+  { key: 'trialSupport', name: '🌱 Stażysta', color: 0xe46a12, perms: 'trial', hoist: true, icon: '🌱', staff: true, was: ['🌱 Trial Support'] },
+  { key: 'seller', name: '💼 Sprzedawca', color: 0xffc785, perms: 'seller', hoist: true, icon: '💼', staff: true, was: ['💼 Seller'] },
+  SEPARATOR('sepSpecial', 'KLIENCI', 'CUSTOMERS'),
+  { key: 'loyal', name: '🧡 Stały Klient', color: 0xffad66, perms: 'none', hoist: true, icon: '🧡', was: ['💜 Loyal Customer', '🧡 Loyal Customer'] },
+  { key: 'customer', name: '🛍️ Klient', color: 0xffdcb8, perms: 'none', hoist: true, icon: '🛍️', was: ['🛍️ Customer'] },
+  SEPARATOR('sepMembers', 'CZŁONKOWIE', 'MEMBERS'),
+  { key: 'bots', name: '🤖 Boty', color: 0xd9894a, perms: 'bot', hoist: true, icon: '🤖', was: ['🤖 Bots'] },
+  { key: 'member', name: '✅ Członek', color: 0xf0c9a3, perms: 'member', hoist: true, icon: '✅', was: ['✅ Member'] },
+  SEPARATOR('sepPings', 'POWIADOMIENIA', 'NOTIFICATIONS'),
+  { key: 'pingAnnouncements', name: '📢 Ogłoszenia', color: 0, perms: 'none', was: ['📢 Announcements'] },
+  { key: 'pingGiveaways', name: '🎉 Giveawaye', color: 0, perms: 'none', was: ['🎉 Giveaways'] },
+  { key: 'pingRestocks', name: '📦 Dostawy', color: 0, perms: 'none', was: ['📦 Restocks'] },
 ];
 
 const text = (key, name, opts = {}) => ({ key, name, kind: 'text', profile: 'public', ...opts });
@@ -55,88 +56,88 @@ const voice = (key, name, opts = {}) => ({ key, name, kind: 'voice', profile: 'p
 const CATEGORIES = [
   {
     key: 'catStats',
-    name: '📊 SERVER STATS',
+    name: '📊 STATYSTYKI',
     profile: 'stats',
     channels: [
-      voice('statShop', '🟢 Shop open', { profile: 'stats', feature: 'shopStatus' }), // open / closed – see features/shopstatus.js
-      voice('statMembers', '👥 Members: 0', { profile: 'stats' }),
-      voice('statVouches', '⭐ Vouches: 0', { profile: 'stats' }),
+      voice('statShop', '🟢 Sklep otwarty', { profile: 'stats', feature: 'shopStatus' }), // open / closed – see features/shopstatus.js
+      voice('statMembers', '👥 Członkowie: 0', { profile: 'stats' }),
+      voice('statVouches', '⭐ Opinie: 0', { profile: 'stats' }),
     ],
   },
   {
     key: 'catWelcome',
-    name: '👋 WELCOME',
+    name: '👋 WITAMY',
     profile: 'public',
     channels: [
-      text('verify', '✅ verify', { profile: 'verify', topic: 'Verify here to unlock the whole server.', post: 'verify' }),
-      text('rules', '📜 rules', { profile: 'rules', topic: 'Server rules – read them before you buy or chat.', post: 'rules' }),
+      text('verify', '✅ weryfikacja', { profile: 'verify', topic: 'Zweryfikuj się tutaj, żeby odblokować cały serwer.', post: 'verify' }),
+      text('rules', '📜 regulamin', { profile: 'rules', topic: 'Regulamin sklepu i serwera – przeczytaj go przed zakupem.', post: 'rules' }),
       // Readable before verifying (like #rules) – otherwise the ping in a newcomer's welcome card never reaches them.
-      text('welcome', '👋 welcome', { profile: 'rules', topic: 'Say hi to our newest members 🧡', post: 'welcome' }),
-      text('information', '📌 information', { profile: 'readonly', topic: 'About us, channels, team and contact.', post: 'information' }),
-      news('announcements', '📢 announcements', { topic: 'Official news and updates.', post: 'announcements' }),
-      text('giveaways', '🎉 giveaways', { profile: 'readonly', topic: 'Giveaways – click Enter to join!', post: 'giveaways' }),
-      text('roles', '🎭 roles', { profile: 'readonly', topic: 'Server roles and notification roles.', post: 'roles' }),
+      text('welcome', '👋 powitania', { profile: 'rules', topic: 'Przywitaj naszych nowych członków 🧡', post: 'welcome' }),
+      text('information', '📌 informacje', { profile: 'readonly', topic: 'O nas, kanały, zespół i kontakt.', post: 'information' }),
+      news('announcements', '📢 ogłoszenia', { topic: 'Oficjalne ogłoszenia i nowości.', post: 'announcements' }),
+      text('giveaways', '🎉 giveawaye', { profile: 'readonly', topic: 'Giveawaye – kliknij Dołącz, żeby wziąć udział!', post: 'giveaways' }),
+      text('roles', '🎭 role', { profile: 'readonly', topic: 'Role na serwerze i role z powiadomieniami.', post: 'roles' }),
     ],
   },
   {
     key: 'catShop',
-    name: '🛒 SHOP',
+    name: '🛒 SKLEP',
     profile: 'public',
     channels: [
-      text('shop', '🛒 shop', { profile: 'readonly', topic: 'Our products – click Buy to order.', post: 'shop' }),
-      text('howToBuy', '📦 how-to-buy', { profile: 'readonly', topic: 'How ordering works, step by step.', post: 'howToBuy' }),
-      text('payments', '💳 payments', { profile: 'readonly', topic: 'Accepted payment methods.', post: 'payments' }),
-      news('restocks', '✨ restocks', { posters: ['seller'], topic: 'New products and restocks.', post: 'restocks' }),
-      text('vouches', '⭐ vouches', { profile: 'botsOnly', topic: 'Customer reviews – leave yours with the button or /vouch.', post: 'vouches' }),
-      text('proofs', '🧾 proofs', { profile: 'botsOnly', topic: 'Every delivered order, posted automatically.', post: 'proofs' }),
+      text('shop', '🛒 sklep', { profile: 'readonly', topic: 'Nasze produkty – kliknij Kup, żeby zamówić.', post: 'shop' }),
+      text('howToBuy', '📦 jak-kupić', { profile: 'readonly', topic: 'Jak złożyć zamówienie – krok po kroku.', post: 'howToBuy' }),
+      text('payments', '💳 płatności', { profile: 'readonly', topic: 'Metody płatności, które przyjmujemy.', post: 'payments' }),
+      news('restocks', '✨ dostawy', { posters: ['seller'], topic: 'Nowe produkty i dostawy.', post: 'restocks' }),
+      text('vouches', '⭐ opinie', { profile: 'botsOnly', topic: 'Opinie klientów – wystaw swoją przyciskiem albo komendą /opinia.', post: 'vouches' }),
+      text('proofs', '🧾 realizacje', { profile: 'botsOnly', topic: 'Każde dostarczone zamówienie, publikowane automatycznie.', post: 'proofs' }),
     ],
   },
   {
     key: 'catSupport',
-    name: '🎧 SUPPORT',
+    name: '🎧 POMOC',
     profile: 'public',
     channels: [
-      text('tickets', '🎫 tickets', { profile: 'readonly', topic: 'Open a ticket – purchases, support, rewards and more.', post: 'tickets' }),
-      text('faq', '❓ faq', { profile: 'readonly', topic: 'Frequently asked questions.', post: 'faq' }),
+      text('tickets', '🎫 tickety', { profile: 'readonly', topic: 'Otwórz ticket – zakupy, pomoc, nagrody i więcej.', post: 'tickets' }),
+      text('faq', '❓ faq', { profile: 'readonly', topic: 'Najczęściej zadawane pytania.', post: 'faq' }),
     ],
   },
   {
     key: 'catCommunity',
-    name: '💬 COMMUNITY',
+    name: '💬 SPOŁECZNOŚĆ',
     profile: 'public',
     channels: [
-      text('chat', '💬 chat', { topic: 'General chat – keep it friendly and in English.', slowmode: 3 }),
-      text('leaderboard', '🏆 leaderboard', { profile: 'readonly', topic: 'The most active members.', post: 'leaderboard' }),
-      text('boosters', '🚀 boosters', { profile: 'readonly', topic: 'Thank you for boosting!', post: 'boosters' }),
+      text('chat', '💬 czat', { topic: 'Ogólny czat – piszemy kulturalnie i po polsku.', slowmode: 3 }),
+      text('leaderboard', '🏆 ranking', { profile: 'readonly', topic: 'Najaktywniejsi członkowie.', post: 'leaderboard' }),
+      text('boosters', '🚀 boosterzy', { profile: 'readonly', topic: 'Dziękujemy za boosty!', post: 'boosters' }),
     ],
   },
   {
     key: 'catStaff',
-    name: '🔒 STAFF',
+    name: '🔒 ZESPÓŁ',
     profile: 'staff',
     channels: [
-      text('staffChat', '💼 staff-chat', { profile: 'staff', topic: 'Team chat.', post: 'staff' }),
-      text('staffCommands', '🔧 staff-commands', { profile: 'staff', topic: 'Staff bot commands.' }),
-      text('discordUpdates', '📣 discord-updates', { profile: 'admins', topic: 'Updates from Discord for server admins.' }),
-      voice('staffVoice', '🔒 Staff Room', { profile: 'staff' }),
+      text('staffChat', '💼 czat-zespołu', { profile: 'staff', topic: 'Czat zespołu.', post: 'staff' }),
+      text('staffCommands', '🔧 komendy-zespołu', { profile: 'staff', topic: 'Komendy bota dla zespołu.' }),
+      text('discordUpdates', '📣 aktualizacje-discorda', { profile: 'admins', topic: 'Komunikaty od Discorda dla administracji serwera.' }),
+      voice('staffVoice', '🔒 Pokój zespołu', { profile: 'staff' }),
     ],
   },
   {
     key: 'catLogs',
-    name: '📁 LOGS',
+    name: '📁 LOGI',
     profile: 'logs',
     channels: [
-      text('ticketLogs', '📁 ticket-logs', { profile: 'staffLogs' }),
-      text('transcripts', '📄 transcripts', { profile: 'staffLogs' }),
-      text('verifyLogs', '✅ verify-logs', { profile: 'logs' }),
-      text('serverLogs', '📋 server-logs', { profile: 'logs' }),
-      text('automodLogs', '🤖 automod-logs', { profile: 'logs' }),
-      text('sales', '📈 sales', { profile: 'admins', topic: 'Weekly sales reports.' }),
-      text('backups', '💾 backups', { profile: 'admins', topic: 'Automatic backups of the bot data – keep this channel private.' }),
+      text('ticketLogs', '📁 logi-ticketów', { profile: 'staffLogs' }),
+      text('transcripts', '📄 transkrypcje', { profile: 'staffLogs' }),
+      text('verifyLogs', '✅ logi-weryfikacji', { profile: 'logs' }),
+      text('serverLogs', '📋 logi-serwera', { profile: 'logs' }),
+      text('automodLogs', '🤖 logi-automod', { profile: 'logs' }),
+      text('sales', '📈 sprzedaż', { profile: 'admins', topic: 'Cotygodniowe raporty sprzedaży.' }),
+      text('backups', '💾 kopie-zapasowe', { profile: 'admins', topic: 'Automatyczne kopie zapasowe danych bota – ten kanał musi zostać prywatny.' }),
     ],
   },
-  { key: 'catTickets', name: '🎫 TICKETS', profile: 'hidden', channels: [] },
-  { key: 'catClosed', name: '🔐 CLOSED TICKETS', profile: 'hidden', channels: [] },
+  { key: 'catTickets', name: '🎫 TICKETY', profile: 'hidden', channels: [] },
+  { key: 'catClosed', name: '🔐 ZAMKNIĘTE TICKETY', profile: 'hidden', channels: [] },
 ];
 
 /**
@@ -145,8 +146,8 @@ const CATEGORIES = [
  * everything else unlocks after verification. Channels that aren't readable are skipped.
  */
 const WELCOME_SCREEN = [
-  { channel: 'verify', emoji: '✅', description: 'Verify to unlock the whole server' },
-  { channel: 'rules', emoji: '📜', description: 'Read the rules before you buy' },
+  { channel: 'verify', emoji: '✅', description: 'Zweryfikuj się, żeby odblokować serwer' },
+  { channel: 'rules', emoji: '📜', description: 'Przeczytaj regulamin przed zakupem' },
 ];
 
 module.exports = { ROLES, CATEGORIES, WELCOME_SCREEN, OLD_COLORS };

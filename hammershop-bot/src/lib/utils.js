@@ -186,6 +186,20 @@ function money(n) {
   return config.shop.currencyPosition === 'before' ? `${currency}${text}` : `${text}${currency}`;
 }
 
+/**
+ * Polish plural forms: plural(1, 'zamówienie', 'zamówienia', 'zamówień') → 'zamówienie', 2–4 (but not 12–14) → few,
+ * everything else → many. Fractions take the "few" form (2,5 zamówienia). count(n, …) puts the number in front.
+ */
+function plural(n, one, few, many) {
+  const v = Math.abs(Number(n));
+  if (!Number.isInteger(v)) return few;
+  if (v === 1) return one;
+  const d = v % 10;
+  const h = v % 100;
+  return d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many;
+}
+const count = (n, one, few, many) => `${n} ${plural(n, one, few, many)}`;
+
 const truncate = (text, max) => {
   const s = String(text ?? '');
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -202,6 +216,8 @@ const maskPins = (value) =>
   String(value ?? '').replace(/(?<!\d)(?:\d(?:[\s\-._/]*\d){15})+(?!\d)/g, (m) => m.replace(/\D/g, '').match(/\d{16}/g).map(maskPin).join(' '));
 
 module.exports = {
+  plural,
+  count,
   maskPin,
   maskPins,
   UserError,
