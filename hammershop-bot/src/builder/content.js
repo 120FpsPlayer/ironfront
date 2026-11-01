@@ -1,0 +1,481 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { ButtonStyle } = require('discord.js');
+const config = require('../lib/config');
+const paymentState = require('../lib/paymentState');
+const db = require('../lib/db');
+const { e, ce, COLORS } = require('../lib/theme');
+const { ts } = require('../lib/utils');
+const { container, text, divider, btn, linkBtn, row, header, v2, channelUrl } = require('../lib/v2');
+const { verifyPanel } = require('../features/verification');
+const { rolesPanels } = require('../features/selfroles');
+
+/**
+ * Everything /build posts into the channels. Each "post" key returns a list of messages:
+ *   { banner: 'shop' }            → the banner image
+ *   { panel: 'shop' }             → a live panel the bot keeps up to date
+ *   { payload }                   → a normal Components V2 card
+ */
+
+function context(guild) {
+  const ch = (key, fallback = `#${key}`) => (db.channelId(guild.id, key) ? `<#${db.channelId(guild.id, key)}>` : fallback);
+  const role = (key, fallback) => (db.roleId(guild.id, key) ? `<@&${db.roleId(guild.id, key)}>` : fallback ?? key);
+  const url = (key) => (db.channelId(guild.id, key) ? channelUrl(guild.id, db.channelId(guild.id, key)) : null);
+  const link = (key, label, icon) => (url(key) ? linkBtn(url(key), label, ce(guild, icon)) : null);
+  const icon = guild.iconURL?.({ size: 256 }) ?? null;
+  return { guild, ch, role, url, link, icon, E: (name) => e(guild, name), brand: config.brand.name };
+}
+
+const card = (c) => ({ payload: v2(c) });
+
+/** config.shop.refundPolicy – "Delivered digital products can't be returned … Store balance can't be paid out or refunded." */
+const refundPolicy = () =>
+  config.shop.refundPolicy ??
+  "Delivered digital products can't be returned – by ordering you ask for instant delivery. Store balance can't be paid out or refunded.";
+const buttons = (...list) => row(...list.filter(Boolean));
+
+// ───────────── WELCOME category ─────────────
+
+/** config.json → rules.file (default regulamin.md, next to config.json) – the shop's terms, posted in #rules. */
+const rulesFile = () => path.join(__dirname, '..', '..', config.rules?.file || 'regulamin.md');
+const RULES_MAX_TEXT = 3800; // Discord allows 4000 characters of text per message – a little room to spare
+const EMPTY = '\u0000';
+
+/**
+ * regulamin.md with its placeholders filled in: {brand}, {#channel}, {e:emoji}, {paymentMethods}, {supportHours},
+ * {seller}, {email}. A line whose placeholder is empty (e.g. no seller details yet) is left out; <!-- comments --> too.
+ */
+function fillRules(src, x) {
+  const methods = config.shop.paymentMethods ?? [];
+  const values = {
+    brand: config.brand.name,
+    seller: String(config.rules?.seller ?? '').trim(),
+    email: String(config.rules?.email ?? '').trim(),
+    supportHours: config.shop.supportHours ?? '',
+    paymentMethods: methods.length ? `> ${methods.map((m) => `${x.E(m.emoji ?? 'card')} **${m.name}**`).join(' · ')}` : '',
+  };
+  return String(src)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\{e:([a-z0-9_]+)\}/g, (_, name) => x.E(name))
+    .replace(/\{#([A-Za-z0-9_]+)\}/g, (_, key) => x.ch(key))
+    .replace(/\{([A-Za-z]+)\}/g, (all, key) => (key in values ? values[key] || EMPTY : all))
+    .split('\n')
+    .filter((line) => !line.includes(EMPTY))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Splits a long block at line breaks into pieces that fit one message. */
+function splitLines(block, max) {
+  const out = [];
+  let cur = '';
+  for (const line of block.split('\n')) {
+    if (cur && cur.length + line.length + 1 > max) {
+      out.push(cur);
+      cur = '';
+    }
+    cur = cur ? `${cur}\n${line}` : line.slice(0, max);
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * The shop's terms from regulamin.md: the part before the first "## " is the title, every "## " starts a section.
+ * As many cards as needed (Discord: 4000 characters of text per message). No file → the built-in English rules.
+ */
+function rulesCards(x) {
+  let src = '';
+  try {
+    src = fs.readFileSync(rulesFile(), 'utf8');
+  } catch {
+    return [rulesCard(x)];
+  }
+  const body = fillRules(src, x);
+  if (!body) return [rulesCard(x)];
+  const [intro, ...sections] = body.split(/^## /m);
+  const cards = [];
+  let c = container(COLORS.brand);
+  let used = 0;
+  if (intro.trim()) {
+    header(c, intro.trim().slice(0, RULES_MAX_TEXT), x.icon);
+    used = intro.trim().length;
+  }
+  for (const section of sections) {
+    for (const part of splitLines(`### ${section.trim()}`, RULES_MAX_TEXT)) {
+      if (used && used + part.length > RULES_MAX_TEXT) {
+        cards.push(card(c));
+        c = container(COLORS.brand);
+        used = 0;
+      }
+      if (used) c.addSeparatorComponents(divider());
+      c.addTextDisplayComponents(text(part));
+      used += part.length;
+    }
+  }
+  cards.push(card(c));
+  return cards;
+}
+
+/** The built-in English server rules – used when regulamin.md is missing. */
+function rulesCard(x) {
+  const c = container(COLORS.brand);
+  header(
+    c,
+    `# ${x.E('shield')} ${x.brand} — Server Rules\nBy staying on this server you agree to the rules below and to Discord's ` +
+      '[Terms of Service](https://discord.com/terms) and [Community Guidelines](https://discord.com/guidelines).',
+    x.icon,
+  );
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(
+    text(
+      `### ${x.E('heart')} 1 · Respect & behaviour\n` +
+        '> **1.1** Be respectful – no harassment, hate speech, discrimination or threats.\n' +
+        '> **1.2** No spam, flooding, excessive caps or mass-pinging.\n' +
+        '> **1.3** Keep public channels in English so everyone can follow.\n' +
+        '> **1.4** No NSFW, gore or otherwise disturbing content – anywhere.\n' +
+        '> **1.5** No advertising or self-promotion, including in DMs to our members.\n' +
+        '> **1.6** No impersonating staff or other members.\n' +
+        '> **1.7** No swearing, slurs or hate speech – in any language.\n' +
+        '> **1.8** No links in the chat (GIFs are fine).',
+    ),
+  );
+  c.addTextDisplayComponents(
+    text(
+      `### ${x.E('cart')} 2 · Shop & payments\n` +
+        `> **2.1** Every purchase happens **only inside a ticket** (${x.ch('tickets')}) – never in DMs.\n` +
+        '> **2.2** Staff will **never DM you first** asking for payment. Anyone who does is a scammer – report them.\n' +
+        "> **2.3** **Refunds** – delivered digital products can't be returned, so read the product description before buying. Store balance can't be refunded or paid out. A product that doesn't work? Open a support ticket – we fix or replace it, and if we can't, you get your money back.\n" +
+        '> **2.4** Chargebacks, payment disputes or fraud attempts = permanent ban and blacklist.\n' +
+        '> **2.5** Report problems with an order within **48 hours** through a ticket.\n' +
+        '> **2.6** Reselling or sharing purchased products without permission is not allowed.',
+    ),
+  );
+  c.addTextDisplayComponents(
+    text(
+      `### ${x.E('ticket')} 3 · Tickets & support\n` +
+        '> **3.1** One issue = one ticket. Explain clearly and add screenshots.\n' +
+        "> **3.2** Don't ping staff – they're notified automatically.\n" +
+        '> **3.3** Tickets without a reply are closed automatically.\n' +
+        '> **3.4** Abusing tickets (trolling, spam) gets you blocked from them.',
+    ),
+  );
+  c.addTextDisplayComponents(
+    text(
+      `### ${x.E('warning')} 4 · Punishments\n` +
+        '> Breaking the rules leads to a warning, timeout, kick or ban depending on how serious it is. ' +
+        `Staff decisions are final – you can appeal through a **Punishment Appeal** ticket.`,
+    ),
+  );
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(text(`-# Last updated ${ts(Date.now(), 'D')} · The team may update these rules at any time.`));
+  return card(c);
+}
+
+function welcomeIntro(x) {
+  const c = container(COLORS.brand);
+  header(
+    c,
+    `# ${x.E('logo')} Welcome to ${x.brand}\n${config.brand.tagline ?? ''}\n\n` +
+      `New here? Verify in ${x.ch('verify')}, read ${x.ch('rules')} and check out ${x.ch('shop')}. ` +
+      'Every new member is greeted right here. 🧡',
+    x.icon,
+  );
+  c.addActionRowComponents(buttons(x.link('shop', 'Shop', 'cart'), x.link('tickets', 'Support', 'ticket'), x.link('vouches', 'Vouches', 'star')));
+  return card(c);
+}
+
+function informationPosts(x, build) {
+  const about = container(COLORS.brand);
+  header(about, `# ${x.E('logo')} About ${x.brand}\n${config.brand.about ?? ''}`, x.icon);
+  about.addSeparatorComponents(divider());
+  about.addTextDisplayComponents(
+    text(
+      `### ${x.E('sparkles')} Why ${x.brand}?\n` +
+        `> ${x.E('rocket')} **Fast delivery** – ${config.shop.deliveryTime ?? 'most orders are delivered quickly'}\n` +
+        `> ${x.E('lock_locked')} **Safe payments** – only inside private tickets, never in DMs\n` +
+        `> ${x.E('star')} **Trusted** – real reviews from real customers in ${x.ch('vouches')}\n` +
+        `> ${x.E('chat')} **Real support** – ${config.shop.supportHours ?? 'a team that actually answers'}`,
+    ),
+  );
+  const aboutButtons = [x.link('shop', 'Shop', 'cart'), x.link('vouches', 'Vouches', 'star')];
+  if (build?.invite) aboutButtons.push(linkBtn(build.invite, 'Invite friends', ce(x.guild, 'share')));
+  about.addActionRowComponents(buttons(...aboutButtons));
+
+  const guide = container(COLORS.brand);
+  guide.addTextDisplayComponents(text(`# ${x.E('hash')} Channel guide\nWhere to find everything on **${x.brand}**.`));
+  guide.addSeparatorComponents(divider());
+  guide.addTextDisplayComponents(
+    text(
+      `### ${x.E('home')} Start here\n` +
+        `> ${x.ch('rules')} – the rules\n> ${x.ch('announcements')} – official news\n> ${x.ch('giveaways')} – free stuff\n` +
+        `> ${x.ch('roles')} – roles & notifications\n` +
+        `### ${x.E('cart')} Shop\n` +
+        `> ${x.ch('shop')} – all products\n> ${x.ch('howToBuy')} – how ordering works\n> ${x.ch('payments')} – payment methods\n` +
+        `> ${x.ch('restocks')} – new products & restocks\n> ${x.ch('vouches')} – customer reviews\n` +
+        `### ${x.E('ticket')} Support\n` +
+        `> ${x.ch('tickets')} – open a ticket\n> ${x.ch('faq')} – quick answers\n` +
+        `### ${x.E('chat')} Community\n` +
+        `> ${x.ch('chat')} · ${x.ch('leaderboard')} · ${x.ch('boosters')}`,
+    ),
+  );
+
+  const team = container(COLORS.brand);
+  team.addTextDisplayComponents(
+    text(
+      `# ${x.E('shield')} Our team\nThe people keeping **${x.brand}** running.\n` +
+        `> ${x.role('founder')} · ${x.role('coowner')}\n> ${x.role('manager')} · ${x.role('admin')}\n` +
+        `> ${x.role('moderator')} · ${x.role('support')} · ${x.role('trialSupport')}\n> ${x.role('seller')} – handles your orders`,
+    ),
+  );
+  team.addSeparatorComponents(divider());
+  team.addTextDisplayComponents(text(`-# ${x.E('warning')} Our team will **never** DM you first or ask for payment outside a ticket. Not sure if someone is staff? Check their roles.`));
+
+  const contact = container(COLORS.brand);
+  contact.addTextDisplayComponents(
+    text(
+      `# ${x.E('mail')} Contact\nThe fastest way to reach us is a ticket in ${x.ch('tickets')} – a private channel with our team.\n` +
+        `> ${x.E('cart')} **Buying something?** → click **Buy** in ${x.ch('shop')}\n> ${x.E('question')} **Need help?** → Support ticket\n` +
+        `-# ${config.shop.supportHours ? `Support hours: ${config.shop.supportHours}` : ''}`,
+    ),
+  );
+  contact.addActionRowComponents(buttons(btn('ticket:open:support', 'Contact support', ce(x.guild, 'mail'), ButtonStyle.Primary), x.link('tickets', 'All ticket types', 'ticket')));
+
+  const hiring = container(COLORS.brand);
+  hiring.addTextDisplayComponents(
+    text(
+      `# ${x.E('person')} Join the team\nWe're always looking for friendly, active people to help our customers.\n` +
+        '> ✅ 16+ and good English\n> ✅ A few hours per week\n> ✅ Patient, honest and helpful\n' +
+        '-# Apply with the button below – we read every application.',
+    ),
+  );
+  hiring.addActionRowComponents(row(btn('ticket:open:apply', 'Apply now', ce(x.guild, 'pencil'), ButtonStyle.Success)));
+
+  return [
+    { banner: 'discord' }, card(about),
+    { banner: 'channels' }, card(guide),
+    { banner: 'staff' }, card(team),
+    { banner: 'contact' }, card(contact),
+    { banner: 'join-us' }, card(hiring),
+  ];
+}
+
+function announcementsIntro(x) {
+  const c = container(COLORS.brand);
+  header(
+    c,
+    `# ${x.E('sparkles')} ${x.brand} is open!\nWelcome to our brand-new home. 🧡\n\n` +
+      `> ${x.E('cart')} Browse the catalog in ${x.ch('shop')}\n> ${x.E('gift')} Giveaways run in ${x.ch('giveaways')}\n` +
+      `> ${x.E('bell')} Grab notification roles in ${x.ch('roles')} so you never miss a drop`,
+    x.icon,
+  );
+  c.addTextDisplayComponents(text(`-# ${x.brand} team · ${ts(Date.now(), 'D')}`));
+  return card(c);
+}
+
+function giveawaysIntro(x) {
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      `# ${x.E('gift')} Giveaways\nWe regularly give away products and goodies here.\n` +
+        '> 🎉 Click **Enter** on a giveaway to join\n> 🏆 Winners are drawn automatically when the timer ends\n' +
+        '> 🎁 Winners claim their prize with a **Claim a Reward** ticket within 48 hours\n' +
+        `-# Want a ping for every giveaway? Grab the ${x.role('pingGiveaways', 'Giveaways')} role in ${x.ch('roles')}.`,
+    ),
+  );
+  return card(c);
+}
+
+// ───────────── SHOP category ─────────────
+
+function howToBuy(x) {
+  const c = container(COLORS.brand);
+  header(c, `# ${x.E('box')} How to buy\nOrdering takes about a minute. Here's how it works:`, x.icon);
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(
+    text(
+      `> **1.** Browse the products in ${x.ch('shop')} and click **Buy** next to the one you want\n` +
+        '> **2.** Fill in the short form (option, quantity + payment method)\n' +
+        `> **3.** A private ticket opens – a ${x.role('seller', 'Seller')} confirms the price and sends payment details\n` +
+        (config.orders.paymentProofs === false
+          ? '> **4.** Pay and receive your product right in the ticket\n'
+          : '> **4.** Click **Pay** in the ticket (PaysafeCard PIN, crypto transaction ID or a screenshot) – with PayPal or Stripe your product arrives instantly\n') +
+        `> **5.** Enjoy – and leave a vouch in ${x.ch('vouches')} ${x.E('star')}\n` +
+        `-# ${config.orders.statusDms === false ? '' : 'You get a DM when your payment is confirmed and when your order is on its way · '}**My orders** in ${x.ch('shop')} shows your orders and receipts`,
+    ),
+  );
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(
+    text(
+      `${x.E('clock')} **Delivery:** ${config.shop.deliveryTime ?? '—'}\n` +
+        `${x.E('chat')} **Support:** ${config.shop.supportHours ?? '—'}\n` +
+        `${x.E('info')} **Refunds:** ${refundPolicy()} A product that doesn't work? Open a support ticket – we fix or replace it, and if we can't, you get your money back.`,
+    ),
+  );
+  c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('payments', 'Payments', 'card')));
+  return card(c);
+}
+
+function payments(x) {
+  const c = container(COLORS.brand);
+  header(c, `# ${x.E('card')} Payment methods\nPay the way you like – all payments are handled inside your private ticket.`, x.icon);
+  c.addSeparatorComponents(divider());
+  const methods = config.shop.paymentMethods;
+  c.addTextDisplayComponents(
+    text(
+      methods.length
+        ? methods
+            .map((m) => {
+              const off = paymentState.offNote(x.guild.id, m); // switched off with /disable
+              return off ? `### ${x.E(m.emoji ?? 'wallet')} ~~${m.name}~~\n-# **${off}** – please pick another method for now.` : `### ${x.E(m.emoji ?? 'wallet')} ${m.name}\n-# ${m.details ?? ''}`;
+            })
+            .join('\n')
+        : 'Payment methods will be listed here soon.',
+    ),
+  );
+  c.addSeparatorComponents(divider());
+  const has = (re) => methods.some((m) => re.test(`${m.name} ${m.emoji ?? ''}`));
+  const tips = ['> Only pay to the details a seller gives you **inside your ticket** – never in DMs. We never ask for passwords.'];
+  if (has(/crypto|btc|eth|bitcoin|ethereum/i)) tips.push("> **Crypto:** send at least the amount shown in your ticket, on the right network, to the address shown there – crypto payments can't be reversed.");
+  if (has(/paysafe/i)) tips.push('> **PaysafeCard:** only share your PIN inside your ticket – a seller confirms it before delivery.');
+  if (has(/paypal/i)) tips.push('> **PayPal:** only pay with the PayPal link or address in your ticket.');
+  if (has(/stripe/i)) tips.push("> **Stripe:** pay by card, Apple Pay or Google Pay on Stripe's secure page – the link is in your ticket, and we never see your card details.");
+  tips.push(`> **Refunds:** ${refundPolicy()} Check the product and the price before you pay.`);
+  tips.push('> Fraud attempts or payment disputes result in a permanent ban.');
+  c.addTextDisplayComponents(text(`${x.E('warning')} **Stay safe**\n${tips.join('\n')}`));
+  c.addActionRowComponents(buttons(x.link('shop', 'Go to shop', 'cart'), x.link('howToBuy', 'How to buy', 'info')));
+  return card(c);
+}
+
+function restocksIntro(x) {
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      `# ${x.E('sparkles')} Restocks & new products\nEvery new product and every restock is announced here first.\n` +
+        `-# Get pinged: grab the ${x.role('pingRestocks', 'Restocks')} role in ${x.ch('roles')}.`,
+    ),
+  );
+  return card(c);
+}
+
+function proofsIntro(x) {
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      `# ${x.E('check')} Order proofs\nEvery order we deliver is posted here automatically – real orders, in real time.\n` +
+        `-# No names or personal details are shown. Want to read what customers say? Check ${x.ch('vouches')}.`,
+    ),
+  );
+  c.addActionRowComponents(buttons(x.link('shop', 'Shop', 'cart'), x.link('vouches', 'Vouches', 'star')));
+  return card(c);
+}
+
+// ───────────── SUPPORT category ─────────────
+
+function faq(x) {
+  const qa = [
+    ['How do I buy something?', `Click **Buy** next to a product in ${x.ch('shop')} – your private order ticket opens right away. Full guide: ${x.ch('howToBuy')}.`],
+    ['Which payment methods do you accept?', `${config.shop.paymentMethods.map((m) => (paymentState.isOff(x.guild.id, m) ? `${m.name} (temporarily unavailable)` : m.name)).join(', ') || 'See'} – details in ${x.ch('payments')}.`],
+    ['How fast is delivery?', `${config.shop.deliveryTime ?? 'Usually very fast'}. You receive everything inside your ticket.`],
+    ['Is it safe to buy here?', `Yes – payments only happen in private tickets with our team, and you can read real reviews in ${x.ch('vouches')}. We never DM you first.`],
+    ["I didn't get my order / something is wrong", `Open a **Support** ticket in ${x.ch('tickets')} within 48 hours and include your order details.`],
+    [
+      'Can I get a refund?',
+      "Delivered digital products can't be returned – by ordering you ask for instant delivery. Store balance can't be refunded or paid out either. " +
+        `A product that doesn't work or doesn't match its description? Open a **Support** ticket in ${x.ch('tickets')} – we fix or replace it, and if we can't, you get your money back. Full terms: ${x.ch('rules')}.`,
+    ],
+    ['How do I win giveaways?', `Click **Enter** on giveaways in ${x.ch('giveaways')} and turn on the giveaway ping in ${x.ch('roles')}.`],
+    ['Can I join the team?', `Sure – open a **Staff Application** ticket in ${x.ch('tickets')}.`],
+  ];
+  const c = container(COLORS.brand);
+  header(c, `# ${x.E('question')} Frequently asked questions\nCan't find your answer? Open a ticket in ${x.ch('tickets')}.`, x.icon);
+  c.addSeparatorComponents(divider());
+  c.addTextDisplayComponents(text(qa.map(([q, a]) => `**${x.E('arrow_right')} ${q}**\n> ${a}`).join('\n\n')));
+  return card(c);
+}
+
+// ───────────── COMMUNITY ─────────────
+
+function boostersCard(x) {
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      `# ${x.E('rocket')} Server Boosters\nBoosting ${x.brand} unlocks a better server for everyone – thank you! 🧡\n` +
+        `### ${x.E('gift')} Booster perks\n` +
+        '> 🚀 A special role at the top of the member list\n> 🧡 Our eternal gratitude\n' +
+        '-# Boost announcements appear in this channel.',
+    ),
+  );
+  return card(c);
+}
+
+function staffHandbook(x) {
+  const c = container(COLORS.brand);
+  c.addTextDisplayComponents(
+    text(
+      `# ${x.E('shield')} Staff handbook\nEverything you need to run **${x.brand}**.\n` +
+        `### ${x.E('ticket')} Tickets\n> Claim a ticket before you answer · use \`/reply\` for canned replies\n` +
+        '> In a **Purchase** ticket set **Status: Paid** / **In progress** in the ⚙️ menu (the customer gets a DM) and choose **Order completed** after delivery – the customer gets the Customer role and a vouch request\n' +
+        `> Transcripts land in ${x.ch('transcripts')}, every action in ${x.ch('ticketLogs')}\n` +
+        `### ${x.E('cart')} Shop\n> \`/product add\` · \`/product edit\` · \`/product stock\` · \`/product variants\` · \`/product remove\` – the ${x.ch('shop')} panel updates by itself\n` +
+        '> `/sale start` – a flash sale with a countdown · `/sale deal` – the automatic deal of the week · `/product stock count:` – a stock counter that counts down by itself\n' +
+        `> **Refunds** – delivered products can't be returned and store balance can't be refunded or paid out. A product doesn't work? Fix or replace it first – only if that's impossible, a manager sends the money back (terms: ${x.ch('rules')} §6)\n` +
+        `> New products and restocks are announced in ${x.ch('restocks')} automatically\n` +
+        `### ${x.E('gift')} Community\n> \`/giveaway start\` (optional: customers only, minimum invites) · \`/giveaway end\` · \`/giveaway reroll\`\n> \`/announce\` – a styled announcement with an optional banner and ping\n` +
+        `### ${x.E('refresh')} Changing the texts\n> Edit \`config.json\` (texts, payments), restart the bot and run \`/build only:panels\` – every card updates in place · new name style → \`/build only:names\`\n` +
+        `### ${x.E('warning')} Golden rules\n> Never ask for payment outside a ticket · stay polite · when unsure, ask a ${x.role('manager', 'Manager')}`,
+    ),
+  );
+  return card(c);
+}
+
+/** All messages for one "post" key. */
+function postsFor(key, guild) {
+  const x = context(guild);
+  const build = db.build(guild.id);
+  switch (key) {
+    case 'verify':
+      return [{ banner: 'verification' }, { payload: verifyPanel(guild) }];
+    case 'rules':
+      return [{ banner: 'rules' }, ...rulesCards(x)];
+    case 'welcome':
+      return [{ banner: 'welcome' }, welcomeIntro(x)];
+    case 'information':
+      return informationPosts(x, build);
+    case 'announcements':
+      return [{ banner: 'announcements' }, announcementsIntro(x)];
+    case 'giveaways':
+      return [{ banner: 'giveaways' }, giveawaysIntro(x)];
+    case 'roles':
+      return [{ banner: 'roles' }, ...rolesPanels(guild).map((payload) => ({ payload }))];
+    case 'shop':
+      return [{ banner: 'shop' }, { panel: 'shop' }];
+    case 'howToBuy':
+      return [{ banner: 'how-to-buy' }, howToBuy(x)];
+    case 'payments':
+      return [{ banner: 'payments' }, payments(x)];
+    case 'restocks':
+      return [{ banner: 'restocks' }, restocksIntro(x)];
+    case 'vouches':
+      return [{ banner: 'vouches' }, { panel: 'vouches' }];
+    case 'proofs':
+      return [{ banner: 'proofs' }, proofsIntro(x)];
+    case 'tickets':
+      return [{ banner: 'support' }, { panel: 'tickets', extra: { style: 'buttons' } }];
+    case 'faq':
+      return [{ banner: 'faq' }, faq(x)];
+    case 'leaderboard':
+      return [{ banner: 'leaderboard' }, { panel: 'leaderboard' }];
+    case 'boosters':
+      return [{ banner: 'boosters' }, boostersCard(x)];
+    case 'staff':
+      return [{ banner: 'staff' }, staffHandbook(x)];
+    default:
+      return [];
+  }
+}
+
+module.exports = { postsFor, context, fillRules, rulesCards, rulesFile };

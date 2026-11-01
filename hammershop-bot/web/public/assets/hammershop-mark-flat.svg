@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-398 -326 697 715"><defs>
+  <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff6ea"/><stop offset=".32" stop-color="#ffc98c"/><stop offset=".68" stop-color="#ff9a3d"/><stop offset="1" stop-color="#e2600f"/>
+  </linearGradient>
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#e4e7ee"/><stop offset="1" stop-color="#9aa1ae"/>
+  </linearGradient>
+  <linearGradient id="steelDark" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#d9dde5"/><stop offset="1" stop-color="#7c8391"/>
+  </linearGradient>
+  <linearGradient id="steelFace" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#c9ced8"/><stop offset=".6" stop-color="#f4f6fa"/><stop offset="1" stop-color="#ffffff"/>
+  </linearGradient>
+  <linearGradient id="handle" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#ffb46a"/><stop offset=".5" stop-color="#ff9238"/><stop offset="1" stop-color="#d9600f"/>
+  </linearGradient>
+  <linearGradient id="grip" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#3b1d0b"/><stop offset=".5" stop-color="#2a1407"/><stop offset="1" stop-color="#170a03"/>
+  </linearGradient>
+  <linearGradient id="word" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#fff4e8"/><stop offset="1" stop-color="#f1d2b0"/>
+  </linearGradient>
+  <linearGradient id="wordOrange" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffd7a6"/><stop offset=".5" stop-color="#ffa34a"/><stop offset="1" stop-color="#f07a1c"/>
+  </linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="28"/></filter>
+  <filter id="glowSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+  <filter id="blur14" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+  <filter id="blur22" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="22"/></filter>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0b0502" flood-opacity=".8"/></filter></defs><g transform="translate(0 0) rotate(38) scale(1)"><path d="M-34 -70 h68 l8 360 a42 42 0 0 1 -84 0z" fill="#ffffff"/><path d="M-52 -182 C-120 -186 -190 -170 -246 -112 C-252 -104 -244 -94 -234 -98 C-186 -120 -128 -118 -52 -96z" fill="#ffffff"/><path d="M40 -168 h96 v64 h-96z" fill="#ffffff"/><path d="M128 -192 h62 a16 16 0 0 1 16 16 v108 a16 16 0 0 1 -16 16 h-62z" fill="#ffffff"/><path d="M-58 -204 h108 a14 14 0 0 1 14 14 v110 a14 14 0 0 1 -14 14 h-108 a14 14 0 0 1 -14 -14 v-110 a14 14 0 0 1 14 -14z" fill="#ffffff"/></g></svg>
