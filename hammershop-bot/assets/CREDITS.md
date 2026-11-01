@@ -1,16 +1,16 @@
-# Asset credits
+# Autorzy grafik
 
-All images in this folder were rendered for HammerShop by `tools/render-assets.js` (`npm run render-assets`).
+Wszystkie obrazki w tym folderze wygenerował dla HammerShop skrypt `tools/render-assets.js` (`npm run render-assets`).
 
-- **Icons:** [Font Awesome Free](https://fontawesome.com) by Fonticons, Inc. – icons licensed under
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The Discord, PayPal and Bitcoin glyphs are
-  trademarks of their respective owners and are used only to label those services.
-- **The HammerShop hammer** in the logos is drawn by hand in `tools/render-assets.js` (`hammer()`).
-- **Font:** [Montserrat](https://fonts.google.com/specimen/Montserrat) – SIL Open Font License 1.1.
+- **Ikony:** [Font Awesome Free](https://fontawesome.com) od Fonticons, Inc. – ikony na licencji
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Symbole Discorda, PayPala i Bitcoina są znakami
+  towarowymi ich właścicieli i służą wyłącznie do oznaczenia tych usług.
+- **Młotek HammerShop** w logo jest rysowany ręcznie w `tools/render-assets.js` (`hammer()`).
+- **Czcionka:** [Montserrat](https://fonts.google.com/specimen/Montserrat) – SIL Open Font License 1.1.
 
-| Folder | Contents |
+| Folder | Zawartość |
 |---|---|
-| `banners/` | 1080 × 400 channel banners in light orange (posted at the top of each channel by `/build`) |
-| `emojis/` | 128 × 128 light orange custom emojis (uploaded as `:hs_<name>:` by `/build`) |
-| `brand/logo-*.png` | 1024 × 1024 logos: `hammer` (default server icon), `hammer-wordmark`, `monogram`, `neon`, `bag` – also great as the bot's avatar |
-| `brand/server-banner.png` | 960 × 540 server banner (needs Boost level 2) |
+| `banners/` | Jasnopomarańczowe banery kanałów 1080 × 400 (publikowane przez `/zbuduj` na początku każdego kanału) |
+| `emojis/` | Jasnopomarańczowe własne emotki 128 × 128 (wgrywane przez `/zbuduj` jako `:hs_<nazwa>:`) |
+| `brand/logo-*.png` | Logo 1024 × 1024: `hammer` (domyślna ikona serwera), `hammer-wordmark`, `monogram`, `neon`, `bag` – świetne też jako awatar bota |
+| `brand/server-banner.png` | Baner serwera 960 × 540 (wymaga 2. poziomu boostów) |

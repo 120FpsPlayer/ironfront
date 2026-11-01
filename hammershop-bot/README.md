@@ -1,524 +1,537 @@
-# 🔨 HammerShop – all-in-one Discord bot
+# 🔨 HammerShop – bot Discord „wszystko w jednym”
 
-One bot that **builds your whole Discord server with a single command** and then **runs it**:
-verification, a live shop with Buy buttons, discount codes, receipts and order proofs, tickets, vouches, giveaways,
-sales stats, invite rewards, raid protection, AutoMod, logs, backups and more.
-Light orange theme, a hammer logo, custom banners and custom emojis included. The bot speaks English; the shop terms
-(`regulamin.md`, posted in #rules) are in Polish.
+Jeden bot, który **buduje cały serwer Discord jedną komendą**, a potem **go prowadzi**:
+weryfikacja, sklep na żywo z przyciskami Kup, kody rabatowe, potwierdzenia zakupu i realizacje zamówień, tickety, opinie,
+giveawaye, statystyki sprzedaży, nagrody za zaproszenia, ochrona przed raidami, AutoMod, logi, kopie zapasowe i wiele więcej.
+Jasnopomarańczowy motyw, logo z młotkiem, własne banery i własne emotki w zestawie. Wszystko jest po polsku: bot, jego
+komendy (`/zbuduj`, `/produkt dodaj`…), strona sklepu i regulamin (`regulamin.md`, publikowany na #regulamin).
 
-Type **`/build`**, click **Build**, wait about two minutes – done. 🧡
+Wpisz **`/zbuduj`**, kliknij **Zbuduj**, poczekaj około dwóch minut – gotowe. 🧡
 
 ---
 
-## ✨ What you get
+## ✨ Co dostajesz
 
-### 🏗️ `/build` – the whole server in one click
+### 🏗️ `/zbuduj` – cały serwer jednym kliknięciem
 | | |
 |---|---|
-| 🎭 **19 roles** | **🔨 HammerShop** – the bot's own role: the highest role of the server, so the bot is listed first, and **only the bot has it**. Then CEO, Co-CEO, Manager, Administrator, Moderator, Support, Trial Support, Seller, Loyal Customer, Customer, Bots, Member, 3 notification roles + 3 separators – all in a light orange palette with the right permissions |
-| 📁 **9 categories, 32 channels** (31 with the shop status channel turned off) | Server stats · Welcome · Shop · Support · Community · Staff (with the staff voice room) · Logs · Tickets · Closed tickets |
-| 🔐 **Permissions done right** | New people only see **#verify**, **#rules** and **#welcome** (read-only, so their welcome ping reaches them). Info channels are read-only, staff and log areas are private |
-| 🖼️ **Custom banners** | 36 light orange banners (1080×400) – every info channel starts with its own banner and a styled card |
-| 😀 **Custom emojis** | 67 light orange emojis (`:hs_cart:`, `:hs_check:`, `:hs_paypal:`…) – the bot uses them in all its messages |
-| 🔨 **Branding** | Renames the server to **HammerShop**, sets the hammer logo as the server icon (and banner on boosted servers) |
-| 🌐 **Community mode** | Announcement channels, welcome screen, rules + updates channels |
-| 🤖 **AutoMod** | Spam, mention raids, scam links ("free nitro"), Discord invites, slurs, scam names – alerts go to #automod-logs |
+| 🎭 **19 ról** | **🔨 HammerShop** – własna rola bota: najwyższa rola na serwerze, więc bot jest na samej górze listy członków, i **ma ją tylko bot**. Dalej CEO, Co-CEO, Manager, Administrator, Moderator, Support, Stażysta, Sprzedawca, Stały Klient, Klient, Boty, Członek, 3 role z powiadomieniami + 3 separatory – wszystkie w jasnopomarańczowej palecie i z właściwymi uprawnieniami |
+| 📁 **9 kategorii, 32 kanały** (31 z wyłączonym kanałem statusu sklepu) | Statystyki · Witamy · Sklep · Pomoc · Społeczność · Zespół (z pokojem głosowym zespołu) · Logi · Tickety · Zamknięte tickety |
+| 🔐 **Dobrze ustawione uprawnienia** | Nowe osoby widzą tylko **#weryfikacja**, **#regulamin** i **#powitania** (tylko do odczytu – dzięki temu dociera do nich ping powitalny). Kanały informacyjne są tylko do odczytu, strefy zespołu i logów są prywatne |
+| 🖼️ **Własne banery** | 36 jasnopomarańczowych banerów (1080×400) – każdy kanał informacyjny zaczyna się od własnego banera i ostylowanej karty |
+| 😀 **Własne emotki** | 67 jasnopomarańczowych emotek (`:hs_cart:`, `:hs_check:`, `:hs_paypal:`…) – bot używa ich we wszystkich swoich wiadomościach |
+| 🔨 **Branding** | Zmienia nazwę serwera na **HammerShop**, ustawia logo z młotkiem jako ikonę serwera (i baner na serwerach z boostami) |
+| 🌐 **Tryb społeczności** | Kanały ogłoszeń, ekran powitalny, kanał z zasadami i kanał aktualizacji |
+| 🤖 **AutoMod** | Spam, rajdy wzmianek, linki-oszustwa („free nitro”), zaproszenia na Discorda, wyzwiska, podejrzane nazwy – alerty trafiają na #logi-automod |
 
-### 🛒 Selling
-- **Live shop panel** in #shop – add products with `/product add`, they appear instantly with a **Buy** button.
-  Prices typed as plain numbers get the currency automatically (`20` → **20€**).
-- **Tabs and pages** – the shop shows **5 products per page** with ◀ ▶ buttons, and a **tab per category** (All · Games ·
-  Accounts …; with more than 4 categories the tabs become a menu). Turning pages or switching tabs opens a private copy
-  for that person, so browsing never changes the shop for anyone else. Give products a category with `/product edit category:`.
-- **Product pictures** – attach an image to each product (`/product add image:`), it's shown next to the product.
-- **Payments:** PaysafeCard, Crypto (BTC, ETH), PayPal, **Stripe** (card, Apple Pay, Google Pay) and **BLIK / Transfer
-  (Simpay)** (the seller sends the link) – edit them in `config.json`.
-- **PaysafeCard PINs are hidden** – the ticket only shows `••••-••••-••••-1234`; only the owner (`config.json` → `orders.pinViewers`, user IDs) can click **🔑 Show PIN** to see the whole PIN (only for them, and it is logged).
-- **Automatic product delivery** – give a product its files and/or text (a key, a login…): `/product delivery
-  product:Netflix file:account.txt text:…` (up to 5 files, 9 MB together) or `file:` / `delivery_text:` on `/product add`.
-  Paid with **PayPal or Stripe** → *"📦 Your product is on the way"*, then the product arrives in the ticket **and by DM**
-  right away (usually under 30 seconds) and the order is completed by itself. Paid with **PaysafeCard or Crypto** → after
-  **Pay** the customer sees *"📦 Your product is on the way"*; you check the payment and click **Payment OK – deliver**
-  (or ⚙️ → **Deliver product** / **Send product again**). Products without files are delivered by hand, as before.
-- **Payment card in every order** – right after the order the ticket shows **💳 Pay 24€** for the chosen method:
-  - **PaysafeCard** – what to do, and an **Pay** button (PIN + screenshot form).
-  - **Crypto** – your **BTC / ETH wallet addresses** (`config.json` → the Crypto payment method → `"addresses"`) with
-    the amount in coins at today's rate (e.g. *≈ 0.00040000 BTC*), and **Pay** for the transaction ID or a screenshot.
-  - **PayPal** – with PayPal keys in `.env` a **PayPal link that confirms itself** (like Stripe, below); without keys a
-    **paypal.me** link with the amount filled in (`"paypalMe": "yourname"`), then **Pay** with a screenshot.
-- **PayPal payments that confirm themselves** – put your PayPal app's keys in `.env` (`PAYPAL_CLIENT_ID`,
-  `PAYPAL_CLIENT_SECRET`): every PayPal order gets a **Pay 24€ with PayPal** link. When the customer has approved it,
-  the bot **takes the money itself** within 30 seconds, sets the order to **Paid** and pings the seller. The money is only
-  taken while the order still wants it – an order that was closed or whose total changed is **never charged** (the
-  customer gets a new link instead). Approved after a seller already set the order to Paid? It's **held**, the team is
-  told and can **Take PayPal payment** if the money is missing. A declined card, a payment PayPal is still processing
-  (e.g. one you have to **accept** in your PayPal account) – the customer and the team are always told what happened.
-- **Stripe card payments** – put your Stripe key in `.env` (`STRIPE_SECRET_KEY`) and every order paid with Stripe gets a
-  **Pay 24€** link in its ticket right away. Once the customer has paid, the bot sees it within 30 seconds, sets the
-  order to **Paid**, tells the customer and pings the seller – nobody has to check anything by hand. No website or
-  webhook needed, it works on any host. Links last 23 hours (then a **New payment link** button appears); a link stops
-  working when the order is paid another way or the ticket is closed or deleted, so nobody pays twice – and a payment
-  that still comes in is never lost: it's recorded and the team is told. The order is only set to Paid when the amount
-  matches its total (otherwise staff are asked to check). Without a key Stripe is just a payment method in the list
-  and the seller sends a link by hand.
-- **Buy → order form → private ticket.** The form asks for the option, quantity, a **payment method** from a list and an
-  optional **promo code** – the ticket shows the subtotal, the discount and the **total to pay**.
-- **Options** – one product, several prices: `/product variants product:Netflix variants:"1 month = 5, 3 months = 12, 12 months = 40"`
-  (up to 10, separated by `,` `;` or new lines – `none` removes them). The shop shows **from 5€** and every option,
-  the order form asks which one, and the ticket, receipt, #proofs, `/sales` and the weekly report show it ("Netflix — 3 months").
-- **Stock counter** – `/product stock product:Nitro count:12` (or `count:` on `/product add` / `/product edit`): the shop shows
-  **12 left** / **Only 2 left**, every completed order counts it down, at 0 it's **Sold out** (with Notify me) and the team
-  gets a note in #ticket-logs. Nobody can order more than is left. Setting only a status turns the counter off.
-  "Only N left" starts at `shop.lowStockAt` (3).
-- **Flash sales** – `/sale start product:Nitro percent:20 duration:2h` (30m, 2h, 1d, 1h30m – up to 7 days): the shop shows
-  ~~20€~~ **16€** · −20% with a live countdown, orders get the sale price (promo codes come on top), it ends by itself
-  (or `/sale stop`) and is announced in #restocks with the Restocks ping (`announce:false` to skip). `/sale list` shows
-  what's on sale. Only for products whose price – or every option price – is a plain number (`20`, `19.99`, or with the
-  shop currency like `20€`; `$20` in a € shop is refused).
-- **Badges** – 🔥 **Bestseller** on the product with the most units sold (at least 3) and ⭐ **4.9** – the average vouch
-  rating of a product (from 2 vouches). The shop updates after every completed order. Turn them off or change the limits
-  in `config.json → badges`.
-- **"Pay"** – the order ticket has an **Pay** button for the customer: they send their PaysafeCard PIN(s)
-  (checked: 16 digits each), screenshots and/or a transaction ID. The seller handling the ticket (or the sellers, while
-  nobody has claimed it) is pinged, the screenshots are kept in the ticket, and the log and the archived transcripts
-  only show the last 4 digits of a PIN. A corrected PIN can be sent again after a minute – it only pings the team again after the Call support
-  cooldown (`defaults.pingStaffCooldownMinutes`), or right away once a seller set the order back to Awaiting payment.
-  Turn it off with `orders.paymentProofs`.
-- **Order status** – ⚙️ Manage ticket → **Status: Paid / In progress / Awaiting payment**. The ticket shows the status
-  (⏳ Awaiting payment → 📨 Payment sent → 💳 Paid → 🔧 In progress → ✅ Delivered) and the customer gets a short DM
-  with a link to the ticket (`orders.statusDms`). "Order completed" = Delivered – the receipt says so.
-- **My orders** – a button under the shop (on every page) shows each member, privately, their open orders with their
-  status, total and a link to the ticket, and all their completed orders (10 per page, ◀ Newer / ▶ Older) with a
-  receipt for each.
-- **Discount codes** – `/promo create code:HS10 percent:10` (or an amount off), with expiry, max uses, once per member,
-  first order only.
-- **Order completed** (ticket menu → confirm the amount paid) → the sale is recorded, the buyer gets a **receipt by DM**,
-  the **Customer** role (after 5 orders **Loyal Customer**), and an anonymous **proof** is posted in #proofs.
-- **Vouch reminder** – 24 hours after the order the customer gets a DM with a **Leave a vouch** button (only if they haven't vouched yet).
-- **First-purchase code** – new members get a personal 5% code by DM after they verify.
-- **Notify me** – sold-out products get a 🔔 button; when they're back in stock everyone who clicked gets a DM.
-- **Open / closed** – the shop is open **10:00–20:00 every day** (Polish time): the status channel at the top shows
-  `🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ` / `🔴┃ꜱʜᴏᴘ ᴄʟᴏꜱᴇᴅ`, and the shop and ticket panels say so. It switches by itself;
-  `/shop open` · `/shop close` override it until `/shop auto`.
-- **Restock pings** – new products and restocks are announced in #restocks and ping the Restocks role.
-- **Payment methods, How to buy, FAQ** – ready-made cards, edit them in `config.json`.
-- **Automatic crypto check** – the buyer clicks **Pay** and pastes the transaction ID; the bot checks it on the
-  blockchain (BTC: mempool.space, ETH: Blockscout) – right wallet, ≥ 99% of the amount, not older than the order, used
-  only once, enough confirmations – and then sets the order to Paid and delivers it. ETH only on the **Ethereum**
-  network. Without a transaction ID a seller checks it by hand. Off: `crypto.autoVerify: false`.
-- **🛒 Cart** – add several products and pay for them in one order (`cart.maxItems`, default 10).
-- **💰 Store balance** – `/balance` shows it; top-ups (`balance.topUpMin`–`topUpMax`) are paid like an order and the
-  balance pays for later orders. **Balance can't be paid out or refunded.**
-- **🎁 Gifts** – in the order ticket: **Make it a gift** → the product goes to a friend's DMs, the buyer keeps the receipt.
-- **🎥 Creator codes** – `/affiliate create · list · remove · payout · stats`: a promo code for a creator (default −5%
-  for buyers, 10% commission for the creator, recorded per completed sale; you pay it out by hand).
-- **Comeback codes** – a ticket closed without paying → after 24 h the buyer gets a personal one-time −5% code by DM.
-- **🔥 Deal of the week** – 1–2 random days a week one product is 25–50% off for 24 h (`deals` in `config.json`,
-  `/sale deal` to start or stop one by hand).
-- **Refunds** – the regulamin (§6), the FAQ and the order cards say the same thing: delivered digital products can't be
-  returned (by ordering, the buyer asks for instant delivery); a product that doesn't work is fixed or replaced – and
-  refunded when that's impossible. Store balance is never paid out (`shop.refundPolicy`).
-- **Regulamin** – the shop terms in Polish live in `regulamin.md` and are posted in #rules (see *The regulamin* below).
+### 🛒 Sprzedaż
+- **Sklep na żywo** na #sklep – dodawaj produkty komendą `/produkt dodaj`, pojawiają się od razu z przyciskiem **Kup**.
+  Ceny wpisane jako sama liczba automatycznie dostają walutę (`20` → **20€**).
+- **Zakładki i strony** – sklep pokazuje **5 produktów na stronę** z przyciskami ◀ ▶ i **zakładkę dla każdej kategorii** (Wszystkie ·
+  Gry · Konta …; przy więcej niż 4 kategoriach zakładki zmieniają się w menu). Zmiana strony albo zakładki otwiera prywatną kopię
+  dla tej osoby, więc przeglądanie nigdy nie zmienia sklepu nikomu innemu. Kategorię produktu ustawisz przez `/produkt edytuj kategoria:`.
+- **Zdjęcia produktów** – dołącz obrazek do każdego produktu (`/produkt dodaj obrazek:`), pokazuje się obok produktu.
+- **Płatności:** PaysafeCard, kryptowaluty (BTC, ETH), PayPal, **Stripe** (karta, Apple Pay, Google Pay) i **BLIK / przelew
+  (Simpay)** (link wysyła sprzedawca) – edytujesz je w `config.json`.
+- **PIN-y PaysafeCard są ukryte** – ticket pokazuje tylko `••••-••••-••••-1234`; tylko właściciel (`config.json` → `orders.pinViewers`, ID użytkowników) może kliknąć **🔑 Pokaż PIN**, żeby zobaczyć cały PIN (widzi go tylko on, a każde odsłonięcie trafia do logów).
+- **Automatyczna dostawa produktu** – daj produktowi pliki i/lub tekst (klucz, dane logowania…): `/produkt dostawa
+  produkt:Netflix plik:konto.txt tekst:…` (do 5 plików, łącznie 9 MB) albo `plik:` / `tekst-dostawy:` w `/produkt dodaj`.
+  Opłacone przez **PayPal lub Stripe** → *„📦 Twój produkt jest w drodze”*, potem produkt trafia do ticketu **i na DM**
+  od razu (zwykle w mniej niż 30 sekund), a zamówienie realizuje się samo. Opłacone **PaysafeCard lub kryptowalutami** → po kliknięciu
+  **Zapłać** klient widzi *„📦 Twój produkt jest w drodze”*; Ty sprawdzasz płatność i klikasz **Płatność OK – dostarcz**
+  (albo ⚙️ → **Dostarcz produkt** / **Wyślij produkt ponownie**). Produkty bez plików dostarczasz ręcznie, tak jak dotąd.
+- **Karta płatności w każdym zamówieniu** – zaraz po złożeniu zamówienia ticket pokazuje **💳 Zapłać 24€** dla wybranej metody:
+  - **PaysafeCard** – co zrobić i przycisk **Zapłać** (formularz na PIN + zrzut ekranu).
+  - **Kryptowaluty** – Twoje **adresy portfeli BTC / ETH** (`config.json` → metoda płatności Kryptowaluty → `"addresses"`)
+    z kwotą w monetach po dzisiejszym kursie (np. *≈ 0.00040000 BTC*) i **Zapłać**, żeby podać ID transakcji albo zrzut ekranu.
+  - **PayPal** – z kluczami PayPal w `.env` **link PayPal, który potwierdza się sam** (jak Stripe, niżej); bez kluczy link
+    **paypal.me** z wpisaną kwotą (`"paypalMe": "twojanazwa"`), a potem **Zapłać** ze zrzutem ekranu.
+- **Płatności PayPal, które potwierdzają się same** – wpisz klucze swojej aplikacji PayPal w `.env` (`PAYPAL_CLIENT_ID`,
+  `PAYPAL_CLIENT_SECRET`): każde zamówienie przez PayPal dostaje link **Zapłać 24€ przez PayPal**. Gdy klient go zatwierdzi,
+  bot w ciągu 30 sekund **sam pobiera pieniądze**, zmienia status zamówienia na **Opłacone** i pinguje sprzedawcę. Pieniądze są
+  pobierane tylko wtedy, gdy zamówienie wciąż na nie czeka – zamówienie zamknięte albo ze zmienioną kwotą **nigdy nie zostanie
+  obciążone** (klient dostaje wtedy nowy link). Zatwierdzone, kiedy sprzedawca już ustawił status Opłacone? Płatność jest
+  **wstrzymana**, zespół dostaje informację i może kliknąć **Pobierz płatność PayPal**, jeśli pieniędzy brakuje. Odrzucona karta,
+  płatność, którą PayPal wciąż przetwarza (np. taka, którą musisz **zaakceptować** na swoim koncie PayPal) – klient i zespół
+  zawsze wiedzą, co się stało.
+- **Płatności kartą przez Stripe** – wpisz klucz Stripe w `.env` (`STRIPE_SECRET_KEY`), a każde zamówienie opłacane przez Stripe
+  od razu dostaje w tickecie link **Zapłać 24€**. Gdy klient zapłaci, bot widzi to w ciągu 30 sekund, zmienia status zamówienia
+  na **Opłacone**, informuje klienta i pinguje sprzedawcę – nikt nie musi niczego sprawdzać ręcznie. Nie potrzeba strony ani
+  webhooka, działa na każdym hostingu. Linki są ważne 23 godziny (potem pojawia się przycisk **Nowy link do płatności**); link
+  przestaje działać, gdy zamówienie zostanie opłacone w inny sposób albo ticket zostanie zamknięty lub usunięty, więc nikt nie
+  zapłaci dwa razy – a płatność, która mimo to wpłynie, nigdy nie przepada: zostaje zapisana, a zespół dostaje informację.
+  Status Opłacone jest ustawiany tylko wtedy, gdy kwota zgadza się z sumą zamówienia (w przeciwnym razie zespół jest proszony
+  o sprawdzenie). Bez klucza Stripe jest po prostu metodą płatności na liście, a link wysyła ręcznie sprzedawca.
+- **Kup → formularz zamówienia → prywatny ticket.** Formularz pyta o wariant, ilość, **metodę płatności** z listy i opcjonalny
+  **kod rabatowy** – ticket pokazuje sumę, rabat i kwotę **do zapłaty**.
+- **Warianty** – jeden produkt, kilka cen: `/produkt warianty produkt:Netflix warianty:"1 miesiąc = 5, 3 miesiące = 12, 12 miesięcy = 40"`
+  (do 10, oddzielone `,` `;` albo nowymi liniami – `none` je usuwa). Sklep pokazuje **od 5€** i każdy wariant,
+  formularz zamówienia pyta, który z nich, a ticket, potwierdzenie zakupu, #realizacje, `/sprzedaz` i raport tygodniowy go
+  pokazują („Netflix — 3 miesiące”).
+- **Licznik sztuk** – `/produkt stan produkt:Nitro ilosc:12` (albo `ilosc:` w `/produkt dodaj` / `/produkt edytuj`): sklep pokazuje
+  **zostało 12** / **zostało tylko 2**, każde zrealizowane zamówienie zmniejsza licznik, przy 0 produkt jest **wyprzedany**
+  (z przyciskiem Powiadom mnie), a zespół dostaje informację na #logi-ticketów. Nikt nie zamówi więcej, niż zostało. Ustawienie
+  samego stanu (bez ilości) wyłącza licznik. „Zostało tylko N” pojawia się od `shop.lowStockAt` (3).
+- **Promocje błyskawiczne** – `/promocja start produkt:Nitro procent:20 czas:2h` (30m, 2h, 1d, 1h30m – do 7 dni): sklep pokazuje
+  ~~20€~~ **16€** · −20% z odliczaniem na żywo, zamówienia dostają cenę promocyjną (kody rabatowe działają dodatkowo), promocja
+  kończy się sama (albo `/promocja stop`) i jest ogłaszana na #dostawy z pingiem roli Dostawy (`ogloszenie:false`, żeby to pominąć).
+  `/promocja lista` pokazuje, co jest przecenione. Tylko dla produktów, których cena – albo cena każdego wariantu – jest samą
+  liczbą (`20`, `19.99` albo z walutą sklepu, np. `20€`; `$20` w sklepie w € zostanie odrzucone).
+- **Odznaki** – 🔥 **Bestseller** przy produkcie z największą liczbą sprzedanych sztuk (co najmniej 3) i ⭐ **4.9** – średnia ocena
+  produktu z opinii (od 2 opinii). Sklep odświeża się po każdym zrealizowanym zamówieniu. Wyłączysz je albo zmienisz progi
+  w `config.json → badges`.
+- **„Zapłać”** – ticket zamówienia ma dla klienta przycisk **Zapłać**: klient wysyła nim PIN(-y) PaysafeCard
+  (sprawdzane: po 16 cyfr), zrzuty ekranu i/lub ID transakcji. Sprzedawca obsługujący ticket (albo sprzedawcy, dopóki nikt
+  go nie przejął) dostaje ping, zrzuty ekranu zostają w tickecie, a log i archiwalne transkrypcje pokazują tylko 4 ostatnie
+  cyfry PIN-u. Poprawiony PIN można wysłać ponownie po minucie – zespół dostaje kolejny ping dopiero po czasie odnowienia
+  przycisku Wezwij pomoc (`defaults.pingStaffCooldownMinutes`) albo od razu, gdy sprzedawca przywróci status Oczekuje na płatność.
+  Wyłączysz to przez `orders.paymentProofs`.
+- **Status zamówienia** – ⚙️ Zarządzaj ticketem → **Status: Opłacone / W realizacji / Oczekuje na płatność**. Ticket pokazuje status
+  (⏳ Oczekuje na płatność → 📨 Płatność wysłana → 💳 Opłacone → 🔧 W realizacji → ✅ Dostarczone), a klient dostaje krótki DM
+  z linkiem do ticketu (`orders.statusDms`). „Zamówienie zrealizowane” = Dostarczone – tak też pisze potwierdzenie zakupu.
+- **Moje zamówienia** – przycisk pod sklepem (na każdej stronie) pokazuje każdemu członkowi, prywatnie, jego otwarte zamówienia
+  ze statusem, kwotą i linkiem do ticketu oraz wszystkie zrealizowane zamówienia (10 na stronę, ◀ Nowsze / ▶ Starsze)
+  z potwierdzeniem zakupu dla każdego.
+- **Kody rabatowe** – `/kod utworz kod:HS10 procent:10` (albo stała kwota rabatu), z datą ważności, limitem użyć, raz na osobę,
+  tylko na pierwsze zamówienie.
+- **Zamówienie zrealizowane** (menu ticketu → potwierdzenie zapłaconej kwoty) → sprzedaż zostaje zapisana, kupujący dostaje
+  **potwierdzenie zakupu na DM** i rolę **Klient** (po 5 zamówieniach **Stały Klient**), a na #realizacje trafia anonimowy wpis
+  o **realizacji**.
+- **Przypomnienie o opinii** – 24 godziny po zamówieniu klient dostaje DM z przyciskiem **Wystaw opinię** (tylko jeśli nie ma jeszcze opinii).
+- **Kod na pierwszy zakup** – nowi członkowie po weryfikacji dostają na DM osobisty kod rabatowy 5%.
+- **Powiadom mnie** – wyprzedane produkty mają przycisk 🔔; gdy wrócą do sprzedaży, każdy, kto go kliknął, dostaje DM.
+- **Otwarte / zamknięte** – sklep jest otwarty **10:00–20:00 codziennie** (czas polski): kanał statusu na górze pokazuje
+  `🟢┃ꜱᴋʟᴇᴘ ᴏᴛᴡᴀʀᴛʏ` / `🔴┃ꜱᴋʟᴇᴘ ᴢᴀᴍᴋɴɪᴇᴛʏ`, a panel sklepu i panel ticketów też to pokazują. Przełącza się samo;
+  `/sklep otworz` · `/sklep zamknij` nadpisują godziny pracy do czasu `/sklep auto`.
+- **Pingi o dostawach** – nowe produkty i dostawy są ogłaszane na #dostawy z pingiem roli Dostawy.
+- **Metody płatności, Jak kupić, FAQ** – gotowe karty, edytujesz je w `config.json`.
+- **Automatyczne sprawdzanie kryptowalut** – kupujący klika **Zapłać** i wkleja ID transakcji; bot sprawdza ją w blockchainie
+  (BTC: mempool.space, ETH: Blockscout) – właściwy portfel, ≥ 99% kwoty, nie starsza niż zamówienie, użyta tylko raz,
+  wystarczająco dużo potwierdzeń – i wtedy zmienia status na Opłacone i dostarcza zamówienie. ETH tylko w sieci **Ethereum**.
+  Bez ID transakcji płatność sprawdza ręcznie sprzedawca. Wyłączenie: `crypto.autoVerify: false`.
+- **🛒 Koszyk** – dodaj kilka produktów i zapłać za nie w jednym zamówieniu (`cart.maxItems`, domyślnie 10).
+- **💰 Saldo sklepu** – `/saldo` je pokazuje; doładowania (`balance.topUpMin`–`topUpMax`) opłaca się jak zamówienie, a saldem
+  można płacić za kolejne zamówienia. **Salda nie można wypłacić ani zwrócić.**
+- **🎁 Prezenty** – w tickecie zamówienia: **Kup jako prezent** → produkt trafia na DM znajomego, a kupujący zachowuje potwierdzenie zakupu.
+- **🎥 Kody twórców** – `/tworca utworz · lista · usun · wyplata · statystyki`: kod rabatowy dla twórcy (domyślnie −5%
+  dla kupujących i 10% prowizji dla twórcy, naliczanej od każdej zrealizowanej sprzedaży; wypłacasz ją ręcznie).
+- **Kody powrotne** – ticket zamknięty bez płatności → po 24 h kupujący dostaje na DM osobisty, jednorazowy kod −5%.
+- **🔥 Okazja tygodnia** – w 1–2 losowe dni w tygodniu jeden produkt jest tańszy o 25–50% przez 24 h (`deals` w `config.json`;
+  `/promocja okazja`, żeby uruchomić albo zatrzymać ją ręcznie).
+- **Zwroty** – regulamin (§6), FAQ i karty zamówień mówią to samo: dostarczonych produktów cyfrowych nie można zwrócić
+  (składając zamówienie, kupujący prosi o natychmiastową dostawę); niedziałający produkt naprawiamy albo wymieniamy – a gdy to
+  niemożliwe, zwracamy pieniądze. Saldo sklepu nigdy nie jest wypłacane (`shop.refundPolicy`).
+- **Regulamin** – zasady sklepu po polsku są w pliku `regulamin.md` i są publikowane na #regulamin (zob. *Regulamin* niżej).
 
-### 📈 For you and your team
-- **`/sales`** – revenue, orders, average order, top products, sellers, payment methods and discounts for today,
-  7 days, 30 days or all time, compared with the period before. A **weekly report** is posted in #sales every Monday at 10:00.
-- **`/customer view @user`** – orders, total spent, last orders, tickets, vouches, invites and **private staff notes**
-  (`/customer note add`).
-- **Automatic backups** – every 24 hours the bot posts a backup of its data in #backups (admins only); `/backup` makes one now.
-- **Unclaimed ticket reminders** – while the shop is open, tickets nobody has claimed for 15 minutes are listed in
-  #staff-chat (one message, with links, pinging the staff roles of those tickets), again every 60 minutes until someone
-  claims them. Tickets from the night are reminded when the shop opens. `staffReminders` in `config.json`
-  (`repeatMinutes: 0` = only once).
+### 📈 Dla Ciebie i Twojego zespołu
+- **`/sprzedaz`** – przychód, zamówienia, średnie zamówienie, najlepsze produkty, sprzedawcy, metody płatności i rabaty za dziś,
+  7 dni, 30 dni albo od początku, w porównaniu z poprzednim okresem. W każdy poniedziałek o 10:00 na #sprzedaż trafia **raport tygodniowy**.
+- **`/klient profil klient:@osoba`** – zamówienia, łączne wydatki, ostatnie zamówienia, tickety, opinie, zaproszenia i **prywatne
+  notatki zespołu** (`/klient notatka dodaj`).
+- **Automatyczne kopie zapasowe** – co 24 godziny bot publikuje kopię swoich danych na #kopie-zapasowe (tylko admini); `/kopia` robi ją od razu.
+- **Przypomnienia o nieprzejętych ticketach** – gdy sklep jest otwarty, tickety, których nikt nie przejął przez 15 minut, są
+  wypisywane na #czat-zespołu (jedna wiadomość z linkami i pingiem ról zespołu z tych ticketów), potem znowu co 60 minut, dopóki
+  ktoś ich nie przejmie. O ticketach z nocy bot przypomina po otwarciu sklepu. `staffReminders` w `config.json`
+  (`repeatMinutes: 0` = tylko raz).
 
-### 🛡️ Security & growth
-- **Chat filter** – no links in #chat (GIFs are fine) and no swearing or slurs in many languages (English, Polish, Swedish, German, French, Spanish, Russian…), also written as `sh1t`, `k u r w a`, `ᴋᴜʀᴡᴀ` or with Cyrillic letters. The message is deleted, the member gets a short notice, #automod-logs gets the details; 3 blocked messages in 10 minutes → 10 min timeout. Staff are never filtered. Settings: `chatFilter` in `config.json` (`noLinks`, `allowedDomains`, `extraWords`, `allowedWords`, `profanity: "public"` = not in tickets).
-- **Look-alike alerts** – someone joins as "supp0rt_hammershop" or copies a staff member's avatar? Staff get an alert in
-  #automod-logs with **Ban / Kick / Timeout / Ignore** buttons.
-- **`/lockdown`** – during a raid everyone except the team can't chat, react or use voice, new tickets, orders and vouches
-  are paused (open tickets keep working) and invites are paused; `/unlock` puts every role and setting back exactly.
-- **Invite tracking with rewards** – the bot knows who invited whom. An invite counts once the new member verifies and stays;
-  at **5 / 15 / 30** invites the inviter gets a personal **10% / 15% / 20%** code by DM. `/invites stats` · `/invites top`.
+### 🛡️ Bezpieczeństwo i rozwój
+- **Filtr czatu** – żadnych linków na #czat (GIF-y są OK) i żadnych przekleństw ani wyzwisk w wielu językach (angielski, polski, szwedzki, niemiecki, francuski, hiszpański, rosyjski…), także pisanych jako `sh1t`, `k u r w a`, `ᴋᴜʀᴡᴀ` albo cyrylicą. Wiadomość jest usuwana, członek dostaje krótką informację, a #logi-automod – szczegóły; 3 zablokowane wiadomości w 10 minut → 10 min wyciszenia (timeout). Filtr nigdy nie dotyczy zespołu. Ustawienia: `chatFilter` w `config.json` (`noLinks`, `allowedDomains`, `extraWords`, `allowedWords`, `profanity: "public"` = nie w ticketach).
+- **Alerty o podszywaniu się** – ktoś dołącza jako „supp0rt_hammershop” albo kopiuje awatar osoby z zespołu? Zespół dostaje alert
+  na #logi-automod z przyciskami **Ban / Wyrzuć / Wycisz / Ignoruj**.
+- **`/zablokuj`** – podczas raidu nikt poza zespołem nie może pisać, reagować ani wchodzić na kanały głosowe, nowe tickety,
+  zamówienia i opinie są wstrzymane (otwarte tickety działają dalej), a zaproszenia zawieszone; `/odblokuj` przywraca każdą rolę
+  i każde ustawienie dokładnie tak, jak było.
+- **Śledzenie zaproszeń z nagrodami** – bot wie, kto kogo zaprosił. Zaproszenie się liczy, gdy nowy członek się zweryfikuje
+  i zostanie na serwerze; przy **5 / 15 / 30** zaproszeniach zapraszający dostaje na DM osobisty kod **10% / 15% / 20%**.
+  `/zaproszenia statystyki` · `/zaproszenia ranking`.
 
-### ⭐ Vouches
-- **Leave a vouch** button with a star-rating form, or `/vouch` with an optional screenshot.
-- The vouch panel is **sticky**: after every new vouch it jumps to the bottom of #vouches, so the
-  **Leave a vouch** button is always the first thing people see (`"stickyPanel": false` turns this off).
-- Live counter with the average rating and a rating breakdown, plus a cooldown against spam.
+### ⭐ Opinie
+- Przycisk **Wystaw opinię** z formularzem i oceną w gwiazdkach albo `/opinia` z opcjonalnym zrzutem ekranu.
+- Panel opinii jest **przyklejony**: po każdej nowej opinii przeskakuje na dół #opinie, więc przycisk **Wystaw opinię** jest
+  zawsze pierwszą rzeczą, którą ludzie widzą (`"stickyPanel": false` to wyłącza).
+- Licznik na żywo ze średnią oceną i rozkładem ocen, plus czas odnowienia przeciw spamowi.
 
-### 🎫 Tickets (full ticket system)
-- 6 categories: **Purchase** (only through Buy in the shop), **Support, Claim a Reward, Report a User, Staff Application, Punishment Appeal**.
-- Forms, claim/unclaim, priorities, move between categories, add people, canned replies (`/reply`), close requests,
-  auto-close for inactive tickets (never for orders that are already paid or in progress), **"Call support"** button, blacklist.
-- **HTML transcripts** that look like Discord, **DM to the author** with the transcript and a **1–5 ⭐ rating**.
-- `/stats` – response times, ratings, staff leaderboard.
+### 🎫 Tickety (pełny system ticketów)
+- 6 kategorii: **Zakup** (tylko przez Kup w sklepie), **Pomoc, Odbierz nagrodę, Zgłoś użytkownika, Rekrutacja, Odwołanie od kary**.
+- Formularze, przejmowanie/oddawanie, priorytety, przenoszenie między kategoriami, dodawanie osób, gotowe odpowiedzi (`/odpowiedz`),
+  prośby o zamknięcie, automatyczne zamykanie nieaktywnych ticketów (nigdy dla zamówień już opłaconych albo w realizacji),
+  przycisk **„Wezwij pomoc”**, czarna lista.
+- **Transkrypcje HTML**, które wyglądają jak Discord, **DM do autora** z transkrypcją i **oceną 1–5 ⭐**.
+- `/statystyki` – czasy odpowiedzi, oceny, ranking zespołu.
 
-### ✅ Verification
-- **Verify** button + a quick math question against bots + minimum account age (3 days by default).
-- Every attempt is logged in #verify-logs. Existing members get the Member role automatically during `/build`.
+### ✅ Weryfikacja
+- Przycisk **Zweryfikuj się** + szybkie pytanie matematyczne przeciw botom + minimalny wiek konta (domyślnie 3 dni).
+- Każda próba trafia do logów na #logi-weryfikacji. Obecni członkowie automatycznie dostają rolę Członek podczas `/zbuduj`.
 
-### 🎉 Community
-- **Giveaways** – Enter button, live entry count, automatic winner draw, reroll; entry requirements: a **required role**,
-  **customers only** (`buyers_only:`) and **at least N invites** (`min_invites:` – only invited members who verified and
-  are still here count); every requirement is checked again for the winners at the draw and on rerolls; winners claim
-  through a ticket.
-- **Notification roles** in #roles (Announcements / Giveaways / Restocks).
-- **`/announce`** – a form that posts a styled announcement with a banner, an optional button and a ping.
-- **Welcome cards** in #welcome, **logs** for joins, leaves, deleted and edited messages.
-- **Stats channels** (👥 Members / ⭐ Vouches) and a **leaderboard** of the most active chatters (weekly + all time).
+### 🎉 Społeczność
+- **Giveawaye** – przycisk Dołącz, licznik uczestników na żywo, automatyczne losowanie zwycięzców, ponowne losowanie; wymagania
+  udziału: **wymagana rola**, **tylko klienci** (`tylko-klienci:`) i **co najmniej N zaproszeń** (`min-zaproszen:` – liczą się
+  tylko zaproszeni członkowie, którzy się zweryfikowali i wciąż są na serwerze); każde wymaganie jest sprawdzane ponownie
+  u zwycięzców przy losowaniu i przy ponownym losowaniu; zwycięzcy odbierają nagrody przez ticket.
+- **Role z powiadomieniami** na #role (Ogłoszenia / Giveawaye / Dostawy).
+- **`/ogloszenie`** – formularz, który publikuje ostylowane ogłoszenie z banerem, opcjonalnym przyciskiem i pingiem.
+- **Karty powitalne** na #powitania, **logi** wejść, wyjść, usuniętych i edytowanych wiadomości.
+- **Kanały ze statystykami** (👥 Członkowie / ⭐ Opinie) i **ranking** najaktywniejszych osób na czacie (tygodniowy + ogólny).
 
 ---
 
-## 🚀 Setup (10 minutes)
+## 🚀 Instalacja (10 minut)
 
-### 1. Create the bot
-1. Go to <https://discord.com/developers/applications> → **New Application** → name it **HammerShop**.
-2. **Bot** tab → **Reset Token** → copy the token (you only see it once – never share it!).
-3. Still on the **Bot** tab, under *Privileged Gateway Intents* turn **ON**:
-   - ✅ **Server Members Intent** (welcome messages, logs, giving roles)
-   - ✅ **Message Content Intent** (transcripts, logs, leaderboard)
-4. *Optional:* upload `assets/brand/logo-hammer.png` (or `logo-hammer-wordmark.png`) as the bot's avatar.
+### 1. Utwórz bota
+1. Wejdź na <https://discord.com/developers/applications> → **New Application** → nazwij aplikację **HammerShop**.
+2. Zakładka **Bot** → **Reset Token** → skopiuj token (zobaczysz go tylko raz – nigdy nikomu go nie podawaj!).
+3. Wciąż w zakładce **Bot**, w sekcji *Privileged Gateway Intents* **włącz**:
+   - ✅ **Server Members Intent** (wiadomości powitalne, logi, nadawanie ról)
+   - ✅ **Message Content Intent** (transkrypcje, logi, ranking)
+4. *Opcjonalnie:* wgraj `assets/brand/logo-hammer.png` (albo `logo-hammer-wordmark.png`) jako awatar bota.
 
-### 2. Configure
-1. Copy **`.env.example`** to **`.env`**.
-2. Fill in:
+### 2. Konfiguracja
+1. Skopiuj **`.env.example`** do **`.env`**.
+2. Uzupełnij:
    ```env
-   DISCORD_TOKEN=your_bot_token
-   GUILD_ID=your_server_id
+   DISCORD_TOKEN=token_twojego_bota
+   GUILD_ID=id_twojego_serwera
    ```
-   > 💡 To copy an ID: Discord → Settings → Advanced → **Developer Mode** on. Then right-click your server → **Copy Server ID**.
-   > With `GUILD_ID` set, the slash commands appear instantly.
+   > 💡 Jak skopiować ID: Discord → Ustawienia użytkownika → Zaawansowane → włącz **Tryb dewelopera**. Potem kliknij prawym przyciskiem swój serwer → **Kopiuj ID serwera**.
+   > Z ustawionym `GUILD_ID` komendy pojawiają się od razu.
 
-   *Optional – card payments:* `STRIPE_SECRET_KEY=sk_live_…` (Stripe Dashboard → **Developers → API keys → Secret key**;
-   `sk_test_…` to try it with test cards first; a restricted key with **Checkout Sessions: Write** is enough).
+   *Opcjonalnie – płatności kartą:* `STRIPE_SECRET_KEY=sk_live_…` (Stripe Dashboard → **Developers → API keys → Secret key**;
+   `sk_test_…`, żeby najpierw wypróbować płatności kartami testowymi; wystarczy klucz ograniczony z uprawnieniem **Checkout Sessions: Write**).
 
-   *Optional – PayPal:* `PAYPAL_CLIENT_ID=…` and `PAYPAL_CLIENT_SECRET=…` (<https://developer.paypal.com> → **Apps &
-   Credentials** → **Live** → **Create App** → copy the Client ID and Secret; `PAYPAL_SANDBOX=true` with Sandbox keys to
-   try it with test accounts first).
+   *Opcjonalnie – PayPal:* `PAYPAL_CLIENT_ID=…` i `PAYPAL_CLIENT_SECRET=…` (<https://developer.paypal.com> → **Apps &
+   Credentials** → **Live** → **Create App** → skopiuj Client ID i Secret; `PAYPAL_SANDBOX=true` z kluczami Sandbox, żeby
+   najpierw wypróbować płatności na kontach testowych).
 
-### 3. Start
-You need **Node.js 18.17 or newer** (<https://nodejs.org>).
+### 3. Uruchomienie
+Potrzebujesz **Node.js 18.17 lub nowszego** (<https://nodejs.org>).
 ```bash
 npm install
 npm start
 ```
-The console prints an **invite link** – open it and add the bot to your server (it asks for **Administrator**, which `/build` needs).
+Konsola wypisze **link z zaproszeniem** – otwórz go i dodaj bota na swój serwer (bot prosi o uprawnienie **Administrator**, którego potrzebuje `/zbuduj`).
 
-**On a host (Wispbyte, Pterodactyl, …):** upload the files so that `index.js` and `package.json` are in the main folder,
-create `.env` there, set the **startup file to `index.js`** and press Start. Dependencies install themselves on the first start.
+**Na hostingu (Wispbyte, Pterodactyl, …):** wgraj pliki tak, żeby `index.js` i `package.json` były w głównym folderze,
+utwórz tam `.env`, ustaw **plik startowy na `index.js`** i kliknij Start. Zależności zainstalują się same przy pierwszym uruchomieniu.
 
-### 4. Build the server
-1. **Server Settings → Roles:** drag the bot's role to the **very top**.
-2. Type **`/build`** and click:
-   - **Build** – adds everything next to your current channels, or
-   - **Wipe & Build** – deletes all channels, roles and AutoMod rules first, then builds a clean HammerShop server
-     (server owner only, you have to type the server name to confirm).
-3. Watch the progress bar. When it says **HammerShop is ready!** you're live. 🎉
-4. Fill in the seller details for the regulamin: `config.json` → `rules.seller` (name or company, address) and
-   `rules.email`, restart the bot and run `/build only:panels`.
+### 4. Zbuduj serwer
+1. **Ustawienia serwera → Role:** przeciągnij rolę bota na **samą górę**.
+2. Wpisz **`/zbuduj`** i kliknij:
+   - **Zbuduj** – dodaje wszystko obok Twoich obecnych kanałów, albo
+   - **Wyczyść i zbuduj** – najpierw usuwa wszystkie kanały, role i reguły AutoMod, a potem buduje czysty serwer HammerShop
+     (tylko właściciel serwera; żeby potwierdzić, trzeba wpisać nazwę serwera).
+3. Obserwuj pasek postępu. Gdy pojawi się **HammerShop jest gotowy!**, serwer działa. 🎉
+4. Uzupełnij dane sprzedawcy do regulaminu: `config.json` → `rules.seller` (imię i nazwisko albo firma, adres) i
+   `rules.email`, uruchom bota ponownie i wpisz `/zbuduj tylko:panels`.
 
-### 5. Start selling
+### 5. Zacznij sprzedawać
 ```
-/product add name:GTA V price:20 description:Instant delivery, full warranty. emoji:💎
+/produkt dodaj nazwa:GTA V cena:20 opis:Dostawa natychmiastowa, pełna gwarancja. emoji:💎
 ```
-The price shows as **20€** in the shop.
-Give your team their roles (Manager, Support, Seller…) and you're good to go.
+Cena pokaże się w sklepie jako **20€**.
+Nadaj zespołowi role (Manager, Support, Sprzedawca…) i możesz zaczynać.
 
 ---
 
-## 🌐 Website (the store page, run by the bot)
+## 🌐 Strona sklepu (prowadzona przez bota)
 
-The bot also runs your HammerShop store website, in the same program on the same server. It sells exactly what's in the bot's shop:
+Bot prowadzi też stronę internetową Twojego sklepu HammerShop – w tym samym programie, na tym samym serwerze. Strona sprzedaje dokładnie to, co jest w sklepie bota:
 
-- `/product add | edit | stock | variants | sale` show on the website right away.
-- Only products with a fixed price are listed. Every option is listed separately, flash sale prices are included, sold-out products are hidden and product pictures are shown.
-- **Continue with Discord** signs the buyer in with the bot's own application. Their Discord ID links everything. Signing in is all it takes to buy – there is no access fee.
-- Someone who isn't on the server yet is **added automatically with the Member role** when they sign in (OAuth2 `guilds.join`), and a member without the role gets it. The bot needs *Create Invite* and *Manage Roles* (it has them after `/build`).
-- The buyer fills the bag (it works before signing in, too) and pays by card on **Stripe** (the same `STRIPE_SECRET_KEY`).
-- **Paid** opens the buyer's order ticket on Discord (paid with "Website", nothing more to pay). Products with files or text (`/product delivery`) are delivered right away in the ticket and by DM, like any paid order, and everything else pings the sellers.
-- A buyer who isn't on the server yet gets their ticket as soon as they join.
-- Product cards show the real description and the delivery time (**⚡ Instant delivery** for products with files or text). The Stripe payment page says where the order goes next.
-- After paying, the buyer sees a **receipt**: the order reference (with a Copy button), what was bought, the total, the ticket with a button straight to it, and whether it's delivered already. The same confirmation arrives **by DM** on Discord (with *Open ticket* and *My orders* buttons). **My orders** shows every order.
-- Every payment is posted in the log channel. The Support buttons use `DISCORD_INVITE_URL`, or a permanent invite the bot makes itself.
+- Zmiany z `/produkt dodaj | edytuj | stan | warianty` i `/promocja` od razu widać na stronie.
+- Na liście są tylko produkty ze stałą ceną. Każdy wariant jest pokazany osobno, ceny z promocji błyskawicznych są uwzględnione, wyprzedane produkty są ukryte, a zdjęcia produktów widoczne.
+- **Zaloguj się przez Discorda** loguje kupującego przez własną aplikację bota. Jego ID na Discordzie łączy wszystko. Do zakupu wystarczy się zalogować – nie ma żadnej opłaty za dostęp.
+- Osoba, której jeszcze nie ma na serwerze, jest przy logowaniu **dodawana automatycznie z rolą Członek** (OAuth2 `guilds.join`), a członek bez tej roli ją dostaje. Bot potrzebuje uprawnień *Utwórz zaproszenie* i *Zarządzaj rolami* (ma je po `/zbuduj`).
+- Kupujący wypełnia koszyk (działa to też przed zalogowaniem) i płaci kartą przez **Stripe** (ten sam `STRIPE_SECRET_KEY`).
+- Po **opłaceniu** na Discordzie otwiera się ticket zamówienia kupującego (opłacone przez stronę, nic więcej do zapłaty). Produkty z plikami albo tekstem (`/produkt dostawa`) są dostarczane od razu w tickecie i na DM, jak każde opłacone zamówienie, a przy pozostałych bot pinguje sprzedawców.
+- Kupujący, którego jeszcze nie ma na serwerze, dostaje swój ticket, gdy tylko dołączy.
+- Karty produktów pokazują prawdziwy opis i czas dostawy (**⚡ Dostawa natychmiastowa** dla produktów z plikami albo tekstem). Strona płatności Stripe mówi, co dalej dzieje się z zamówieniem.
+- Po zapłacie kupujący widzi **potwierdzenie zakupu**: numer zamówienia (z przyciskiem Kopiuj), kupione produkty, kwotę, ticket z przyciskiem prowadzącym prosto do niego i informację, czy zamówienie jest już dostarczone. To samo potwierdzenie przychodzi **na DM** na Discordzie (z przyciskami *Otwórz ticket* i *Moje zamówienia*). **Moje zamówienia** pokazuje każde zamówienie.
+- Każda płatność trafia na kanał z logami. Przyciski Pomoc korzystają z `DISCORD_INVITE_URL` albo ze stałego zaproszenia, które bot tworzy sam.
 
-**Setup:**
-1. `.env`: set `PUBLIC_URL` (the address people open) and `DISCORD_CLIENT_SECRET` (Developer Portal → OAuth2). Under Redirects, add `<PUBLIC_URL>/api/shop/auth/callback`.
-2. Optional: set `STRIPE_WEBHOOK_SECRET` (Stripe → Webhooks → `<PUBLIC_URL>/api/shop/stripe/webhook`).
-3. The port is `WEB_PORT`. On a hosting panel (Pterodactyl and similar) leave it empty: the bot uses the port the panel gives it.
+**Konfiguracja:**
+1. `.env`: ustaw `PUBLIC_URL` (adres, który otwierają ludzie) i `DISCORD_CLIENT_SECRET` (Developer Portal → OAuth2). W sekcji Redirects dodaj `<PUBLIC_URL>/api/shop/auth/callback`.
+2. Opcjonalnie: ustaw `STRIPE_WEBHOOK_SECRET` (Stripe → Webhooks → `<PUBLIC_URL>/api/shop/stripe/webhook`).
+3. Port to `WEB_PORT`. Na panelu hostingowym (Pterodactyl i podobne) zostaw go pustym: bot użyje portu, który przydzieli mu panel.
 
-Until Discord sign-in and Stripe are both set up, the page shows its clearly marked offline preview. The HammerShop look (light orange, the hammer logo, the name and the pictures) comes from `scripts/website-theme.js` – `node scripts/build-website.js design.html` applies it to a new ChatGPT export by itself, and `npm run render-assets -- web` redraws the pictures. Website accounts and orders are kept in `data/web.json`.
+Dopóki logowanie przez Discorda i Stripe nie są skonfigurowane, strona pokazuje wyraźnie oznaczony podgląd offline. Wygląd HammerShop (jasny pomarańcz, logo z młotkiem, nazwa i obrazki) pochodzi z `scripts/website-theme.js` – `node scripts/build-website.js design.html` sam nakłada go na nowy eksport z ChatGPT, a `npm run render-assets -- web` rysuje obrazki od nowa. Konta i zamówienia ze strony są zapisywane w `data/web.json`.
 
-## 🗺️ What /build creates
+## 🗺️ Co tworzy /zbuduj
 
 ```
-〔 📊 SERVER STATS 〕    🟢┃ꜱʜᴏᴘ ᴏᴘᴇɴ · 👥┃ᴍᴇᴍʙᴇʀꜱ: 123 · ⭐┃ᴠᴏᴜᴄʜᴇꜱ: 45      (everyone can see, nobody can join)
-〔 👋 WELCOME 〕         ✅┃ᴠᴇʀɪꜰʏ · 📜┃ʀᴜʟᴇꜱ · 👋┃ᴡᴇʟᴄᴏᴍᴇ · 📌┃ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ · 📢┃ᴀɴɴᴏᴜɴᴄᴇᴍᴇɴᴛꜱ
-                        🎉┃ɢɪᴠᴇᴀᴡᴀʏꜱ · 🎭┃ʀᴏʟᴇꜱ
-〔 🛒 SHOP 〕            🛒┃ꜱʜᴏᴘ · 📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ · 💳┃ᴘᴀʏᴍᴇɴᴛꜱ · ✨┃ʀᴇꜱᴛᴏᴄᴋꜱ · ⭐┃ᴠᴏᴜᴄʜᴇꜱ · 🧾┃ᴘʀᴏᴏꜰꜱ
-〔 🎧 SUPPORT 〕         🎫┃ᴛɪᴄᴋᴇᴛꜱ · ❓┃ꜰᴀǫ
-〔 💬 COMMUNITY 〕       💬┃ᴄʜᴀᴛ · 🏆┃ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ · 🚀┃ʙᴏᴏꜱᴛᴇʀꜱ
-〔 🔒 STAFF 〕           💼┃ꜱᴛᴀꜰꜰ-ᴄʜᴀᴛ · 🔧┃ꜱᴛᴀꜰꜰ-ᴄᴏᴍᴍᴀɴᴅꜱ · 📣┃ᴅɪꜱᴄᴏʀᴅ-ᴜᴘᴅᴀᴛᴇꜱ · 🔒┃ꜱᴛᴀꜰꜰ ʀᴏᴏᴍ
-〔 📁 LOGS 〕            📁┃ᴛɪᴄᴋᴇᴛ-ʟᴏɢꜱ · 📄┃ᴛʀᴀɴꜱᴄʀɪᴘᴛꜱ · ✅┃ᴠᴇʀɪꜰʏ-ʟᴏɢꜱ · 📋┃ꜱᴇʀᴠᴇʀ-ʟᴏɢꜱ · 🤖┃ᴀᴜᴛᴏᴍᴏᴅ-ʟᴏɢꜱ
-                        📈┃ꜱᴀʟᴇꜱ · 💾┃ʙᴀᴄᴋᴜᴘꜱ                                  (admins only)
-〔 🎫 TICKETS 〕 / 〔 🔐 CLOSED TICKETS 〕                        (ticket channels go here: 🛒┃ᴏʀᴅᴇʀ-0001)
+〔 📊 STATYSTYKI 〕     🟢┃ꜱᴋʟᴇᴘ ᴏᴛᴡᴀʀᴛʏ · 👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: 123 · ⭐┃ᴏᴘɪɴɪᴇ: 45       (widzą wszyscy, nikt nie może wejść)
+〔 👋 WITAMY 〕         ✅┃ᴡᴇʀʏꜰɪᴋᴀᴄᴊᴀ · 📜┃ʀᴇɢᴜʟᴀᴍɪɴ · 👋┃ᴘᴏᴡɪᴛᴀɴɪᴀ · 📌┃ɪɴꜰᴏʀᴍᴀᴄᴊᴇ · 📢┃ᴏɢᴌᴏꜱᴢᴇɴɪᴀ
+                        🎉┃ɢɪᴠᴇᴀᴡᴀʏᴇ · 🎭┃ʀᴏʟᴇ
+〔 🛒 SKLEP 〕          🛒┃ꜱᴋʟᴇᴘ · 📦┃ᴊᴀᴋ-ᴋᴜᴘɪᴄ · 💳┃ᴘᴌᴀᴛɴᴏꜱᴄɪ · ✨┃ᴅᴏꜱᴛᴀᴡʏ · ⭐┃ᴏᴘɪɴɪᴇ · 🧾┃ʀᴇᴀʟɪᴢᴀᴄᴊᴇ
+〔 🎧 POMOC 〕          🎫┃ᴛɪᴄᴋᴇᴛʏ · ❓┃ꜰᴀǫ
+〔 💬 SPOŁECZNOŚĆ 〕    💬┃ᴄᴢᴀᴛ · 🏆┃ʀᴀɴᴋɪɴɢ · 🚀┃ʙᴏᴏꜱᴛᴇʀᴢʏ
+〔 🔒 ZESPÓŁ 〕         💼┃ᴄᴢᴀᴛ-ᴢᴇꜱᴘᴏᴌᴜ · 🔧┃ᴋᴏᴍᴇɴᴅʏ-ᴢᴇꜱᴘᴏᴌᴜ · 📣┃ᴀᴋᴛᴜᴀʟɪᴢᴀᴄᴊᴇ-ᴅɪꜱᴄᴏʀᴅᴀ · 🔒┃ᴘᴏᴋᴏᴊ ᴢᴇꜱᴘᴏᴌᴜ
+〔 📁 LOGI 〕           📁┃ʟᴏɢɪ-ᴛɪᴄᴋᴇᴛᴏᴡ · 📄┃ᴛʀᴀɴꜱᴋʀʏᴘᴄᴊᴇ · ✅┃ʟᴏɢɪ-ᴡᴇʀʏꜰɪᴋᴀᴄᴊɪ · 📋┃ʟᴏɢɪ-ꜱᴇʀᴡᴇʀᴀ · 🤖┃ʟᴏɢɪ-ᴀᴜᴛᴏᴍᴏᴅ
+                        📈┃ꜱᴘʀᴢᴇᴅᴀᴢ · 💾┃ᴋᴏᴘɪᴇ-ᴢᴀᴘᴀꜱᴏᴡᴇ                          (tylko admini)
+〔 🎫 TICKETY 〕 / 〔 🔐 ZAMKNIĘTE TICKETY 〕                   (tu trafiają kanały ticketów: 🛒┃ᴢᴀᴍᴏᴡɪᴇɴɪᴇ-0001)
 ```
-Discord allows 50 channels per category: when 〔 🎫 TICKETS 〕 is full the bot opens **〔 🎫 TICKETS 2 〕** (3, …),
-and 〔 🔐 CLOSED TICKETS 〕 keeps the newest 49 closed tickets (older ones are deleted – their transcripts stay in #transcripts).
-Want different channels or roles? Edit `src/builder/layout.js` – it's one readable list.
+Discord pozwala na 50 kanałów w kategorii: gdy 〔 🎫 TICKETY 〕 się zapełni, bot otwiera **〔 🎫 TICKETY 2 〕** (3, …),
+a 〔 🔐 ZAMKNIĘTE TICKETY 〕 trzyma 49 najnowszych zamkniętych ticketów (starsze są usuwane – ich transkrypcje zostają na #transkrypcje).
+Chcesz inne kanały albo role? Edytuj `src/builder/layout.js` – to jedna czytelna lista.
 
-**Roles, top to bottom** – the bot's own integration role (Discord makes it, named after your application), then:
+**Role, od góry do dołu** – rola integracji bota (tworzy ją Discord i nazywa tak jak Twoją aplikację), a pod nią:
 
-| Role | Who has it |
+| Rola | Kto ją ma |
 |---|---|
-| 🔨 **HammerShop** | **Only the bot.** `/build` puts it right under the bot's integration role (the highest place a bot can give a role) and hoists it, so the bot is listed first in the member list. Anyone else who gets it loses it right away. It grants no permissions – it's a badge |
-| 👑 CEO · 🔱 Co-CEO | The owner (the server owner gets CEO during `/build`) |
-| 🔥 Manager · 🛡️ Administrator · ⚔️ Moderator · 🎧 Support · 🌱 Trial Support · 💼 Seller | Your team |
-| 🧡 Loyal Customer · 🛍️ Customer · 🤖 Bots · ✅ Member · notification roles | Given automatically |
+| 🔨 **HammerShop** | **Tylko bot.** `/zbuduj` umieszcza ją tuż pod rolą integracji bota (najwyżej, jak bot może nadać rolę) i wyświetla ją osobno, więc bot jest pierwszy na liście członków. Każdy inny, kto ją dostanie, od razu ją traci. Nie daje żadnych uprawnień – to odznaka |
+| 👑 CEO · 🔱 Co-CEO | Właściciel (właściciel serwera dostaje CEO podczas `/zbuduj`) |
+| 🔥 Manager · 🛡️ Administrator · ⚔️ Moderator · 🎧 Support · 🌱 Stażysta · 💼 Sprzedawca | Twój zespół |
+| 🧡 Stały Klient · 🛍️ Klient · 🤖 Boty · ✅ Członek · role z powiadomieniami (📢 Ogłoszenia · 🎉 Giveawaye · 📦 Dostawy) | Nadawane automatycznie |
 
-Keep the bot's integration role at the very top in Server Settings → Roles – the HammerShop role always sits right under it.
+Trzymaj rolę integracji bota na samej górze w Ustawieniach serwera → Role – rola HammerShop zawsze jest tuż pod nią.
 
-**Who sees what**
+**Kto co widzi**
 
-| | Not verified | Member | Seller | Support | Moderator | Admin+ |
+| | Niezweryfikowani | Członek | Sprzedawca | Support | Moderator | Admin+ |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| #verify | ✅ | | | | | ✅ |
-| #rules, server stats | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Shop, support, community | | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Write in #restocks | | | ✅ | | | ✅ |
-| Staff chat, ticket logs, transcripts | | | ✅ | ✅ | ✅ | ✅ |
-| Server, verify & AutoMod logs | | | | | ✅ | ✅ |
-| #discord-updates, #sales, #backups | | | | | | ✅ |
+| #weryfikacja | ✅ | | | | | ✅ |
+| #regulamin, statystyki serwera | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Sklep, pomoc, społeczność | | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Pisanie na #dostawy | | | ✅ | | | ✅ |
+| Czat zespołu, logi ticketów, transkrypcje | | | ✅ | ✅ | ✅ | ✅ |
+| Logi serwera, weryfikacji i AutoModa | | | | | ✅ | ✅ |
+| #aktualizacje-discorda, #sprzedaż, #kopie-zapasowe | | | | | | ✅ |
 
 ---
 
-## 📋 Commands
+## 📋 Komendy
 
-| Command | What it does | Who |
+| Komenda | Co robi | Kto |
 |---|---|---|
-| `/build` | Build the whole server (Build / Wipe & Build) | Owner, admins |
-| `/build only:update` | **After a bot update:** adds new channels & roles, applies the name style and updates every panel – nothing is deleted | Owner, admins |
-| `/build only:emojis` | Upload the emojis that didn't fit yet (e.g. after boosting) | Owner, admins |
-| `/build only:panels` | Update all banners & cards **in place** after editing `config.json` (vouches, giveaways and announcements are never touched) | Owner, admins |
-| `/build only:names` | Rename all channels & categories to the name style from `config.json` (e.g. after an update) – nothing else changes | Owner, admins |
-| `/disable method [reason]` · `/enable method` | Switch a payment method off for a while (e.g. while fixing PayPal) and back on – it disappears from the order, cart and top-up forms, and #payments, the FAQ and the shop panel show "temporarily unavailable". Orders already placed keep working | Admins, sellers |
-| `/product add / edit / stock / variants / delivery / remove / list` | Manage the shop (categories, images, options, stock counter, files the buyer gets) – the #shop panel updates by itself | Admins, sellers |
-| `/sale start / stop / list` | Flash sales – a percentage off a product for a while, with a countdown in the shop | Admins, sellers |
-| `/promo create / list / info / delete` | Discount codes | Admins, sellers |
-| `/shop open / close / auto / status` | Open or close the shop by hand, or follow the opening hours again | Admins, sellers |
-| `/sales` | Sales statistics | Admins, sellers |
-| `/customer view / note add / note remove` | Customer profiles and private staff notes | Staff |
-| `/lockdown` · `/unlock` | Lock the server during a raid and unlock it again | Moderators+ |
-| `/backup` | Back up the bot data now (it also happens automatically) | Admins |
-| `/invites stats / top` | Your invites, the next reward and the top inviters | Everyone |
-| `/vouch` | Leave a review (with optional screenshot) | Everyone |
-| `/giveaway start / end / reroll / list` | Giveaways (start: optional `required_role`, `buyers_only`, `min_invites`) | Moderators+ |
-| `/announce` | Styled announcement with banner, button and ping | Moderators+ |
-| `/ticket info / close` | Your ticket | Ticket author |
-| `/ticket claim / unclaim / add / remove / priority / move / rename / request-close / complete` | Handle tickets (`complete amount:` = what the customer paid) | Staff |
-| `/reply` | Canned replies | Staff |
-| `/blacklist add / remove / list` | Block people from tickets | Staff |
-| `/stats` | Ticket statistics and staff leaderboard | Staff |
-| `/panel` | Re-send a panel (tickets, shop, vouches, leaderboard, verification, roles) | Admins |
-| `/setup show / set / role-add / role-remove` | Ticket settings (all set automatically by `/build`) | Admins |
-| `/help` | The commands *you* can use | Everyone |
+| `/zbuduj` | Buduje cały serwer (Zbuduj / Wyczyść i zbuduj) | Właściciel, admini |
+| `/zbuduj tylko:update` | **Po aktualizacji bota:** dodaje nowe kanały i role, stosuje styl nazw i odświeża każdy panel – Twoich własnych kanałów i ról nie rusza | Właściciel, admini |
+| `/zbuduj tylko:emojis` | Wgrywa emotki, które się jeszcze nie zmieściły (np. po boostach) | Właściciel, admini |
+| `/zbuduj tylko:panels` | Odświeża wszystkie banery i karty **w miejscu** po edycji `config.json` (opinii, giveawayów i ogłoszeń nigdy nie rusza) | Właściciel, admini |
+| `/zbuduj tylko:names` | Zmienia nazwy wszystkich kanałów i kategorii na styl z `config.json` (np. po aktualizacji) – nic innego się nie zmienia | Właściciel, admini |
+| `/wylacz-platnosc metoda [powod]` · `/wlacz-platnosc metoda` | Wyłącza na chwilę metodę płatności (np. na czas naprawy PayPala) i włącza ją z powrotem – znika z formularzy zamówienia, koszyka i doładowania, a #płatności, FAQ i panel sklepu pokazują „chwilowo niedostępna”. Złożone już zamówienia działają dalej | Admini, sprzedawcy |
+| `/produkt dodaj / edytuj / stan / warianty / dostawa / usun / lista` | Zarządzanie sklepem (kategorie, obrazki, warianty, licznik sztuk, pliki, które dostaje kupujący) – panel na #sklep odświeża się sam | Admini, sprzedawcy |
+| `/promocja start / stop / lista` | Promocje błyskawiczne – procentowy rabat na produkt przez jakiś czas, z odliczaniem w sklepie | Admini, sprzedawcy |
+| `/kod utworz / lista / info / usun` | Kody rabatowe | Admini, sprzedawcy |
+| `/sklep otworz / zamknij / auto / status` | Ręczne otwarcie lub zamknięcie sklepu albo powrót do godzin pracy | Admini, sprzedawcy |
+| `/sprzedaz` | Statystyki sprzedaży | Admini, sprzedawcy |
+| `/klient profil / notatka dodaj / notatka usun` | Profile klientów i prywatne notatki zespołu | Zespół |
+| `/zablokuj` · `/odblokuj` | Blokada serwera podczas raidu i jej zdjęcie | Moderatorzy+ |
+| `/kopia` | Kopia zapasowa danych bota od razu (robi się też automatycznie) | Admini |
+| `/zaproszenia statystyki / ranking` | Twoje zaproszenia, następna nagroda i ranking zapraszających | Wszyscy |
+| `/opinia` | Wystawienie opinii (z opcjonalnym zrzutem ekranu) | Wszyscy |
+| `/giveaway start / zakoncz / losuj-ponownie / lista` | Giveawaye (start: opcjonalnie `wymagana-rola`, `tylko-klienci`, `min-zaproszen`) | Moderatorzy+ |
+| `/ogloszenie` | Ostylowane ogłoszenie z banerem, przyciskiem i pingiem | Moderatorzy+ |
+| `/ticket info / zamknij` | Twój ticket | Autor ticketu |
+| `/ticket przejmij / oddaj / dodaj / usun / priorytet / przenies / nazwa / prosba-zamkniecia / zrealizuj` | Obsługa ticketów (`zrealizuj kwota:` = ile zapłacił klient) | Zespół |
+| `/odpowiedz` | Gotowe odpowiedzi | Zespół |
+| `/czarna-lista dodaj / usun / lista` | Blokowanie osobom dostępu do ticketów | Zespół |
+| `/statystyki` | Statystyki ticketów i ranking zespołu | Zespół |
+| `/panel` | Ponowne wysłanie panelu (tickety, sklep, opinie, ranking, weryfikacja, role) | Admini |
+| `/ustawienia pokaz / zmien / dodaj-role / usun-role` | Ustawienia ticketów (wszystko ustawia automatycznie `/zbuduj`) | Admini |
+| `/pomoc` | Komendy, których *Ty* możesz użyć | Wszyscy |
 
-Admin commands are hidden from normal members automatically.
-
----
-
-## 🛍️ How an order works
-
-1. A customer clicks **Buy** next to a product in #shop – that's the only way to buy. The **Purchase** entry in the ticket
-   panel, *How to buy* and *Payments* all send people to #shop (`"shopOnly": true` on the `order` ticket type).
-2. They choose the option, quantity, a payment method and (optionally) a promo code → a **private ticket** opens with the
-   total to pay (with the flash sale price, if one is running). Sellers and support are pinged. Outside the opening hours
-   the ticket says when you're back. Nobody claims it within 15 minutes? The team is reminded in #staff-chat.
-3. A seller claims it and sends the payment details (tip: `/reply` → *Order quote*, *Payment received*, *Delivered*).
-   The customer pays and clicks **Pay** (PIN / screenshot / transaction ID) – the seller is pinged, checks it and sets
-   **⚙️ → Status: Paid**, later **Status: In progress**; the customer gets a DM for each step.
-4. After delivery the seller picks **⚙️ Manage ticket → Order completed** and confirms the amount paid:
-   the sale is recorded for `/sales`, the stock counter goes down, the customer gets a **receipt by DM** (✅ Delivered),
-   the **Customer** role (and **Loyal Customer** after 5 orders) and a **Leave a vouch** button, and an anonymous proof
-   appears in #proofs. The order and its receipt stay in the customer's **My orders**.
-5. The ticket is closed – the customer gets the transcript and a rating request by DM, the transcript is saved in #transcripts.
-6. 24 hours later the customer gets a friendly vouch reminder (unless they already left one).
+Komendy dla adminów są automatycznie ukryte przed zwykłymi członkami. W `/zbuduj tylko:` Discord pokazuje polskie nazwy
+wyborów: `update` = 🆕 Aktualizacja, `emojis` = 😀 Emotki, `panels` = 🔄 Panele, `names` = 🎨 Nazwy.
 
 ---
 
-## 🎨 Customizing – `config.json`
+## 🛍️ Jak działa zamówienie
 
-| Section | What you can change |
+1. Klient klika **Kup** przy produkcie na #sklep – to jedyny sposób zakupu. Pozycja **Zakup** w panelu ticketów oraz karty
+   *Jak kupić* i *Płatności* kierują na #sklep (`"shopOnly": true` w typie ticketu `order`).
+2. Wybiera wariant, ilość, metodę płatności i (opcjonalnie) kod rabatowy → otwiera się **prywatny ticket** z kwotą do zapłaty
+   (z ceną promocyjną, jeśli trwa promocja błyskawiczna). Sprzedawcy i support dostają ping. Poza godzinami pracy ticket informuje,
+   kiedy wracacie. Nikt go nie przejmie w ciągu 15 minut? Zespół dostaje przypomnienie na #czat-zespołu.
+3. Sprzedawca przejmuje ticket i wysyła dane do płatności (wskazówka: `/odpowiedz` → *💰 Wycena zamówienia*, *💳 Płatność otrzymana*,
+   *📦 Dostarczone*). Klient płaci i klika **Zapłać** (PIN / zrzut ekranu / ID transakcji) – sprzedawca dostaje ping, sprawdza
+   płatność i ustawia **⚙️ → Status: Opłacone**, później **Status: W realizacji**; klient dostaje DM przy każdym kroku.
+4. Po dostawie sprzedawca wybiera **⚙️ Zarządzaj ticketem → Zamówienie zrealizowane** i potwierdza zapłaconą kwotę:
+   sprzedaż trafia do `/sprzedaz`, licznik sztuk spada, klient dostaje **potwierdzenie zakupu na DM** (✅ Dostarczone),
+   rolę **Klient** (i **Stały Klient** po 5 zamówieniach) oraz przycisk **Wystaw opinię**, a na #realizacje pojawia się anonimowy
+   wpis o realizacji. Zamówienie i jego potwierdzenie zostają w **Moich zamówieniach** klienta.
+5. Ticket zostaje zamknięty – klient dostaje na DM transkrypcję i prośbę o ocenę, a transkrypcja jest zapisywana na #transkrypcje.
+6. 24 godziny później klient dostaje przyjazne przypomnienie o opinii (o ile jeszcze jej nie ma).
+
+---
+
+## 🎨 Dostosowanie – `config.json`
+
+| Sekcja | Co możesz zmienić |
 |---|---|
-| `brand` | Name, color, footer, tagline and the "About us" text |
-| `server` | Rename the server, set icon/banner, **which logo to use** (`logo`: `hammer`, `hammer-wordmark`, `monogram`, `neon` or `bag`), Community mode, verification level, server language (`locale`: a Discord language such as `en-US`, `de`, `pl`, `sv-SE`), **name style** (see below) |
-| `rules` | The regulamin file (`file`, default `regulamin.md`), the seller details (`seller`) and e-mail (`email`) shown in §1 |
-| `emojis` | Upload custom emojis, emoji name prefix (`hs_`) |
-| `verification` | Math question on/off, minimum account age in days |
-| `shop` | Currency, delivery time, support hours (written from `workingHours` unless you set `supportHours`), refund policy, orders needed for Loyal Customer, **payment methods**, `lowStockAt` (a stock counter at or below this shows "🟠 Only N left", default 3) |
-| `vouches` | Sticky panel, cooldown, "customers only", minimum review length |
-| `orders` | Receipts by DM, #proofs posts, vouch reminder after N hours (`0` = off), order status DMs (`statusDms`), the **Pay** button (`paymentProofs`) |
-| `stripe` | Automatic Stripe payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `STRIPE_SECRET_KEY` in `.env` |
-| `paypal` | Automatic PayPal payment links on/off (`enabled`) and their currency (`currency`, empty = from `shop.currency`) – needs `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in `.env` |
-| `crypto` | The currency the coin amounts are worked out in (`currency`, empty = from `shop.currency`) – set it when your currency sign isn't clear |
-| `badges` | 🔥 Bestseller and ⭐ rating in the shop on/off (`enabled`), units sold for Bestseller (`bestsellerMinSales`, 3), vouches needed for a rating (`ratingMinVouches`, 2) |
-| `staffReminders` | Unclaimed ticket reminders on/off, after how many minutes (`unclaimedMinutes`, 15) and how often again (`repeatMinutes`, 60 – `0` = once) |
-| `promos`, `welcomeDiscount` | Discount codes on/off; the first-purchase code (percent, days valid) |
-| `workingHours`, `shopStatus` | Opening hours (default **10:00–20:00 every day, Europe/Warsaw**); the open/closed status channel on/off (`enabled`) and its names |
-| `invites` | Invite tracking on/off and the rewards (`{ "invites": 5, "percent": 10 }` …) |
-| `security` | Look-alike alerts, whether `/lockdown` pauses invites |
-| `backups`, `salesReport` | How often to back up; the weekday and hour of the weekly sales report |
-| `panel`, `ticketTypes`, `snippets`, `defaults` | Ticket panel texts, ticket categories and their questions, canned replies, limits and auto-close |
+| `brand` | Nazwa, kolor, stopka, slogan i tekst „O nas” |
+| `server` | Zmiana nazwy serwera, ikona/baner, **które logo** (`logo`: `hammer`, `hammer-wordmark`, `monogram`, `neon` albo `bag`), tryb społeczności, poziom weryfikacji, język serwera (`locale`: język Discorda – domyślnie `pl`, inne to np. `en-US`, `de`, `sv-SE`), **styl nazw** (zob. niżej) |
+| `rules` | Plik regulaminu (`file`, domyślnie `regulamin.md`), dane sprzedawcy (`seller`) i e-mail (`email`) pokazywane w §1 |
+| `emojis` | Wgrywanie własnych emotek, prefiks nazw emotek (`hs_`) |
+| `verification` | Pytanie matematyczne wł./wył., minimalny wiek konta w dniach |
+| `shop` | Waluta, czas dostawy, godziny pomocy (tworzone z `workingHours`, chyba że ustawisz `supportHours`), zasady zwrotów, liczba zamówień do roli Stały Klient, **metody płatności**, `lowStockAt` (licznik sztuk na tym poziomie lub niżej pokazuje „🟠 Zostało tylko N”, domyślnie 3) |
+| `vouches` | Przyklejony panel, czas odnowienia, „tylko klienci”, minimalna długość opinii |
+| `orders` | Potwierdzenia zakupu na DM, wpisy na #realizacje, przypomnienie o opinii po N godzinach (`0` = wyłączone), DM-y o statusie zamówienia (`statusDms`), przycisk **Zapłać** (`paymentProofs`) |
+| `stripe` | Automatyczne linki do płatności Stripe wł./wył. (`enabled`) i ich waluta (`currency`, puste = z `shop.currency`) – wymaga `STRIPE_SECRET_KEY` w `.env` |
+| `paypal` | Automatyczne linki do płatności PayPal wł./wył. (`enabled`) i ich waluta (`currency`, puste = z `shop.currency`) – wymaga `PAYPAL_CLIENT_ID` i `PAYPAL_CLIENT_SECRET` w `.env` |
+| `crypto` | Waluta, w której liczone są kwoty w monetach (`currency`, puste = z `shop.currency`) – ustaw ją, gdy znak Twojej waluty nie jest jednoznaczny |
+| `badges` | 🔥 Bestseller i ⭐ ocena w sklepie wł./wył. (`enabled`), liczba sprzedanych sztuk do Bestsellera (`bestsellerMinSales`, 3), liczba opinii potrzebna do oceny (`ratingMinVouches`, 2) |
+| `staffReminders` | Przypomnienia o nieprzejętych ticketach wł./wył., po ilu minutach (`unclaimedMinutes`, 15) i jak często ponownie (`repeatMinutes`, 60 – `0` = raz) |
+| `promos`, `welcomeDiscount` | Kody rabatowe wł./wył.; kod na pierwszy zakup (procent, ważność w dniach) |
+| `workingHours`, `shopStatus` | Godziny pracy (domyślnie **10:00–20:00 codziennie, Europe/Warsaw**); kanał statusu otwarte/zamknięte wł./wył. (`enabled`) i jego nazwy |
+| `invites` | Śledzenie zaproszeń wł./wył. i nagrody (`{ "invites": 5, "percent": 10 }` …) |
+| `security` | Alerty o podszywaniu się, czy `/zablokuj` wstrzymuje zaproszenia |
+| `backups`, `salesReport` | Jak często robić kopię zapasową; dzień tygodnia i godzina raportu tygodniowego sprzedaży |
+| `panel`, `ticketTypes`, `snippets`, `defaults` | Teksty panelu ticketów, kategorie ticketów i ich pytania, gotowe odpowiedzi, limity i automatyczne zamykanie |
 
-After editing:
+Po edycji:
 ```bash
-npm run check          # validates config.json against Discord's limits
+npm run check          # sprawdza config.json pod kątem limitów Discorda
 ```
-then **restart the bot** and run **`/build only:panels`** – every banner and card is updated in place
-(nothing moves, and your vouches, giveaways and announcements are never touched).
+potem **uruchom bota ponownie** i wpisz **`/zbuduj tylko:panels`** – każdy baner i każda karta zostaną odświeżone w miejscu
+(nic się nie przesuwa, a Twoich opinii, giveawayów i ogłoszeń bot nigdy nie rusza).
 
-**Payment methods** – each entry has a `name`, `details`, an `emoji`
-(`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…) and a `type` – `paysafecard`,
-`crypto`, `paypal` or `stripe` – that decides the payment card in the ticket. The default is PaysafeCard, Crypto (BTC, ETH),
-PayPal, Stripe and **BLIK / Transfer (Simpay)** – an entry without a `type`: the seller sends the Simpay payment link in
-the ticket. **Fill in your wallets** in the Crypto entry: `"addresses": { "BTC": "bc1…", "ETH": "0x…" }` (LTC, SOL,
-USDT, USDC, XMR, DOGE, TRX and BNB work too – the amount in coins is shown for them). The PayPal entry takes
-`"paypalMe": "yourname"` for the paypal.me link when there are no PayPal keys. The `stripe` entry gets the automatic card
-payment links (only with `STRIPE_SECRET_KEY` in `.env`); `stripe.currency` sets the Stripe currency (`eur`, `usd`, `pln`… – empty =
-from `shop.currency`: € → eur, $ → usd, £ → gbp, zł → pln; for `kr` and other unclear signs set it, otherwise no
-links are made), `stripe.enabled: false` turns the links off.
+**Metody płatności** – każda pozycja ma `name`, `details`, `emoji`
+(`paysafecard`, `crypto`, `paypal`, `card`, `wallet`, `blik`, `coin`, `currency_eur`…) i `type` – `paysafecard`,
+`crypto`, `paypal` albo `stripe` – od którego zależy karta płatności w tickecie. Domyślnie są to PaysafeCard, Kryptowaluty (BTC, ETH),
+PayPal, Stripe i **BLIK / przelew (Simpay)** – pozycja bez `type`: sprzedawca wysyła link do płatności Simpay w tickecie.
+**Wpisz swoje portfele** w pozycji Kryptowaluty: `"addresses": { "BTC": "bc1…", "ETH": "0x…" }` (LTC, SOL, USDT, USDC, XMR,
+DOGE, TRX i BNB też działają – dla nich także pokazuje się kwota w monetach). Pozycja PayPal przyjmuje `"paypalMe": "twojanazwa"`
+dla linku paypal.me, gdy nie ma kluczy PayPal. Pozycja `stripe` dostaje automatyczne linki do płatności kartą (tylko ze
+`STRIPE_SECRET_KEY` w `.env`); `stripe.currency` ustawia walutę Stripe (`eur`, `usd`, `pln`… – puste = z `shop.currency`:
+€ → eur, $ → usd, £ → gbp, zł → pln; dla `kr` i innych niejednoznacznych znaków trzeba ją ustawić, inaczej linki nie powstaną),
+`stripe.enabled: false` wyłącza linki.
 
-**Name style** – `server.channelStyle` (default `{emoji}┃{name}`), `server.categoryStyle` (default `〔 {name} 〕`)
-and `server.smallCaps` (`true` → `📦┃ʜᴏᴡ-ᴛᴏ-ʙᴜʏ`, `false` → `📦┃how-to-buy`). Ticket channels follow `channelNameFormat`
-(default `{prio}{emoji}┃{prefix}-{number}` → `🛒┃ᴏʀᴅᴇʀ-0001`). The names themselves are in `src/builder/layout.js`.
-After changing the style, restart the bot and run **`/build only:names`**.
+**Styl nazw** – `server.channelStyle` (domyślnie `{emoji}┃{name}`), `server.categoryStyle` (domyślnie `〔 {name} 〕`)
+i `server.smallCaps` (`true` → `📦┃ᴊᴀᴋ-ᴋᴜᴘɪᴄ`, `false` → `📦┃jak-kupić`; w kapitalikach polskie litery tracą ogonki, poza ł → ᴌ).
+Kanały ticketów mają nazwy według `channelNameFormat` (domyślnie `{prio}{emoji}┃{prefix}-{number}` → `🛒┃ᴢᴀᴍᴏᴡɪᴇɴɪᴇ-0001`).
+Same nazwy są w `src/builder/layout.js`. Po zmianie stylu uruchom bota ponownie i wpisz **`/zbuduj tylko:names`**.
 
-### Updating the bot
-Replace the bot files (keep **`.env`** and the **`data/`** folder), run `npm install`, restart the bot and run
-**`/build only:update`** once – it adds the channels and roles that are new in this version (e.g. 🧾┃ᴘʀᴏᴏꜰꜱ,
-📈┃ꜱᴀʟᴇꜱ, 💾┃ʙᴀᴄᴋᴜᴘꜱ and the shop status channel), **removes the ones the bot made earlier that are no longer part
-of the server** (e.g. the VIP lounge, the voice channels, #memes – never channels or roles you made yourself),
-applies the name style and updates every panel. Run it in a channel that stays (e.g. #staff-commands).
-If you changed `config.json` yourself you can keep your copy: sections it doesn't have yet get the default values,
-and the console lists every feature that is turned off in it.
+### Aktualizacja bota
+Podmień pliki bota (zostaw **`.env`** i folder **`data/`**), wpisz `npm install`, uruchom bota ponownie i raz wpisz
+**`/zbuduj tylko:update`** – komenda dodaje kanały i role, które są nowe w tej wersji (np. 🧾┃ʀᴇᴀʟɪᴢᴀᴄᴊᴇ, 📈┃ꜱᴘʀᴢᴇᴅᴀᴢ,
+💾┃ᴋᴏᴘɪᴇ-ᴢᴀᴘᴀꜱᴏᴡᴇ i kanał statusu sklepu), **usuwa te, które bot utworzył wcześniej, a które nie są już częścią serwera**
+(np. strefę VIP, kanały głosowe, #memes – nigdy kanałów ani ról utworzonych przez Ciebie), stosuje styl nazw i odświeża
+każdy panel. Uruchom ją na kanale, który zostaje (np. #komendy-zespołu).
+Jeśli Twój `config.json` ma Twoje zmiany, możesz go zachować: sekcje, których jeszcze w nim nie ma, dostaną wartości domyślne,
+a konsola wypisze każdą funkcję, która jest w nim wyłączona.
 
-**Coming from NØX (the purple version)?** Keep `.env` and `data/`, then run `/build only:update` once (a fresh
-`/build` works too). It:
-- adds the **🔨 HammerShop** role on top and gives it to the bot,
-- renames the old default roles (Founder → **CEO**, Co-Founder → **Co-CEO**, …) and recolours the purple ones to orange –
-  roles you renamed or recoloured yourself are left alone,
-- replaces the purple `:nox_*:` emojis with the light orange `:hs_*:` ones (it frees their slots first; emojis you
-  uploaded yourself are never touched), and re-uploads every purple banner in place,
-- posts the new regulamin in #rules.
+**Serwer zbudowany przez angielską wersję HammerShop?** `/zbuduj tylko:update` zmienia też nazwy kanałów i kategorii bota na
+polskie, a domyślne role na polskie odpowiedniki (Seller → **Sprzedawca**, Loyal Customer → **Stały Klient**, Member → **Członek**, …) –
+role o nazwach nadanych przez Ciebie zostają bez zmian. Teksty paneli, typy ticketów i gotowe odpowiedzi pochodzą z `config.json`:
+jeśli zachowasz stary, angielski plik, zostaną po angielsku – weź nowy `config.json` i przenieś do niego swoje ustawienia.
 
-The server name and icon only change with a fresh `/build` – or set them yourself (Server Settings → Overview,
+**Przechodzisz z NØX (wersji fioletowej)?** Zostaw `.env` i `data/`, a potem raz wpisz `/zbuduj tylko:update` (świeże
+`/zbuduj` też zadziała). Komenda:
+- dodaje rolę **🔨 HammerShop** na górze i daje ją botowi,
+- zmienia nazwy starych domyślnych ról (Founder → **CEO**, Co-Founder → **Co-CEO**, …) i przemalowuje fioletowe role na
+  pomarańczowo – role, którym nazwę albo kolor zmieniono ręcznie, zostają bez zmian,
+- zastępuje fioletowe emotki `:nox_*:` jasnopomarańczowymi `:hs_*:` (najpierw zwalnia ich miejsca; emotek wgranych przez
+  Ciebie nigdy nie rusza) i wgrywa na nowo, w miejscu, każdy fioletowy baner,
+- publikuje nowy regulamin na #regulamin.
+
+Nazwa i ikona serwera zmieniają się tylko przy świeżym `/zbuduj` – możesz też ustawić je ręcznie (Ustawienia serwera → Przegląd,
 `assets/brand/logo-hammer.png`).
 
-**Currency** – `shop.currency` (default `€`) and `shop.currencyPosition` (`after` → `20€`, `before` → `€20`).
-Only plain-number prices get it; `from 5€` or `$10` are shown exactly as you typed them.
+**Waluta** – `shop.currency` (domyślnie `€`) i `shop.currencyPosition` (`after` → `20€`, `before` → `€20`).
+Dostają ją tylko ceny wpisane jako sama liczba; `od 5€` albo `$10` są pokazywane dokładnie tak, jak je wpiszesz.
 
-### The regulamin (shop terms)
-`regulamin.md` (next to `config.json`) is posted in #rules – a banner and as many cards as Discord needs. It's plain
-Discord markdown: the part before the first `## ` is the title, every `## ` starts a section. The bot fills in:
+### Regulamin (zasady sklepu)
+`regulamin.md` (obok `config.json`) jest publikowany na #regulamin – baner i tyle kart, ile potrzeba na Discordzie. To zwykły
+markdown Discorda: część przed pierwszym `## ` to tytuł, każde `## ` zaczyna nową sekcję. Bot uzupełnia:
 
-| Placeholder | Becomes |
+| Znacznik | Zamienia się w |
 |---|---|
 | `{brand}` | `brand.name` (HammerShop) |
-| `{#tickets}` `{#shop}` `{#payments}` `{#announcements}` … | a link to that channel (keys from `src/builder/layout.js`) |
-| `{e:cart}` `{e:check}` … | the bot's orange emoji (names from `assets/emojis`) |
-| `{paymentMethods}` | your payment methods from `shop.paymentMethods` |
-| `{seller}` `{email}` | `rules.seller` / `rules.email` – a line with an empty one isn't posted |
+| `{#tickets}` `{#shop}` `{#payments}` `{#announcements}` … | link do tego kanału (klucze z `src/builder/layout.js`) |
+| `{e:cart}` `{e:check}` … | pomarańczową emotkę bota (nazwy z `assets/emojis`) |
+| `{paymentMethods}` | Twoje metody płatności z `shop.paymentMethods` |
+| `{seller}` `{email}` | `rules.seller` / `rules.email` – linia z pustą wartością nie jest publikowana |
 
-Edit the file, restart the bot and run `/build only:panels` – #rules is updated in place. Fill in `rules.seller`
-(name or company, address) and `rules.email`: a shop selling to consumers has to show them. The text is a solid
-template, not legal advice.
+Edytuj plik, uruchom bota ponownie i wpisz `/zbuduj tylko:panels` – #regulamin zostanie odświeżony w miejscu. Uzupełnij
+`rules.seller` (imię i nazwisko albo firma, adres) i `rules.email`: sklep sprzedający konsumentom musi je podawać. Tekst to
+solidny szablon, a nie porada prawna.
 
-### The logo
-There are five logos in `assets/brand/` (1024 × 1024) – pick one with `"logo"` in the `server` section of `config.json`:
+### Logo
+W `assets/brand/` jest pięć logo (1024 × 1024) – wybierz jedno przez `"logo"` w sekcji `server` w `config.json`:
 
-| `hammer` (default) | `hammer-wordmark` | `monogram` | `neon` | `bag` |
+| `hammer` (domyślne) | `hammer-wordmark` | `monogram` | `neon` | `bag` |
 |---|---|---|---|---|
-| The hammer striking sparks in a glowing orange ring | Hammer + HAMMERSHOP name below (great bot avatar) | "HS" in the ring with a small hammer | Bright light orange tile with the name, pops in the server list | An orange shopping bag with the hammer |
+| Młotek krzeszący iskry w świecącym pomarańczowym pierścieniu | Młotek + nazwa HAMMERSHOP pod spodem (świetny awatar bota) | „HS” w pierścieniu z małym młotkiem | Jasnopomarańczowy kafelek z nazwą, wyróżnia się na liście serwerów | Pomarańczowa torba na zakupy z młotkiem |
 
-Already built? Just upload the logo yourself in Server Settings → Overview, or run `/build` on a fresh server.
+Serwer już zbudowany? Po prostu wgraj logo ręcznie w Ustawieniach serwera → Przegląd albo uruchom `/zbuduj` na świeżym serwerze.
 
-### Your own art
-All banners, emojis and the logo are generated by `tools/render-assets.js`. Change the colors in `THEME`,
-add banners or emojis to the lists and run:
+### Własne grafiki
+Wszystkie banery, emotki i logo generuje `tools/render-assets.js`. Zmień kolory w `THEME`,
+dodaj banery albo emotki do list i uruchom:
 ```bash
 npm i -D playwright && npm run render-assets
 ```
 
 ---
 
-## 🛠️ Troubleshooting
+## 🛠️ Rozwiązywanie problemów
 
-| Problem | Fix |
+| Problem | Rozwiązanie |
 |---|---|
-| `privileged intents are not enabled` | Developer Portal → Bot → turn on **Server Members Intent** and **Message Content Intent** → restart |
-| `Invalid DISCORD_TOKEN` | Reset the token on the Bot tab and paste it into `.env` again |
-| No PayPal link in PayPal orders | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` missing or wrong (the console says *"refused by PayPal"*; Sandbox keys need `PAYPAL_SANDBOX=true`), or the currency isn't taken by PayPal – set `paypal.currency`. The card shows the paypal.me link instead |
-| No Stripe link in Stripe orders | `STRIPE_SECRET_KEY` missing or wrong in `.env` (the console says *"STRIPE_SECRET_KEY was refused"*), the order has no fixed price (e.g. `from 5€`) – a seller sends a link by hand then – or it's **below Stripe's smallest charge** (0.50€ / $0.50 / £0.30 / 2 zł): the customer is asked to pay another way. Restart the bot after editing `.env` |
-| Commands don't show up | Set `GUILD_ID` in `.env` and restart. Also check the invite had `applications.commands` (the console link does) |
-| "I need the Administrator permission" | Server Settings → Roles → the bot's role → enable **Administrator** |
-| Some roles weren't removed by Wipe & Build | They are above the bot's role – drag the bot's role to the top and run it again |
-| Only 50 emojis were uploaded | Servers without boosts have 50 emoji slots. Boost the server and run `/build only:emojis` |
-| "Discord limits how fast emojis can be uploaded" | Wait an hour, then run `/build only:emojis` |
-| Community mode wasn't enabled | Discord refused it for this server. Everything else still works (announcement channels are normal read-only channels). You can turn it on later under Server Settings → Enable Community |
-| A custom emoji was deleted | Nothing breaks – the bot switches to a normal emoji. Run `/build only:emojis` to upload it again |
-| "Discord only allows renaming a channel twice per 10 minutes" | That's Discord's limit – wait the minutes it says and try again |
-| `⏳ A click (…) expired before the bot could answer` or `Unknown interaction (10062)` | Discord gives the bot 3 seconds to answer. It happens when someone clicks while the bot is starting or the host is very slow – they just click again. If it happens all the time: use Node.js 20 or newer and a faster plan / a host region in the EU or US |
-| `… was already answered by another bot process` | The bot is running twice with the same token (e.g. on your PC and on the host) – stop one of them |
-| `ExperimentalWarning: buffer.File is an experimental feature` | Harmless – it's printed by Node.js 18. Pick Node.js 20 or 22 on your host to get rid of it (and for a faster bot) |
-| Buttons say "This interaction failed" | The bot must be **online** – buttons are handled live by the bot |
-| Transcripts are empty | Turn on **Message Content Intent** |
-| The new channels (#proofs, #sales, #backups, shop status) are missing | Run `/build only:update` (the shop status channel only exists while `shopStatus.enabled` is `true`) |
-| "The image is too big" | Product images can be up to 1 MB – save it as JPG or WEBP |
-| Invites aren't counted | The bot needs to see the server's invites – it has Administrator, so check its role wasn't changed. Invites only count after the new member verifies |
+| Discord odrzuca połączenie: `privileged intents` nie są włączone | Developer Portal → Bot → włącz **Server Members Intent** i **Message Content Intent** → uruchom bota ponownie |
+| Nieprawidłowy `DISCORD_TOKEN` | Zresetuj token w zakładce Bot i wklej go ponownie do `.env` |
+| Brak linku PayPal w zamówieniach przez PayPal | Brakuje `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` albo są błędne (konsola pisze, że PayPal je odrzucił; klucze Sandbox wymagają `PAYPAL_SANDBOX=true`), albo PayPal nie przyjmuje tej waluty – ustaw `paypal.currency`. Karta pokazuje wtedy link paypal.me |
+| Brak linku Stripe w zamówieniach przez Stripe | Brakuje `STRIPE_SECRET_KEY` w `.env` albo jest błędny (konsola pisze, że Stripe odrzucił `STRIPE_SECRET_KEY`), zamówienie nie ma stałej ceny (np. `od 5€`) – wtedy link wysyła ręcznie sprzedawca – albo kwota jest **niższa niż najmniejsza płatność w Stripe** (0.50€ / $0.50 / £0.30 / 2 zł): klient jest proszony o zapłatę w inny sposób. Po edycji `.env` uruchom bota ponownie |
+| Komendy się nie pokazują | Ustaw `GUILD_ID` w `.env` i uruchom bota ponownie. Sprawdź też, czy zaproszenie miało `applications.commands` (link z konsoli je ma) |
+| „Potrzebuję uprawnienia Administrator” | Ustawienia serwera → Role → rola bota → włącz **Administrator** |
+| Wyczyść i zbuduj nie usunęło niektórych ról | Są nad rolą bota – przeciągnij rolę bota na górę i uruchom to ponownie |
+| Wgrało się tylko 50 emotek | Serwery bez boostów mają 50 miejsc na emotki. Zboostuj serwer i wpisz `/zbuduj tylko:emojis` |
+| „Discord ogranicza, jak szybko można wgrywać emotki” | Odczekaj godzinę, potem wpisz `/zbuduj tylko:emojis` |
+| Tryb społeczności nie został włączony | Discord odmówił dla tego serwera. Wszystko inne działa (kanały ogłoszeń są zwykłymi kanałami tylko do odczytu). Możesz go włączyć później w Ustawieniach serwera → Włącz społeczność |
+| Własna emotka została usunięta | Nic się nie psuje – bot używa wtedy zwykłego emoji. Wpisz `/zbuduj tylko:emojis`, żeby wgrać ją ponownie |
+| „Discord pozwala zmienić nazwę kanału tylko dwa razy na 10 minut” | To limit Discorda – odczekaj podaną liczbę minut i spróbuj ponownie |
+| `⏳` kliknięcie wygasło, zanim bot zdążył odpowiedzieć, albo `Unknown interaction (10062)` | Discord daje botowi 3 sekundy na odpowiedź. Zdarza się to, gdy ktoś kliknie, kiedy bot się uruchamia albo hosting jest bardzo wolny – wystarczy kliknąć jeszcze raz. Jeśli zdarza się ciągle: użyj Node.js 20 lub nowszego i szybszego planu / hostingu w regionie UE lub USA |
+| Interakcja została już obsłużona przez inny proces bota | Bot działa dwa razy na tym samym tokenie (np. na Twoim komputerze i na hostingu) – wyłącz jedną kopię |
+| `ExperimentalWarning: buffer.File is an experimental feature` | Nieszkodliwe – wypisuje to Node.js 18. Wybierz na hostingu Node.js 20 albo 22, żeby się tego pozbyć (i mieć szybszego bota) |
+| Przyciski pokazują „Ta interakcja nie powiodła się” | Bot musi być **online** – przyciski obsługuje bot na żywo |
+| Transkrypcje są puste | Włącz **Message Content Intent** |
+| Brakuje nowych kanałów (#realizacje, #sprzedaż, #kopie-zapasowe, status sklepu) | Wpisz `/zbuduj tylko:update` (kanał statusu sklepu istnieje tylko wtedy, gdy `shopStatus.enabled` ma wartość `true`) |
+| „Obrazek jest za duży” | Obrazki produktów mogą mieć do 1 MB – zapisz go jako JPG albo WEBP |
+| Zaproszenia nie są liczone | Bot musi widzieć zaproszenia serwera – ma uprawnienie Administrator, więc sprawdź, czy nikt nie zmienił jego roli. Zaproszenia liczą się dopiero po weryfikacji nowego członka |
 
-💾 **Backup:** everything (tickets, products, sales, promo codes, vouches, giveaways) lives in `data/db.json`, product images in
-`data/products/`. The bot also posts an automatic backup in #backups – to restore one, unzip it, rename it to `db.json`
-and put it in `data/` while the bot is stopped.
+💾 **Kopia zapasowa:** wszystko (tickety, produkty, sprzedaż, kody rabatowe, opinie, giveawaye) jest w `data/db.json`, obrazki
+produktów w `data/products/`. Bot publikuje też automatyczne kopie na #kopie-zapasowe – żeby przywrócić kopię, rozpakuj ją,
+zmień nazwę pliku na `db.json` i wrzuć go do `data/`, gdy bot jest wyłączony.
 
 ---
 
-## 🗂️ Files
+## 🗂️ Pliki
 
 ```
-index.js                     startup file (select it on your host)
-.env                         your token & IDs (copy from .env.example)
-config.json                  texts, payment methods, ticket categories, options
-regulamin.md                 the shop terms (Polish) posted in #rules – edit and run /build only:panels
-assets/                      banners, emojis, logo (see assets/CREDITS.md)
-data/db.json                 the bot's data (created automatically)
+index.js                     plik startowy (wybierz go na hostingu)
+.env                         Twój token i ID (skopiuj z .env.example)
+config.json                  teksty, metody płatności, kategorie ticketów, opcje
+regulamin.md                 regulamin sklepu publikowany na #regulamin – edytuj i wpisz /zbuduj tylko:panels
+assets/                      banery, emotki, logo (zob. assets/CREDITS.md)
+data/db.json                 dane bota (tworzone automatycznie)
 src/
-├── index.js                 Discord client, events, timers
-├── builder/                 /build – layout, permissions, content, executor, emoji upload
-├── features/                verification, shop, catalog, orders, promo codes, shop status, vouches, giveaways, roles,
-│                            announcements, welcome/logs, stats, sales report, backups, customer profiles,
-│                            Notify me, invites, lockdown, look-alike alerts, housekeeping, flash sales, badges,
-│                            Pay, order status, My orders, staff reminders, payment cards, Stripe, PayPal,
-│                            the bot's own HammerShop role (brandrole.js)
-├── tickets/                 ticket system, cards, HTML transcripts
-├── commands/                slash commands
-├── handlers/interactions.js buttons, menus and forms
-└── lib/                     config, database, theme, permissions, helpers
-tools/render-assets.js       re-generates all images (bot + website pictures)
-scripts/website-theme.js     the HammerShop look of the website (colours, logo, name, pictures)
-test/                        tests with a simulated Discord server (npm test)
+├── index.js                 klient Discorda, zdarzenia, timery
+├── builder/                 /zbuduj – układ, uprawnienia, treści, wykonanie, wgrywanie emotek
+├── features/                weryfikacja, sklep, katalog, zamówienia, kody rabatowe, status sklepu, opinie, giveawaye, role,
+│                            ogłoszenia, powitania/logi, statystyki, raport sprzedaży, kopie zapasowe, profile klientów,
+│                            Powiadom mnie, zaproszenia, blokada serwera, alerty o podszywaniu się, porządki, promocje
+│                            błyskawiczne, odznaki, Zapłać, status zamówienia, Moje zamówienia, przypomnienia dla zespołu,
+│                            karty płatności, Stripe, PayPal, własna rola bota HammerShop (brandrole.js)
+├── tickets/                 system ticketów, karty, transkrypcje HTML
+├── commands/                komendy (polskie nazwy dla Discorda: lib/commandsPl.js)
+├── handlers/interactions.js przyciski, menu i formularze
+└── lib/                     konfiguracja, baza danych, motyw, uprawnienia, funkcje pomocnicze
+tools/render-assets.js       generuje od nowa wszystkie obrazki (bot + obrazki strony)
+scripts/website-theme.js     wygląd HammerShop na stronie (kolory, logo, nazwa, obrazki)
+test/                        testy z symulowanym serwerem Discord (npm test)
 ```
 
-## 🧪 Tests
+## 🧪 Testy
 ```bash
 npm test
 ```
-379 tests run against a simulated Discord server that enforces Discord's real limits (names, 40 components / 4000
-characters per card, emoji slots, permissions, AutoMod rules, Community mode): a full build, wipe & build,
-every permission, the shop → ticket → order → vouch flow, options, stock counter, flash sales, badges, Pay,
-order status DMs, My orders, staff reminders, payment cards, Stripe and PayPal payment links, giveaway requirements, promo code limits (also for orders placed at the same moment),
-opening hours across summer/winter time, lockdown, invite rewards, in-place panel updates, verification, giveaways, ratings,
-the bot-only HammerShop role, the regulamin, the NØX → HammerShop update (emojis, banners, roles) and more.
+379 testów działa na symulowanym serwerze Discord, który pilnuje prawdziwych limitów Discorda (nazwy, 40 komponentów / 4000
+znaków na kartę, miejsca na emotki, uprawnienia, reguły AutoMod, tryb społeczności): pełna budowa, wyczyść i zbuduj,
+każde uprawnienie, ścieżka sklep → ticket → zamówienie → opinia, warianty, licznik sztuk, promocje błyskawiczne, odznaki, Zapłać,
+DM-y o statusie zamówienia, Moje zamówienia, przypomnienia dla zespołu, karty płatności, linki do płatności Stripe i PayPal,
+wymagania giveawayów, limity kodów rabatowych (także dla zamówień złożonych w tej samej chwili), godziny pracy przy zmianie
+czasu letniego/zimowego, blokada serwera, nagrody za zaproszenia, odświeżanie paneli w miejscu, weryfikacja, giveawaye, oceny,
+rola HammerShop tylko dla bota, regulamin, aktualizacja NØX → HammerShop (emotki, banery, role) i więcej.
 
 ---
 
-Credits: icons by [Font Awesome](https://fontawesome.com) (CC BY 4.0), font [Montserrat](https://fonts.google.com/specimen/Montserrat) (OFL).
-The ticket system and server builder are based on the *Ticket Bot* and *Kreator Serwera* projects, translated to English, rebuilt for NØX and rebranded as HammerShop.
+Autorzy i licencje: ikony [Font Awesome](https://fontawesome.com) (CC BY 4.0), czcionka [Montserrat](https://fonts.google.com/specimen/Montserrat) (OFL).
+System ticketów i kreator serwera powstały na bazie projektów *Ticket Bot* i *Kreator Serwera* – przetłumaczonych na angielski, przebudowanych dla NØX, przemianowanych na HammerShop, a teraz z powrotem po polsku.
