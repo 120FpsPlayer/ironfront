@@ -45,10 +45,10 @@ async function userFromCode(code) {
     signal: AbortSignal.timeout(15_000),
   });
   const token = await tokenRes.json().catch(() => ({}));
-  if (!tokenRes.ok || !token.access_token) throw new Error(`Discord refused the sign-in (${tokenRes.status})`);
+  if (!tokenRes.ok || !token.access_token) throw new Error(`Discord odrzucił logowanie (${tokenRes.status})`);
   const meRes = await fetch(`${web().discordApi}/users/@me`, { headers: { authorization: `Bearer ${token.access_token}` }, signal: AbortSignal.timeout(15_000) });
   const me = await meRes.json().catch(() => ({}));
-  if (!meRes.ok || !me.id) throw new Error(`Discord didn't return the account (${meRes.status})`);
+  if (!meRes.ok || !me.id) throw new Error(`Discord nie zwrócił danych konta (${meRes.status})`);
   return { me, accessToken: token.access_token };
 }
 

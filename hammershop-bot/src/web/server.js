@@ -77,7 +77,7 @@ function readBody(req, limit = 64 * 1024) {
     req.on('data', (c) => {
       size += c.length;
       if (size > limit) {
-        reject(Object.assign(new Error('Request too large'), { status: 413 }));
+        reject(Object.assign(new Error('Za duże zapytanie.'), { status: 413 }));
         req.destroy();
       } else chunks.push(c);
     });
@@ -87,12 +87,12 @@ function readBody(req, limit = 64 * 1024) {
 }
 
 async function jsonBody(req) {
-  if (!String(req.headers['content-type'] ?? '').includes('application/json')) throw Object.assign(new Error('Send JSON.'), { status: 415 });
+  if (!String(req.headers['content-type'] ?? '').includes('application/json')) throw Object.assign(new Error('Wyślij dane w formacie JSON.'), { status: 415 });
   const raw = await readBody(req);
   try {
     return raw ? JSON.parse(raw) : {};
   } catch {
-    throw Object.assign(new Error('Invalid JSON.'), { status: 400 });
+    throw Object.assign(new Error('Nieprawidłowy JSON.'), { status: 400 });
   }
 }
 
@@ -150,13 +150,13 @@ async function settle(order, session) {
   if (session.payment_status === 'paid') {
     const amountOk = session.amount_total === order.amount && String(session.currency).toLowerCase() === order.currency;
     if (!amountOk) {
-      console.warn(`[web] ${order.id}: Stripe total ${session.amount_total} ${session.currency} ≠ order ${order.amount} ${order.currency} – not marked paid`);
+      console.warn(`[web] ${order.id}: kwota w Stripe ${session.amount_total} ${session.currency} ≠ zamówienie ${order.amount} ${order.currency} – nie oznaczono jako opłacone`);
       return store.updateOrder(order.id, { status: 'failed', note: 'amount mismatch' });
     }
     const { order: paid, first } = store.markPaid(order.id, { payment_intent: session.payment_intent ?? null });
     if (first) {
-      console.log(`[web] order ${paid.id} paid – ${paid.kind} – ${(paid.amount / 100).toFixed(2)} ${paid.currency}`);
-      await Promise.resolve(hooks.onPaid(paid, store._state().users[paid.userId])).catch((err) => console.warn(`[web] handing ${paid.id} to the bot:`, err.message));
+      console.log(`[web] zamówienie ${paid.id} opłacone – ${paid.kind} – ${(paid.amount / 100).toFixed(2)} ${paid.currency}`);
+      await Promise.resolve(hooks.onPaid(paid, store._state().users[paid.userId])).catch((err) => console.warn(`[web] przekazanie ${paid.id} do bota:`, err.message));
     }
     return paid;
   }
@@ -165,11 +165,11 @@ async function settle(order, session) {
 }
 
 async function checkout(req, res, user) {
-  if (!paymentsReady()) return fail(res, 503, 'Checkout is not open yet. No payment has been taken.');
-  if (limited(req, 'checkout', 10)) return fail(res, 429, 'Too many tries – wait a minute and try again.');
+  if (!paymentsReady()) return fail(res, 503, 'Płatności nie są jeszcze uruchomione. Nic nie zostało pobrane.');
+  if (limited(req, 'checkout', 10)) return fail(res, 429, 'Zbyt wiele prób – odczekaj minutę i spróbuj ponownie.');
   const body = await jsonBody(req);
-  if (body.kind === 'access') return fail(res, 409, "Signing in with Discord is all you need – there's no access fee.");
-  if (body.kind !== 'products') return fail(res, 400, 'Unknown checkout.');
+  if (body.kind === 'access') return fail(res, 409, 'Wystarczy zalogować się przez Discord – nie ma opłaty za dostęp.');
+  if (body.kind !== 'products') return fail(res, 400, 'Nieznany rodzaj zamówienia.');
   const kind = 'products';
   const requestId = String(body.requestId ?? '').slice(0, 100) || crypto.randomUUID();
 
@@ -187,13 +187,13 @@ async function checkout(req, res, user) {
   const items = [];
   for (const [id, quantity] of wanted) {
     const p = list.find((x) => x.id === id);
-    if (!p) return fail(res, 400, 'Something in your bag is no longer available. Remove it and try again.');
+    if (!p) return fail(res, 400, 'Coś z Twojego koszyka nie jest już dostępne. Usuń to i spróbuj ponownie.');
     items.push({ id: p.id, name: p.name, price: p.price, quantity: Math.min(MAX_QTY, quantity), productId: p.productId ?? null, variant: p.variant ?? null, eta: p.eta ?? null });
   }
-  if (!items.length) return fail(res, 400, 'Your bag is empty.');
-  const lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity, description: i.eta ? `${i.eta} · delivered on Discord` : 'Delivered on Discord' }));
+  if (!items.length) return fail(res, 400, 'Twój koszyk jest pusty.');
+  const lines = items.map((i) => ({ name: i.name, amount: i.price, quantity: i.quantity, description: i.eta ? `${i.eta} · na Discordzie` : 'Dostawa na Discordzie' }));
   const amount = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  if (amount < STRIPE_MIN) return fail(res, 400, 'The total is below the smallest card payment (0.50 €).');
+  if (amount < STRIPE_MIN) return fail(res, 400, 'Kwota jest niższa niż najmniejsza płatność kartą (0.50 €).');
 
   const currency = hooks.currency();
   const order = store.createOrder({ userId: user.id, kind, items, amount, currency, requestId });
@@ -203,23 +203,23 @@ async function checkout(req, res, user) {
     return send(res, 200, { url: session.url, order: order.id });
   } catch (err) {
     store.updateOrder(order.id, { status: 'failed', note: err.message });
-    console.warn(`[web] checkout ${order.id}:`, err.message);
-    return fail(res, 502, err.status === 401 ? 'Payments are not set up correctly yet – please contact HammerShop.' : "The payment page couldn't be opened. Please try again.");
+    console.warn(`[web] płatność ${order.id}:`, err.message);
+    return fail(res, 502, err.status === 401 ? 'Płatności nie są jeszcze poprawnie skonfigurowane – skontaktuj się z HammerShop.' : 'Nie udało się otworzyć strony płatności. Spróbuj ponownie.');
   }
 }
 
 async function verify(req, res, user) {
-  if (limited(req, 'verify', 30)) return fail(res, 429, 'Too many tries – wait a minute and try again.');
+  if (limited(req, 'verify', 30)) return fail(res, 429, 'Zbyt wiele prób – odczekaj minutę i spróbuj ponownie.');
   const { sessionId } = await jsonBody(req);
   const order = sessionId ? store.orderByStripe(String(sessionId)) : null;
-  if (!order || order.userId !== user.id) return fail(res, 404, 'This payment was not found on your account.');
+  if (!order || order.userId !== user.id) return fail(res, 404, 'Nie znaleziono tej płatności na Twoim koncie.');
   if (order.status === 'paid') return send(res, 200, { paid: true, status: 'paid', order: order.id });
-  if (!paymentsReady()) return fail(res, 503, 'Payments are not connected right now.');
+  if (!paymentsReady()) return fail(res, 503, 'Płatności są teraz niedostępne.');
   const session = await stripe.getCheckout(order.stripe_id).catch((err) => {
-    console.warn(`[web] verify ${order.id}:`, err.message);
+    console.warn(`[web] sprawdzanie ${order.id}:`, err.message);
     return null;
   });
-  if (!session) return fail(res, 502, "Stripe couldn't be reached. Try again in a moment.");
+  if (!session) return fail(res, 502, 'Brak połączenia ze Stripe. Spróbuj ponownie za chwilę.');
   const updated = await settle(order, session);
   return send(res, 200, { paid: updated.status === 'paid', status: updated.status, order: updated.id });
 }
@@ -262,13 +262,13 @@ async function authCallback(req, res, url) {
     const user = store.upsertUser(me);
     // Not on the HammerShop Discord yet → the bot adds them (Member role included). Signing in never fails because of it.
     const joined = await Promise.resolve(hooks.onLogin(user, accessToken)).catch((err) => {
-      console.warn(`[web] adding ${user.id} to the server:`, err.message);
+      console.warn(`[web] dodawanie ${user.id} do serwera:`, err.message);
       return null;
     });
     const token = store.createSession(user.id);
     return redirect(res, `/?connected=1${joined?.added ? '&joined=1' : ''}`, [clear, cookie('hs_sid', token, 30 * 86_400)]);
   } catch (err) {
-    console.warn('[web] sign-in:', err.message);
+    console.warn('[web] logowanie:', err.message);
     return redirect(res, '/?auth=failed', [clear]);
   }
 }
@@ -279,7 +279,7 @@ function serveStatic(req, res, pathname) {
   const file = pathname === '/' || pathname === '/index.html' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(pathname).replace(/^([/\\])+/, ''));
   if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
     // Unknown paths show the store (single page) – but not for missing assets.
-    if (pathname.startsWith('/assets/')) return fail(res, 404, 'Not found');
+    if (pathname.startsWith('/assets/')) return fail(res, 404, 'Nie znaleziono');
     return serveStatic(req, res, '/');
   }
   const ext = path.extname(file);
@@ -294,11 +294,11 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://local');
   const p = url.pathname;
   if (!p.startsWith('/api/shop/')) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'Method not allowed');
+    if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'Niedozwolona metoda');
     return serveStatic(req, res, p);
   }
   const route = p.slice('/api/shop/'.length);
-  if (limited(req, 'api', 120)) return fail(res, 429, 'Slow down a little and try again.');
+  if (limited(req, 'api', 120)) return fail(res, 429, 'Zwolnij trochę i spróbuj ponownie.');
 
   if (req.method === 'GET') {
     if (route === 'health') return send(res, 200, { ok: true });
@@ -319,32 +319,32 @@ async function handle(req, res) {
     if (route === 'auth/callback') return authCallback(req, res, url);
     if (route.startsWith('image/')) {
       const p = products().find((x) => x.id === decodeURIComponent(route.slice(6)));
-      if (!p?.imagePath || !fs.existsSync(p.imagePath)) return fail(res, 404, 'Not found');
+      if (!p?.imagePath || !fs.existsSync(p.imagePath)) return fail(res, 404, 'Nie znaleziono');
       res.writeHead(200, { ...HEADERS, 'content-type': TYPES[path.extname(p.imagePath)] ?? 'image/png', 'cache-control': 'public, max-age=300' });
       return fs.createReadStream(p.imagePath).pipe(res);
     }
     if (route === 'orders') {
       const user = userOf(req);
-      if (!user) return fail(res, 401, 'Sign in with Discord to see your orders.');
+      if (!user) return fail(res, 401, 'Zaloguj się przez Discord, aby zobaczyć swoje zamówienia.');
       return send(res, 200, { orders: store.ordersOf(user.id).filter((o) => o.stripe_id || o.status === 'paid').map(orderJson) });
     }
-    return fail(res, 404, 'Not found');
+    return fail(res, 404, 'Nie znaleziono');
   }
 
   if (req.method === 'POST') {
     if (route === 'stripe/webhook') return webhook(req, res);
-    if (!sameOrigin(req)) return fail(res, 403, 'Request refused.');
+    if (!sameOrigin(req)) return fail(res, 403, 'Żądanie odrzucone.');
     if (route === 'logout') {
       store.endSession(cookies(req).hs_sid);
       return send(res, 200, { ok: true }, { 'set-cookie': cookie('hs_sid', '', 0) });
     }
     const user = userOf(req);
-    if (!user) return fail(res, 401, 'Sign in with Discord first.');
+    if (!user) return fail(res, 401, 'Najpierw zaloguj się przez Discord.');
     if (route === 'checkout') return checkout(req, res, user);
     if (route === 'verify') return verify(req, res, user);
-    return fail(res, 404, 'Not found');
+    return fail(res, 404, 'Nie znaleziono');
   }
-  return fail(res, 405, 'Method not allowed');
+  return fail(res, 405, 'Niedozwolona metoda');
 }
 
 /**
@@ -356,7 +356,7 @@ function createWebServer(h = {}) {
   return http.createServer((req, res) => {
     handle(req, res).catch((err) => {
       if (!err.status) console.error('[web]', err);
-      if (!res.headersSent) fail(res, err.status ?? 500, err.status ? err.message : 'Something went wrong on our side. Please try again.');
+      if (!res.headersSent) fail(res, err.status ?? 500, err.status ? err.message : 'Coś poszło nie tak po naszej stronie. Spróbuj ponownie.');
       else res.end();
     });
   });

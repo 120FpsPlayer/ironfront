@@ -41,7 +41,7 @@ const { isSafeSelfRole } = require('../lib/guards');
 
 const shop = () => require('./shop');
 const delivery = () => require('./delivery');
-const METHOD = 'Website';
+const METHOD = 'Strona internetowa';
 const TABS = ['Games', 'Discord Bots', 'Discord Servers']; // the page's filter tabs
 let client = null;
 let server = null;
@@ -65,8 +65,8 @@ function tabOf(p) {
   const exact = TABS.find((t) => t.toLowerCase() === raw.toLowerCase());
   if (exact) return exact;
   const text = `${raw} ${p.name}`.toLowerCase();
-  if (/\bbots?\b/.test(text)) return 'Discord Bots';
-  if (/\bservers?\b/.test(text)) return 'Discord Servers';
+  if (/\bbot[sy]?\b/.test(text)) return 'Discord Bots'; // bots, boty
+  if (/\bservers?\b|\bserwer[y]?\b/.test(text)) return 'Discord Servers'; // serwery
   if (/game|gry|gra\b|steam|spiel/.test(text)) return 'Games';
   return raw || 'Other';
 }
@@ -77,13 +77,13 @@ function artOf(p, tab) {
 }
 
 /**
- * What the product card says about delivery: the delivery time picked in /product add | edit, or "Instant delivery"
+ * What the product card says about delivery: the delivery time picked in /product add | edit, or "Dostawa natychmiastowa"
  * when the product has files or text to send (a website order is paid by card, so it goes out right away).
  */
 function etaOf(p) {
   const label = shop().DELIVERY_TIMES[p.deliveryTime];
   if (label) return { instant: p.deliveryTime === 'instant', eta: label.replace(/^[^\p{L}]+/u, '') };
-  return require('./delivery').hasDelivery(p) ? { instant: true, eta: 'Instant delivery' } : { instant: false, eta: null };
+  return require('./delivery').hasDelivery(p) ? { instant: true, eta: 'Dostawa natychmiastowa' } : { instant: false, eta: null };
 }
 
 /** The bot's shop as website products – prices in cents, every option its own entry. */
@@ -139,7 +139,7 @@ async function ensureInvite(guild) {
     (c) => c && c.type === ChannelType.GuildText && c.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.CreateInstantInvite),
   );
   for (const channel of candidates) {
-    const invite = await channel.createInvite({ maxAge: 0, maxUses: 0, unique: false, reason: 'HammerShop website – Support / community button' }).catch(() => null);
+    const invite = await channel.createInvite({ maxAge: 0, maxUses: 0, unique: false, reason: 'Strona HammerShop – przycisk Pomoc / społeczność' }).catch(() => null);
     if (invite) {
       db.guild(guild.id).webInvite = { code: invite.code, url: `https://discord.gg/${invite.code}` };
       db.save();
@@ -162,7 +162,7 @@ async function onLogin(user, accessToken) {
   let member = await guild.members.fetch(user.id).catch(() => null);
   if (member) {
     if (roleOk && !member.roles.cache.has(role.id)) {
-      await member.roles.add(role, 'Signed in on the HammerShop website');
+      await member.roles.add(role, 'Logowanie na stronie HammerShop');
       await hooks.emit('verified', member);
     }
     return { added: false, member: true };
@@ -171,13 +171,13 @@ async function onLogin(user, accessToken) {
   try {
     member = await guild.members.add(user.id, { accessToken, ...(roleOk && { roles: [role.id] }) });
   } catch (err) {
-    console.warn(`[website] couldn't add ${user.username ?? user.id} to the server:`, err.message);
+    console.warn(`[website] nie udało się dodać ${user.username ?? user.id} do serwera:`, err.message);
     return { added: false, member: false };
   }
   member ??= await guild.members.fetch(user.id).catch(() => null);
   if (!member) return { added: false, member: false };
-  if (roleOk && !member.roles.cache.has(role.id)) await member.roles.add(role, 'Signed in on the HammerShop website').catch(() => null);
-  await sendLog(guild, { embeds: [logEmbed(COLORS.success, '🌐 Joined through the website', guild.client.user).setDescription(`<@${user.id}>${user.username ? ` (${user.username})` : ''} signed in on the website and was added to the server${roleOk ? ` with ${role}` : ''}.`)] }).catch(() => null);
+  if (roleOk && !member.roles.cache.has(role.id)) await member.roles.add(role, 'Logowanie na stronie HammerShop').catch(() => null);
+  await sendLog(guild, { embeds: [logEmbed(COLORS.success, '🌐 Dołączenie przez stronę', guild.client.user).setDescription(`<@${user.id}>${user.username ? ` (${user.username})` : ''} loguje się na stronie i trafia na serwer${roleOk ? ` z rolą ${role}` : ''}.`)] }).catch(() => null);
   if (roleOk) await hooks.emit('verified', member);
   return { added: true, member: true };
 }
@@ -208,9 +208,9 @@ function ticketOrder(order, guildId) {
 function ticketAnswers(order) {
   const lines = order.items.map((i) => `${i.name} × ${i.quantity} — ${money((i.price * i.quantity) / unit())}`);
   return [
-    { label: order.items.length > 1 ? 'Products' : 'Product', value: lines.join('\n') },
-    { label: 'Payment method', value: 'Website – card (Stripe)' },
-    { label: 'Price', value: `**Paid: ${money(order.amount / unit())}** ✅ · website order \`${order.id}\`` },
+    { label: order.items.length > 1 ? 'Produkty' : 'Produkt', value: lines.join('\n') },
+    { label: 'Metoda płatności', value: 'Strona internetowa – karta (Stripe)' },
+    { label: 'Cena', value: `**Opłacone: ${money(order.amount / unit())}** ✅ · zamówienie ze strony \`${order.id}\`` },
   ];
 }
 
@@ -221,17 +221,17 @@ function receiptDm(guild, order, ticket, channel) {
   const c = container(COLORS.success);
   const instant = delivery().deliverable(guild.id, ticket);
   const items = order.items.map((i) => `\`${i.quantity}×\` ${i.name} — **${money((i.price * i.quantity) / unit())}**`).join('\n');
-  header(c, `## ${e(guild, 'check')} Order confirmed – thank you!\nYour payment on the **HammerShop** website went through. Here's your receipt:`, guild.iconURL?.({ size: 128 }));
+  header(c, `## ${e(guild, 'check')} Zamówienie potwierdzone – dziękujemy!\nTwoja płatność na stronie **HammerShop** przeszła pomyślnie. Oto potwierdzenie zakupu:`, guild.iconURL?.({ size: 128 }));
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
-    text(`${items}\n\n**Total paid: ${money(order.amount / unit())}** · card (Stripe)\n-# Order reference \`${order.id}\` · ${ts(order.paidAt ?? Date.now(), 'f')}`),
+    text(`${items}\n\n**Zapłacono razem: ${money(order.amount / unit())}** · karta (Stripe)\n-# Numer zamówienia \`${order.id}\` · ${ts(order.paidAt ?? Date.now(), 'f')}`),
   );
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(
-    text(instant ? `📦 Your order is in ticket **#${pad(ticket.number)}** – the product is delivered there and in this DM right away.` : `🎫 Your order is in ticket **#${pad(ticket.number)}** – a seller delivers it there. You'll be pinged.`),
+    text(instant ? `📦 Twoje zamówienie czeka w tickecie **#${pad(ticket.number)}** – produkt od razu trafi tam i do tej wiadomości.` : `🎫 Twoje zamówienie czeka w tickecie **#${pad(ticket.number)}** – sprzedawca dostarczy je tam. Dostaniesz powiadomienie.`),
   );
-  const buttons = [linkBtn(channelUrl(guild.id, channel.id), `Open ticket #${pad(ticket.number)}`, ce(guild, 'ticket'))];
-  if (env.web.publicUrl) buttons.push(linkBtn(`${env.web.publicUrl}/?view=orders`, 'My orders', ce(guild, 'cart')));
+  const buttons = [linkBtn(channelUrl(guild.id, channel.id), `Otwórz ticket #${pad(ticket.number)}`, ce(guild, 'ticket'))];
+  if (env.web.publicUrl) buttons.push(linkBtn(`${env.web.publicUrl}/?view=orders`, 'Moje zamówienia', ce(guild, 'cart')));
   c.addActionRowComponents(row(...buttons));
   return v2(c);
 }
@@ -243,25 +243,25 @@ async function handOver(order) {
   try {
     const guild = guildOf();
     if (!guild) {
-      setDelivery(order, { delivery: `The HammerShop team delivers your order on Discord – keep your order reference ${order.id}.` });
+      setDelivery(order, { delivery: `Zespół HammerShop dostarczy Twoje zamówienie na Discordzie – zachowaj numer zamówienia ${order.id}.` });
       return;
     }
     const member = await guild.members.fetch(order.userId).catch(() => null);
     if (!member) {
       setDelivery(order, {
         waitingForMember: true,
-        delivery: `Join the HammerShop Discord server with the account you signed in with – your order opens there automatically (reference ${order.id}).`,
+        delivery: `Dołącz do serwera HammerShop na Discordzie z kontem, którym logujesz się na stronie – Twoje zamówienie otworzy się tam automatycznie (numer ${order.id}).`,
       });
-      await sendLog(guild, { embeds: [logEmbed(COLORS.warning, '🌐 Website order waiting', guild.client.user).setDescription(`Order \`${order.id}\` (${money(order.amount / unit())}) is paid – <@${order.userId}> isn't on the server yet. It opens as soon as they join.`)] }).catch(() => null);
+      await sendLog(guild, { embeds: [logEmbed(COLORS.warning, '🌐 Zamówienie ze strony czeka', guild.client.user).setDescription(`Zamówienie \`${order.id}\` (${money(order.amount / unit())}) jest opłacone – <@${order.userId}> nie ma jeszcze na serwerze. Ticket otworzy się, gdy tylko dołączy.`)] }).catch(() => null);
       return;
     }
     let channel;
     try {
       channel = await tickets.openTicket(member, config.getType('order'), ticketAnswers(order), { order: ticketOrder(order, guild.id) }, { force: true });
     } catch (err) {
-      console.warn(`[website] ticket for ${order.id}:`, err.message);
-      setDelivery(order, { delivery: `The HammerShop team contacts you on Discord to deliver it (reference ${order.id}).` });
-      await sendLog(guild, { embeds: [logEmbed(COLORS.danger ?? COLORS.warning, '🌐 Website order – no ticket', guild.client.user).setDescription(`Order \`${order.id}\` of <@${order.userId}> is **paid** (${money(order.amount / unit())}) but its ticket couldn't open: ${truncate(err.message, 300)}\nDeliver it by hand.`)] }).catch(() => null);
+      console.warn(`[website] ticket dla ${order.id}:`, err.message);
+      setDelivery(order, { delivery: `Zespół HammerShop skontaktuje się z Tobą na Discordzie, aby je dostarczyć (numer ${order.id}).` });
+      await sendLog(guild, { embeds: [logEmbed(COLORS.danger ?? COLORS.warning, '🌐 Zamówienie ze strony – brak ticketu', guild.client.user).setDescription(`Zamówienie \`${order.id}\` od <@${order.userId}> jest **opłacone** (${money(order.amount / unit())}), ale nie udało się otworzyć ticketu: ${truncate(err.message, 300)}\nDostarcz je ręcznie.`)] }).catch(() => null);
       return;
     }
     const ticket = db.getTicket(channel.id);
@@ -271,7 +271,7 @@ async function handOver(order) {
       ticketChannelId: channel.id,
       ticketNumber: pad(ticket.number),
       ticketUrl: `https://discord.com/channels/${guild.id}/${channel.id}`,
-      delivery: `Your order is in ticket #${pad(ticket.number)} on the HammerShop Discord – a seller delivers it there.`,
+      delivery: `Twoje zamówienie czeka w tickecie #${pad(ticket.number)} na Discordzie HammerShop – sprzedawca dostarczy je tam.`,
     });
     await member.send(receiptDm(guild, webStore.getOrder(order.id) ?? order, ticket, channel)).catch(() => null);
     await hooks.emit('orderPlaced', { guild, channel, ticket, member });
@@ -294,30 +294,30 @@ async function onOrderPlaced({ guild, channel, ticket }) {
   const instant = delivery.deliverable(guild.id, ticket);
   const pings = instant ? { users: [], roles: [] } : autopay.pingsFor(guild, ticket);
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
-  const ask = instant ? ' 📦 The product is delivered automatically.' : who ? ` ${who}, please deliver it.` : '';
-  await channel.send(notice(COLORS.success, `🌐 **Paid on the website – ${money(order.total)}** (card, Stripe) for order \`#${pad(ticket.number)}\` · \`${order.web?.orderId ?? '—'}\`.${ask}`, { mentions: pings })).catch(() => null);
+  const ask = instant ? ' 📦 Produkt zostanie dostarczony automatycznie.' : who ? ` ${who} – prosimy o dostawę.` : '';
+  await channel.send(notice(COLORS.success, `🌐 **Opłacone na stronie – ${money(order.total)}** (karta, Stripe) za zamówienie \`#${pad(ticket.number)}\` · \`${order.web?.orderId ?? '—'}\`.${ask}`, { mentions: pings })).catch(() => null);
   await sendLog(guild, {
     embeds: [
-      logEmbed(COLORS.success, '🌐 Paid on the website', guild.client.user).addFields(
+      logEmbed(COLORS.success, '🌐 Opłacone na stronie', guild.client.user).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
-        { name: 'Customer', value: `<@${ticket.ownerId}>`, inline: true },
-        { name: 'Amount', value: money(order.total), inline: true },
+        { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
+        { name: 'Kwota', value: money(order.total), inline: true },
         { name: 'Stripe', value: `\`${truncate(order.web?.stripe ?? '—', 100)}\``, inline: true },
       ),
     ],
   }).catch(() => null);
   if (!instant) return;
   const done = await delivery.deliverPaid(channel, db.getTicket(channel.id), { amount: order.total }).catch((err) => {
-    console.warn('[website] delivery:', err.message);
+    console.warn('[website] dostawa:', err.message);
     return false;
   });
   if (done && order.web?.orderId) {
-    webStore.updateOrder(order.web.orderId, { delivered: true, delivery: `Delivered! Your product is in ticket #${pad(ticket.number)} on the HammerShop Discord and in your DMs.` });
+    webStore.updateOrder(order.web.orderId, { delivered: true, delivery: `Dostarczone! Twój produkt czeka w tickecie #${pad(ticket.number)} na Discordzie HammerShop i w Twoich wiadomościach prywatnych.` });
   }
   if (!done) {
     const team = autopay.pingsFor(guild, ticket);
     const mention = [...team.users.map((id) => `<@${id}>`), ...team.roles.map((id) => `<@&${id}>`)].join(' ');
-    await channel.send(notice(COLORS.warning, `⚠️ The product couldn't be delivered automatically${mention ? ` – ${mention}, please deliver it by hand` : ' – a seller delivers it by hand'}.`, { mentions: team })).catch(() => null);
+    await channel.send(notice(COLORS.warning, `⚠️ Nie udało się dostarczyć produktu automatycznie${mention ? ` – ${mention}, prosimy o ręczną dostawę` : ' – sprzedawca dostarczy go ręcznie'}.`, { mentions: team })).catch(() => null);
   }
 }
 
@@ -336,21 +336,21 @@ function start(c) {
   webAuth.setClientId(c.application?.id ?? c.user?.id);
   server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, onLogin, isMember, currency });
   server.on('error', (err) => {
-    console.warn(`🌐 Website: can't use port ${env.web.port} (${err.code ?? err.message}) – the bot keeps running without it.`);
+    console.warn(`🌐 Strona: nie można użyć portu ${env.web.port} (${err.code ?? err.message}) – bot działa dalej bez niej.`);
     server = null;
   });
   server.listen(env.web.port, '0.0.0.0', () => {
-    console.log(`🌐 Website on port ${env.web.port}${env.web.publicUrl ? ` – ${env.web.publicUrl}` : ''}`);
-    if (!env.web.publicUrl) console.warn('🌐 Website: set PUBLIC_URL in .env (the address people open) – Discord sign-in and payments stay off without it.');
-    else if (!authReady()) console.warn('🌐 Website: Discord sign-in is off – set DISCORD_CLIENT_SECRET (Developer Portal → OAuth2) and add the redirect …/api/shop/auth/callback.');
-    if (env.web.publicUrl && !paymentsReady()) console.warn('🌐 Website: payments are off – set STRIPE_SECRET_KEY.');
+    console.log(`🌐 Strona na porcie ${env.web.port}${env.web.publicUrl ? ` – ${env.web.publicUrl}` : ''}`);
+    if (!env.web.publicUrl) console.warn('🌐 Strona: ustaw PUBLIC_URL w .env (adres, który otwierają ludzie) – bez niego logowanie przez Discord i płatności są wyłączone.');
+    else if (!authReady()) console.warn('🌐 Strona: logowanie przez Discord jest wyłączone – ustaw DISCORD_CLIENT_SECRET (Developer Portal → OAuth2) i dodaj przekierowanie …/api/shop/auth/callback.');
+    if (env.web.publicUrl && !paymentsReady()) console.warn('🌐 Strona: płatności są wyłączone – ustaw STRIPE_SECRET_KEY.');
   });
   ensureInvite(guildOf()).catch(() => null);
 }
 
 hooks.on('ready', start);
 hooks.on('orderPlaced', onOrderPlaced);
-hooks.on('memberAdd', (member) => onMemberAdd(member).catch((err) => console.warn('[website] member join:', err.message)));
+hooks.on('memberAdd', (member) => onMemberAdd(member).catch((err) => console.warn('[website] dołączenie członka:', err.message)));
 hooks.on('inviteDelete', (invite) => {
   const g = invite.guild && db.guild(invite.guild.id);
   if (g?.webInvite?.code === invite.code) {

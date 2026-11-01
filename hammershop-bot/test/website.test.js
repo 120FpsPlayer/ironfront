@@ -87,7 +87,7 @@ test('the website sells the bot\'s shop: fixed prices only, every option, sale p
   const byName = Object.fromEntries(s.products.map((p) => [p.name, p]));
   assert.equal(byName['Game Keys'].price, 990);
   assert.equal(byName['Game Keys'].category, 'Games', '"🎮 Games" → the Games tab');
-  assert.equal(byName['Game Keys'].eta, 'Instant delivery', 'files/text to deliver → instant delivery on the card');
+  assert.equal(byName['Game Keys'].eta, 'Dostawa natychmiastowa', 'files/text to deliver → instant delivery on the card');
   assert.equal(byName['Game Keys'].instant, true);
   assert.equal(byName['5 Game Combo'].eta, null);
   assert.equal(byName['5 Game Combo'].art, 'bundle');
@@ -153,19 +153,19 @@ test('paid on the website → the order ticket opens on Discord, paid, and the p
   assert.equal(ticket.order.total, 9.9);
   const channel = guild.channels.cache.get(ticket.channelId);
   const texts = channel.messageList.map((m) => textOf(m.body ?? m)).join('\n');
-  assert.match(texts, /Paid on the website – 9\.90€/);
-  assert.doesNotMatch(texts, /## .*Pay 9\.90€/, 'no "Pay" card – it is paid already');
+  assert.match(texts, /Opłacone na stronie – 9\.90€/);
+  assert.doesNotMatch(texts, /## .*(?:Pay|Zapłać) 9\.90€/, 'no "Pay" card – it is paid already');
   assert.ok(guild.dms.some((d) => d.to === buyer.id && /KEY-ABC-123/.test(textOf(d.payload))), 'delivered by DM');
-  const receipt = guild.dms.find((d) => d.to === buyer.id && /Order confirmed/.test(textOf(d.payload)));
+  const receipt = guild.dms.find((d) => d.to === buyer.id && /Zamówienie potwierdzone/.test(textOf(d.payload)));
   assert.ok(receipt, 'an order confirmation by DM');
-  assert.match(textOf(receipt.payload), /Game Keys[\s\S]*Total paid: 9\.90€[\s\S]*Order reference `HS-[0-9A-F]{10}`/);
+  assert.match(textOf(receipt.payload), /Game Keys[\s\S]*Zapłacono razem: 9\.90€[\s\S]*Numer zamówienia `HS-[0-9A-F]{10}`/);
   assert.equal(fakes.state.lastCheckout.get('submit_type'), 'pay');
-  assert.match(fakes.state.lastCheckout.get('custom_text[submit][message]'), /private ticket on the HammerShop Discord/);
-  assert.equal(fakes.state.lastCheckout.get('line_items[0][price_data][product_data][description]'), 'Instant delivery · delivered on Discord');
+  assert.match(fakes.state.lastCheckout.get('custom_text[submit][message]'), /prywatnym tickecie na Discordzie HammerShop/);
+  assert.equal(fakes.state.lastCheckout.get('line_items[0][price_data][product_data][description]'), 'Dostawa natychmiastowa · na Discordzie');
   assert.ok(db.getTicket(ticket.channelId).completedAt, 'completed like any paid Discord order');
 
   const order = (await (await get('/api/shop/orders', sid)).json()).orders[0];
-  assert.match(order.delivery, /^Delivered! Your product is in ticket #\d{4} on the HammerShop Discord and in your DMs\.$/);
+  assert.match(order.delivery, /^Dostarczone! Twój produkt czeka w tickecie #\d{4} na Discordzie HammerShop i w Twoich wiadomościach prywatnych\.$/);
   assert.equal(order.delivered, true);
   assert.equal(order.ticketNumber, String(ticket.number).padStart(4, '0'));
   assert.equal(order.ticketUrl, `https://discord.com/channels/${guild.id}/${ticket.channelId}`, 'the receipt links straight to the ticket');
@@ -194,7 +194,7 @@ test('the bot couldn\'t add them (no Create Invite permission): signing in still
   assert.equal((await (await get('/api/shop/session', sid)).json()).member, false);
   await buy(sid, { kind: 'products', requestId: 's-1', items: [{ id: keys.id, quantity: 1 }] });
   let order = (await (await get('/api/shop/orders', sid)).json()).orders.find((o) => o.kind === 'products');
-  assert.match(order.delivery, /Join the HammerShop Discord server/);
+  assert.match(order.delivery, /Dołącz do serwera HammerShop na Discordzie/);
   assert.equal(order.waiting, true);
   assert.equal(db.tickets((t) => t.ownerId === stranger.id).length, 0);
 
@@ -203,7 +203,7 @@ test('the bot couldn\'t add them (no Create Invite permission): signing in still
   await hooks.emit('memberAdd', member);
   assert.equal(db.tickets((t) => t.ownerId === stranger.id).length, 1, 'the ticket opened on join');
   order = (await (await get('/api/shop/orders', sid)).json()).orders.find((o) => o.kind === 'products');
-  assert.match(order.delivery, /ticket #\d{4}/);
+  assert.match(order.delivery, /tickecie #\d{4}/);
   assert.equal(order.waiting, false);
   fakes.state.user = { id: '111222333444555666', username: 'tester', global_name: 'Tester', avatar: null };
 });
@@ -260,37 +260,37 @@ test('the real page in a browser: bag → sign in → checkout → Stripe → re
     await page.goto(base);
     await page.waitForSelector('text=Game Keys');
     if (process.env.HS_SHOTS) await page.screenshot({ path: `${process.env.HS_SHOTS}/home.png` });
-    assert.equal(await page.locator('text=OFFLINE PREVIEW').count(), 0);
-    assert.equal(await page.locator('text=/access pass|access fee unlocks|Activate my access/i').count(), 0, 'no paid access anywhere');
+    assert.equal(await page.locator('text=PODGLĄD OFFLINE').count(), 0);
+    assert.equal(await page.locator('text=/access pass|access fee unlocks|Activate my access|karta dostępu|opłata za dostęp odblokowuje|Aktywuj mój dostęp/i').count(), 0, 'no paid access anywhere');
     // The bag works before signing in; checkout asks for Discord, and the bag is still there afterwards.
-    await page.locator('article.product', { hasText: 'Game Keys' }).getByRole('button', { name: 'Add to bag' }).click();
-    await page.getByRole('button', { name: /Open bag, 1 items/ }).click();
-    await page.getByRole('button', { name: /Sign in with Discord to check out/ }).click();
-    await page.getByRole('link', { name: /Continue with Discord/ }).click();
-    await page.waitForSelector('text=Your bag', { timeout: 10_000 });
-    await Promise.all([page.waitForURL(/checkout\.stripe\.com/), page.getByRole('button', { name: /Continue to checkout/ }).click()]);
+    await page.locator('article.product', { hasText: 'Game Keys' }).getByRole('button', { name: 'Do koszyka' }).click();
+    await page.getByRole('button', { name: /Otwórz koszyk, 1 produkt$/ }).click();
+    await page.getByRole('button', { name: /Zaloguj się przez Discord, aby zamówić/ }).click();
+    await page.getByRole('link', { name: /Kontynuuj z Discordem/ }).click();
+    await page.waitForSelector('text=Twój koszyk', { timeout: 10_000 });
+    await Promise.all([page.waitForURL(/checkout\.stripe\.com/), page.getByRole('button', { name: /Przejdź do płatności/ }).click()]);
     const sessionId = page.url().split('/').pop();
     fakes.pay(sessionId);
     await page.goto(`${base}/?payment=return&session_id=${sessionId}`);
-    await page.waitForSelector('text=Thank you, Tester.');
-    await page.waitForSelector('text=PAYMENT CONFIRMED');
-    const ticketLink = page.getByRole('link', { name: /Open ticket #\d{4}/ });
+    await page.waitForSelector('text=Dziękujemy, Tester.');
+    await page.waitForSelector('text=PŁATNOŚĆ POTWIERDZONA');
+    const ticketLink = page.getByRole('link', { name: /Otwórz ticket #\d{4}/ });
     assert.match(await ticketLink.getAttribute('href'), new RegExp(`^https://discord\\.com/channels/${guild.id}/\\d+$`));
-    await page.waitForSelector('text=Delivered');
+    await page.waitForSelector('text=Dostarczone');
     if (process.env.HS_SHOTS) {
       await page.screenshot({ path: `${process.env.HS_SHOTS}/receipt-desktop.png` });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: `${process.env.HS_SHOTS}/receipt-phone.png`, fullPage: false });
       await page.setViewportSize({ width: 1366, height: 900 });
     }
-    await page.getByRole('button', { name: 'My orders' }).last().click();
-    await page.locator('.order-top b', { hasText: 'DELIVERED' }).first().waitFor();
-    assert.ok(await page.getByRole('link', { name: /Open ticket #\d{4}/ }).first().isVisible(), 'My orders links to the ticket too');
+    await page.getByRole('button', { name: 'Moje zamówienia' }).last().click();
+    await page.locator('.order-top b', { hasText: 'DOSTARCZONE' }).first().waitFor();
+    assert.ok(await page.getByRole('link', { name: /Otwórz ticket #\d{4}/ }).first().isVisible(), 'My orders links to the ticket too');
     if (process.env.HS_SHOTS) {
       await page.screenshot({ path: `${process.env.HS_SHOTS}/orders.png` });
       await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Tester' }).click();
-      await page.waitForSelector('text=/signed in and a Member of the HammerShop Discord/');
+      await page.waitForSelector('text=/należysz do Discorda HammerShop z rolą Członek/');
       await page.waitForTimeout(400);
       await page.screenshot({ path: `${process.env.HS_SHOTS}/account.png` });
       await page.keyboard.press('Escape');
@@ -299,7 +299,7 @@ test('the real page in a browser: bag → sign in → checkout → Stripe → re
     }
     // The "My orders" button in the Discord DM: /?view=orders opens My orders.
     await page.goto(`${base}/?view=orders`);
-    await page.locator('.order-top b', { hasText: 'DELIVERED' }).first().waitFor();
+    await page.locator('.order-top b', { hasText: 'DOSTARCZONE' }).first().waitFor();
     assert.deepEqual(problems, []);
   } finally {
     await browser.close();

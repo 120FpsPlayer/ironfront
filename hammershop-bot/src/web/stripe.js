@@ -31,7 +31,7 @@ async function call(method, path, body = null, { idempotencyKey } = {}) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error?.message || `Stripe answered ${res.status}`);
+    const err = new Error(data.error?.message || `Stripe odpowiedział ${res.status}`);
     err.status = res.status;
     throw err;
   }
@@ -50,7 +50,8 @@ function createCheckout({ order, user, lines, currency, idempotencyKey }) {
     {
       mode: 'payment',
       submit_type: 'pay',
-      custom_text: { submit: { message: 'Right after payment, your order opens in a private ticket on the HammerShop Discord – instant products are delivered there and by DM.' } },
+      locale: 'pl', // Stripe's own page in Polish too
+      custom_text: { submit: { message: 'Zaraz po płatności Twoje zamówienie otworzy się w prywatnym tickecie na Discordzie HammerShop – produkty z dostawą natychmiastową dostarczymy tam i w wiadomości prywatnej.' } },
       success_url: `${back}/?payment=return&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${back}/?payment=cancelled`,
       client_reference_id: user.id,
@@ -70,15 +71,15 @@ const getCheckout = (id) => call('GET', `/checkout/sessions/${encodeURIComponent
 
 /** Checks the Stripe-Signature header (HMAC-SHA256 of "t.body"), 5 minutes tolerance. Returns the event or throws. */
 function verifyWebhook(rawBody, header, secret = web().stripeWebhookSecret, now = Date.now()) {
-  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
+  if (!secret) throw new Error('Brak STRIPE_WEBHOOK_SECRET');
   const parts = Object.fromEntries(String(header ?? '').split(',').map((p) => p.split('=').map((x) => x.trim())));
   const sigs = String(header ?? '').split(',').filter((p) => p.trim().startsWith('v1=')).map((p) => p.trim().slice(3));
   const t = Number(parts.t);
-  if (!t || !sigs.length) throw new Error('Bad signature header');
-  if (Math.abs(now / 1000 - t) > 300) throw new Error('Signature too old');
+  if (!t || !sigs.length) throw new Error('Zły nagłówek podpisu');
+  if (Math.abs(now / 1000 - t) > 300) throw new Error('Podpis jest za stary');
   const expected = crypto.createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex');
   const ok = sigs.some((s) => s.length === expected.length && crypto.timingSafeEqual(Buffer.from(s), Buffer.from(expected)));
-  if (!ok) throw new Error('Signature does not match');
+  if (!ok) throw new Error('Podpis się nie zgadza');
   return JSON.parse(rawBody);
 }
 

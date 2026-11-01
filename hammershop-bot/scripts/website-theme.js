@@ -2,7 +2,8 @@
 
 /**
  * HammerShop look for the store website (web/public/index.html): light orange instead of purple, the hammer logo
- * instead of the Ø, the HammerShop name, and its own pictures. build-website.js runs it last; it can also be run on
+ * instead of the Ø, the HammerShop name, its own pictures and the Polish texts (scripts/website-pl.js).
+ * build-website.js runs it last; it can also be run on
  * its own – it is safe to run twice:
  *
  *   node scripts/website-theme.js            (themes web/public/index.html in place)
@@ -12,6 +13,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { translate } = require('./website-pl');
 
 const BRAND = 'HammerShop';
 /** Pictures of the original design → HammerShop pictures (from npm run render-assets -- web). */
@@ -122,6 +124,8 @@ function applyTheme(input) {
   // The theme's own styles – replaced when run again, so a changed CSS here always lands.
   const block = `<style id="hs-theme">${CSS}</style>`;
   html = html.includes('<style id="hs-theme">') ? html.replace(/<style id="hs-theme">[\s\S]*?<\/style>/, () => block) : html.replace('</head>', () => `${block}</head>`);
+  // Last: the texts in Polish (scripts/website-pl.js – it matches the pieces as they read after the renaming above).
+  html = translate(html);
   return html;
 }
 
