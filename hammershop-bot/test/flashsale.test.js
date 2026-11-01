@@ -61,54 +61,54 @@ const onSale = (p, percent, ms = HOUR) => Object.assign(p, { sale: { percent, en
 test('/sale start | stop | list: admins and sellers only, number prices only, durations up to 7 days', async () => {
   const { guild, nitro, seller } = await shopGuild();
   const notStaff = await sale(guild, member(guild), 'list');
-  assert.match(said(notStaff), /Only administrators and sellers can run flash sales/);
-  assert.match(said(await sale(guild, seller, 'list')), /Nothing is on sale right now/);
+  assert.match(said(notStaff), /Tylko administratorzy i sprzedawcy mogą prowadzić promocje błyskawiczne/);
+  assert.match(said(await sale(guild, seller, 'list')), /Nic nie jest teraz w promocji/);
 
   const logo = shop.addProduct(guild, { name: 'Custom Logo', price: 'from 5€', description: 'Made for you.' });
   const text = await sale(guild, seller, 'start', { product: logo.id, percent: 20, duration: '2h' });
-  assert.match(said(text), /\*\*Custom Logo\*\* can't go on sale: its price "from 5€" is not a plain number/);
+  assert.match(said(text), /Nie można przecenić \*\*Custom Logo\*\*: cena „from 5€” nie jest zwykłą liczbą/);
   assert.equal(logo.sale, null);
   const netflix = shop.addProduct(guild, { name: 'Netflix', price: '5', description: 'Premium.' });
   shop.setVariants(guild, netflix.id, '1 month = 5, 1 year = ask');
   const option = await sale(guild, seller, 'start', { product: netflix.id, percent: 20, duration: '2h' });
-  assert.match(said(option), /the price of the option \*\*1 year\*\* \("ask"\) is not a plain number/);
+  assert.match(said(option), /cena wariantu \*\*1 year\*\* \(„ask”\) nie jest zwykłą liczbą/);
 
   for (const duration of ['soon', '8d', '30s', '0m', '1w1m']) {
     const bad = await sale(guild, seller, 'start', { product: nitro.id, percent: 20, duration });
-    assert.match(said(bad), /duration must look like `30m`, `2h`, `1d` or `1h30m` – from 1 minute up to 7 days/, duration);
+    assert.match(said(bad), /Podaj czas w formacie `30m`, `2h`, `1d` albo `1h30m` – od 1 minuty do 7 dni/, duration);
   }
   assert.equal(flash.saleDuration('1h30m'), 1.5 * HOUR);
   assert.equal(flash.saleDuration('7d'), 168 * HOUR);
-  for (const percent of [0, 91, 12.5]) assert.throws(() => flash.startSale(guild, nitro.id, { percent, durationMs: HOUR }), /whole number from 1 to 90/);
+  for (const percent of [0, 91, 12.5]) assert.throws(() => flash.startSale(guild, nitro.id, { percent, durationMs: HOUR }), /liczbą całkowitą od 1 do 90/);
   assert.equal(nitro.sale, null);
 
   const before = Date.now();
   const start = await sale(guild, seller, 'start', { product: nitro.id, percent: 20, duration: '2h', announce: false });
-  assert.match(said(start), /Nitro is on sale[\s\S]*\*\*−20%\*\* · ends <t:\d+:R>[\s\S]*~~20€~~ \*\*16€\*\*/);
+  assert.match(said(start), /Nitro jest w promocji[\s\S]*\*\*−20%\*\* · koniec <t:\d+:R>[\s\S]*~~20€~~ \*\*16€\*\*/);
   assert.equal(nitro.sale.percent, 20);
   assert.equal(nitro.sale.startedBy, seller.id);
   assert.ok(nitro.sale.endsAt >= before + 2 * HOUR && nitro.sale.endsAt <= Date.now() + 2 * HOUR);
   const log = textOf(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1).body);
-  assert.match(log, /Flash sale started[\s\S]*put \*\*Nitro\*\* on sale: \*\*−20%\*\*/);
+  assert.match(log, /Promocja błyskawiczna uruchomiona[\s\S]*Promocja uruchomiona przez <@\d+>: \*\*Nitro\*\* \*\*−20%\*\*/);
 
   const list = await sale(guild, seller, 'list');
-  assert.match(said(list), /Flash sales \(1\)[\s\S]*⚡ \*\*Nitro\*\* · \*\*−20%\*\* · ends <t:\d+:R>[\s\S]*~~20€~~ \*\*16€\*\* · started by <@/);
+  assert.match(said(list), /Promocje błyskawiczne \(1\)[\s\S]*⚡ \*\*Nitro\*\* · \*\*−20%\*\* · koniec <t:\d+:R>[\s\S]*~~20€~~ \*\*16€\*\* · uruchomiona przez <@/);
 
   const restart = await sale(guild, seller, 'start', { product: nitro.id, percent: 30, duration: '1d', announce: false });
-  assert.match(said(restart), /It replaces the −20% sale that was running\./);
+  assert.match(said(restart), /Zastępuje trwającą promocję −20%\./);
   assert.equal(nitro.sale.percent, 30);
 
   // Autocomplete for /sale stop only suggests what is on sale.
   const ac = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'sale', subcommand: 'stop', focusedOption: 'product', focused: '' });
   assert.deepEqual(ac.state.responded.map((c) => c.value), [nitro.id]);
-  assert.match(ac.state.responded[0].name, /Nitro · 20€ · −30% sale · In stock/);
+  assert.match(ac.state.responded[0].name, /Nitro · 20€ · promocja −30% · Dostępny/);
   const acStart = await run({ guild, member: seller, kind: 'autocomplete', commandName: 'sale', subcommand: 'start', focusedOption: 'product', focused: '' });
   assert.equal(acStart.state.responded.length, 3);
 
   const stop = await sale(guild, seller, 'stop', { product: nitro.id });
-  assert.match(said(stop), /The sale of \*\*Nitro\*\* has ended – it is back to \*\*20€\*\*/);
+  assert.match(said(stop), /Promocja na \*\*Nitro\*\* zakończona – cena wraca do \*\*20€\*\*/);
   assert.equal(nitro.sale, null);
-  assert.match(said(await sale(guild, seller, 'stop', { product: nitro.id })), /\*\*Nitro\*\* is not on sale right now/);
+  assert.match(said(await sale(guild, seller, 'stop', { product: nitro.id })), /\*\*Nitro\*\* nie jest teraz w promocji/);
 });
 
 test('the card: crossed-out old price, the new price and a live countdown – every option shows its reduced price', async () => {
@@ -116,9 +116,9 @@ test('the card: crossed-out old price, the new price and a live countdown – ev
   const { product: p } = flash.startSale(guild, nitro.id, { percent: 20, durationMs: 2 * HOUR });
   const end = Math.floor(p.sale.endsAt / 1000);
   const card = shop.cardText(guild, nitro);
-  assert.equal(card, `### 💎 Nitro\u2002\u2002~~20€~~ **16€** · −20%\n\nInstant delivery.\n\n-# 🟢 In stock\n-# ⏰ Sale ends <t:${end}:R>`);
+  assert.equal(card, `### 💎 Nitro\u2002\u2002~~20€~~ **16€** · −20%\n\nInstant delivery.\n\n-# 🟢 Dostępny\n-# ⏰ Promocja kończy się <t:${end}:R>`);
   await panels.refresh(guild, 'shop');
-  assert.match(textOf(shopMessage(guild).body), /~~20€~~ \*\*16€\*\* · −20%[\s\S]*⏰ Sale ends <t:\d+:R>/);
+  assert.match(textOf(shopMessage(guild).body), /~~20€~~ \*\*16€\*\* · −20%[\s\S]*⏰ Promocja kończy się <t:\d+:R>/);
 
   // The order form tells the buyer too.
   const modal = validateModal(shop.orderModal(nitro, guild), guild);
@@ -128,14 +128,14 @@ test('the card: crossed-out old price, the new price and a live countdown – ev
   shop.setVariants(guild, netflix.id, '1 month = 5, 3 months = 12, 12 months = 40');
   flash.startSale(guild, netflix.id, { percent: 20, durationMs: HOUR });
   const lines = shop.cardText(guild, netflix).split('\n');
-  assert.equal(lines[0], '### 🎬 Netflix\u2002\u2002from ~~5€~~ **4€** · −20%');
+  assert.equal(lines[0], '### 🎬 Netflix\u2002\u2002od ~~5€~~ **4€** · −20%');
   assert.equal(lines[4], '-# 1 month 4€ · 3 months 9.60€ · 12 months 32€');
   const options = validateModal(shop.orderModal(netflix, guild), guild).components[0].component.options;
-  assert.deepEqual(options.map((o) => o.description), ['4€ (was 5€ · −20% flash sale)', '9.60€ (was 12€ · −20% flash sale)', '32€ (was 40€ · −20% flash sale)']);
+  assert.deepEqual(options.map((o) => o.description), ['4€ (było 5€ · promocja −20%)', '9.60€ (było 12€ · promocja −20%)', '32€ (było 40€ · promocja −20%)']);
 
   // Over: the card is back to normal, even before the timer clears it.
   nitro.sale.endsAt = Date.now() - 1;
-  assert.equal(shop.cardText(guild, nitro), '### 💎 Nitro\u2002\u2002**20€**\n\nInstant delivery.\n\n-# 🟢 In stock');
+  assert.equal(shop.cardText(guild, nitro), '### 💎 Nitro\u2002\u2002**20€**\n\nInstant delivery.\n\n-# 🟢 Dostępny');
 });
 
 test('price maths: the sale comes off the unit price before the quantity and the promo code', async () => {
@@ -153,14 +153,14 @@ test('price maths: the sale comes off the unit price before the quantity and the
   assert.equal(ticket.order.discount, 3);
   assert.equal(ticket.order.total, 27);
   assert.equal(ticket.order.salePercent, 20);
-  assert.equal(answer(ticket, 'Product'), 'Netflix — 3 months — 12.50€');
-  assert.equal(answer(ticket, 'Price'), '⚡ Flash sale −20%: 12.50€ → 10€ each\nSubtotal: 30€ (3 × 10€)\nDiscount (NOX10 · 10% off): −3€\n**Total to pay: 27€**');
-  assert.match(said(i), /Total to pay: \*\*27€\*\* \(⚡ −20% flash sale · you save 3€ with \*\*NOX10\*\*\)/);
+  assert.equal(answer(ticket, 'Produkt'), 'Netflix — 3 months — 12.50€');
+  assert.equal(answer(ticket, 'Cena'), '⚡ Promocja błyskawiczna −20%: 12.50€ → 10€ za sztukę\nSuma: 30€ (3 × 10€)\nRabat (NOX10 · 10% rabatu): −3€\n**Do zapłaty: 27€**');
+  assert.match(said(i), /Do zapłaty: \*\*27€\*\* \(⚡ promocja błyskawiczna −20% · oszczędzasz 3€ z kodem \*\*NOX10\*\*\)/);
 
   // One item, no code.
   flash.startSale(guild, nitro.id, { percent: 25, durationMs: HOUR });
   const single = await order(guild, member(guild), nitro);
-  assert.equal(answer(single.ticket, 'Price'), '⚡ Flash sale −25%: 20€ → 15€\n**Total to pay: 15€**');
+  assert.equal(answer(single.ticket, 'Cena'), '⚡ Promocja błyskawiczna −25%: 20€ → 15€\n**Do zapłaty: 15€**');
   assert.equal(single.ticket.order.total, 15);
 
   // Cents are rounded: 19.99 − 15% = 16.99.
@@ -171,7 +171,7 @@ test('price maths: the sale comes off the unit price before the quantity and the
 
   // A promo code that can't be used never blocks the sale price.
   const bad = shop.priceOrder(guild.id, '1', nitro, 2, 'NOPE');
-  assert.deepEqual([bad.unitPrice, bad.total, bad.error], [15, 30, "This code doesn't exist."]);
+  assert.deepEqual([bad.unitPrice, bad.total, bad.error], [15, 30, 'Taki kod nie istnieje.']);
 });
 
 test('an ended sale is never applied – the timer clears it, refreshes the panel and skips unavailable servers', async () => {
@@ -182,7 +182,7 @@ test('an ended sale is never applied – the timer clears it, refreshes the pane
   assert.equal(ticket.order.unitPrice, 20);
   assert.equal(ticket.order.total, 40);
   assert.equal('salePercent' in ticket.order, false);
-  assert.doesNotMatch(answer(ticket, 'Price'), /Flash sale/);
+  assert.doesNotMatch(answer(ticket, 'Cena'), /Promocja błyskawiczna/);
   assert.deepEqual(flash.onSale(guild.id), []);
 
   // The panel shows the sale while it runs; the timer ends it and refreshes the panel.
@@ -199,7 +199,7 @@ test('an ended sale is never applied – the timer clears it, refreshes the pane
   guild.available = true;
   assert.equal(await flash.expireSales(guild.client, Date.now() + 2 * HOUR), 1);
   assert.equal(nitro.sale, null);
-  assert.doesNotMatch(textOf(shopMessage(guild).body), /~~20€~~|Sale ends/);
+  assert.doesNotMatch(textOf(shopMessage(guild).body), /~~20€~~|Promocja kończy się/);
   assert.match(textOf(shopMessage(guild).body), /Nitro\u2002\u2002\*\*20€\*\*/);
 });
 
@@ -208,12 +208,12 @@ test('starting a sale announces it in #restocks with the Restocks ping – unles
   const restocks = ch(guild, 'restocks');
   const count = restocks.messageList.length;
   const start = await sale(guild, seller, 'start', { product: nitro.id, percent: 20, duration: '2h' });
-  assert.match(said(start), /Sale announced in #restocks/);
+  assert.match(said(start), /Promocja ogłoszona na #dostawy/);
   assert.equal(restocks.messageList.length, count + 1);
   const post = restocks.messageList.at(-1).body;
   validateMessage(post, guild);
   const roleId = role(guild, 'pingRestocks');
-  assert.match(textOf(post), /⚡ Flash sale: 💎 Nitro −20%[\s\S]*\*\*Price:\*\* ~~20€~~ \*\*16€\*\*[\s\S]*Ends <t:\d+:R>/);
+  assert.match(textOf(post), /⚡ Promocja błyskawiczna: 💎 Nitro −20%[\s\S]*\*\*Cena:\*\* ~~20€~~ \*\*16€\*\*[\s\S]*Koniec <t:\d+:R>/);
   assert.match(textOf(post), new RegExp(`<@&${roleId}>`));
   assert.deepEqual(post.allowedMentions, { roles: [roleId] });
   assert.ok(customIds(post).includes(`shop:buy:${nitro.id}`));
@@ -228,7 +228,7 @@ test('starting a sale announces it in #restocks with the Restocks ping – unles
   await sale(guild, seller, 'start', { product: nitro.id, percent: 10, duration: '1h', announce: false });
   await shop.setStock(guild, netflix.id, 'out');
   const soldOut = await sale(guild, seller, 'start', { product: netflix.id, percent: 10, duration: '1h' });
-  assert.match(said(soldOut), /sold out right now – buyers see the sale price once it's back in stock/);
+  assert.match(said(soldOut), /Produkt jest teraz wyprzedany – kupujący zobaczą cenę promocyjną, gdy wróci do sprzedaży/);
   assert.equal(restocks.messageList.length, quiet, 'nothing posted');
 });
 
@@ -236,15 +236,15 @@ test('while on sale the price – or an option price – must stay a number', as
   const { guild, nitro, seller } = await shopGuild();
   flash.startSale(guild, nitro.id, { percent: 20, durationMs: HOUR });
   const edit = await product(guild, seller, 'edit', { product: nitro.id, price: 'ask us' });
-  assert.match(said(edit), /\*\*Nitro\*\* is on a flash sale right now and its price "ask us" is not a plain number[\s\S]*`\/sale stop`/);
+  assert.match(said(edit), /\*\*Nitro\*\* jest teraz w promocji błyskawicznej, a cena „ask us” nie jest zwykłą liczbą[\s\S]*`\/promocja stop`/);
   assert.equal(nitro.price, '20');
   const variants = await product(guild, seller, 'variants', { product: nitro.id, variants: '1 month = 5, 1 year = ask' });
-  assert.match(said(variants), /is on a flash sale right now and the price of the option \*\*1 year\*\*/);
+  assert.match(said(variants), /jest teraz w promocji błyskawicznej, a cena wariantu \*\*1 year\*\*/);
   assert.deepEqual(nitro.variants, []);
 
   // Numbers are fine, and the preview shows the sale prices.
   const ok = await product(guild, seller, 'variants', { product: nitro.id, variants: '1 month = 5, 1 year = 40' });
-  assert.match(said(ok), /• 1 month — ~~5€~~ \*\*4€\*\*\n• 1 year — ~~40€~~ \*\*32€\*\*\n-# ⚡ −20% flash sale until/);
+  assert.match(said(ok), /• 1 month — ~~5€~~ \*\*4€\*\*\n• 1 year — ~~40€~~ \*\*32€\*\*\n-# ⚡ −20% – promocja błyskawiczna do/);
   // After the sale anything goes again.
   await sale(guild, seller, 'stop', { product: nitro.id });
   await product(guild, seller, 'variants', { product: nitro.id, variants: 'none' });

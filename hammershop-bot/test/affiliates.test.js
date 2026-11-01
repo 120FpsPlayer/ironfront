@@ -53,28 +53,28 @@ const entry = (code) => affiliates.list(guild.id).find((a) => a.code === code);
 test('/affiliate create: admins & sellers only, defaults from config, a real member, the creator gets a DM', async () => {
   const buyer = member(guild);
   const denied = await aff(guild, buyer, 'create', { user: creator.user, code: 'NOX-HACK' });
-  assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+  assert.match(textOf(lastResponse(denied)), /Tylko administratorzy i sprzedawcy mogą zarządzać kodami twórców/);
   assert.equal(promos.find(guild.id, 'NOX-HACK'), null);
 
   const robot = member(guild, [], { bot: true });
-  assert.match(textOf(lastResponse(await aff(guild, seller, 'create', { user: robot.user, code: 'NOX-BOT' }))), /Bots can't be creators/);
+  assert.match(textOf(lastResponse(await aff(guild, seller, 'create', { user: robot.user, code: 'NOX-BOT' }))), /Boty nie mogą być twórcami/);
 
   const made = await aff(guild, seller, 'create', { user: creator.user, code: 'nox-alex' });
-  assert.match(textOf(lastResponse(made)), /Creator code NOX-ALEX created[\s\S]*5% off[\s\S]*10%/);
+  assert.match(textOf(lastResponse(made)), /Kod twórcy NOX-ALEX utworzony[\s\S]*5% rabatu[\s\S]*10%/);
   const p = promos.find(guild.id, 'NOX-ALEX');
   assert.deepEqual(p.affiliate, { userId: creator.id, commission: 10 });
   assert.equal(p.percent, 5);
   assert.equal(p.oncePerUser, false, 'everyone, every time');
   assert.equal(p.userId, null, 'not a personal code');
   assert.deepEqual({ ...entry('NOX-ALEX'), createdAt: 0 }, { code: 'NOX-ALEX', userId: creator.id, discount: 5, commission: 10, createdAt: 0, createdBy: seller.id, earned: 0, paidOut: 0, sales: [], payouts: [] });
-  assert.equal(dmsTo(creator, /You have a creator code[\s\S]*NOX-ALEX/).length, 1);
+  assert.equal(dmsTo(creator, /Masz kod twórcy![\s\S]*NOX-ALEX/).length, 1);
 
   const twice = await aff(guild, seller, 'create', { user: creator.user, code: 'NOX-ALEX' });
-  assert.match(textOf(lastResponse(twice)), /already exists/);
+  assert.match(textOf(lastResponse(twice)), /Kod \*\*NOX-ALEX\*\* już istnieje/);
   const list = await aff(guild, seller, 'list');
-  assert.match(textOf(lastResponse(list)), new RegExp(`NOX-ALEX\` · <@${creator.id}> · 5% off · 10% commission · 0 sales`));
+  assert.match(textOf(lastResponse(list)), new RegExp(`NOX-ALEX\` · <@${creator.id}> · 5% rabatu · 10% prowizji · 0 sprzedaży`));
   const promoList = await run({ guild, member: seller, kind: 'command', commandName: 'promo', subcommand: 'list' });
-  assert.match(textOf(lastResponse(promoList)), /NOX-ALEX[\s\S]*creator code of/);
+  assert.match(textOf(lastResponse(promoList)), /NOX-ALEX[\s\S]*kod twórcy <@/);
 });
 
 test('a buyer gets the discount; the order remembers the creator; the creator cannot use their own code', async () => {
@@ -85,13 +85,13 @@ test('a buyer gets the discount; the order remembers the creator; the creator ca
   assert.equal(ticket().order.total, 22.8);
   assert.deepEqual(ticket().order.affiliate, { code: 'NOX-ALEX', userId: creator.id, commission: 10 });
   const stats = textOf(lastResponse(await aff(guild, creator, 'stats')));
-  assert.match(stats, /Uses 1 \(1 in open order\)/);
+  assert.match(stats, /Użycia 1 \(1 w otwartym zamówieniu\)/);
   await t.closeTicket(channel, seller);
 
   const own = await order(creator, 'NOX-ALEX');
   assert.equal(own.ticket().order.promo, null);
   assert.equal(own.ticket().order.total, 24);
-  assert.match(own.ticket().answers.find((a) => a.label === 'Price').value, /not applied: This is your own creator code/);
+  assert.match(own.ticket().answers.find((a) => a.label === 'Cena').value, /nie zastosowano: To Twój własny kod twórcy/);
   await t.closeTicket(own.channel, seller);
 
   // The same buyer can use it again (another open order holds no limit).
@@ -112,13 +112,13 @@ test('commission: recorded once per completed sale, rounded to cents, and the cr
     e.sales.filter((s) => s.saleId === sale.id).map(({ at, ...s }) => s),
     [{ saleId: sale.id, ticketNumber: sale.ticketNumber, buyerId: buyer.id, amount: 22.8, commission: 2.28 }],
   );
-  assert.equal(dmsTo(creator, /You earned \*\*2\.28€\*\* from a sale with your code \*\*NOX-ALEX\*\*/).length, 1);
+  assert.equal(dmsTo(creator, /Dostajesz \*\*2\.28€\*\* prowizji za sprzedaż z Twoim kodem \*\*NOX-ALEX\*\*/).length, 1);
 
   // The same sale again (a retried hook) changes nothing.
   await hooks.emit('orderCompleted', { guild, ticket: db.getTicket(channel.id), member: null, staff: seller, sale });
   assert.equal(entry('NOX-ALEX').sales.filter((s) => s.saleId === sale.id).length, 1);
   assert.equal(entry('NOX-ALEX').earned, e.earned);
-  assert.equal(dmsTo(creator, /You earned/).length, 1);
+  assert.equal(dmsTo(creator, /prowizji za sprzedaż z Twoim kodem/).length, 1);
 
   // An odd amount is rounded to cents: 13.37 × 10% = 1.337 → 1.34.
   const other = member(guild);
@@ -129,41 +129,41 @@ test('commission: recorded once per completed sale, rounded to cents, and the cr
   const third = await order(member(guild), 'NOX-ALEX');
   const unknown = await t.completeOrder(third.channel, seller, { amount: null });
   assert.equal(entry('NOX-ALEX').sales.find((s) => s.saleId === unknown.sale.id).commission, 0);
-  assert.equal(dmsTo(creator, /You earned/).length, 2);
+  assert.equal(dmsTo(creator, /prowizji za sprzedaż z Twoim kodem/).length, 2);
 });
 
 test('/affiliate stats and payout: own stats for creators, any creator for staff; payout clears what is owed', async () => {
   const stranger = member(guild);
   const none = await aff(guild, stranger, 'stats');
-  assert.match(textOf(lastResponse(none)), /You don't have a creator code/);
+  assert.match(textOf(lastResponse(none)), /Nie masz kodu twórcy/);
   const peek = await aff(guild, stranger, 'stats', { user: creator.user });
-  assert.match(textOf(lastResponse(peek)), /only see your own/);
+  assert.match(textOf(lastResponse(peek)), /Możesz zobaczyć tylko swoje statystyki twórcy/);
 
   const mine = await aff(guild, creator, 'stats');
   const text = textOf(lastResponse(mine));
   assert.match(text, /NOX-ALEX/);
-  assert.match(text, /Sales 3/);
-  assert.match(text, /Revenue 36\.17€/); // 22.8 + 13.37 + unknown
-  assert.match(text, /Commission earned 3\.62€/);
-  assert.match(text, /Paid out 0€/);
-  assert.match(text, /Owed \*\*3\.62€\*\*/);
+  assert.match(text, /Sprzedaż 3/);
+  assert.match(text, /Przychód 36\.17€/); // 22.8 + 13.37 + unknown
+  assert.match(text, /Zarobiona prowizja 3\.62€/);
+  assert.match(text, /Wypłacono 0€/);
+  assert.match(text, /Do wypłaty \*\*3\.62€\*\*/);
   const staffView = await aff(guild, seller, 'stats', { user: creator.user });
-  assert.match(textOf(lastResponse(staffView)), /Owed \*\*3\.62€\*\*/);
+  assert.match(textOf(lastResponse(staffView)), /Do wypłaty \*\*3\.62€\*\*/);
 
   const denied = await aff(guild, creator, 'payout', { user: creator.user });
-  assert.match(textOf(lastResponse(denied)), /Only administrators and sellers/);
+  assert.match(textOf(lastResponse(denied)), /Tylko administratorzy i sprzedawcy mogą zarządzać kodami twórców/);
   const paid = await aff(guild, seller, 'payout', { user: creator.user });
-  assert.match(textOf(lastResponse(paid)), /Marked \*\*3\.62€\*\* as paid out/);
+  assert.match(textOf(lastResponse(paid)), /Oznaczono \*\*3\.62€\*\* jako wypłacone/);
   assert.equal(entry('NOX-ALEX').paidOut, 3.62);
   assert.equal(entry('NOX-ALEX').payouts.length, 1);
-  assert.equal(dmsTo(creator, /Commission paid out[\s\S]*3\.62€/).length, 1);
+  assert.equal(dmsTo(creator, /Prowizja wypłacona[\s\S]*3\.62€/).length, 1);
   const after = textOf(lastResponse(await aff(guild, creator, 'stats')));
-  assert.match(after, /Paid out 3\.62€/);
-  assert.match(after, /Owed \*\*0€\*\*/);
+  assert.match(after, /Wypłacono 3\.62€/);
+  assert.match(after, /Do wypłaty \*\*0€\*\*/);
   const nothing = await aff(guild, seller, 'payout', { user: creator.user });
-  assert.match(textOf(lastResponse(nothing)), /Nothing is owed/);
+  assert.match(textOf(lastResponse(nothing)), /nie ma teraz nic do wypłaty/);
   const noCreator = await aff(guild, seller, 'payout', { user: stranger.user });
-  assert.match(textOf(lastResponse(noCreator)), /has no creator code/);
+  assert.match(textOf(lastResponse(noCreator)), /<@\d+> nie ma kodu twórcy/);
 });
 
 test('a removed code: new orders cannot use it, open orders keep the discount and the creator still earns', async () => {
@@ -176,20 +176,20 @@ test('a removed code: new orders cannot use it, open orders keep the discount an
   assert.equal(auto.state.responded[0].value, 'NOX-ALEX');
 
   const removed = await aff(guild, seller, 'remove', { code: 'nox-alex' });
-  assert.match(textOf(lastResponse(removed)), /Removed the creator code \*\*NOX-ALEX\*\*[\s\S]*1 open order keeps its discount/);
+  assert.match(textOf(lastResponse(removed)), /Usunięto kod twórcy \*\*NOX-ALEX\*\*[\s\S]*1 otwarte zamówienie zachowuje rabat/);
   assert.equal(promos.find(guild.id, 'NOX-ALEX'), null);
   assert.ok(entry('NOX-ALEX').removedAt);
 
   const late = await order(member(guild), 'NOX-ALEX');
   assert.equal(late.ticket().order.promo, null);
-  assert.match(late.ticket().answers.find((a) => a.label === 'Price').value, /not applied: This code doesn't exist/);
+  assert.match(late.ticket().answers.find((a) => a.label === 'Cena').value, /nie zastosowano: Taki kod nie istnieje/);
 
   const earned = entry('NOX-ALEX').earned;
   await t.completeOrder(open.channel, seller);
   assert.equal(entry('NOX-ALEX').earned, Math.round((earned + 2.28) * 100) / 100, 'the open order still earns');
-  assert.match(textOf(lastResponse(await aff(guild, seller, 'list'))), /⚫ `NOX-ALEX`[\s\S]*2\.28€ owed[\s\S]*removed/);
+  assert.match(textOf(lastResponse(await aff(guild, seller, 'list'))), /⚫ `NOX-ALEX`[\s\S]*2\.28€ do wypłaty[\s\S]*usunięty/);
   const gone = await aff(guild, seller, 'remove', { code: 'NOX-ALEX' });
-  assert.match(textOf(lastResponse(gone)), /no creator code/);
+  assert.match(textOf(lastResponse(gone)), /Nie ma kodu twórcy \*\*NOX-ALEX\*\*/);
 });
 
 test('old promo codes keep working and earn no commission; a creator code deleted with /promo delete still pays orders placed before', async () => {
@@ -221,11 +221,11 @@ test('old promo codes keep working and earn no commission; a creator code delete
   await aff(guild, seller, 'create', { user: maker.user, code: 'NOX-ZED' });
   config.affiliates.enabled = false;
   try {
-    assert.match(textOf(lastResponse(await aff(guild, seller, 'create', { user: maker.user, code: 'NOX-OFF' }))), /turned off/);
+    assert.match(textOf(lastResponse(await aff(guild, seller, 'create', { user: maker.user, code: 'NOX-OFF' }))), /Kody twórców są wyłączone/);
     const off = await order(member(guild), 'NOX-ZED');
     assert.equal(off.ticket().order.promo, null);
-    assert.match(off.ticket().answers.find((a) => a.label === 'Price').value, /Creator codes are turned off/);
-    assert.match(textOf(lastResponse(await aff(guild, seller, 'payout', { user: maker.user }))), /Marked \*\*2\.88€\*\* as paid out/);
+    assert.match(off.ticket().answers.find((a) => a.label === 'Cena').value, /Kody twórców są teraz wyłączone/);
+    assert.match(textOf(lastResponse(await aff(guild, seller, 'payout', { user: maker.user }))), /Oznaczono \*\*2\.88€\*\* jako wypłacone/);
   } finally {
     config.affiliates.enabled = true;
   }

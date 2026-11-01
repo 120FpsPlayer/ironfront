@@ -69,8 +69,8 @@ test('"I\'ve paid" sits on the order card while the payment is awaited – only 
   const { ticket, channel } = await order(guild, buyer, product, { quantity: '2' });
   const first = card(channel);
   assert.ok(customIds(first.body).includes('pay:open'));
-  assert.match(textOf(first.body), /Ready to pay\?\*\* Click \*\*Pay\*\* and send your PaysafeCard PIN, a screenshot or the transaction ID/);
-  assert.match(textOf(first.body), /\*\*Order:\*\* ⏳ Awaiting payment/);
+  assert.match(textOf(first.body), /Chcesz zapłacić\?\*\* Kliknij \*\*Zapłać\*\* i wyślij PIN PaysafeCard, zrzut ekranu albo ID transakcji/);
+  assert.match(textOf(first.body), /\*\*Zamówienie:\*\* ⏳ Oczekuje na płatność/);
 
   // Other tickets have no such button
   const support = await t.openTicket(member(guild), config.getType('support'), [{ label: 'Subject', value: 'x' }]);
@@ -79,20 +79,20 @@ test('"I\'ve paid" sits on the order card while the payment is awaited – only 
   // Someone else (a stranger who got in, or staff) gets an explanation
   for (const who of [member(guild), seller]) {
     const denied = await run({ guild, member: who, kind: 'button', customId: 'pay:open', channel });
-    assert.match(textOf(lastResponse(denied)), new RegExp(`Only <@${buyer.id}> can send the payment for this order`));
+    assert.match(textOf(lastResponse(denied)), new RegExp(`Płatność za to zamówienie może wysłać tylko <@${buyer.id}>`));
     assert.equal(denied.state.modals.length, 0);
   }
 
   const click = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
   const form = click.state.modals[0];
   assert.equal(form.custom_id, 'pay:submit');
-  assert.equal(form.title, `💳 Pay · order #${String(ticket.number).padStart(4, '0')}`);
+  assert.equal(form.title, `💳 Zapłać · zamówienie #${String(ticket.number).padStart(4, '0')}`);
   assert.ok(form.components.length <= 5);
-  assert.match(form.components[0].content, /\*\*Nitro Boost\*\* × 2 · PaysafeCard · Total \*\*20€\*\*/);
+  assert.match(form.components[0].content, /\*\*Nitro Boost\*\* × 2 · PaysafeCard · Razem \*\*20€\*\*/);
   assert.deepEqual(form.components.slice(1).map((c) => [c.label, c.component.type, c.component.custom_id, c.component.required]), [
-    ['PaysafeCard PIN(s)', 4, 'pins', false],
-    ['Screenshots', 19, 'files', false],
-    ['Note or transaction ID', 4, 'note', false],
+    ['PIN PaysafeCard (jeden lub kilka)', 4, 'pins', false],
+    ['Zrzuty ekranu', 19, 'files', false],
+    ['Notatka lub ID transakcji', 4, 'note', false],
   ]);
   assert.equal(form.components[2].component.max_values, 5);
 
@@ -101,7 +101,7 @@ test('"I\'ve paid" sits on the order card while the payment is awaited – only 
   const crypto = await order(guild, cryptoBuyer, product, { payment: '1' });
   const cryptoForm = (await run({ guild, member: cryptoBuyer, kind: 'button', customId: 'pay:open', channel: crypto.channel })).state.modals[0];
   assert.deepEqual(cryptoForm.components.slice(1).map((c) => c.component.custom_id), ['files', 'note']);
-  assert.match(textOf(card(crypto.channel).body), /send a screenshot or the transaction ID/);
+  assert.match(textOf(card(crypto.channel).body), /wyślij zrzut ekranu albo ID transakcji/);
 
   // Turned off: no button, and old buttons explain it
   config.orders.paymentProofs = false;
@@ -109,7 +109,7 @@ test('"I\'ve paid" sits on the order card while the payment is awaited – only 
     await t.refreshControlMessage(channel, db.getTicket(channel.id));
     assert.ok(!customIds(card(channel).body).includes('pay:open'));
     const off = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
-    assert.match(textOf(lastResponse(off)), /write your payment details in the ticket/);
+    assert.match(textOf(lastResponse(off)), /Napisz dane płatności w tickecie/);
   } finally {
     config.orders.paymentProofs = true;
   }
@@ -121,14 +121,14 @@ test('"I\'ve paid": PINs are checked, and at least one field is needed', async (
   const { channel } = await order(guild, buyer, product);
 
   const empty = await pay(guild, buyer, channel, { fields: { pins: '  ', note: '' } });
-  assert.match(textOf(lastResponse(empty)), /Fill in at least one field: your PaysafeCard PIN, a screenshot or a note/);
+  assert.match(textOf(lastResponse(empty)), /Wypełnij co najmniej jedno pole: PIN PaysafeCard, zrzut ekranu albo notatkę/);
   const short = await pay(guild, buyer, channel, { fields: { pins: '1234-5678', note: '' } });
-  assert.match(textOf(lastResponse(short)), /`1234-5678` is not a PaysafeCard PIN – a PIN has 16 digits/);
+  assert.match(textOf(lastResponse(short)), /`1234-5678` to nie jest PIN PaysafeCard – PIN ma 16 cyfr/);
   const letters = await pay(guild, buyer, channel, { fields: { pins: '1234-5678-9012-345X' } });
-  assert.match(textOf(lastResponse(letters)), /is not a PaysafeCard PIN/);
+  assert.match(textOf(lastResponse(letters)), /to nie jest PIN PaysafeCard/);
   const many = Array.from({ length: 11 }, (_, i) => String(1000000000000000 + i)).join(', ');
   const tooMany = await pay(guild, buyer, channel, { fields: { pins: many } });
-  assert.match(textOf(lastResponse(tooMany)), /That's 11 PINs – you can send up to 10/);
+  assert.match(textOf(lastResponse(tooMany)), /To 11 PIN-ów – naraz możesz wysłać maks\. 10/);
   assert.equal(db.getTicket(channel.id).order.payment, undefined, 'nothing was saved');
   assert.equal(db.getTicket(channel.id).order.status, undefined);
 
@@ -149,7 +149,7 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   const before = channel.messageList.length;
 
   const done = await pay(guild, buyer, channel, { fields: { pins: '1234-5678-9012-3456\n1111 2222 3333 4444', note: 'Bought at the kiosk, spare: 9999888877776666' } });
-  assert.match(textOf(lastResponse(done)), /Thanks! Your payment was sent to the seller/);
+  assert.match(textOf(lastResponse(done)), /Dzięki! Płatność trafiła do sprzedawcy/);
   const saved = db.getTicket(channel.id).order;
   assert.equal(saved.status, 'sent');
   assert.equal(saved.product, 'Nitro Boost', 'the shop order is kept');
@@ -163,15 +163,15 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
 
   // "Your product is on the way" for the customer, then the card for the team: PINs in spoilers, the order staff roles pinged
   assert.equal(channel.messageList.length, before + 2);
-  assert.match(textOf(channel.messageList.at(-2).body), /Your product is on the way/);
+  assert.match(textOf(channel.messageList.at(-2).body), /Twój produkt jest w drodze/);
   const posted = channel.messageList.at(-1);
   const out = textOf(posted.body);
-  assert.match(out, /## 📨 Payment sent\n/);
+  assert.match(out, /## 📨 Płatność wysłana\n/);
   // PINs hidden – only the last 4 digits; the whole PIN only for config.orders.pinViewers (Show PINs)
   assert.ok(out.includes('••••-••••-••••-3456 · ••••-••••-••••-4444'));
   for (const secret of ['1234-5678', '5678-9012', '1111-2222']) assert.ok(!out.includes(secret), `the ticket must not show ${secret}`);
   assert.ok(customIds(posted.body).some((id) => id.startsWith('pay:pin:')), 'a Show PINs button');
-  assert.match(out, /\*\*Method:\*\* PaysafeCard/);
+  assert.match(out, /\*\*Metoda:\*\* PaysafeCard/);
   assert.match(out, /> Bought at the kiosk/);
   // Only the sellers (the Purchase type's own role) – not every staff role
   const roles = [role(guild, 'seller')];
@@ -181,14 +181,14 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   assert.equal(saved.payment.messageId, posted.id);
 
   // The order card shows it, the ticket waits for the team now
-  assert.match(textOf(card(channel).body), /\*\*Order:\*\* 📨 Payment sent – being checked/);
-  assert.match(textOf(card(channel).body), /Payment sent <t:\d+:R>\*\* – a seller is checking it/);
+  assert.match(textOf(card(channel).body), /\*\*Zamówienie:\*\* 📨 Płatność wysłana – sprawdzamy/);
+  assert.match(textOf(card(channel).body), /Płatność wysłana <t:\d+:R>\*\* – sprzedawca ją sprawdza/);
   assert.equal(db.getTicket(channel.id).lastMessageBy, 'owner');
 
   // The log: masked PINs, also inside the note
   const log = logChannel(guild).messageList.at(-1);
   const logText = textOf(log.body);
-  assert.match(logText, /📨 Payment sent/);
+  assert.match(logText, /📨 Płatność wysłana/);
   assert.ok(logText.includes('••••-••••-••••-3456') && logText.includes('••••-••••-••••-4444') && logText.includes('••••-••••-••••-6666'));
   const raw = JSON.stringify(log.body);
   for (const secret of ['1234567890123456', '1234-5678-9012-3456', '1111 2222 3333 4444', '1111222233334444', '9999888877776666', '5678']) {
@@ -197,9 +197,9 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
 
   // Again right away → cooldown
   const soon = await pay(guild, buyer, channel, { fields: { pins: '1234-5678-9012-3457' } });
-  assert.match(textOf(lastResponse(soon)), /You've just sent your payment\. You can send a correction <t:\d+:R>/);
+  assert.match(textOf(lastResponse(soon)), /Płatność została właśnie wysłana\. Poprawkę możesz wysłać <t:\d+:R>/);
   const soonButton = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
-  assert.match(textOf(lastResponse(soonButton)), /You've just sent your payment/);
+  assert.match(textOf(lastResponse(soonButton)), /Płatność została właśnie wysłana/);
 
   // A corrected PIN after the cooldown: a seller has claimed it now – only they are pinged
   // (re-sends ping only after the Call support cooldown – see orders-review.test.js)
@@ -208,30 +208,30 @@ test('"I\'ve paid": PINs in spoilers, status "sent", staff pinged, the log never
   await t.claimTicket(channel, seller);
   await pay(guild, buyer, channel, { fields: { pins: '1234567890123457' } });
   const again = channel.messageList.at(-1);
-  assert.match(textOf(again.body), /## 📨 Payment sent again/);
-  assert.match(textOf(again.body), new RegExp(`<@${seller.id}>, please check it`));
+  assert.match(textOf(again.body), /## 📨 Płatność wysłana ponownie/);
+  assert.match(textOf(again.body), new RegExp(`<@${seller.id}>, prośba o sprawdzenie`));
   assert.deepEqual(again.body.allowedMentions, { users: [seller.id], roles: [] });
   assert.deepEqual(db.getTicket(channel.id).order.payment.pins, ['1234567890123457']);
   assert.deepEqual(db.getTicket(channel.id).order.history.map((h) => h.status), ['sent', 'sent']);
-  assert.match(textOf(logChannel(guild).messageList.at(-1).body), /Payment sent again/);
+  assert.match(textOf(logChannel(guild).messageList.at(-1).body), /Płatność wysłana ponownie/);
 
   // Set back to "Awaiting payment" (e.g. a wrong PIN): the card asks for the payment again
   await orderstatus.setStatus(channel, 'awaiting', seller);
-  assert.match(textOf(card(channel).body), /Ready to pay\?\*\* Click \*\*Pay\*\*/);
+  assert.match(textOf(card(channel).body), /Chcesz zapłacić\?\*\* Kliknij \*\*Zapłać\*\*/);
   assert.ok(customIds(card(channel).body).includes('pay:open'));
 
   // Once the seller confirms it, the button is gone
   await orderstatus.setStatus(channel, 'paid', seller);
   assert.ok(!customIds(card(channel).body).includes('pay:open'));
   const late = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
-  assert.match(textOf(lastResponse(late)), /already confirmed \(💳 Paid\)/);
+  assert.match(textOf(lastResponse(late)), /już potwierdzona \(💳 Opłacone\)/);
   assert.equal(ticket.number, db.getTicket(channel.id).number);
 
   // Show PINs: only the PIN viewers (config.orders.pinViewers – the owner) see the whole PINs
   const pinId = customIds(posted.body).find((id) => id.startsWith('pay:pin:'));
   const pinSeller = member(guild, ['member', 'seller']);
   const notYou = await run({ guild, member: pinSeller, kind: 'button', customId: pinId, channel });
-  assert.match(textOf(lastResponse(notYou)), /Only the owner can see/);
+  assert.match(textOf(lastResponse(notYou)), /widzi tylko właściciel/);
   const viewers = config.orders.pinViewers;
   config.orders.pinViewers = [pinSeller.id];
   try {
@@ -269,7 +269,7 @@ test('"I\'ve paid": screenshots are downloaded and uploaded again with the card 
         ],
       },
     });
-    assert.match(textOf(lastResponse(done)), /Thanks!/);
+    assert.match(textOf(lastResponse(done)), /Dzięki!/);
   } finally {
     global.fetch = realFetch;
   }
@@ -280,8 +280,8 @@ test('"I\'ve paid": screenshots are downloaded and uploaded again with the card 
   const components = json(posted.body);
   assert.ok(components.includes('attachment://payment-1-proof.png'), 'the picture is shown in a gallery');
   assert.ok(components.includes('"type":13') && components.includes('attachment://payment-2-receipt.pdf'), 'other files as a file component');
-  assert.match(textOf(posted.body), /\*\*Screenshots:\*\* 4/);
-  assert.match(textOf(posted.body), /Too big to keep \(the link expires\): \[payment-3-huge\.png\]\(.*huge\.png\?ex=1\), \[payment-4-gone\.png\]/);
+  assert.match(textOf(posted.body), /\*\*Zrzuty ekranu:\*\* 4/);
+  assert.match(textOf(posted.body), /Za duże, by je zachować \(link wygaśnie\): \[payment-3-huge\.png\]\(.*huge\.png\?ex=1\), \[payment-4-gone\.png\]/);
   assert.ok(!textOf(posted.body).includes('PIN'));
 
   // Stored: the copies' links (they belong to the ticket message), the rest keeps the original link
@@ -293,7 +293,7 @@ test('"I\'ve paid": screenshots are downloaded and uploaded again with the card 
     { name: 'payment-4-gone.png', url: cdn('gone.png') },
   ]);
   assert.deepEqual(db.getTicket(channel.id).order.payment.pins, []);
-  assert.match(textOf(logChannel(guild).messageList.at(-1).body), /Screenshots 4 – in the ticket/);
+  assert.match(textOf(logChannel(guild).messageList.at(-1).body), /Zrzuty ekranu 4 – w tickecie/);
 
   // A screenshot alone is enough
   const other = member(guild);
@@ -342,15 +342,15 @@ test('a closed or completed order takes no payment', async () => {
   const { channel } = await order(guild, buyer, product);
   await t.completeOrder(channel, seller, { amount: 10 });
   const completed = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel });
-  assert.match(textOf(lastResponse(completed)), /already completed/);
+  assert.match(textOf(lastResponse(completed)), /To zamówienie jest już zrealizowane/);
   const late = await pay(guild, buyer, channel, { fields: { note: 'paid' } });
-  assert.match(textOf(lastResponse(late)), /already completed/);
+  assert.match(textOf(lastResponse(late)), /To zamówienie jest już zrealizowane/);
 
   const second = await order(guild, buyer, product);
   await t.closeTicket(second.channel, seller);
   const closed = await run({ guild, member: buyer, kind: 'button', customId: 'pay:open', channel: second.channel });
-  assert.match(textOf(lastResponse(closed)), /This ticket is closed/);
-  assert.match(textOf(card(second.channel).body), /\*\*Order:\*\* ❌ Cancelled/);
+  assert.match(textOf(lastResponse(closed)), /Ten ticket jest zamknięty/);
+  assert.match(textOf(card(second.channel).body), /\*\*Zamówienie:\*\* ❌ Anulowane/);
 });
 
 test('the payment form and card stay within Discord limits', async () => {

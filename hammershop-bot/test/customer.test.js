@@ -90,21 +90,21 @@ test('/customer view: orders, total spent, tickets, vouches, blacklist, invites 
   const card = textOf(res);
   assert.match(card, new RegExp(`<@${buyer.id}> · \`user${buyer.id}\``));
   assert.match(card, new RegExp(`<@&${role(guild, 'loyal')}> <@&${role(guild, 'customer')}>`), 'customer badges');
-  assert.match(card, /\*\*Member since:\*\* <t:\d+:D>/);
-  assert.match(card, /\*\*Account created:\*\* <t:\d+:D> \(<t:\d+:R>\)/);
-  assert.match(card, /\*\*Verified:\*\* ✅ Yes/);
-  assert.match(card, /\*\*Blacklisted:\*\* ⛔ \*\*Yes\*\* – Chargeback on PayPal/);
-  assert.match(card, new RegExp(`\\*\\*Invited by:\\*\\* <@${inviter.id}>  ·  \\*\\*Invites:\\*\\* 2 \\(1 left\\)`));
-  assert.match(card, /\*\*Completed orders:\*\* 6  ·  \*\*Total spent:\*\* 80€ \(\+1 order without a known amount\)/);
-  assert.match(card, /Last 5 orders/);
+  assert.match(card, /\*\*Na serwerze od:\*\* <t:\d+:D>/);
+  assert.match(card, /\*\*Konto założone:\*\* <t:\d+:D> \(<t:\d+:R>\)/);
+  assert.match(card, /\*\*Weryfikacja:\*\* ✅ Tak/);
+  assert.match(card, /\*\*Czarna lista:\*\* ⛔ \*\*Tak\*\* – Chargeback on PayPal/);
+  assert.match(card, new RegExp(`\\*\\*Zaproszenie od:\\*\\* <@${inviter.id}>  ·  \\*\\*Zaproszenia:\\*\\* 2 \\(w tym 1 poza serwerem\\)`));
+  assert.match(card, /\*\*Zrealizowane zamówienia:\*\* 6  ·  \*\*Wydano łącznie:\*\* 80€ \(\+1 zamówienie bez znanej kwoty\)/);
+  assert.match(card, /Ostatnie 5 zamówień/);
   assert.match(card, /`#0105` · \*\*Product 5\*\* × 1 · 30€ · 🏷️ NOX10/);
-  assert.match(card, /`#0102` · \*\*Product 2\*\* × 1 · amount unknown/);
+  assert.match(card, /`#0102` · \*\*Product 2\*\* × 1 · kwota nieznana/);
   assert.doesNotMatch(card, /Product 0/, 'only the last 5 orders');
   assert.ok(card.indexOf('Product 5') < card.indexOf('Product 1'), 'newest first');
-  assert.match(card, /\*\*Tickets:\*\* 2 open · 2 closed  → <#\d+> <#\d+>/);
-  assert.match(card, /\*\*Vouches given:\*\* 2  ·  ⭐ \*\*4\.50\*\* average/);
-  assert.match(card, new RegExp(`Staff notes \\(1\\)\\n\\*\\*#1\\*\\* · <@${support.id}> · <t:\\d+:R>\\n> Prefers crypto\\.\\n> Asks for fast delivery\\.`));
-  assert.match(card, /Only staff can see this profile/);
+  assert.match(card, /\*\*Tickety:\*\* otwarte: 2 · zamknięte: 2  → <#\d+> <#\d+>/);
+  assert.match(card, /\*\*Wystawione opinie:\*\* 2  ·  \*\*Średnia ocena:\*\* ⭐ \*\*4\.50\*\*/);
+  assert.match(card, new RegExp(`Notatki zespołu \\(1\\)\\n\\*\\*#1\\*\\* · <@${support.id}> · <t:\\d+:R>\\n> Prefers crypto\\.\\n> Asks for fast delivery\\.`));
+  assert.match(card, /Ten profil i jego notatki widzi tylko zespół/);
   assert.deepEqual(customIds(res), [`customer:note:${buyer.id}`]);
 });
 
@@ -112,16 +112,16 @@ test('/customer: staff only – members can neither see profiles nor add notes',
   const buyer = member(guild);
   const nosy = member(guild, ['member', 'customer', 'vip']);
   const view = await customer(nosy, 'view', { user: buyer.user });
-  assert.match(textOf(lastResponse(view)), /only available to staff members/);
-  assert.doesNotMatch(textOf(lastResponse(view)), /Completed orders/);
+  assert.match(textOf(lastResponse(view)), /dostępne tylko dla zespołu/);
+  assert.doesNotMatch(textOf(lastResponse(view)), /Zrealizowane zamówienia/);
   const add = await customer(nosy, 'add', { user: buyer.user, text: 'hello' });
-  assert.match(textOf(lastResponse(add)), /only available to staff members/);
+  assert.match(textOf(lastResponse(add)), /dostępne tylko dla zespołu/);
   assert.deepEqual(customers.notesOf(guild.id, buyer.id), []);
   const button = await run({ member: nosy, kind: 'button', customId: `customer:note:${buyer.id}` });
   assert.equal(button.state.modals.length, 0);
-  assert.match(textOf(lastResponse(button)), /only available to staff members/);
+  assert.match(textOf(lastResponse(button)), /dostępne tylko dla zespołu/);
   const form = await run({ member: nosy, kind: 'modal', customId: `customer:note:${buyer.id}`, fields: { text: 'sneaky' } });
-  assert.match(textOf(lastResponse(form)), /only available to staff members/);
+  assert.match(textOf(lastResponse(form)), /dostępne tylko dla zespołu/);
   assert.deepEqual(customers.notesOf(guild.id, buyer.id), []);
 
   const auto = createInteraction({ guild, member: nosy, kind: 'autocomplete', commandName: 'customer' });
@@ -130,7 +130,7 @@ test('/customer: staff only – members can neither see profiles nor add notes',
   assert.deepEqual(auto.state.responded, [], 'no note suggestions for members');
 
   const bot = await customer(member(guild, ['member', 'support']), 'view', { user: { ...buyer.user, bot: true } });
-  assert.match(textOf(lastResponse(bot)), /Bots don't have customer profiles/);
+  assert.match(textOf(lastResponse(bot)), /Boty nie mają profili klientów/);
 });
 
 test('/customer note add | remove: up to 500 characters, own notes – moderators can remove any', async () => {
@@ -142,14 +142,14 @@ test('/customer note add | remove: up to 500 characters, own notes – moderator
   const added = await customer(support, 'add', { user: buyer.user, text: '  Paid late twice  ' });
   const res = lastResponse(added);
   assert.ok(res.flags & MessageFlags.Ephemeral);
-  assert.match(textOf(res), /Note \*\*#1\*\* saved/);
+  assert.match(textOf(res), /Notatka \*\*#1\*\* o <@\d+> zapisana/);
   await customer(seller, 'add', { user: buyer.user, text: 'VIP candidate' });
   assert.deepEqual(customers.notesOf(guild.id, buyer.id).map((x) => [x.id, x.by, x.text]), [[1, support.id, 'Paid late twice'], [2, seller.id, 'VIP candidate']]);
 
   const tooLong = await customer(support, 'add', { user: buyer.user, text: 'x'.repeat(501) });
-  assert.match(textOf(lastResponse(tooLong)), /at most 500 characters/);
+  assert.match(textOf(lastResponse(tooLong)), /maks\. 500 znaków/);
   const blank = await customer(support, 'add', { user: buyer.user, text: '   ' });
-  assert.match(textOf(lastResponse(blank)), /The note is empty/);
+  assert.match(textOf(lastResponse(blank)), /Notatka jest pusta/);
   assert.equal(customers.notesOf(guild.id, buyer.id).length, 2);
 
   // Suggestions for "id": the notes of the chosen user, newest first
@@ -159,25 +159,25 @@ test('/customer note add | remove: up to 500 characters, own notes – moderator
   assert.deepEqual(auto.state.responded, [{ name: '#2 · VIP candidate', value: 2 }, { name: '#1 · Paid late twice', value: 1 }]);
 
   const notMine = await customer(support, 'remove', { user: buyer.user, id: 2 });
-  assert.match(textOf(lastResponse(notMine)), /you can only delete your own notes/);
+  assert.match(textOf(lastResponse(notMine)), /możesz usuwać tylko swoje notatki/);
   const missing = await customer(support, 'remove', { user: buyer.user, id: 9 });
-  assert.match(textOf(lastResponse(missing)), /has no note \*\*#9\*\*/);
+  assert.match(textOf(lastResponse(missing)), /nie ma notatki \*\*#9\*\*/);
   const own = await customer(support, 'remove', { user: buyer.user, id: 1 });
-  assert.match(textOf(lastResponse(own)), /Deleted note \*\*#1\*\*/);
+  assert.match(textOf(lastResponse(own)), /Usunięto notatkę \*\*#1\*\*/);
   const byMod = await customer(mod, 'remove', { user: buyer.user, id: 2 });
-  assert.match(textOf(lastResponse(byMod)), /Deleted note \*\*#2\*\*/);
+  assert.match(textOf(lastResponse(byMod)), /Usunięto notatkę \*\*#2\*\*/);
   assert.equal(db.guild(guild.id).notes[buyer.id], undefined, 'no empty list left behind');
 
   for (let k = 0; k < customers.MAX_NOTES; k += 1) customers.addNote(guild.id, buyer.id, { by: support.id, text: `note ${k}` });
   const full = await customer(support, 'add', { user: buyer.user, text: 'one more' });
-  assert.match(textOf(lastResponse(full)), /already has 50 notes/);
+  assert.match(textOf(lastResponse(full)), /ma już 50 notatek/);
 });
 
 test('"Add note" button on a profile → form → the note is saved and the profile refreshed', async () => {
   const buyer = member(guild);
   const support = member(guild, ['member', 'support']);
   const view = await customer(support, 'view', { user: buyer.user });
-  assert.match(textOf(lastResponse(view)), /Staff notes \(0\)[\s\S]*No notes yet/);
+  assert.match(textOf(lastResponse(view)), /Notatki zespołu \(0\)[\s\S]*Brak notatek/);
 
   const button = await run({ member: support, kind: 'button', customId: `customer:note:${buyer.id}` });
   const modal = button.state.modals[0];
@@ -186,7 +186,7 @@ test('"Add note" button on a profile → form → the note is saved and the prof
 
   const submit = await run({ member: support, kind: 'modal', customId: `customer:note:${buyer.id}`, fields: { text: 'Asked for a refund, solved.' }, message: { id: 'profile' } });
   assert.deepEqual([submit.state.replies.length, submit.state.edits.length], [0, 1], 'the profile card is updated in place');
-  assert.match(textOf(submit.state.edits[0]), /Staff notes \(1\)[\s\S]*Asked for a refund, solved\./);
+  assert.match(textOf(submit.state.edits[0]), /Notatki zespołu \(1\)[\s\S]*Asked for a refund, solved\./);
   assert.equal(customers.notesOf(guild.id, buyer.id)[0].by, support.id);
 });
 
@@ -210,7 +210,7 @@ test('"Add note" answers in time: the form opens without an API call, the saved 
     current = createInteraction({ guild, member: support, kind: 'button', customId: `customer:note:${buyer.id}` });
     await handle(current, commands);
     assert.equal(current.state.modals.length, 1);
-    assert.equal(current.state.modals[0].title, `Note about user${buyer.id}`, 'the name comes from the cache');
+    assert.equal(current.state.modals[0].title, `Notatka – user${buyer.id}`, 'the name comes from the cache');
     assert.deepEqual(calls, [], 'no API call before the form (it must open within 3 seconds)');
 
     // A customer who left: fetching them is a slow API call (404), so the form is acknowledged first
@@ -220,7 +220,7 @@ test('"Add note" answers in time: the form opens without an API call, the saved 
     await handle(current, commands);
     assert.ok(calls.length > 0 && calls.every(([, deferred]) => deferred), 'deferred before fetching');
     const card = textOf(lastResponse(current));
-    assert.match(card, /\*\*Member since:\*\* not on the server/);
+    assert.match(card, /\*\*Na serwerze od:\*\* — \(poza serwerem\)/);
     assert.match(card, /Left after a refund\./);
   } finally {
     users.fetch = realUsers;
@@ -238,11 +238,11 @@ test('profile of someone who left, with odd invite data, and with many long note
 
   const view = await customer(support, 'view', { user: ghost });
   const card = textOf(lastResponse(view));
-  assert.match(card, /\*\*Member since:\*\* not on the server/);
-  assert.match(card, /\*\*Verified:\*\* —/);
-  assert.match(card, /\*\*Invited by:\*\* —  ·  \*\*Invites:\*\* 9 \(2 left\)/);
-  assert.match(card, /\*\*Completed orders:\*\* 0  ·  \*\*Total spent:\*\* 0€/);
-  assert.match(card, /No completed orders yet/);
+  assert.match(card, /\*\*Na serwerze od:\*\* — \(poza serwerem\)/);
+  assert.match(card, /\*\*Weryfikacja:\*\* —/);
+  assert.match(card, /\*\*Zaproszenie od:\*\* —  ·  \*\*Zaproszenia:\*\* 9 \(w tym 2 poza serwerem\)/);
+  assert.match(card, /\*\*Zrealizowane zamówienia:\*\* 0  ·  \*\*Wydano łącznie:\*\* 0€/);
+  assert.match(card, /Brak zrealizowanych zamówień/);
 
   // The invites feature may store its data in other shapes – or not at all
   const shapes = [
@@ -262,7 +262,7 @@ test('profile of someone who left, with odd invite data, and with many long note
   const full = customers.profileCard(guild, ghost, null);
   const r = validateMessage(full, guild);
   assert.ok(r.textLength <= 4000 && r.total <= 40);
-  assert.match(textOf(full), /Staff notes \(50\)[\s\S]*…and \d+ older notes/);
+  assert.match(textOf(full), /Notatki zespołu \(50\)[\s\S]*…i jeszcze \d+ (starsza notatka|starsze notatki|starszych notatek)/);
   assert.match(textOf(full), /\*\*#50\*\*/, 'the newest note is shown');
   guild.unknownMembers = null;
 });

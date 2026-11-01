@@ -34,7 +34,7 @@ async function cardFor(guild, product, type) {
   await handle(i, commands);
   const ticket = db.tickets((x) => x.guildId === guild.id && x.ownerId === buyer.id)[0];
   const channel = guild.channels.cache.get(ticket.channelId);
-  const card = channel.messageList.map((m) => m.body ?? m).find((b) => /^## .*(Pay |Payment)/m.test(textOf(b)));
+  const card = channel.messageList.map((m) => m.body ?? m).find((b) => /^## .*(Zapłać |Płatność)/m.test(textOf(b)));
   return { card, channel, ticket };
 }
 
@@ -54,14 +54,14 @@ test('PaysafeCard: "Pay 24€" with the steps and an Enter PIN button that opens
   assert.ok(card, 'a payment card is posted');
   validateMessage(card, guild);
   const out = textOf(card);
-  assert.match(out, /Pay 24€ – PaysafeCard/);
-  assert.match(out, /Buy a \*\*PaysafeCard\*\* worth \*\*24€\*\*/);
-  assert.match(out, /Click \*\*Pay\*\* and enter the 16-digit PIN/);
+  assert.match(out, /Zapłać 24€ – PaysafeCard/);
+  assert.match(out, /Kup \*\*PaysafeCard\*\* na \*\*24€\*\*/);
+  assert.match(out, /Kliknij \*\*Zapłać\*\* i wpisz 16-cyfrowy PIN/);
   assert.ok(customIds(card).includes('pay:open'));
   const i = createInteraction({ guild, member: guild.members.cache.get(db.getTicket(channel.id).ownerId), kind: 'button', customId: 'pay:open', channel });
   await handle(i, commands);
   const modal = i.state.modals.at(-1);
-  assert.ok(JSON.stringify(modal).includes('PaysafeCard PIN'), 'the form asks for the PIN');
+  assert.ok(JSON.stringify(modal).includes('PIN PaysafeCard'), 'the form asks for the PIN');
 });
 
 test('Crypto: the wallets from config.json with the amount in coins (rounded up), and I\'ve paid', async () => {
@@ -77,12 +77,12 @@ test('Crypto: the wallets from config.json with the amount in coins (rounded up)
     validateMessage(card, guild);
     const out = textOf(card);
     assert.match(asked, /^https:\/\/api\.coingecko\.com\/api\/v3\/simple\/price\?ids=bitcoin,ethereum&vs_currencies=eur$/);
-    assert.match(out, /Send \*\*24€\*\* to one of these wallets/);
+    assert.match(out, /Wyślij \*\*24€\*\* na jeden z tych portfeli/);
     assert.match(out, /Bitcoin \(BTC\)\*\* – \*\*≈ 0\.00040000 BTC\*\*/);
     assert.match(out, /Ethereum \(ETH\)\*\* – \*\*≈ 0\.009600 ETH\*\*/);
     assert.ok(out.includes('bc1qnoxexamplewallet000000000000000000'));
     assert.ok(out.includes('0x1234567890abcdef1234567890abcdef12345678'));
-    assert.match(out, /Then click \*\*Pay\*\* and send the transaction ID/);
+    assert.match(out, /Potem kliknij \*\*Zapłać\*\* i wyślij ID transakcji/);
     assert.ok(customIds(card).includes('pay:open'));
     assert.equal(paycards.coinAmount(10, 3, 'BTC'), '3.33333334', 'never less than the price');
   } finally {
@@ -102,7 +102,7 @@ test('Crypto without rates (CoinGecko down) still shows the wallets; without wal
 
     crypto().addresses = { BTC: '', ETH: '' };
     const { card: none } = await cardFor(guild, product, 'crypto');
-    assert.match(textOf(none), /A seller sends you the wallet address here – send \*\*24€\*\*/);
+    assert.match(textOf(none), /Sprzedawca wyśle Ci tutaj adres portfela – wyślij \*\*24€\*\*/);
   } finally {
     crypto().addresses = prev;
   }
@@ -116,12 +116,12 @@ test('PayPal without keys: a paypal.me link with the amount – or the seller se
     const { card } = await cardFor(guild, product, 'paypal');
     validateMessage(card, guild);
     assert.ok(JSON.stringify(card.components.map((c) => c.toJSON?.() ?? c)).includes('https://paypal.me/NoxShop/24.00EUR'));
-    assert.match(textOf(card), /then click \*\*Pay\*\* and send a screenshot/);
+    assert.match(textOf(card), /potem kliknij \*\*Zapłać\*\* i wyślij zrzut ekranu/);
     assert.ok(customIds(card).includes('pay:open'));
 
     paypal().paypalMe = '';
     const { card: manual } = await cardFor(guild, product, 'paypal');
-    assert.match(textOf(manual), /A seller sends you the PayPal address here – pay \*\*24€\*\*/);
+    assert.match(textOf(manual), /Sprzedawca wyśle Ci tutaj adres PayPal – zapłać \*\*24€\*\*/);
   } finally {
     paypal().paypalMe = prev;
   }
@@ -134,18 +134,18 @@ test('PayPal without keys: a paypal.me link with the amount – or the seller se
 test('Stripe without a key and prices that aren\'t fixed get a card too; with proofs turned off there is no button', async () => {
   const { guild, product } = await shopGuild();
   const { card: stripeCard } = await cardFor(guild, product, 'stripe');
-  assert.match(textOf(stripeCard), /Pay 24€ – Stripe[\s\S]*A seller sends you the payment details here/);
+  assert.match(textOf(stripeCard), /Zapłać 24€ – Stripe[\s\S]*Sprzedawca wyśle Ci tutaj dane do płatności/);
 
   const custom = shop.addProduct(guild, { name: 'Custom bundle', price: 'from 5€', description: 'Ask us.' });
   const { card: open } = await cardFor(guild, custom, 'paysafecard');
-  assert.match(textOf(open), /## .* Payment – PaysafeCard/);
-  assert.match(textOf(open), /worth the amount the seller confirms/);
+  assert.match(textOf(open), /## .* Płatność – PaysafeCard/);
+  assert.match(textOf(open), /na kwotę potwierdzoną przez sprzedawcę/);
 
   config.orders.paymentProofs = false;
   try {
     const { card } = await cardFor(guild, product, 'crypto');
     assert.ok(!customIds(card).includes('pay:open'));
-    assert.match(textOf(card), /here in the ticket/);
+    assert.match(textOf(card), /tutaj w tickecie/);
   } finally {
     config.orders.paymentProofs = true;
   }
@@ -168,7 +168,7 @@ test('one place decides a method\'s kind: the PIN field and Stripe follow it too
     config.shop.paymentMethods.push({ name: 'PSC', emoji: 'paysafecard', type: 'paysafecard' }, { name: 'PayPal / Karta (Stripe)', emoji: 'paypal' });
     const psc = { method: 'PSC', methodIndex: config.shop.paymentMethods.length - 2 };
     assert.equal(ui.takesPins(psc), true, '"PSC" set as PaysafeCard asks for the PIN');
-    assert.equal(ui.takesPins({ method: 'Crypto', methodIndex: 1 }), false);
+    assert.equal(ui.takesPins({ method: 'Kryptowaluty', methodIndex: 1 }), false);
     assert.equal(ui.takesPins({ method: null }), true, 'unknown method → the PIN field stays');
     const mixed = { method: 'PayPal / Karta (Stripe)', methodIndex: config.shop.paymentMethods.length - 1 };
     assert.equal(paycards.methodType(paycards.methodOf(mixed)), 'paypal');

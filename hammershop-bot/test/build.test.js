@@ -133,7 +133,7 @@ test('emojis: fills the 50 free slots in priority order and reports the rest', a
   assert.equal(R.created.emojis, 50);
   const uploaded = Object.keys(db.emojiIds(guild.id));
   assert.deepEqual(uploaded.sort(), EMOJI_PRIORITY.slice(0, 50).sort());
-  assert.ok(R.warnings.some((w) => w.includes('/build only:emojis')));
+  assert.ok(R.warnings.some((w) => w.includes('/zbuduj tylko:emojis')));
   // Panels use the custom emojis now.
   const verify = byKey(guild, 'verify').messageList[1];
   assert.match(JSON.stringify(verify.components), /hs_check/);
@@ -145,7 +145,7 @@ test('emojis: a boosted server gets all of them, a rate limit stops uploads grac
   const limited = await build({ emojiRateLimitAfter: 10 });
   assert.equal(limited.guild.emojis.cache.size, 10);
   assert.deepEqual(limited.R.errors, []);
-  assert.ok(limited.R.warnings.some((w) => w.includes('Discord limits how fast')));
+  assert.ok(limited.R.warnings.some((w) => w.includes('Discord ogranicza tempo wgrywania emotek')));
 });
 
 test('wipe & build removes the old server (except the channel /build was used in)', async () => {
@@ -167,7 +167,7 @@ test('building twice without a wipe warns about existing single-instance AutoMod
   const { guild } = await build();
   const R2 = await buildServer({ guild, mode: 'add', invokerId: guild.ownerId });
   assert.deepEqual(R2.errors, []);
-  assert.ok(R2.warnings.some((w) => w.includes('already has a rule')));
+  assert.ok(R2.warnings.some((w) => w.includes('serwer ma już regułę tego typu')));
 });
 
 test('the build can be stopped', async () => {
@@ -229,7 +229,7 @@ test('welcome screen: hidden channels in the list are skipped with a clear note,
     const { guild, R } = await build();
     assert.deepEqual(R.errors, []);
     assert.equal(guild.welcomeScreen.welcomeChannels.length, 2, 'only #verify and #rules');
-    assert.ok(R.warnings.some((w) => /skipped #shop/.test(w)));
+    assert.ok(R.warnings.some((w) => /pominięto #sklep/.test(w)));
     assert.ok(!R.warnings.some((w) => /WELCOME_CHANNEL_PERMISSIONS_REQUIRED/.test(w)));
   } finally {
     WELCOME_SCREEN.pop();
@@ -251,7 +251,7 @@ test('server language: region codes become Discord languages, a bad value never 
     let { guild, R } = await build();
     assert.deepEqual(R.errors, []);
     assert.equal(guild.settings.preferredLocale, 'pl');
-    assert.ok(R.warnings.some((w) => w.includes('"pl-PL"') && w.includes('"pl"')));
+    assert.ok(R.warnings.some((w) => w.includes('„pl-PL”') && w.includes('„pl”')));
     config.server.locale = 'klingon';
     ({ guild, R } = await build());
     assert.equal(guild.settings.preferredLocale, 'en-US');
@@ -272,8 +272,8 @@ test('wipe & build: an AutoMod rule the wipe could not delete is not created a s
   };
   const R = await buildServer({ guild, mode: 'wipe', invokerId: guild.ownerId, keepChannelIds: [old[0].id] });
   assert.deepEqual(R.errors, []);
-  assert.ok(R.warnings.some((w) => w.includes('already has a rule')), R.warnings.join('\n'));
-  assert.ok(!R.warnings.some((w) => /MAX_RULES|invalid data/.test(w)), R.warnings.join('\n'));
+  assert.ok(R.warnings.some((w) => w.includes('serwer ma już regułę tego typu')), R.warnings.join('\n'));
+  assert.ok(!R.warnings.some((w) => /MAX_RULES|nieprawidłowe dane/.test(w)), R.warnings.join('\n'));
 });
 
 test('a long brand name in config.json never breaks the slash commands', () => {
@@ -337,8 +337,8 @@ test('wipe & build when Community mode switches off during the wipe: no type err
   };
   const R = await buildServer({ guild, mode: 'wipe', invokerId: guild.ownerId });
   const all = [...R.errors, ...R.warnings].join('\n');
-  assert.doesNotMatch(all, /invalid data|BASE_TYPE_CHOICES|404|no longer exists|could not be enabled|has no access/, all);
-  assert.match(all, /Scam names & profiles" skipped – Discord doesn't offer it to this server yet/);
+  assert.doesNotMatch(all, /nieprawidłowe dane|BASE_TYPE_CHOICES|404|już nie istnieje|Nie udało się włączyć|nie ma dostępu/, all);
+  assert.match(all, /Oszukańcze nicki i profile” pominięta – Discord nie udostępnia jej jeszcze temu serwerowi/);
   assert.ok(R.community, 'Community mode is on again');
   const announcements = guild.channels.cache.get(db.channelId(guild.id, 'announcements'));
   assert.equal(announcements.type, ChannelType.GuildAnnouncement);

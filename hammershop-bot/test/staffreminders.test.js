@@ -60,10 +60,10 @@ test('after unclaimedMinutes: ONE message for all waiting tickets, link buttons,
   const msg = chat.messageList.at(-1);
   validateMessage(msg.body, guild);
   const out = textOf(msg.body);
-  assert.match(out, /## 🔔 2 tickets are waiting to be claimed/);
+  assert.match(out, /## 🔔 2 tickety czekają na przejęcie/);
   for (const channel of [a, b]) {
     const ticket = db.getTicket(channel.id);
-    assert.match(out, new RegExp(`<#${channel.id}> · ${config.getType(ticket.typeId).label} · <@${ticket.ownerId}> · waiting \\*\\*16m\\*\\*`));
+    assert.match(out, new RegExp(`<#${channel.id}> · ${config.getType(ticket.typeId).label} · <@${ticket.ownerId}> · czeka \\*\\*16 min\\*\\*`));
     assert.equal(ticket.unclaimedRemindedAt, now + 16 * MIN);
   }
   assert.deepEqual(
@@ -90,15 +90,15 @@ test('repeat: again after repeatMinutes (default 60) – repeatMinutes 0 reminds
   assert.equal(await reminders.sweep(guild.client, now + 16 * MIN), 1);
   assert.equal(await reminders.sweep(guild.client, now + (16 + 59) * MIN), 0);
   assert.equal(await reminders.sweep(guild.client, now + (16 + 60) * MIN), 1);
-  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /waiting \*\*1h 16m\*\*/);
-  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /reminded again in 1h/);
+  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /czeka \*\*1 h 16 min\*\*/);
+  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /Kolejne przypomnienie za 1 h/);
 
   config.staffReminders.repeatMinutes = 0;
   try {
     const other = await builtGuild();
     await support(other.guild);
     assert.equal(await reminders.sweep(other.guild.client, now + 16 * MIN), 1);
-    assert.doesNotMatch(textOf(staffChat(other.guild).messageList.at(-1).body), /reminded again/);
+    assert.doesNotMatch(textOf(staffChat(other.guild).messageList.at(-1).body), /Kolejne przypomnienie/);
     assert.equal(await reminders.sweep(other.guild.client, now + 10 * 60 * MIN), 0, 'only once');
   } finally {
     config.staffReminders.repeatMinutes = 60;
@@ -129,7 +129,7 @@ test('claiming stops the reminders; unclaiming starts the clock again from the u
   assert.equal(await reminders.sweep(guild.client, Date.now() + MIN), 0, 'no instant ping after unclaiming');
   assert.equal(await reminders.sweep(guild.client, Date.now() + 14 * MIN), 0);
   assert.equal(await reminders.sweep(guild.client, Date.now() + 16 * MIN), 1);
-  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /waiting \*\*1[56]m\*\*/, 'counted from the unclaim');
+  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /czeka \*\*1[56] min\*\*/, 'counted from the unclaim');
 });
 
 test('closed shop: no reminders – tickets from the night are reminded as soon as it opens', async () => {
@@ -139,7 +139,7 @@ test('closed shop: no reminders – tickets from the night are reminded as soon 
   assert.equal(await reminders.sweep(guild.client), 0);
   db.guild(guild.id).shopStatus.mode = 'open';
   assert.equal(await reminders.sweep(guild.client), 1);
-  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /waiting \*\*3h\*\*/);
+  assert.match(textOf(staffChat(guild).messageList.at(-1).body), /czeka \*\*3 h\*\*/);
 
   // Following the working hours (10:00–20:00 Europe/Warsaw): a ticket from 03:00 is reminded at opening time
   const night = await builtGuild('auto');
@@ -147,7 +147,7 @@ test('closed shop: no reminders – tickets from the night are reminded as soon 
   db.updateTicket(late.id, { createdAt: Date.parse('2026-07-15T01:00:00Z') });
   assert.equal(await reminders.sweep(night.guild.client, Date.parse('2026-07-15T07:59:00Z')), 0, '09:59 – still closed');
   assert.equal(await reminders.sweep(night.guild.client, Date.parse('2026-07-15T08:00:00Z')), 1, '10:00 – open');
-  assert.match(textOf(staffChat(night.guild).messageList.at(-1).body), /waiting \*\*7h\*\*/);
+  assert.match(textOf(staffChat(night.guild).messageList.at(-1).body), /czeka \*\*7 h\*\*/);
 });
 
 test('many waiting tickets: 10 listed and "+N more", 5 link buttons, one message within Discord limits', async () => {
@@ -162,9 +162,9 @@ test('many waiting tickets: 10 listed and "+N more", 5 link buttons, one message
   const msg = chat.messageList.at(-1);
   validateMessage(msg.body, guild);
   const out = textOf(msg.body);
-  assert.match(out, /14 tickets are waiting/);
-  assert.match(out, /\*\*\+4 more\*\*/);
-  assert.equal((out.match(/· waiting \*\*/g) ?? []).length, 10);
+  assert.match(out, /14 ticketów czeka na przejęcie/);
+  assert.match(out, /\*\*\+4 więcej\*\*/);
+  assert.equal((out.match(/· czeka \*\*/g) ?? []).length, 10);
   assert.ok(out.includes(`<#${channels[0].id}>`) && !out.includes(`<#${channels[13].id}>`), 'longest waiting first');
   assert.equal(linkButtons(msg.body).length, 5);
   assert.ok(channels.every((c) => db.getTicket(c.id).unclaimedRemindedAt));

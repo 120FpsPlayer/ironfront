@@ -76,9 +76,9 @@ test('⚙️ menu: "Status: …" options for open orders, never the current stat
   const { channel } = await order(guild, member(guild), product);
   assert.deepEqual(values(channel).slice(0, 3), ['complete', 'status:paid', 'status:progress'], 'awaiting is the current status');
   const paid = menuOptions(channel).find((o) => o.value === 'status:paid');
-  assert.equal(paid.label, 'Status: Paid');
+  assert.equal(paid.label, 'Status: Opłacone');
   assert.equal(paid.emoji.name, '💳');
-  assert.match(paid.description, /DMs the customer/);
+  assert.match(paid.description, /klient dostaje DM/);
 
   await orderstatus.setStatus(channel, 'paid', seller);
   assert.deepEqual(values(channel).slice(0, 3), ['complete', 'status:progress', 'status:awaiting']);
@@ -111,11 +111,11 @@ test('setting a status: saved with its history, a notice in the ticket, the card
   const { guild, product, seller } = await shopGuild();
   const buyer = member(guild);
   const { ticket, channel } = await order(guild, buyer, product, { quantity: '2' });
-  assert.match(textOf(card(channel).body), /\*\*Order:\*\* ⏳ Awaiting payment/);
+  assert.match(textOf(card(channel).body), /\*\*Zamówienie:\*\* ⏳ Oczekuje na płatność/);
 
   // Members can't use it
   const denied = await run({ guild, member: buyer, kind: 'select', customId: 'ticket:manage', values: ['status:paid'], channel });
-  assert.match(textOf(lastResponse(denied)), /only available to staff/);
+  assert.match(textOf(lastResponse(denied)), /To menu jest dostępne tylko dla zespołu/);
   assert.equal(statusOf(db.getTicket(channel.id)), 'awaiting');
 
   const dmsBefore = dmsTo(guild, buyer).length;
@@ -123,7 +123,7 @@ test('setting a status: saved with its history, a notice in the ticket, the card
   const seen = await events(async () => {
     pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['status:paid'], channel });
   });
-  assert.match(textOf(lastResponse(pick)), /Order status set to \*\*💳 Paid\*\* – the customer got a DM\./);
+  assert.match(textOf(lastResponse(pick)), /Status zamówienia zmieniony na \*\*💳 Opłacone\*\* – klient dostał DM\./);
   const saved = db.getTicket(channel.id).order;
   assert.equal(saved.status, 'paid');
   assert.equal(saved.statusBy, seller.id);
@@ -132,19 +132,19 @@ test('setting a status: saved with its history, a notice in the ticket, the card
   assert.equal(saved.product, 'Nitro Boost');
   assert.equal(saved.total, 20);
 
-  assert.match(textOf(channel.messageList.at(-1).body), /💳 Order status: \*\*Paid\*\*\n-# Set by <@\d+> <t:\d+:R>/);
-  assert.match(textOf(card(channel).body), /\*\*Order:\*\* 💳 Paid · <t:\d+:R>/);
+  assert.match(textOf(channel.messageList.at(-1).body), /💳 Status zamówienia: \*\*Opłacone\*\*\n-# Ustawiony przez <@\d+> <t:\d+:R>/);
+  assert.match(textOf(card(channel).body), /\*\*Zamówienie:\*\* 💳 Opłacone · <t:\d+:R>/);
 
   // The DM: order number, product, status and a link to the ticket
   assert.equal(dmsTo(guild, buyer).length, dmsBefore + 1);
   const dm = dmsTo(guild, buyer).at(-1).payload;
   validateMessage(dm, guild);
   const out = textOf(dm);
-  assert.match(out, /## 💳 Order update/);
-  assert.ok(out.includes(`**Order:** \`#${pad(ticket.number)}\``));
-  assert.ok(out.includes('**Product:** Nitro Boost × 2'));
-  assert.ok(out.includes('**Status:** 💳 Paid'));
-  assert.ok(out.includes('Go to ticket'));
+  assert.match(out, /## 💳 Aktualizacja zamówienia/);
+  assert.ok(out.includes(`**Zamówienie:** \`#${pad(ticket.number)}\``));
+  assert.ok(out.includes('**Produkt:** Nitro Boost × 2'));
+  assert.ok(out.includes('**Status:** 💳 Opłacone'));
+  assert.ok(out.includes('Przejdź do ticketu'));
   assert.ok(linkUrls(dm).includes(`"url":"${channel.url}"`), 'a link button to the ticket');
 
   // The hook
@@ -156,16 +156,16 @@ test('setting a status: saved with its history, a notice in the ticket, the card
 
   // In progress, back to awaiting (undo), and the same status twice is refused
   await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['status:progress'], channel });
-  assert.match(textOf(dmsTo(guild, buyer).at(-1).payload), /is now \*\*In progress\*\*/);
+  assert.match(textOf(dmsTo(guild, buyer).at(-1).payload), /Nowy status Twojego zamówienia w \*\*[^*]+\*\*: \*\*W realizacji\*\*/);
   await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['status:awaiting'], channel });
-  assert.match(textOf(dmsTo(guild, buyer).at(-1).payload), /is now \*\*Awaiting payment\*\*.*\n[\s\S]*waiting for your payment/);
+  assert.match(textOf(dmsTo(guild, buyer).at(-1).payload), /Nowy status Twojego zamówienia w \*\*[^*]+\*\*: \*\*Oczekuje na płatność\*\*.*\n[\s\S]*Czekamy na Twoją płatność/);
   assert.deepEqual(db.getTicket(channel.id).order.history.map((h) => h.status), ['paid', 'progress', 'awaiting']);
-  await assert.rejects(orderstatus.setStatus(channel, 'awaiting', seller), /already \*\*⏳ Awaiting payment\*\*/);
-  await assert.rejects(orderstatus.setStatus(channel, 'delivered', seller), /Unknown order status/);
+  await assert.rejects(orderstatus.setStatus(channel, 'awaiting', seller), /ma już status \*\*⏳ Oczekuje na płatność\*\*/);
+  await assert.rejects(orderstatus.setStatus(channel, 'delivered', seller), /Nieznany status zamówienia/);
   const forged = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['status:cancelled'], channel });
-  assert.match(textOf(lastResponse(forged)), /Unknown order status/);
+  assert.match(textOf(lastResponse(forged)), /Nieznany status zamówienia/);
   const support = await t.openTicket(member(guild), config.getType('support'), [{ label: 'Subject', value: 'x' }]);
-  await assert.rejects(orderstatus.setStatus(support, 'paid', seller), /Only purchase tickets have an order status/);
+  await assert.rejects(orderstatus.setStatus(support, 'paid', seller), /Status zamówienia mają tylko tickety zakupu/);
 });
 
 test('status DMs: closed DMs never break it, and statusDms: false sends none', async () => {
@@ -174,7 +174,7 @@ test('status DMs: closed DMs never break it, and statusDms: false sends none', a
   guild.closedDms.add(shy.id);
   const a = await order(guild, shy, product);
   const pick = await run({ guild, member: seller, kind: 'select', customId: 'ticket:manage', values: ['status:paid'], channel: a.channel });
-  assert.match(textOf(lastResponse(pick)), /Order status set to \*\*💳 Paid\*\*\./);
+  assert.match(textOf(lastResponse(pick)), /Status zamówienia zmieniony na \*\*💳 Opłacone\*\*\./);
   assert.equal(db.getTicket(a.channel.id).order.status, 'paid');
 
   config.orders.statusDms = false;
@@ -203,14 +203,14 @@ test('delivered: the receipt says "✅ Delivered" (no second DM); without receip
   const seen = await events(() => complete(a.channel));
   const dms = dmsTo(guild, buyer).slice(before);
   assert.equal(dms.length, 1, 'only the receipt');
-  assert.match(textOf(dms[0].payload), /Here is your receipt/);
-  assert.ok(textOf(dms[0].payload).includes('**Status:** ✅ Delivered'));
+  assert.match(textOf(dms[0].payload), /Oto Twoje potwierdzenie zakupu/);
+  assert.ok(textOf(dms[0].payload).includes('**Status:** ✅ Dostarczone'));
   const saved = db.getTicket(a.channel.id).order;
   assert.equal(saved.status, 'delivered');
   assert.deepEqual([saved.history.at(-1).status, saved.history.at(-1).by], ['delivered', seller.id]);
   assert.equal(saved.statusAt, db.getTicket(a.channel.id).completedAt);
   assert.deepEqual(seen.map((e) => e.status), ['delivered']);
-  assert.match(textOf(card(a.channel).body), /\*\*Order:\*\* ✅ Delivered · <t:\d+:R>/);
+  assert.match(textOf(card(a.channel).body), /\*\*Zamówienie:\*\* ✅ Dostarczone · <t:\d+:R>/);
 
   // Receipts off → the status DM instead
   config.orders.receipts = false;
@@ -222,9 +222,9 @@ test('delivered: the receipt says "✅ Delivered" (no second DM); without receip
     const sent = dmsTo(guild, other).slice(start);
     assert.equal(sent.length, 1);
     validateMessage(sent[0].payload, guild);
-    assert.match(textOf(sent[0].payload), /## ✅ Order update/);
-    assert.ok(textOf(sent[0].payload).includes('**Product:** Nitro Boost × 3'));
-    assert.ok(textOf(sent[0].payload).includes('**Status:** ✅ Delivered'));
+    assert.match(textOf(sent[0].payload), /## ✅ Aktualizacja zamówienia/);
+    assert.ok(textOf(sent[0].payload).includes('**Produkt:** Nitro Boost × 3'));
+    assert.ok(textOf(sent[0].payload).includes('**Status:** ✅ Dostarczone'));
 
     // … and nothing at all with status DMs off too
     config.orders.statusDms = false;
@@ -251,7 +251,7 @@ test('order tickets from older versions (no ticket.order): a status change keeps
   await orderstatus.setStatus(channel, 'paid', seller);
   const saved = db.getTicket(channel.id).order;
   assert.deepEqual([saved.product, saved.quantity, saved.method, saved.status], ['Spotify Premium', 2, 'PayPal', 'paid']);
-  assert.ok(textOf(dmsTo(guild, buyer).at(-1).payload).includes('**Product:** Spotify Premium × 2'));
+  assert.ok(textOf(dmsTo(guild, buyer).at(-1).payload).includes('**Produkt:** Spotify Premium × 2'));
 
   await t.completeOrder(channel, seller, { amount: 12 });
   const sale = db.sales(guild.id).at(-1);
