@@ -26,7 +26,7 @@ function topOwnRole(me, brandId) {
  * and takes it away from everyone else.
  * @returns {Promise<{ moved: boolean, given: boolean, removed: number }>}
  */
-async function ensureBrandRole(guild, { reason = `${config.brand.name} – the bot's own role` } = {}) {
+async function ensureBrandRole(guild, { reason = `${config.brand.name} – własna rola bota` } = {}) {
   const res = { moved: false, given: false, removed: 0 };
   const id = brandRoleId(guild);
   const role = id ? guild.roles.cache.get(id) : null;
@@ -52,7 +52,7 @@ async function ensureBrandRole(guild, { reason = `${config.brand.name} – the b
   }
   for (const member of guild.members.cache.values()) {
     if (member.id === me.id || !member.roles.cache.has(role.id)) continue;
-    await member.roles.remove(role.id, `Only the ${config.brand.name} bot has this role`).catch(() => null);
+    await member.roles.remove(role.id, `Tylko bot ${config.brand.name} ma tę rolę`).catch(() => null);
     res.removed += 1;
   }
   return res;
@@ -63,7 +63,7 @@ hooks.on('memberUpdate', async (before, after) => {
   const guild = after?.guild;
   const id = guild ? brandRoleId(guild) : null;
   if (!id || after.id === guild.members.me?.id || !after.roles?.cache?.has(id)) return;
-  await after.roles.remove(id, `Only the ${config.brand.name} bot has this role`).catch(() => null);
+  await after.roles.remove(id, `Tylko bot ${config.brand.name} ma tę rolę`).catch(() => null);
 });
 
 module.exports = { ensureBrandRole, topOwnRole };

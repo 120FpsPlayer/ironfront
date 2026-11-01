@@ -6,7 +6,8 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const invites = require('./invites');
 const { e, ce, COLORS } = require('../lib/theme');
-const { UserError, embed, ts, truncate, sendToChannel } = require('../lib/utils');
+const { UserError, embed, ts, truncate, sendToChannel, plural, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { container, text, divider, btn, row, header, v2, linkBtn, channelUrl } = require('../lib/v2');
 
 /**
@@ -32,23 +33,23 @@ function card(guild, gw) {
   const lines = [
     `# ${e(guild, 'gift')} ${gw.prize}`,
     gw.description ? `${gw.description}\n` : '',
-    ended ? `**Ended:** ${ts(gw.endsAt, 'R')}` : `**Ends:** ${ts(gw.endsAt, 'R')} (${ts(gw.endsAt, 'f')})`,
-    `**Winners:** ${gw.winnersCount}${' '}·${' '}**Entries:** ${gw.entries.length}`,
-    `**Hosted by:** <@${gw.hostId}>`,
+    ended ? `**Zakończony:** ${ts(gw.endsAt, 'R')}` : `**Koniec:** ${ts(gw.endsAt, 'R')} (${ts(gw.endsAt, 'f')})`,
+    `**Zwycięzcy:** ${gw.winnersCount}${' '}·${' '}**Uczestnicy:** ${gw.entries.length}`,
+    `**Organizator:** <@${gw.hostId}>`,
   ];
-  if (gw.requiredRoleId) lines.push(`**Required role:** <@&${gw.requiredRoleId}>`);
-  if (gw.buyersOnly) lines.push(`${e(guild, 'cart')} Only customers can enter`);
-  if (gw.minInvites) lines.push(`📨 Invited at least **${gw.minInvites}** ${gw.minInvites === 1 ? 'member' : 'members'}`);
+  if (gw.requiredRoleId) lines.push(`**Wymagana rola:** <@&${gw.requiredRoleId}>`);
+  if (gw.buyersOnly) lines.push(`${e(guild, 'cart')} Tylko dla klientów`);
+  if (gw.minInvites) lines.push(`📨 Trzeba zaprosić co najmniej **${gw.minInvites}** ${plural(gw.minInvites, 'osobę', 'osoby', 'osób')}`);
   header(c, lines.filter(Boolean).join('\n'), guild.iconURL?.({ size: 256 }));
   c.addSeparatorComponents(divider());
   if (ended) {
     c.addTextDisplayComponents(
-      text(gw.winners.length ? `### ${e(guild, 'trophy')} Winners\n${gw.winners.map((id) => `<@${id}>`).join(', ')}` : '### 😢 No valid entries – no winner this time.'),
+      text(gw.winners.length ? `### ${e(guild, 'trophy')} Zwycięzcy\n${gw.winners.map((id) => `<@${id}>`).join(', ')}` : '### 😢 Brak ważnych zgłoszeń – tym razem bez zwycięzcy.'),
     );
   } else {
-    const recheck = gw.requiredRoleId || gw.buyersOnly || gw.minInvites ? ' – the requirements are checked again then' : '';
-    c.addTextDisplayComponents(text(`-# Click **Enter** to join. Click again to leave. Winners are picked at random when the timer ends${recheck}.`));
-    c.addActionRowComponents(row(btn(`gw:enter:${gw.id}`, 'Enter', ce(guild, 'gift'), ButtonStyle.Primary)));
+    const recheck = gw.requiredRoleId || gw.buyersOnly || gw.minInvites ? ' – wtedy wymagania są sprawdzane ponownie' : '';
+    c.addTextDisplayComponents(text(`-# Kliknij **Dołącz**, żeby wziąć udział. Kliknij jeszcze raz, żeby się wypisać. Zwycięzcy zostaną wylosowani, gdy skończy się czas${recheck}.`));
+    c.addActionRowComponents(row(btn(`gw:enter:${gw.id}`, 'Dołącz', ce(guild, 'gift'), ButtonStyle.Primary)));
   }
   return v2(c);
 }
@@ -71,13 +72,13 @@ function scheduleEdit(guild, gw) {
 }
 
 async function start(guild, host, { prize, durationMs, winners, description, channel, requiredRole, buyersOnly = false, minInvites = null, ping }) {
-  if (durationMs < 60_000) throw new UserError('A giveaway must last at least 1 minute.');
-  if (durationMs > 60 * 86_400_000) throw new UserError('A giveaway can last at most 60 days.');
+  if (durationMs < 60_000) throw new UserError('Giveaway musi trwać co najmniej 1 minutę.');
+  if (durationMs > 60 * 86_400_000) throw new UserError('Giveaway może trwać najwyżej 60 dni.');
   if (minInvites && config.invites.enabled === false) {
-    throw new UserError("Invite tracking is turned off (`invites.enabled` in config.json) – a giveaway can't require invites.");
+    throw new UserError('Śledzenie zaproszeń jest wyłączone (`invites.enabled` w config.json) – giveaway nie może wymagać zaproszeń.');
   }
   const target = channel ?? guild.channels.cache.get(db.channelId(guild.id, 'giveaways'));
-  if (!target?.isTextBased?.()) throw new UserError('Pick a channel – there is no giveaways channel yet (run `/build`).');
+  if (!target?.isTextBased?.()) throw new UserError(`Wybierz kanał – nie ma jeszcze kanału z giveawayami (użyj \`${slash('build')}\`).`);
 
   const gw = {
     id: crypto.randomBytes(4).toString('hex'),
@@ -129,13 +130,13 @@ function invitesMissing(guildId, userId, gw) {
 function entryBlock(member, gw) {
   const guild = member.guild;
   if (gw.requiredRoleId && !member.roles.cache.has(gw.requiredRoleId)) {
-    return { reason: `🔒 You need the <@&${gw.requiredRoleId}> role to enter this giveaway.`, buttons: [] };
+    return { reason: `🔒 Żeby dołączyć do tego giveawayu, potrzebujesz roli <@&${gw.requiredRoleId}>.`, buttons: [] };
   }
   if (gw.buyersOnly && !isCustomer(member)) {
     const shop = db.channelId(guild.id, 'shop');
     return {
-      reason: `${e(guild, 'cart')} Only customers can enter this giveaway – you need at least one completed order. Buy anything in ${shop ? `<#${shop}>` : 'the shop'} and you're in!`,
-      buttons: shop ? [linkBtn(channelUrl(guild.id, shop), 'Shop', ce(guild, 'cart'))] : [],
+      reason: `${e(guild, 'cart')} Ten giveaway jest tylko dla klientów – potrzebujesz co najmniej jednego zrealizowanego zamówienia. Kup cokolwiek ${shop ? `na <#${shop}>` : 'w sklepie'} i możesz dołączyć!`,
+      buttons: shop ? [linkBtn(channelUrl(guild.id, shop), 'Sklep', ce(guild, 'cart'))] : [],
     };
   }
   const missing = invitesMissing(guild.id, member.id, gw);
@@ -143,8 +144,8 @@ function entryBlock(member, gw) {
     const have = gw.minInvites - missing;
     return {
       reason:
-        `📨 You need at least **${gw.minInvites}** valid ${gw.minInvites === 1 ? 'invite' : 'invites'} to enter this giveaway – you have **${have}**.\n` +
-        '-# Invited members count once they verify and as long as they stay. `/invites stats` shows yours.',
+        `📨 Żeby dołączyć do tego giveawayu, potrzebujesz co najmniej **${gw.minInvites}** ${plural(gw.minInvites, 'ważnego zaproszenia', 'ważnych zaproszeń', 'ważnych zaproszeń')} – masz **${have}**.\n` +
+        `-# Zaproszone osoby liczą się, gdy się zweryfikują, i dopóki zostają na serwerze. Twoje zaproszenia pokazuje \`${slash('invites stats')}\`.`,
       buttons: [],
     };
   }
@@ -167,8 +168,8 @@ const drawing = new Set(); // giveaways whose winners are being drawn right now
 
 /** Ends a giveaway (or rerolls it) – one draw at a time, and a normal end only once. */
 async function end(guild, gw, opts = {}) {
-  if (drawing.has(gw.id)) throw new UserError('Winners for this giveaway are being drawn right now – try again in a moment.');
-  if (!opts.reroll && gw.ended) throw new UserError('This giveaway has already ended – use `/giveaway reroll` for a new winner.');
+  if (drawing.has(gw.id)) throw new UserError('Zwycięzcy tego giveawayu są właśnie losowani – spróbuj ponownie za chwilę.');
+  if (!opts.reroll && gw.ended) throw new UserError(`Ten giveaway już się zakończył – użyj \`${slash('giveaway reroll')}\`, żeby wylosować nowego zwycięzcę.`);
   drawing.add(gw.id);
   try {
     return await draw(guild, gw, opts);
@@ -194,17 +195,17 @@ async function draw(guild, gw, { reroll = false, count = null } = {}) {
   if (winners.length) {
     c.addTextDisplayComponents(
       text(
-        `## ${e(guild, 'trophy')} ${reroll ? 'New winner' : 'Congratulations'}!\n${winners.map((id) => `<@${id}>`).join(', ')} won **${gw.prize}**! 🎉\n` +
-          (rewardType ? `Claim your prize within **48 hours** by opening a **${rewardType.emoji ?? '🎁'} ${rewardType.label}** ticket.` : 'Contact the staff to claim your prize.'),
+        `## ${e(guild, 'trophy')} ${reroll ? (winners.length === 1 ? 'Nowy zwycięzca' : 'Nowi zwycięzcy') : 'Gratulacje'}!\n${winners.map((id) => `<@${id}>`).join(', ')} ${winners.length === 1 ? 'wygrywa' : 'wygrywają'} **${gw.prize}**! 🎉\n` +
+          (rewardType ? `Odbierz nagrodę w ciągu **48 godzin** – otwórz ticket **${rewardType.emoji ?? '🎁'} ${rewardType.label}**.` : 'Skontaktuj się z zespołem, żeby odebrać nagrodę.'),
       ),
     );
     const buttons = [];
-    if (rewardType) buttons.push(btn(`ticket:open:${rewardType.id}`, 'Claim reward', ce(guild, 'gift'), ButtonStyle.Success));
-    else if (tickets) buttons.push(linkBtn(channelUrl(guild.id, tickets), 'Support', ce(guild, 'ticket')));
+    if (rewardType) buttons.push(btn(`ticket:open:${rewardType.id}`, 'Odbierz nagrodę', ce(guild, 'gift'), ButtonStyle.Success));
+    else if (tickets) buttons.push(linkBtn(channelUrl(guild.id, tickets), 'Pomoc', ce(guild, 'ticket')));
     if (msg) buttons.push(linkBtn(msg.url, 'Giveaway', '🎉'));
     if (buttons.length) c.addActionRowComponents(row(...buttons));
   } else {
-    c.addTextDisplayComponents(text(`### 😢 The giveaway for **${gw.prize}** ended without valid entries.`));
+    c.addTextDisplayComponents(text(`### 😢 Giveaway z nagrodą **${gw.prize}** zakończył się bez ważnych zgłoszeń.`));
   }
   await sendToChannel(guild, gw.channelId, v2(c, { mentions: { users: winners } }));
   return winners;
@@ -215,20 +216,20 @@ async function toggleEntry(interaction) {
   const gw = db.guild(interaction.guild.id).giveaways[id];
   const say = (color, msg, buttons = []) =>
     interaction.reply({ embeds: [embed(color).setDescription(msg)], components: buttons.length ? [row(...buttons)] : [], flags: MessageFlags.Ephemeral });
-  if (!gw || gw.ended || Date.now() >= gw.endsAt) return say(COLORS.muted, '⌛ This giveaway has already ended.');
+  if (!gw || gw.ended || Date.now() >= gw.endsAt) return say(COLORS.muted, '⌛ Ten giveaway już się zakończył.');
   // Leaving always works – even when a requirement isn't met any more (e.g. invites dropped).
   if (gw.entries.includes(interaction.user.id)) {
     gw.entries = gw.entries.filter((x) => x !== interaction.user.id);
     db.save();
     scheduleEdit(interaction.guild, gw);
-    return say(COLORS.muted, `👋 You left the giveaway for **${gw.prize}**. Click **Enter** again if you change your mind.`);
+    return say(COLORS.muted, `👋 Wypisano Cię z giveawayu z nagrodą **${gw.prize}**. Kliknij **Dołącz** jeszcze raz, jeśli zmienisz zdanie.`);
   }
   const blocked = entryBlock(interaction.member, gw);
   if (blocked) return say(COLORS.warning, blocked.reason, blocked.buttons);
   gw.entries.push(interaction.user.id);
   db.save();
   scheduleEdit(interaction.guild, gw);
-  return say(COLORS.success, `🎉 You're in! Good luck winning **${gw.prize}** – winners are drawn ${ts(gw.endsAt, 'R')}.\n-# Click **Enter** again to leave.`);
+  return say(COLORS.success, `🎉 Bierzesz udział! Powodzenia w walce o **${gw.prize}** – zwycięzcy zostaną wylosowani ${ts(gw.endsAt, 'R')}.\n-# Kliknij **Dołącz** jeszcze raz, żeby się wypisać.`);
 }
 
 async function tick(client) {
@@ -238,7 +239,7 @@ async function tick(client) {
     if (!guild || guild.available === false) continue;
     for (const gw of all(guildId)) {
       if (gw.ended || gw.endsAt > now) continue;
-      await end(guild, gw).catch((err) => console.error(`[giveaway] Failed to end ${gw.id}:`, err.message));
+      await end(guild, gw).catch((err) => console.error(`[giveaway] Nie udało się zakończyć ${gw.id}:`, err.message));
     }
   }
 }
@@ -256,7 +257,7 @@ function autocomplete(interaction, { active = null } = {}) {
     .filter((g) => !q || g.prize.toLowerCase().includes(q))
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 25);
-  return interaction.respond(list.map((g) => ({ name: truncate(`${g.ended ? '✅' : '🎉'} ${g.prize} · ${g.entries.length} entries`, 100), value: g.id })));
+  return interaction.respond(list.map((g) => ({ name: truncate(`${g.ended ? '✅' : '🎉'} ${g.prize} · ${count(g.entries.length, 'uczestnik', 'uczestników', 'uczestników')}`, 100), value: g.id })));
 }
 
 module.exports = { all, card, start, end, toggleEntry, tick, find, autocomplete, drawWinners };

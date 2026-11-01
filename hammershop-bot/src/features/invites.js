@@ -27,7 +27,8 @@ const db = require('../lib/db');
 const members = require('../lib/members');
 const promos = require('./promos');
 const { e, ce, COLORS } = require('../lib/theme');
-const { embed, logEmbed, ts, truncate, sendToChannel } = require('../lib/utils');
+const { embed, logEmbed, ts, truncate, sendToChannel, plural, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { container, text, divider, row, linkBtn, header, v2, channelUrl } = require('../lib/v2');
 
 const REWARD_DAYS = 30;
@@ -68,8 +69,8 @@ async function fetchInvites(guild) {
     return new Map([...invites.values()].map((invite) => [invite.code, snapshot(invite, guild)]));
   } catch (err) {
     if (!unreadable.has(guild.id)) {
-      const why = err?.code === 50013 ? 'missing the Manage Server permission' : err?.message ?? err;
-      console.warn(`⚠️  [invites] ${guild.name}: can't read the invites (${why}) – joins are recorded without an inviter until that's fixed.`);
+      const why = err?.code === 50013 ? 'brak uprawnienia Zarządzanie serwerem' : err?.message ?? err;
+      console.warn(`⚠️  [invites] ${guild.name}: nie mogę odczytać zaproszeń (${why}) – do czasu naprawy dołączenia są zapisywane bez zapraszającego.`);
     }
     unreadable.add(guild.id);
     return null;
@@ -147,7 +148,7 @@ async function onVerified(member) {
 /** Members who left while the bot was offline don't count anymore. Needs the full member list in the cache. */
 function reconcile(guild, now = Date.now()) {
   if (!members.complete(guild)) {
-    console.warn(`[invites] ${guild.name}: the member list is incomplete – nobody is marked as left.`);
+    console.warn(`[invites] ${guild.name}: lista członków jest niepełna – nikt nie zostanie oznaczony jako osoba, która wyszła.`);
     return 0;
   }
   let changed = 0;
@@ -213,9 +214,9 @@ function rewardCard(guild, inviter, promo, level) {
   const c = container(COLORS.brand);
   header(
     c,
-    `## ${e(guild, 'gift')} Invite reward unlocked!\n` +
-      `Thank you for growing **${truncate(guild.name, 100)}**, **${truncate(inviter.displayName ?? inviter.user?.username ?? 'friend', 64)}**! 🧡 ` +
-      `**${level.invites}** people you invited have joined and verified – here's **${promos.label(promo)}** your next order:`,
+    `## ${e(guild, 'gift')} Nagroda za zaproszenia odblokowana!\n` +
+      `Dziękujemy, że rozwijasz **${truncate(guild.name, 100)}**, **${truncate(inviter.displayName ?? inviter.user?.username ?? 'przyjacielu', 64)}**! 🧡 ` +
+      `Zaproszone przez Ciebie osoby, które dołączyły i się zweryfikowały: **${level.invites}** – oto **${promos.label(promo)}** na następne zamówienie:`,
     guild.iconURL?.({ size: 128 }),
   );
   c.addTextDisplayComponents(text(`# \`${promo.code}\``));
@@ -223,16 +224,16 @@ function rewardCard(guild, inviter, promo, level) {
   const next = levels().find((l) => l.invites > level.invites);
   c.addTextDisplayComponents(
     text(
-      `### ${e(guild, 'info')} How to use it\n` +
-        '> **1.** Open the shop and click **Buy** on any product\n' +
-        '> **2.** Paste the code into the **Promo code** field of the order form\n' +
-        '> **3.** The discount is taken off your total automatically\n' +
-        (next ? `\n${e(guild, 'trophy')} Keep going – **${next.invites}** valid invites unlock **${next.percent}% off**.\n` : '\n') +
-        `-# Valid until ${ts(promo.expiresAt, 'f')} (${ts(promo.expiresAt, 'R')}) · only for your account · one use · \`/invites stats\` shows your invites`,
+      `### ${e(guild, 'info')} Jak go użyć\n` +
+        '> **1.** Otwórz sklep i kliknij **Kup** przy dowolnym produkcie\n' +
+        '> **2.** Wklej kod w pole **Kod rabatowy** w formularzu zamówienia\n' +
+        '> **3.** Rabat zostanie automatycznie odjęty od kwoty do zapłaty\n' +
+        (next ? `\n${e(guild, 'trophy')} Tak trzymaj – za **${next.invites}** ${plural(next.invites, 'ważne zaproszenie', 'ważne zaproszenia', 'ważnych zaproszeń')} dostaniesz **${next.percent}% rabatu**.\n` : '\n') +
+        `-# Ważny do ${ts(promo.expiresAt, 'f')} (${ts(promo.expiresAt, 'R')}) · tylko dla Twojego konta · jednorazowy · Twoje zaproszenia pokazuje \`${slash('invites stats')}\``,
     ),
   );
   const shop = db.channelId(guild.id, 'shop');
-  if (shop) c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, shop), 'Shop', ce(guild, 'cart'))));
+  if (shop) c.addActionRowComponents(row(linkBtn(channelUrl(guild.id, shop), 'Sklep', ce(guild, 'cart'))));
   return v2(c);
 }
 
@@ -254,12 +255,12 @@ async function checkRewards(guild, inviterId) {
   }
   const given = [];
   for (const l of due) {
-    const promo = promos.personal(guild.id, inviterId, { percent: l.percent, days: REWARD_DAYS, prefix: 'INVITE', reason: `${l.invites} invites` });
+    const promo = promos.personal(guild.id, inviterId, { percent: l.percent, days: REWARD_DAYS, prefix: 'INVITE', reason: count(l.invites, 'zaproszenie', 'zaproszenia', 'zaproszeń') });
     Object.assign(rewarded[l.invites], { code: promo.code, delivered: await dm(inviter, rewardCard(guild, inviter, promo, l)) });
     db.save();
     given.push(promo);
-    const note = rewarded[l.invites].delivered ? 'sent by DM' : "⚠️ DMs closed – they can see it with `/invites stats`";
-    const entry = logEmbed(COLORS.brand, '🎁 Invite reward').setDescription(`<@${inviterId}> reached **${l.invites}** valid invites → \`${promo.code}\` (${promos.label(promo)}) · ${note}`);
+    const note = rewarded[l.invites].delivered ? 'wysłany w wiadomości prywatnej' : `⚠️ zamknięte wiadomości prywatne – kod widać w \`${slash('invites stats')}\``;
+    const entry = logEmbed(COLORS.brand, '🎁 Nagroda za zaproszenia').setDescription(`<@${inviterId}> – ważne zaproszenia: **${l.invites}** → \`${promo.code}\` (${promos.label(promo)}) · ${note}`);
     await sendToChannel(guild, db.channelId(guild.id, 'serverLogs'), { embeds: [entry], allowedMentions: { parse: [] } });
   }
   return given;
@@ -267,18 +268,16 @@ async function checkRewards(guild, inviterId) {
 
 // ───────────── /invites ─────────────
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
 function codeLine(guildId, code, entry) {
   const promo = promos.find(guildId, code);
   const status = !promo
-    ? 'deleted'
+    ? 'usunięty'
     : promo.uses.length
-      ? 'used'
+      ? 'wykorzystany'
       : promo.expiresAt && Date.now() > promo.expiresAt
-        ? 'expired'
-        : `valid until ${ts(promo.expiresAt, 'D')}`;
-  return `\`${code}\` · ${entry.percent}% off · ${status}`;
+        ? 'wygasł'
+        : `ważny do ${ts(promo.expiresAt, 'D')}`;
+  return `\`${code}\` · ${entry.percent}% rabatu · ${status}`;
 }
 
 /** /invites stats – valid / pending / left, reward levels, the next reward (and your own codes). */
@@ -291,36 +290,36 @@ function statsEmbed(guild, user, { self = false, displayName = null } = {}) {
   const own = data.members[user.id];
   const intro = [
     self
-      ? 'Invite friends with your own invite link – each one counts once they **verify** and **stay** on the server.'
-      : `Invites of <@${user.id}>.`,
+      ? 'Zapraszaj znajomych własnym linkiem – każda osoba liczy się, gdy się **zweryfikuje** i **zostanie** na serwerze.'
+      : `Zaproszenia osoby <@${user.id}>.`,
   ];
-  if (own?.inviterId) intro.push(`-# ${self ? 'You' : 'They'} joined through <@${own.inviterId}>'s invite.`);
+  if (own?.inviterId) intro.push(`-# ${self ? 'Zaprosił(a) Cię' : 'Tę osobę zaprosił(a)'} <@${own.inviterId}>.`);
   const out = embed(COLORS.brand)
-    .setTitle(`📨 Invites · ${truncate(displayName ?? user.globalName ?? user.username ?? 'Member', 60)}`)
+    .setTitle(`📨 Zaproszenia · ${truncate(displayName ?? user.globalName ?? user.username ?? 'Członek', 60)}`)
     .setDescription(intro.join('\n'))
     .addFields(
-      { name: '✅ Valid', value: String(c.valid), inline: true },
-      { name: '⏳ Pending', value: `${c.pending} (not verified)`, inline: true },
-      { name: '🚪 Left', value: String(c.left), inline: true },
+      { name: '✅ Ważne', value: String(c.valid), inline: true },
+      { name: '⏳ Oczekujące', value: `${c.pending} (bez weryfikacji)`, inline: true },
+      { name: '🚪 Utracone', value: String(c.left), inline: true },
       {
-        name: '🎁 Next reward',
+        name: '🎁 Następna nagroda',
         value: next
-          ? `**${plural(next.invites - c.valid, 'more valid invite')}** → **${next.percent}% off** (a personal code by DM)`
+          ? `**jeszcze ${count(next.invites - c.valid, 'ważne zaproszenie', 'ważne zaproszenia', 'ważnych zaproszeń')}** → **${next.percent}% rabatu** (osobisty kod w wiadomości prywatnej)`
           : list.length
-            ? 'Every reward is unlocked – thank you! 🧡'
-            : 'There are no invite rewards right now.',
+            ? 'Wszystkie nagrody odblokowane – dziękujemy! 🧡'
+            : 'Obecnie nie ma nagród za zaproszenia.',
       },
     );
   if (list.length) {
-    const lines = list.map((l) => `${rewarded[l.invites]?.code ? '✅' : '⬜'} **${l.invites}** valid invites → ${l.percent}% off`);
-    out.addFields({ name: '🏆 Reward levels', value: truncate(lines.join('\n'), 1024) });
+    const lines = list.map((l) => `${rewarded[l.invites]?.code ? '✅' : '⬜'} **${l.invites}** ${plural(l.invites, 'ważne zaproszenie', 'ważne zaproszenia', 'ważnych zaproszeń')} → ${l.percent}% rabatu`);
+    out.addFields({ name: '🏆 Poziomy nagród', value: truncate(lines.join('\n'), 1024) });
   }
   const codes = Object.values(rewarded).filter((r) => r.code);
   if (self && codes.length) {
-    out.addFields({ name: '🏷️ Your reward codes', value: truncate(codes.map((r) => codeLine(guild.id, r.code, r)).join('\n'), 1024) });
+    out.addFields({ name: '🏷️ Twoje kody z nagród', value: truncate(codes.map((r) => codeLine(guild.id, r.code, r)).join('\n'), 1024) });
   }
   if (unreadable.has(guild.id)) {
-    out.addFields({ name: '⚠️ Tracking paused', value: "I can't see this server's invites (I need **Manage Server**) – new joins aren't counted until that's fixed." });
+    out.addFields({ name: '⚠️ Śledzenie wstrzymane', value: 'Nie widzę zaproszeń tego serwera (potrzebuję uprawnienia **Zarządzanie serwerem**) – do czasu naprawy nowe dołączenia nie są liczone.' });
   }
   return out;
 }
@@ -331,15 +330,15 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 function topEmbed(guild, viewerId) {
   const list = leaderboard(guild.id);
   const lines = list.slice(0, 10).map((c, i) => {
-    const extra = [c.pending ? `${c.pending} pending` : null, c.left ? `${c.left} left` : null].filter(Boolean).join(' · ');
-    return `${MEDALS[i] ?? `**${i + 1}.**`} <@${c.inviterId}> – **${plural(c.valid, 'valid invite')}**${extra ? ` · ${extra}` : ''}`;
+    const extra = [c.pending ? `oczekujące: ${c.pending}` : null, c.left ? `utracone: ${c.left}` : null].filter(Boolean).join(' · ');
+    return `${MEDALS[i] ?? `**${i + 1}.**`} <@${c.inviterId}> – **${count(c.valid, 'ważne zaproszenie', 'ważne zaproszenia', 'ważnych zaproszeń')}**${extra ? ` · ${extra}` : ''}`;
   });
   const rank = list.findIndex((c) => c.inviterId === viewerId);
-  if (rank >= 10) lines.push(`\nYou're **#${rank + 1}** with ${plural(list[rank].valid, 'valid invite')}.`);
-  const body = lines.length ? lines.join('\n') : 'Nobody has a valid invite yet – invite your friends and be the first! 🧡';
+  if (rank >= 10) lines.push(`\nJesteś na **${rank + 1}.** miejscu z ${count(list[rank].valid, 'ważnym zaproszeniem', 'ważnymi zaproszeniami', 'ważnymi zaproszeniami')}.`);
+  const body = lines.length ? lines.join('\n') : 'Nikt nie ma jeszcze ważnego zaproszenia – zaproś znajomych i zajmij pierwsze miejsce! 🧡';
   return embed(COLORS.brand)
-    .setTitle('🏆 Top inviters')
-    .setDescription(`${body}\n\n-# Only invited members who verified and are still here count.`);
+    .setTitle('🏆 Ranking zapraszających')
+    .setDescription(`${body}\n\n-# Liczą się tylko zaproszone osoby, które się zweryfikowały i wciąż są na serwerze.`);
 }
 
 // ───────────── Wiring ─────────────

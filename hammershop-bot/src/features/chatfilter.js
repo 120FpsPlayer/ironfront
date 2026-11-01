@@ -19,7 +19,7 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const { isStaff } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
-const { logEmbed, truncate, sendToChannel } = require('../lib/utils');
+const { logEmbed, truncate, sendToChannel, count } = require('../lib/utils');
 const { SLUR, PROFANITY, SAFE } = require('../lib/badwords');
 
 const NOTICE_MS = 6000;
@@ -172,13 +172,13 @@ function verdict(message) {
   if (!text.trim()) return null;
   if (noLinkChannel(channel)) {
     const link = findLink(message.content ?? '', { allowGifs: cfg.allowGifs !== false, allowedDomains: cfg.allowedDomains ?? [] });
-    if (link) return { reason: 'Link', notice: `links aren't allowed in <#${channel.id}>.`, detail: link };
+    if (link) return { reason: 'Link', notice: `linki nie są dozwolone na <#${channel.id}>.`, detail: link };
   }
   const kinds = [];
   if (applies(cfg.slurs ?? 'everywhere', channel)) kinds.push('slur');
   if (applies(cfg.profanity ?? 'public', channel)) kinds.push('profanity');
   const bad = kinds.length ? findBadWord(text, { kinds }) : null;
-  if (bad) return { reason: bad.kind === 'slur' ? 'Slur / hate speech' : 'Swearing', notice: bad.kind === 'slur' ? 'hate speech isn\'t tolerated here.' : 'please keep it clean – no swearing.', detail: bad.term };
+  if (bad) return { reason: bad.kind === 'slur' ? 'Obelgi / mowa nienawiści' : 'Przekleństwa', notice: bad.kind === 'slur' ? 'mowa nienawiści nie jest tu tolerowana.' : 'prosimy bez przekleństw.', detail: bad.term };
   return null;
 }
 
@@ -205,18 +205,18 @@ async function check(message) {
   strikes.set(key, list);
   let timedOut = false;
   if (cfg.strikes && list.length >= cfg.strikes && member.moderatable) {
-    timedOut = await member.timeout((cfg.timeoutMinutes ?? 10) * 60_000, `Chat filter: ${list.length} blocked messages`).then(() => true, () => false);
+    timedOut = await member.timeout((cfg.timeoutMinutes ?? 10) * 60_000, `Filtr czatu: ${count(list.length, 'zablokowana wiadomość', 'zablokowane wiadomości', 'zablokowanych wiadomości')}`).then(() => true, () => false);
     if (timedOut) strikes.delete(key);
   }
   const logId = db.channelId(guild.id, 'automodLogs') ?? db.settings(guild.id).logChannelId;
   await sendToChannel(guild, logId, {
     embeds: [
-      logEmbed(COLORS.warning, `🧹 Chat filter – ${v.reason}`, member.user).addFields(
-        { name: 'Member', value: `<@${member.id}>`, inline: true },
-        { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
-        { name: 'Caught', value: `||${truncate(v.detail, 100)}||`, inline: true },
-        { name: 'Message', value: `\`\`\`${truncate(String(message.content ?? '').replace(/`/g, "'"), 900) || '—'}\`\`\`` },
-        { name: 'Result', value: `${deleted ? 'Deleted' : '⚠️ Could not delete it – give the bot **Manage Messages**'}${timedOut ? ` · ⏳ timed out for ${cfg.timeoutMinutes ?? 10} min (${list.length} strikes)` : ` · strike ${list.length}/${cfg.strikes ?? '–'}`}` },
+      logEmbed(COLORS.warning, `🧹 Filtr czatu – ${v.reason}`, member.user).addFields(
+        { name: 'Członek', value: `<@${member.id}>`, inline: true },
+        { name: 'Kanał', value: `<#${message.channel.id}>`, inline: true },
+        { name: 'Wykryto', value: `||${truncate(v.detail, 100)}||`, inline: true },
+        { name: 'Wiadomość', value: `\`\`\`${truncate(String(message.content ?? '').replace(/`/g, "'"), 900) || '—'}\`\`\`` },
+        { name: 'Wynik', value: `${deleted ? 'Usunięta' : '⚠️ Nie udało się jej usunąć – daj botowi uprawnienie **Zarządzanie wiadomościami**'}${timedOut ? ` · ⏳ wyciszenie na ${cfg.timeoutMinutes ?? 10} min (${count(list.length, 'ostrzeżenie', 'ostrzeżenia', 'ostrzeżeń')})` : ` · ostrzeżenie ${list.length}/${cfg.strikes ?? '–'}`}` },
       ),
     ],
   }).catch(() => null);

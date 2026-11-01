@@ -13,7 +13,7 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   async execute(interaction) {
-    if (!isMod(interaction.member)) return replyError(interaction, 'Only moderators and administrators can unlock the server.');
+    if (!isMod(interaction.member)) return replyError(interaction, 'Tylko moderatorzy i administratorzy mogą odblokować serwer.');
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const result = await lockdown.unlock(interaction.guild, interaction.member);
     return reply(interaction, { embeds: [lockdown.unlockReply(interaction.guild, result)] });

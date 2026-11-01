@@ -16,7 +16,8 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
 const { COLORS, banner, hasBanner, bannerArt, ASSETS } = require('../lib/theme');
-const { embed } = require('../lib/utils');
+const { embed, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { SUPPORT_KEYS } = require('../lib/permissions');
 const { STAFF_PERMISSIONS, GROUPS, toBits, profile } = require('./permissions');
 const { syncEmojis, describeEmojiResult } = require('./emojis');
@@ -41,22 +42,22 @@ function logoPath(name) {
 
 class BuildAborted extends Error {
   constructor() {
-    super('The build was stopped.');
+    super('Budowa została zatrzymana.');
     this.name = 'BuildAborted';
   }
 }
 
 const API_ERRORS = {
-  10003: 'the channel no longer exists',
-  10011: 'the role no longer exists',
-  30005: 'the server has reached the 250 role limit',
-  30013: 'the server has reached the 500 channel limit',
-  50001: 'the bot has no access',
-  50013: 'the bot is missing permissions',
-  50024: 'not possible on this channel type',
-  50035: 'invalid data',
-  50074: 'the channel is required by Community mode',
-  50101: 'the server does not meet the requirements',
+  10003: 'kanał już nie istnieje',
+  10011: 'rola już nie istnieje',
+  30005: 'serwer osiągnął limit 250 ról',
+  30013: 'serwer osiągnął limit 500 kanałów',
+  50001: 'bot nie ma dostępu',
+  50013: 'botowi brakuje uprawnień',
+  50024: 'niemożliwe na tym typie kanału',
+  50035: 'nieprawidłowe dane',
+  50074: 'kanał jest wymagany przez tryb społeczności',
+  50101: 'serwer nie spełnia wymagań',
 };
 
 const LOCALES = Object.values(Locale);
@@ -76,7 +77,7 @@ function discordLocale(value) {
 const gone = (err) => err?.status === 404 || [10003, 10011, 10066].includes(err?.code);
 
 function describeError(err) {
-  if (!err) return 'unknown error';
+  if (!err) return 'nieznany błąd';
   const known = API_ERRORS[err.code];
   if (known && err.code === 50035) {
     const detail = String(err.message || '').split('\n').slice(1, 3).join(' ').trim();
@@ -84,6 +85,9 @@ function describeError(err) {
   }
   return known ?? String(err.message || err).slice(0, 200);
 }
+
+/** Polish channel name from layout.js ("✅ weryfikacja" → "weryfikacja"). */
+const layoutName = (key) => CATEGORIES.flatMap((c) => c.channels).find((c) => c.key === key)?.name.replace(/^\S+\s+/, '') ?? key;
 
 /** Later entries win (e.g. a channel profile overrides its category). */
 function mergeOverwrites(...lists) {
@@ -122,44 +126,44 @@ const SCAM_KEYWORDS = [
 const INVITE_REGEX = '(?i)(discord\\.(gg|io|me|li)|discord(app)?\\.com/invite|dsc\\.gg)/[a-z0-9-]+';
 
 function automodRules(alertChannelId, exemptRoleIds) {
-  const block = { type: AutoModerationActionType.BlockMessage, metadata: { customMessage: 'Blocked by HammerShop AutoMod. Please read the rules.' } };
+  const block = { type: AutoModerationActionType.BlockMessage, metadata: { customMessage: 'Zablokowane przez AutoMod HammerShop. Przeczytaj regulamin.' } };
   const alert = alertChannelId ? [{ type: AutoModerationActionType.SendAlertMessage, metadata: { channel: alertChannelId } }] : [];
   const msg = (extra = []) => [block, ...alert, ...extra];
   const exemptRoles = exemptRoleIds.slice(0, 20);
   const base = { eventType: AutoModerationRuleEventType.MessageSend, enabled: true, exemptRoles };
   return [
-    { ...base, name: 'HammerShop · Spam filter', triggerType: AutoModerationRuleTriggerType.Spam, actions: msg() },
+    { ...base, name: 'HammerShop · Filtr spamu', triggerType: AutoModerationRuleTriggerType.Spam, actions: msg() },
     {
       ...base,
-      name: 'HammerShop · Mention spam & raids',
+      name: 'HammerShop · Spam wzmianek i raidy',
       triggerType: AutoModerationRuleTriggerType.MentionSpam,
       triggerMetadata: { mentionTotalLimit: 5, mentionRaidProtectionEnabled: true },
       actions: msg([{ type: AutoModerationActionType.Timeout, metadata: { durationSeconds: 600 } }]),
     },
     {
       ...base,
-      name: 'HammerShop · Profanity, slurs & sexual content',
+      name: 'HammerShop · Wulgaryzmy, obelgi i treści seksualne',
       triggerType: AutoModerationRuleTriggerType.KeywordPreset,
       triggerMetadata: { presets: [AutoModerationRuleKeywordPresetType.Profanity, AutoModerationRuleKeywordPresetType.Slurs, AutoModerationRuleKeywordPresetType.SexualContent] },
       actions: msg(),
     },
     {
       ...base,
-      name: 'HammerShop · Scam links',
+      name: 'HammerShop · Oszukańcze linki',
       triggerType: AutoModerationRuleTriggerType.Keyword,
       triggerMetadata: { keywordFilter: SCAM_KEYWORDS },
       actions: msg([{ type: AutoModerationActionType.Timeout, metadata: { durationSeconds: 3600 } }]),
     },
     {
       ...base,
-      name: 'HammerShop · Discord invites',
+      name: 'HammerShop · Zaproszenia na Discorda',
       triggerType: AutoModerationRuleTriggerType.Keyword,
       triggerMetadata: { regexPatterns: [INVITE_REGEX] },
       actions: msg(),
       exemptRoles,
     },
     {
-      name: 'HammerShop · Scam names & profiles',
+      name: 'HammerShop · Oszukańcze nicki i profile',
       eventType: AutoModerationRuleEventType.MemberUpdate,
       triggerType: AutoModerationRuleTriggerType.MemberProfile,
       triggerMetadata: { keywordFilter: SCAM_KEYWORDS },
@@ -266,7 +270,7 @@ function plannedSteps() {
  */
 async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = [], onProgress = () => {}, shouldAbort = () => false }) {
   const started = Date.now();
-  const reason = `${config.brand.name} /build by ${invokerId}`;
+  const reason = `${config.brand.name} ${slash('build')} (na prośbę ${invokerId})`;
   const wipe = mode === 'wipe';
   const S = config.server;
   const R = {
@@ -286,7 +290,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
 
   let done = 0;
   let total = plannedSteps();
-  let phase = 'Preparing';
+  let phase = 'Przygotowanie';
   let label = '';
   const emit = () => onProgress({ done, total, phase, label, phases: R.phases.slice(), elapsed: Date.now() - started });
   const tick = (t) => {
@@ -295,7 +299,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     emit();
   };
   const startPhase = (name) => {
-    if (phase !== 'Preparing') R.phases.push(phase);
+    if (phase !== 'Przygotowanie') R.phases.push(phase);
     phase = name;
     label = '';
     emit();
@@ -312,7 +316,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       const message = `${what}: ${describeError(err)}`;
       (warn ? R.warnings : R.errors).push(message);
       console.warn(`[build] ${message}`);
-      if (R.errors.length > 40) throw new Error('Too many errors in a row – the build was stopped. Check the bot permissions.');
+      if (R.errors.length > 40) throw new Error('Za dużo błędów z rzędu – budowa została zatrzymana. Sprawdź uprawnienia bota.');
       return null;
     }
   };
@@ -328,19 +332,19 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     await guild.roles.fetch();
     const me = await guild.members.fetchMe();
     if (!me.permissions.has(PermissionFlagsBits.Administrator)) {
-      throw new Error('The bot needs the Administrator permission to build the server.');
+      throw new Error('Bot potrzebuje uprawnienia Administrator, żeby zbudować serwer.');
     }
     let communityOn = guild.features.includes('COMMUNITY');
 
     // ───────────── Wipe ─────────────
     const deferredDeletes = [];
     if (wipe) {
-      startPhase('Cleaning the server');
+      startPhase('Czyszczenie serwera');
       const keep = new Set(keepChannelIds.filter(Boolean));
       const rules = await guild.autoModerationRules.fetch().catch(() => null);
       for (const rule of rules?.values() ?? []) {
         // Already gone (deleted by hand, or by Discord with Community mode) – that's what we wanted.
-        const ok = await attempt(`Deleting AutoMod rule "${rule.name}"`, () => rule.delete(reason).catch((err) => (gone(err) ? null : Promise.reject(err))), { warn: true });
+        const ok = await attempt(`Usuwanie reguły AutoMod „${rule.name}”`, () => rule.delete(reason).catch((err) => (gone(err) ? null : Promise.reject(err))), { warn: true });
         if (ok !== null) R.deleted.automod += 1;
       }
       const channels = [...guild.channels.cache.values()].filter((c) => !c.isThread?.() && !keep.has(c.id));
@@ -353,17 +357,17 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
           R.deleted.channels += 1;
         } catch (err) {
           if (err.code === 50074) deferredDeletes.push(channel);
-          else if (err.code !== 10003) R.warnings.push(`Could not delete #${channel.name}: ${describeError(err)}`);
+          else if (err.code !== 10003) R.warnings.push(`Nie udało się usunąć #${channel.name}: ${describeError(err)}`);
         }
-        tick(`Deleted #${channel.name}`);
+        tick(`Usunięto #${channel.name}`);
       }
       const roles = [...guild.roles.cache.values()].filter((r) => r.id !== guild.id && !r.managed && r.editable);
       for (const role of roles) {
-        const ok = await attempt(`Deleting role "${role.name}"`, () => role.delete(reason), { warn: true });
+        const ok = await attempt(`Usuwanie roli „${role.name}”`, () => role.delete(reason), { warn: true });
         if (ok !== null) R.deleted.roles += 1;
       }
       const skipped = guild.roles.cache.filter((r) => r.id !== guild.id && !r.managed && !r.editable).size;
-      if (skipped) R.warnings.push(`${skipped} roles above the bot's role were kept – move the bot's role to the top to remove them too.`);
+      if (skipped) R.warnings.push(`Role nad rolą bota zostały na serwerze (${skipped}) – przenieś rolę bota na samą górę, żeby je też usunąć.`);
       // Old panels and build data point to deleted channels.
       const g = db.guild(guild.id);
       g.panels = [];
@@ -371,9 +375,9 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       // A /lockdown can't survive the wipe: the roles and channels it locked are gone, the new ones aren't locked.
       const locked = g.security?.lockdown;
       if (locked) {
-        if (locked.invitesPaused) await attempt('Resuming invites paused by /lockdown', () => guild.disableInvites(false), { warn: true });
+        if (locked.invitesPaused) await attempt(`Wznawianie zaproszeń wstrzymanych przez ${slash('lockdown')}`, () => guild.disableInvites(false), { warn: true });
         delete g.security.lockdown;
-        R.warnings.push(`The server was locked with /lockdown – the wipe ended the lockdown${locked.invitesPaused ? ' and resumed invites' : ''}. Run /lockdown again if the raid isn't over.`);
+        R.warnings.push(`Serwer był zablokowany komendą ${slash('lockdown')} – czyszczenie zakończyło blokadę${locked.invitesPaused ? ' i wznowiło zaproszenia' : ''}. Jeśli raid się nie skończył, użyj ${slash('lockdown')} jeszcze raz.`);
       }
       db.save();
     }
@@ -385,47 +389,47 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     }
 
     // ───────────── Roles ─────────────
-    startPhase('Creating roles');
+    startPhase('Tworzenie ról');
     const roleIcons = S.rolesWithIcons !== false && guild.features.includes('ROLE_ICONS');
     for (const role of ROLES) {
-      const created = await attempt(`Role "${role.name}"`, () => createRole(guild, role, { roleIcons, reason }));
+      const created = await attempt(`Rola „${role.name}”`, () => createRole(guild, role, { roleIcons, reason }));
       if (created) {
         R.roles[role.key] = created.id;
         R.created.roles += 1;
       }
-      tick(`Role ${role.name}`);
+      tick(`Rola ${role.name}`);
     }
-    await attempt('Role order', () => ensureRoleOrder(guild, ROLES.map((r) => R.roles[r.key]).filter(Boolean)), { warn: true });
+    await attempt('Kolejność ról', () => ensureRoleOrder(guild, ROLES.map((r) => R.roles[r.key]).filter(Boolean)), { warn: true });
     saveBuild();
     // The bot's own role goes to the very top (right under the bot's integration role) – and only the bot gets it.
-    if (R.roles.brand) await attempt(`Role "${ROLES[0].name}" for the bot`, () => ensureBrandRole(guild, { reason }), { warn: true });
+    if (R.roles.brand) await attempt(`Rola „${ROLES[0].name}” dla bota`, () => ensureBrandRole(guild, { reason }), { warn: true });
     // Gated server: @everyone gets nothing – the Member role (from verification) unlocks everything.
-    await attempt('@everyone permissions', () => guild.roles.everyone.setPermissions(0n, reason));
+    await attempt('Uprawnienia @everyone', () => guild.roles.everyone.setPermissions(0n, reason));
     saveBuild({ at: Date.now(), by: invokerId, mode, version: 1 });
 
     // ───────────── Emojis ─────────────
     if (config.emojis.upload !== false) {
-      startPhase('Uploading emojis');
-      const res = await attempt('Emojis', () => syncEmojis(guild, { reason, onProgress: (n) => { label = `:${n}:`; emit(); }, shouldAbort }), { warn: true });
+      startPhase('Wgrywanie emotek');
+      const res = await attempt('Emotki', () => syncEmojis(guild, { reason, onProgress: (n) => { label = `:${n}:`; emit(); }, shouldAbort }), { warn: true });
       if (res) {
         R.created.emojis = res.uploaded;
         R.emojiSummary = describeEmojiResult(res);
-        if (res.missing.length) R.warnings.push(`Emojis: ${R.emojiSummary}`);
+        if (res.missing.length) R.warnings.push(`Emotki: ${R.emojiSummary}`);
       }
-      tick('Emojis');
+      tick('Emotki');
     }
 
     // ───────────── Categories & channels ─────────────
-    startPhase('Creating channels');
+    startPhase('Tworzenie kanałów');
     const resolve = overwriteResolver(guild, R.roles);
 
     const toConvert = [];
     for (const cat of CATEGORIES) {
       const categoryName = style.categoryName(cat.name);
-      const category = await attempt(`Category ${categoryName}`, () =>
+      const category = await attempt(`Kategoria ${categoryName}`, () =>
         guild.channels.create({ name: categoryName, type: ChannelType.GuildCategory, permissionOverwrites: resolve(profile(cat.profile)), reason }),
       );
-      tick(`Category ${categoryName}`);
+      tick(`Kategoria ${categoryName}`);
       if (!category) continue;
       R.categories[cat.key] = category.id;
       R.created.categories += 1;
@@ -433,7 +437,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       for (const ch of cat.channels.filter(channelWanted)) {
         const { opts, convert } = channelOptions(cat, ch, { parentId: category.id, resolve, communityOn, reason });
         if (convert) toConvert.push(ch.key);
-        const channel = await attempt(`Channel ${opts.name}`, () =>
+        const channel = await attempt(`Kanał ${opts.name}`, () =>
           guild.channels.create(opts).catch((err) => {
             // Discord only takes announcement channels in Community servers – it's off: a text channel now, converted later.
             if (opts.type !== ChannelType.GuildAnnouncement || ![50024, 50035].includes(err.code)) throw err;
@@ -452,7 +456,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     saveBuild();
 
     // ───────────── Server settings ─────────────
-    startPhase('Server settings');
+    startPhase('Ustawienia serwera');
     const id = (key) => R.channels[key];
     const settings = {
       verificationLevel: Math.max(0, Math.min(4, Number(S.verificationLevel ?? 2))),
@@ -471,18 +475,18 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     }
     if (S.rename !== false) settings.name = config.brand.name;
     if (id('boosters')) settings.systemChannel = id('boosters');
-    await attempt('Server settings', () => guild.edit(settings));
+    await attempt('Ustawienia serwera', () => guild.edit(settings));
     if (S.setIcon !== false) {
-      await attempt('Server icon', () => guild.setIcon(logoPath(S.logo), reason), { warn: true });
+      await attempt('Ikona serwera', () => guild.setIcon(logoPath(S.logo), reason), { warn: true });
     }
     if (S.setBanner !== false && guild.features.includes('BANNER')) {
-      await attempt('Server banner', () => guild.setBanner(path.join(ASSETS, 'brand', 'server-banner.png'), reason), { warn: true });
+      await attempt('Baner serwera', () => guild.setBanner(path.join(ASSETS, 'brand', 'server-banner.png'), reason), { warn: true });
     }
-    tick('Name, icon and security');
+    tick('Nazwa, ikona i bezpieczeństwo');
 
     // ───────────── Community mode ─────────────
     if (S.community !== false) {
-      startPhase('Community mode');
+      startPhase('Tryb społeczności');
       if (id('rules') && id('discordUpdates')) {
         const payload = { rulesChannel: id('rules'), publicUpdatesChannel: id('discordUpdates'), reason };
         await guild.fetch().catch(() => null); // the real state – not what it was when the build started
@@ -492,39 +496,39 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
           payload.verificationLevel = Math.max(1, settings.verificationLevel);
           payload.explicitContentFilter = 2;
         }
-        const res = await attempt('Enabling Community mode', () => guild.edit(payload), { warn: true });
+        const res = await attempt('Włączanie trybu społeczności', () => guild.edit(payload), { warn: true });
         if (res) communityOn = Boolean(res.features?.includes('COMMUNITY')) || guild.features.includes('COMMUNITY');
         if (communityOn) {
           await attempt(
-            'Server description',
+            'Opis serwera',
             () => guild.edit({ description: (config.brand.tagline ?? '').slice(0, 120) || null, safetyAlertsChannel: id('discordUpdates'), reason }),
             { warn: true },
           );
           // Separate edit: a bad language value must not block the description.
           const locale = discordLocale(S.locale) ?? 'en-US';
           if (S.locale && locale !== S.locale) {
-            R.warnings.push(`Server language "${S.locale}" is not a Discord language – used "${locale}" instead.`);
+            R.warnings.push(`Język serwera „${S.locale}” nie jest językiem Discorda – użyto „${locale}”.`);
           }
-          await attempt('Server language', () => guild.edit({ preferredLocale: locale, reason }), { warn: true });
+          await attempt('Język serwera', () => guild.edit({ preferredLocale: locale, reason }), { warn: true });
           for (const key of toConvert) {
             const channel = guild.channels.cache.get(R.channels[key]);
-            if (channel) await attempt(`Announcement channel #${channel.name}`, () => channel.setType(ChannelType.GuildAnnouncement, reason), { warn: true });
+            if (channel) await attempt(`Kanał ogłoszeń #${channel.name}`, () => channel.setType(ChannelType.GuildAnnouncement, reason), { warn: true });
           }
           // Discord only accepts welcome channels everyone can read (before verification).
           const readable = WELCOME_SCREEN.filter((w) => id(w.channel) && everyoneCanRead(w.channel));
           const skipped = WELCOME_SCREEN.filter((w) => id(w.channel) && !everyoneCanRead(w.channel));
           if (skipped.length) {
-            R.warnings.push(`Welcome screen: skipped ${skipped.map((w) => `#${w.channel}`).join(', ')} – only channels everyone can read before verifying are allowed.`);
+            R.warnings.push(`Ekran powitalny: pominięto ${skipped.map((w) => `#${layoutName(w.channel)}`).join(', ')} – dozwolone są tylko kanały, które każdy może czytać przed weryfikacją.`);
           }
           if (readable.length) {
             const welcomeChannels = readable.map((w) => ({ channel: id(w.channel), description: w.description.slice(0, 42), emoji: w.emoji }));
-            await attempt('Welcome screen', () => guild.editWelcomeScreen({ enabled: true, description: (config.brand.tagline ?? '').slice(0, 140), welcomeChannels }), { warn: true });
+            await attempt('Ekran powitalny', () => guild.editWelcomeScreen({ enabled: true, description: (config.brand.tagline ?? '').slice(0, 140), welcomeChannels }), { warn: true });
           }
         } else {
-          R.warnings.push('Community mode could not be enabled – announcement channels were created as read-only text channels.');
+          R.warnings.push('Nie udało się włączyć trybu społeczności – kanały ogłoszeń utworzono jako zwykłe kanały tekstowe tylko do odczytu.');
         }
       }
-      tick('Community mode');
+      tick('Tryb społeczności');
     }
     R.community = communityOn;
 
@@ -539,20 +543,20 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     });
     let invite = null;
     if (S.createInvite !== false && id('rules')) {
-      const inv = await attempt('Invite link', () => guild.invites.create(id('rules'), { maxAge: 0, maxUses: 0, unique: false, reason }), { warn: true });
+      const inv = await attempt('Link z zaproszeniem', () => guild.invites.create(id('rules'), { maxAge: 0, maxUses: 0, unique: false, reason }), { warn: true });
       invite = inv?.url ?? null;
     }
     saveBuild({ invite });
-    tick('Ticket system');
+    tick('System ticketów');
 
     // ───────────── Messages & panels ─────────────
-    startPhase('Posting banners & panels');
+    startPhase('Publikowanie banerów i paneli');
     for (const cat of CATEGORIES) {
       for (const ch of cat.channels) {
         if (!ch.post || !R.channels[ch.key]) continue;
         const channel = guild.channels.cache.get(R.channels[ch.key]);
         if (!channel) continue;
-        const sent = await attempt(`Messages in #${channel.name}`, () => publish(channel, ch.post));
+        const sent = await attempt(`Wiadomości na #${channel.name}`, () => publish(channel, ch.post));
         if (sent) {
           R.created.messages += sent.length;
           R.posts[ch.key] = sent;
@@ -570,21 +574,21 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     let keywordRules = existing.filter((r) => r.triggerType === AutoModerationRuleTriggerType.Keyword).length;
     for (const rule of automodRules(id('automodLogs'), exempt)) {
       if (SINGLE_TRIGGERS.has(rule.triggerType) && existing.some((r) => r.triggerType === rule.triggerType)) {
-        R.warnings.push(`AutoMod "${rule.name}" skipped – the server already has a rule of this type.`);
+        R.warnings.push(`Reguła AutoMod „${rule.name}” pominięta – serwer ma już regułę tego typu.`);
         continue;
       }
       if (rule.triggerType === AutoModerationRuleTriggerType.Keyword) {
         if (keywordRules >= 6) {
-          R.warnings.push(`AutoMod "${rule.name}" skipped – Discord allows 6 keyword rules.`);
+          R.warnings.push(`Reguła AutoMod „${rule.name}” pominięta – Discord pozwala na 6 reguł ze słowami kluczowymi.`);
           continue;
         }
         keywordRules += 1;
       }
-      const created = await attempt(`AutoMod "${rule.name}"`, () =>
+      const created = await attempt(`Reguła AutoMod „${rule.name}”`, () =>
         guild.autoModerationRules.create({ ...rule, reason }).catch((err) => {
           // Discord doesn't offer AutoMod for member names and profiles to every server (or bot) yet.
           if (rule.triggerType === AutoModerationRuleTriggerType.MemberProfile && [50001, 50013, 50035].includes(err.code)) {
-            R.warnings.push(`AutoMod "${rule.name}" skipped – Discord doesn't offer it to this server yet. The look-alike staff alerts still work.`);
+            R.warnings.push(`Reguła AutoMod „${rule.name}” pominięta – Discord nie udostępnia jej jeszcze temu serwerowi. Alerty o podszywaniu się pod zespół nadal działają.`);
             return null;
           }
           throw err;
@@ -594,29 +598,29 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     tick('AutoMod');
 
     // ───────────── Roles for people ─────────────
-    startPhase('Giving roles');
+    startPhase('Nadawanie ról');
     const memberRole = R.roles.member;
     const ownerRoles = [R.roles.founder, memberRole].filter(Boolean);
-    if (ownerRoles.length) await attempt('Owner roles', async () => (await guild.members.fetch(guild.ownerId)).roles.add(ownerRoles, reason), { warn: true });
+    if (ownerRoles.length) await attempt('Role właściciela', async () => (await guild.members.fetch(guild.ownerId)).roles.add(ownerRoles, reason), { warn: true });
     if (invokerId && invokerId !== guild.ownerId && memberRole) {
-      await attempt('Your roles', async () => (await guild.members.fetch(invokerId)).roles.add(memberRole, reason), { warn: true });
+      await attempt('Twoje role', async () => (await guild.members.fetch(invokerId)).roles.add(memberRole, reason), { warn: true });
     }
-    if (R.roles.bots) await attempt('Bot role', () => me.roles.add(R.roles.bots, reason), { warn: true });
+    if (R.roles.bots) await attempt('Rola bota', () => me.roles.add(R.roles.bots, reason), { warn: true });
     // Existing members shouldn't be locked out: they get the Member role right away (small servers).
     if (memberRole) {
       const members = await guild.members.fetch().catch(() => null);
       const humans = members ? [...members.values()].filter((m) => !m.user.bot && !m.roles.cache.has(memberRole) && m.id !== guild.ownerId && m.id !== invokerId) : [];
       if (humans.length > 250) {
-        R.warnings.push(`${humans.length} existing members did not get the Member role automatically – they can verify in #verify.`);
+        R.warnings.push(`Obecni członkowie bez automatycznej roli Członek: ${humans.length} – mogą się zweryfikować na ${id('verify') ? `<#${id('verify')}>` : `#${layoutName('verify')}`}.`);
       } else {
-        for (const m of humans) await attempt(`Member role for ${m.user.username}`, () => m.roles.add(memberRole, reason), { warn: true });
+        for (const m of humans) await attempt(`Rola Członek dla ${m.user.username}`, () => m.roles.add(memberRole, reason), { warn: true });
       }
     }
-    tick('Roles given');
+    tick('Role nadane');
 
     // Channels Community mode protected during the wipe can go now.
     for (const channel of deferredDeletes) {
-      await attempt(`Deleting #${channel.name}`, async () => {
+      await attempt(`Usuwanie #${channel.name}`, async () => {
         try {
           await channel.delete(reason);
           R.deleted.channels += 1;
@@ -632,23 +636,29 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
     // Report for the team
     if (id('staffChat')) {
       const report = embed(COLORS.brand)
-        .setTitle(`🏗️ ${config.brand.name} was built`)
-        .setDescription(`Built by <@${invokerId}> in ${Math.round((Date.now() - started) / 1000)}s.`)
+        .setTitle(`🏗️ Serwer ${config.brand.name} zbudowany`)
+        .setDescription(`Zbudowano na prośbę <@${invokerId}> w ${Math.round((Date.now() - started) / 1000)} s.`)
         .addFields(
-          { name: 'Created', value: `🎭 ${R.created.roles} roles\n📁 ${R.created.categories} categories\n💬 ${R.created.channels} channels\n📨 ${R.created.messages} messages\n🤖 ${R.created.automod} AutoMod rules\n😀 ${R.created.emojis} emojis`, inline: true },
-          { name: 'Notes', value: String(R.warnings.length + R.errors.length), inline: true },
+          {
+            name: 'Utworzono',
+            value:
+              `🎭 ${count(R.created.roles, 'rola', 'role', 'ról')}\n📁 ${count(R.created.categories, 'kategoria', 'kategorie', 'kategorii')}\n💬 ${count(R.created.channels, 'kanał', 'kanały', 'kanałów')}\n` +
+              `📨 ${count(R.created.messages, 'wiadomość', 'wiadomości', 'wiadomości')}\n🤖 ${count(R.created.automod, 'reguła AutoMod', 'reguły AutoMod', 'reguł AutoMod')}\n😀 ${count(R.created.emojis, 'emotka', 'emotki', 'emotek')}`,
+            inline: true,
+          },
+          { name: 'Uwagi', value: String(R.warnings.length + R.errors.length), inline: true },
         );
-      await attempt('Build report', () => guild.channels.cache.get(id('staffChat'))?.send({ embeds: [report] }), { warn: true });
+      await attempt('Raport z budowy', () => guild.channels.cache.get(id('staffChat'))?.send({ embeds: [report] }), { warn: true });
     }
-    tick('Done');
+    tick('Gotowe');
     R.phases.push(phase);
   } catch (err) {
     if (err instanceof BuildAborted) {
       R.aborted = true;
-      R.warnings.push('The build was stopped – everything created so far stays on the server.');
+      R.warnings.push('Budowa została zatrzymana – wszystko, co do tej pory utworzono, zostaje na serwerze.');
     } else {
       R.fatal = describeError(err);
-      console.error('[build] Fatal error:', err);
+      console.error('[build] Błąd krytyczny:', err);
     }
   }
   R.duration = Date.now() - started;

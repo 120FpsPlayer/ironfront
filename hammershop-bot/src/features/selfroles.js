@@ -5,14 +5,14 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
 const { isSafeSelfRole } = require('../lib/guards');
-const { embed } = require('../lib/utils');
+const { embed, count } = require('../lib/utils');
 const { container, text, divider, btn, row, v2 } = require('../lib/v2');
 
 /** Notification roles members can toggle in #roles (button id: sr:<key>). */
 const SELF_ROLES = [
-  { key: 'pingAnnouncements', label: 'Announcements', icon: 'bell', description: 'big news, updates and openings' },
-  { key: 'pingGiveaways', label: 'Giveaways', icon: 'gift', description: 'every new giveaway' },
-  { key: 'pingRestocks', label: 'Restocks', icon: 'box', description: 'new products and restocks' },
+  { key: 'pingAnnouncements', label: 'Ogłoszenia', icon: 'bell', description: 'ważne nowości, aktualizacje i otwarcia' },
+  { key: 'pingGiveaways', label: 'Giveawaye', icon: 'gift', description: 'każdy nowy giveaway' },
+  { key: 'pingRestocks', label: 'Dostawy', icon: 'box', description: 'nowe produkty i dostawy' },
 ];
 
 /** Who-is-who card + the notification role buttons (posted in #roles). */
@@ -22,30 +22,30 @@ function rolesPanels(guild) {
   const lines = (list) => list.map(([k, d]) => line(k, d)).filter(Boolean).join('\n');
 
   const guide = container(COLORS.brand);
-  guide.addTextDisplayComponents(text(`# ${e(guild, 'crown')} Server roles\nWho is who on **${config.brand.name}** and how to get each role.`));
+  guide.addTextDisplayComponents(text(`# ${e(guild, 'crown')} Role na serwerze\nKto jest kim na **${config.brand.name}** i jak zdobyć każdą rolę.`));
   guide.addSeparatorComponents(divider());
   guide.addTextDisplayComponents(
     text(
-      `### ${e(guild, 'shield')} Team\n` +
+      `### ${e(guild, 'shield')} Zespół\n` +
         lines([
-          ['brand', `the ${config.brand.name} bot itself – shop, tickets and orders run through it`],
-          ['founder', `owner of ${config.brand.name}`],
-          ['coowner', 'runs the shop together with the CEO'],
-          ['manager', 'manages the team and the shop'],
-          ['admin', 'server administration'],
-          ['moderator', 'keeps chat safe and handles reports'],
-          ['support', 'answers tickets and questions'],
-          ['seller', 'handles orders and deliveries'],
+          ['brand', `sam bot ${config.brand.name} – przez niego działają sklep, tickety i zamówienia`],
+          ['founder', `właściciel ${config.brand.name}`],
+          ['coowner', 'prowadzi sklep razem z CEO'],
+          ['manager', 'zarządza zespołem i sklepem'],
+          ['admin', 'administracja serwera'],
+          ['moderator', 'dba o bezpieczeństwo czatu i obsługuje zgłoszenia'],
+          ['support', 'odpowiada na tickety i pytania'],
+          ['seller', 'obsługuje zamówienia i dostawy'],
         ]),
     ),
   );
   guide.addTextDisplayComponents(
     text(
-      `### ${e(guild, 'diamond')} Special\n` +
+      `### ${e(guild, 'diamond')} Specjalne\n` +
         lines([
-          ['loyal', `given automatically after ${config.shop.loyalAfterOrders || 5} completed orders`],
-          ['customer', 'given automatically after your first completed order'],
-          ['member', 'everyone who passed verification'],
+          ['loyal', `nadawana automatycznie po ${count(config.shop.loyalAfterOrders || 5, 'zrealizowanym zamówieniu', 'zrealizowanych zamówieniach', 'zrealizowanych zamówieniach')}`],
+          ['customer', 'nadawana automatycznie po pierwszym zrealizowanym zamówieniu'],
+          ['member', 'każdy po weryfikacji'],
         ]),
     ),
   );
@@ -53,7 +53,7 @@ function rolesPanels(guild) {
   const pings = container(COLORS.brand);
   pings.addTextDisplayComponents(
     text(
-      `# ${e(guild, 'bell')} Notifications\nPick what you want to be pinged for. Click again to remove a role.\n` +
+      `# ${e(guild, 'bell')} Powiadomienia\nWybierz, o czym chcesz dostawać pingi. Kliknij jeszcze raz, żeby zdjąć rolę.\n` +
         SELF_ROLES.filter((s) => db.roleId(guild.id, s.key)).map((s) => `> ${e(guild, s.icon)} **${s.label}** – ${s.description}`).join('\n'),
     ),
   );
@@ -68,14 +68,14 @@ async function handleButton(interaction) {
   const roleId = def ? db.roleId(interaction.guild.id, key) : null;
   const role = roleId ? interaction.guild.roles.cache.get(roleId) : null;
   const say = (color, msg) => interaction.reply({ embeds: [embed(color).setDescription(msg)], flags: MessageFlags.Ephemeral });
-  if (!role) return say(COLORS.danger, '❌ This role no longer exists. Please tell the staff.');
-  if (!isSafeSelfRole(role)) return say(COLORS.danger, '❌ I cannot give out this role. Please tell the staff.');
+  if (!role) return say(COLORS.danger, '❌ Ta rola już nie istnieje. Daj znać zespołowi.');
+  if (!isSafeSelfRole(role)) return say(COLORS.danger, '❌ Nie mogę nadać tej roli. Daj znać zespołowi.');
   if (interaction.member.roles.cache.has(role.id)) {
-    await interaction.member.roles.remove(role, 'Notification role removed');
-    return say(COLORS.muted, `🔕 Removed ${role} – you won't be pinged for **${def.label.toLowerCase()}** anymore.`);
+    await interaction.member.roles.remove(role, 'Usunięto rolę z powiadomieniami');
+    return say(COLORS.muted, `🔕 Zdjęto rolę ${role} – pingi **${def.label}** wyłączone.`);
   }
-  await interaction.member.roles.add(role, 'Notification role added');
-  return say(COLORS.success, `🔔 Added ${role} – you'll be pinged for **${def.description}**.`);
+  await interaction.member.roles.add(role, 'Dodano rolę z powiadomieniami');
+  return say(COLORS.success, `🔔 Dodano rolę ${role} – będziesz dostawać pingi: **${def.description}**.`);
 }
 
 module.exports = { SELF_ROLES, rolesPanels, handleButton };

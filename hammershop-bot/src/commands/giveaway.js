@@ -4,7 +4,8 @@ const { SlashCommandBuilder, InteractionContextType, ChannelType, MessageFlags, 
 const giveaways = require('../features/giveaways');
 const invites = require('../features/invites');
 const { COLORS } = require('../lib/theme');
-const { embed, reply, replyError, parseDuration, ts, truncate } = require('../lib/utils');
+const { embed, reply, replyError, parseDuration, ts, truncate, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { isMod } = require('../lib/permissions');
 
 module.exports = {
@@ -50,14 +51,14 @@ module.exports = {
   },
 
   async execute(interaction) {
-    if (!isMod(interaction.member)) return replyError(interaction, 'Only moderators and administrators can run giveaways.');
+    if (!isMod(interaction.member)) return replyError(interaction, 'Giveawaye mogą prowadzić tylko moderatorzy i administratorzy.');
     const o = interaction.options;
     const sub = o.getSubcommand();
     const guild = interaction.guild;
 
     if (sub === 'start') {
       const durationMs = parseDuration(o.getString('duration'));
-      if (!durationMs) return replyError(interaction, 'Invalid duration. Examples: `30m`, `2h`, `1d`, `1w`, `1d12h`.');
+      if (!durationMs) return replyError(interaction, 'Nieprawidłowy czas. Przykłady: `30m`, `2h`, `1d`, `1w`, `1d12h`.');
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { gw, message } = await giveaways.start(guild, interaction.member, {
         prize: o.getString('prize'),
@@ -71,22 +72,22 @@ module.exports = {
         ping: o.getBoolean('ping') ?? true,
       });
       // Without Manage Server new joins have no inviter – min_invites would only count the invites from before.
-      const blind = gw.minInvites && !invites.isReadable(guild.id) ? "\n⚠️ I can't see this server's invites (I need **Manage Server**) – new invites aren't counted until that's fixed." : '';
-      return reply(interaction, `Giveaway for **${gw.prize}** started in <#${gw.channelId}> – it ends ${ts(gw.endsAt, 'R')}. [Jump](${message.url})${blind}`);
+      const blind = gw.minInvites && !invites.isReadable(guild.id) ? '\n⚠️ Nie widzę zaproszeń tego serwera (potrzebuję uprawnienia **Zarządzanie serwerem**) – do czasu naprawy nowe zaproszenia nie są liczone.' : '';
+      return reply(interaction, `Giveaway z nagrodą **${gw.prize}** wystartował na <#${gw.channelId}> – kończy się ${ts(gw.endsAt, 'R')}. [Przejdź](${message.url})${blind}`);
     }
 
     if (sub === 'end' || sub === 'reroll') {
       const gw = giveaways.find(guild.id, o.getString('giveaway'));
-      if (!gw) return replyError(interaction, 'There is no such giveaway. Pick one from the suggestions.');
-      if (sub === 'end' && gw.ended) return replyError(interaction, 'This giveaway has already ended – use `/giveaway reroll` for a new winner.');
-      if (sub === 'reroll' && !gw.ended) return replyError(interaction, 'This giveaway is still running – end it first.');
+      if (!gw) return replyError(interaction, 'Nie ma takiego giveawayu. Wybierz jeden z listy podpowiedzi.');
+      if (sub === 'end' && gw.ended) return replyError(interaction, `Ten giveaway już się zakończył – użyj \`${slash('giveaway reroll')}\`, żeby wylosować nowego zwycięzcę.`);
+      if (sub === 'reroll' && !gw.ended) return replyError(interaction, 'Ten giveaway wciąż trwa – najpierw go zakończ.');
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const winners = await giveaways.end(guild, gw, { reroll: sub === 'reroll', count: sub === 'reroll' ? o.getInteger('winners') ?? 1 : null });
-      return reply(interaction, winners.length ? `Winner${winners.length > 1 ? 's' : ''}: ${winners.map((id) => `<@${id}>`).join(', ')}` : 'No valid entries – nobody could be drawn.');
+      return reply(interaction, winners.length ? `${winners.length > 1 ? 'Zwycięzcy' : 'Zwycięzca'}: ${winners.map((id) => `<@${id}>`).join(', ')}` : 'Brak ważnych zgłoszeń – nie udało się nikogo wylosować.');
     }
 
     const list = giveaways.all(guild.id).sort((a, b) => b.createdAt - a.createdAt).slice(0, 15);
-    const lines = list.map((g) => `${g.ended ? '✅' : '🎉'} **${truncate(g.prize, 60)}** – ${g.entries.length} entries · ${g.ended ? 'ended' : 'ends'} ${ts(g.endsAt, 'R')} · <#${g.channelId}>`);
-    return reply(interaction, { embeds: [embed(COLORS.brand).setTitle('🎉 Giveaways').setDescription(lines.join('\n') || 'No giveaways yet – start one with `/giveaway start`.')] });
+    const lines = list.map((g) => `${g.ended ? '✅' : '🎉'} **${truncate(g.prize, 60)}** – ${count(g.entries.length, 'uczestnik', 'uczestników', 'uczestników')} · ${g.ended ? 'zakończony' : 'koniec'} ${ts(g.endsAt, 'R')} · <#${g.channelId}>`);
+    return reply(interaction, { embeds: [embed(COLORS.brand).setTitle('🎉 Giveawaye').setDescription(lines.join('\n') || `Nie ma jeszcze giveawayów – zacznij od \`${slash('giveaway start')}\`.`)] });
   },
 };

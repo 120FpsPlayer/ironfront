@@ -5,6 +5,7 @@ const db = require('../lib/db');
 const backups = require('../features/backups');
 const { COLORS } = require('../lib/theme');
 const { embed, reply, replyError, isAdmin } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,17 +15,17 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild), // hidden from members, like /panel
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member)) return replyError(interaction, 'Only administrators can make backups.');
+    if (!isAdmin(interaction.member)) return replyError(interaction, 'Kopie zapasowe mogą robić tylko administratorzy.');
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { backup, tooBig, message, payload } = await backups.backupNow(interaction.guild, { by: interaction.user.id });
     if (tooBig) return reply(interaction, payload);
     if (message) {
       return reply(interaction, {
-        embeds: [embed(COLORS.success).setDescription(`✅ Backup saved in ${message.channel}: [\`${backup.name}\`](${message.url}) · ${backups.size(backup.size)}`)],
+        embeds: [embed(COLORS.success).setDescription(`✅ Kopia zapasowa zapisana na ${message.channel}: [\`${backup.name}\`](${message.url}) · ${backups.size(backup.size)}`)],
       });
     }
     // No #backups channel (or it can't be used) – hand the file over right here.
-    const where = db.channelId(interaction.guild.id, 'backups') ? "I couldn't post in #backups" : 'There is no #backups channel (run `/build`)';
-    return reply(interaction, { ...payload, content: `${where} – here is the file, keep it somewhere safe.` });
+    const where = db.channelId(interaction.guild.id, 'backups') ? 'Nie udało mi się opublikować na #kopie-zapasowe' : `Nie ma kanału #kopie-zapasowe (użyj \`${slash('build')}\`)`;
+    return reply(interaction, { ...payload, content: `${where} – oto plik, przechowuj go w bezpiecznym miejscu.` });
   },
 };

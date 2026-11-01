@@ -46,7 +46,7 @@ function toBits(names = []) {
   let bits = 0n;
   for (const name of names) {
     const flag = PermissionFlagsBits[name];
-    if (flag === undefined) throw new Error(`Unknown permission "${name}"`);
+    if (flag === undefined) throw new Error(`Nieznane uprawnienie „${name}”`);
     bits |= flag;
   }
   return bits;
@@ -111,7 +111,7 @@ function profile(name, { posters = [] } = {}) {
     case 'hidden':
       return [ow(E, [], ['ViewChannel']), ...allowFor([...G.staff, ...G.bots], ['ViewChannel'])];
     default:
-      throw new Error(`Unknown access profile "${name}"`);
+      throw new Error(`Nieznany profil dostępu „${name}”`);
   }
 }
 

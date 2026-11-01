@@ -7,6 +7,7 @@ const { banner, hasBanner, bannerArt } = require('../lib/theme');
 const { CATEGORIES } = require('./layout');
 const { postsFor } = require('./content');
 const { sendItem, describeError } = require('./executor');
+const { slash } = require('../lib/commandsPl');
 
 /**
  * /build only:panels – updates every banner, card and panel /build posted IN PLACE, so nothing
@@ -90,7 +91,7 @@ async function syncPosts(channel, postKey, tracked, res) {
 /** Updates every banner, card and panel /build posted. */
 async function refreshContent(guild) {
   const build = db.build(guild.id);
-  if (!build) throw new Error('This server was not built yet – run /build first.');
+  if (!build) throw new Error(`Ten serwer nie został jeszcze zbudowany – najpierw użyj ${slash('build')}.`);
   const posts = { ...(build.posts ?? {}) };
   const res = { channels: 0, edited: 0, sent: 0, removed: 0, errors: [] };
   for (const cat of CATEGORIES) {

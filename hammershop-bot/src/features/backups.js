@@ -75,35 +75,35 @@ async function createBackup(guild, now = Date.now()) {
 }
 
 const RESTORE =
-  '1. Stop the bot and keep a copy of the current `data/db.json`\n' +
-  '2. Unzip this file (it\'s gzip – 7-Zip, `gunzip` or any archive tool)\n' +
-  '3. Rename it to `db.json`, put it into `data/` (replace the old file)\n' +
-  '4. Start the bot\n' +
-  '*Bot on more than one server? Copy only this server from `guilds` and its `tickets` into your db.json instead.*';
+  '1. Zatrzymaj bota i zachowaj kopię obecnego pliku `data/db.json`\n' +
+  '2. Rozpakuj ten plik (to gzip – 7-Zip, `gunzip` albo dowolny program do archiwów)\n' +
+  '3. Zmień jego nazwę na `db.json` i wrzuć go do `data/` (zastąp stary plik)\n' +
+  '4. Uruchom bota\n' +
+  '*Bot działa na kilku serwerach? Zamiast tego skopiuj do swojego db.json tylko ten serwer z `guilds` i jego `tickets`.*';
 
 function backupEmbed(guild, b, { by } = {}) {
   const c = b.counts;
-  const next = config.backups.enabled ? `\nNext automatic backup ${ts(b.createdAt + periodMs(), 'R')}.` : '';
+  const next = config.backups.enabled ? `\nNastępna automatyczna kopia ${ts(b.createdAt + periodMs(), 'R')}.` : '';
   return embed(COLORS.brand)
-    .setTitle('💾 Backup')
-    .setDescription(`${by ? `Made by <@${by}>` : `Automatic backup (every ${periodMs() / HOUR} h)`} of **${truncate(guild.name, 100)}** · \`${b.name}\`${next}`)
+    .setTitle('💾 Kopia zapasowa')
+    .setDescription(`${by ? `Kopia wykonana na prośbę <@${by}>` : `Automatyczna kopia (co ${periodMs() / HOUR} h)`} – serwer **${truncate(guild.name, 100)}** · \`${b.name}\`${next}`)
     .addFields(
-      { name: 'Size', value: `${size(b.size)} (${size(b.rawSize)} unpacked)`, inline: true },
-      { name: 'Tickets', value: `${c.tickets} (${c.openTickets} open)`, inline: true },
-      { name: 'Sales', value: String(c.sales), inline: true },
-      { name: 'Products', value: String(c.products), inline: true },
-      { name: 'Vouches', value: String(c.vouches), inline: true },
-      { name: 'Promo codes', value: String(c.promos), inline: true },
-      { name: '♻️ How to restore', value: RESTORE },
+      { name: 'Rozmiar', value: `${size(b.size)} (${size(b.rawSize)} po rozpakowaniu)`, inline: true },
+      { name: 'Tickety', value: `${c.tickets} (otwarte: ${c.openTickets})`, inline: true },
+      { name: 'Sprzedaż', value: String(c.sales), inline: true },
+      { name: 'Produkty', value: String(c.products), inline: true },
+      { name: 'Opinie', value: String(c.vouches), inline: true },
+      { name: 'Kody rabatowe', value: String(c.promos), inline: true },
+      { name: '♻️ Jak przywrócić', value: RESTORE },
     );
 }
 
 function tooBigEmbed(guild, b) {
   return embed(COLORS.warning)
-    .setTitle('⚠️ Backup too big to upload')
+    .setTitle('⚠️ Kopia zapasowa jest za duża')
     .setDescription(
-      `The backup of **${truncate(guild.name, 100)}** is **${size(b.size)}** – Discord only takes files up to ${size(LIMITS.maxBytes)} here, so it wasn't posted.\n` +
-        'Copy `data/db.json` from the bot\'s host instead – it holds all the data.',
+      `Kopia serwera **${truncate(guild.name, 100)}** ma **${size(b.size)}** – Discord przyjmuje tu pliki do ${size(LIMITS.maxBytes)}, więc nie została opublikowana.\n` +
+        'Zamiast tego skopiuj `data/db.json` z serwera, na którym działa bot – są tam wszystkie dane.',
     );
 }
 
@@ -112,7 +112,7 @@ function persist() {
   try {
     db.flush();
   } catch (err) {
-    console.warn('[backups] Failed to save data:', err.message);
+    console.warn('[backups] Nie udało się zapisać danych:', err.message);
     db.save();
   }
 }

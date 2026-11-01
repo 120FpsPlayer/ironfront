@@ -27,12 +27,12 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    if (!isMod(interaction.member)) return replyError(interaction, 'Only moderators and administrators can post announcements.');
+    if (!isMod(interaction.member)) return replyError(interaction, 'Ogłoszenia mogą publikować tylko moderatorzy i administratorzy.');
     const channel =
       interaction.options.getChannel('channel') ?? interaction.guild.channels.cache.get(db.channelId(interaction.guild.id, 'announcements') ?? '') ?? interaction.channel;
     const ping = interaction.options.getString('ping') ?? 'none';
     if (ping === 'everyone' && !interaction.member.permissions.has(PermissionFlagsBits.MentionEveryone)) {
-      return replyError(interaction, 'You need the **Mention @everyone** permission to ping everyone.');
+      return replyError(interaction, 'Żeby pingować wszystkich, potrzebujesz uprawnienia do wzmianek o **@everyone**.');
     }
     return announce.openModal(interaction, { channelId: channel.id, ping, bannerKey: interaction.options.getString('banner') ?? 'announcements' });
   },

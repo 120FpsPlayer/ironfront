@@ -96,8 +96,11 @@ function distance(a, b) {
   return d[a.length][b.length];
 }
 
-/** Words that make a name look official ("alex support", "nøx team"). */
-const TITLES = ['support', 'admin', 'administrator', 'staff', 'team', 'mod', 'moderator', 'helper', 'help', 'official', 'owner', 'founder', 'manager', 'seller', 'service', 'real'];
+/** Words that make a name look official ("alex support", "nøx team", "Alex | Pomoc HammerShop") – English and Polish. */
+const TITLES = [
+  'support', 'admin', 'administrator', 'staff', 'team', 'mod', 'moderator', 'helper', 'help', 'official', 'owner', 'founder', 'manager', 'seller', 'service', 'real',
+  'wsparcie', 'pomoc', 'zespol', 'zespół', 'administracja', 'wlasciciel', 'właściciel', 'sprzedawca', 'ceo', 'obsluga', 'obsługa', 'moderacja', 'oficjalny',
+];
 const TITLE_FORMS = [...TITLES, config.brand.name].map(forms);
 const WORDS = { full: TITLE_FORMS.map((f) => f.full), short: TITLE_FORMS.map((f) => f.short) };
 const isTitle = (word) => WORDS.full.includes(forms(word).full) || WORDS.short.includes(forms(word).short);
@@ -142,7 +145,7 @@ function core(name) {
 
 // ───────────── Profiles ─────────────
 
-const FIELDS = { username: 'Username', globalName: 'Display name', nickname: 'Server nickname' };
+const FIELDS = { username: 'Nazwa użytkownika', globalName: 'Wyświetlana nazwa', nickname: 'Pseudonim na serwerze' };
 
 /** [[field, name]] – the names a member is shown with. */
 function namesOf(member) {
@@ -273,31 +276,31 @@ function memberGone(member, now = Date.now()) {
 }
 
 const TRIGGERS = {
-  join: 'joined the server',
-  username: 'changed their username',
-  globalName: 'changed their display name',
-  nickname: 'changed their server nickname',
-  avatar: 'changed their avatar',
-  guildAvatar: 'changed their server avatar',
-  profile: 'updated their profile',
+  join: 'dołączyła do serwera',
+  username: 'zmieniła nazwę użytkownika',
+  globalName: 'zmieniła wyświetlaną nazwę',
+  nickname: 'zmieniła pseudonim na serwerze',
+  avatar: 'zmieniła awatar',
+  guildAvatar: 'zmieniła awatar na serwerze',
+  profile: 'zaktualizowała profil',
 };
 
 const ACTIONS = {
-  ban: { label: 'Ban', icon: 'x', style: ButtonStyle.Danger, done: 'Banned', final: true },
-  kick: { label: 'Kick', icon: 'arrow_right', style: ButtonStyle.Danger, done: 'Kicked', final: true },
-  timeout: { label: 'Timeout 24h', icon: 'clock', style: ButtonStyle.Primary, done: 'Timed out for 24 hours' },
-  ignore: { label: 'Ignore', icon: 'check', style: ButtonStyle.Secondary, done: "Ignored – this name won't be reported again", final: true },
+  ban: { label: 'Zbanuj', icon: 'x', style: ButtonStyle.Danger, done: 'Zbanowano', final: true },
+  kick: { label: 'Wyrzuć', icon: 'arrow_right', style: ButtonStyle.Danger, done: 'Wyrzucono', final: true },
+  timeout: { label: 'Wycisz na 24 h', icon: 'clock', style: ButtonStyle.Primary, done: 'Wyciszono na 24 godziny' },
+  ignore: { label: 'Ignoruj', icon: 'check', style: ButtonStyle.Secondary, done: 'Zignorowano – ta nazwa nie będzie już zgłaszana', final: true },
 };
 
-const quote = (name) => `“${truncate(escapeMarkdown(String(name)), 64)}”`;
+const quote = (name) => `„${truncate(escapeMarkdown(String(name)), 64)}”`;
 
 function matchLine(guild, m) {
-  const who = m.staffId ? `<@${m.staffId}>` : `the **${config.brand.name}** team`;
-  if (m.kind === 'avatar') return `> ${e(guild, 'person')} **Avatar** – the same picture as ${who}`;
+  const who = m.staffId ? `<@${m.staffId}>` : `zespół **${config.brand.name}**`;
+  if (m.kind === 'avatar') return `> ${e(guild, 'person')} **Awatar** – ten sam obrazek co ${who}`;
   const how = {
-    exact: `the same name as ${who} (${quote(m.staffName)})`,
-    title: m.staffId ? `${who}'s name (${quote(m.staffName)}) with a staff title` : `poses as ${who}`,
-    similar: `one letter away from ${who} (${quote(m.staffName)})`,
+    exact: `ta sama nazwa co ${who} (${quote(m.staffName)})`,
+    title: m.staffId ? `nazwa ${who} (${quote(m.staffName)}) z tytułem zespołu` : `podszywa się pod ${who}`,
+    similar: `jedna litera różnicy względem ${who} (${quote(m.staffName)})`,
   }[m.kind];
   return `> ${e(guild, 'warning')} **${FIELDS[m.field]}** ${quote(m.name)} – ${how}`;
 }
@@ -316,27 +319,27 @@ function alertCard(guild, alert, now = Date.now()) {
   const c = container(handled ? COLORS.muted : COLORS.warning);
   header(
     c,
-    `## ${e(guild, 'shield')} Possible staff impersonation\n` +
-      `<@${alert.userId}> · \`${truncate(alert.username ?? 'unknown', 40)}\` · \`${alert.userId}\`\n` +
-      `They ${TRIGGERS[alert.trigger] ?? TRIGGERS.profile} and look like a member of the team.`,
+    `## ${e(guild, 'shield')} Możliwe podszywanie się pod zespół\n` +
+      `<@${alert.userId}> · \`${truncate(alert.username ?? 'nieznany', 40)}\` · \`${alert.userId}\`\n` +
+      `Ta osoba ${TRIGGERS[alert.trigger] ?? TRIGGERS.profile} i wygląda jak ktoś z zespołu.`,
     alert.avatarUrl,
   );
   c.addSeparatorComponents(divider());
-  c.addTextDisplayComponents(text(`### What matched\n${alert.matches.map((m) => matchLine(guild, m)).join('\n')}`));
-  const fresh = alert.createdAt && now - alert.createdAt < NEW_ACCOUNT ? ` · ${e(guild, 'warning')} **new account**` : '';
+  c.addTextDisplayComponents(text(`### Co się zgadza\n${alert.matches.map((m) => matchLine(guild, m)).join('\n')}`));
+  const fresh = alert.createdAt && now - alert.createdAt < NEW_ACCOUNT ? ` · ${e(guild, 'warning')} **nowe konto**` : '';
   c.addTextDisplayComponents(
     text(
-      `**Account created:** ${alert.createdAt ? `${ts(alert.createdAt, 'D')} (${ts(alert.createdAt, 'R')})${fresh}` : 'unknown'}\n` +
-        `**Joined the server:** ${alert.joinedAt ? ts(alert.joinedAt, 'R') : 'unknown'}`,
+      `**Konto utworzone:** ${alert.createdAt ? `${ts(alert.createdAt, 'D')} (${ts(alert.createdAt, 'R')})${fresh}` : 'nieznane'}\n` +
+        `**Dołączenie do serwera:** ${alert.joinedAt ? ts(alert.joinedAt, 'R') : 'nieznane'}`,
     ),
   );
   if (alert.actions.length) {
     c.addSeparatorComponents(divider());
-    c.addTextDisplayComponents(text(alert.actions.map((a) => `${e(guild, 'check')} **${ACTIONS[a.action].done}** by <@${a.by}> · ${ts(a.at, 'R')}`).join('\n')));
+    c.addTextDisplayComponents(text(alert.actions.map((a) => `${e(guild, 'check')} **${ACTIONS[a.action].done}** (<@${a.by}>) · ${ts(a.at, 'R')}`).join('\n')));
   }
   const buttons = buttonsFor(guild, alert);
   if (buttons.length) c.addActionRowComponents(row(...buttons));
-  c.addTextDisplayComponents(text(`-# Alert \`${alert.id}\` · ${ts(alert.at, 'f')} · only moderators can use these buttons`));
+  c.addTextDisplayComponents(text(`-# Alert \`${alert.id}\` · ${ts(alert.at, 'f')} · tylko moderatorzy mogą używać tych przycisków`));
   return v2(c);
 }
 
@@ -378,30 +381,30 @@ async function check(member, trigger = 'join', now = Date.now()) {
 
 // ───────────── Buttons ─────────────
 
-const auditReason = (user, what) => `${config.brand.name}: ${what} from an impersonation alert by ${user.tag ?? user.username}`.slice(0, 512);
+const auditReason = (user, what) => `${config.brand.name}: ${what} z alertu o podszywaniu się – ${user.tag ?? user.username}`.slice(0, 512);
 
 async function target(guild, alert, required) {
   const member = await guild.members.fetch(alert.userId).catch(() => null);
-  if (!member && required) throw new UserError(`<@${alert.userId}> is no longer on the server.`);
-  if (member && isStaff(member)) throw new UserError(`<@${alert.userId}> is a staff member now – I won't act on them.`);
+  if (!member && required) throw new UserError(`<@${alert.userId}> nie ma już na serwerze.`);
+  if (member && isStaff(member)) throw new UserError(`<@${alert.userId}> należy teraz do zespołu – nic nie zrobię.`);
   return member;
 }
 
 const ACT = {
   async ban(guild, alert, user) {
     const member = await target(guild, alert, false);
-    if (member && !member.bannable) throw new UserError(`I can't ban <@${alert.userId}> – their highest role is above mine.`);
+    if (member && !member.bannable) throw new UserError(`Nie mogę zbanować <@${alert.userId}> – najwyższa rola tej osoby jest nad moją.`);
     await guild.bans.create(alert.userId, { reason: auditReason(user, 'ban'), deleteMessageSeconds: HOUR / 1000 });
   },
   async kick(guild, alert, user) {
     const member = await target(guild, alert, true);
-    if (!member.kickable) throw new UserError(`I can't kick <@${alert.userId}> – their highest role is above mine.`);
-    await member.kick(auditReason(user, 'kick'));
+    if (!member.kickable) throw new UserError(`Nie mogę wyrzucić <@${alert.userId}> – najwyższa rola tej osoby jest nad moją.`);
+    await member.kick(auditReason(user, 'wyrzucenie'));
   },
   async timeout(guild, alert, user) {
     const member = await target(guild, alert, true);
-    if (!member.moderatable) throw new UserError(`I can't time out <@${alert.userId}> – their highest role is above mine.`);
-    await member.timeout(DAY, auditReason(user, '24h timeout'));
+    if (!member.moderatable) throw new UserError(`Nie mogę wyciszyć <@${alert.userId}> – najwyższa rola tej osoby jest nad moją.`);
+    await member.timeout(DAY, auditReason(user, 'wyciszenie na 24 h'));
   },
   async ignore(guild, alert, user) {
     const { ignored } = store(guild.id);
@@ -412,12 +415,12 @@ const ACT = {
 async function onButton(interaction, action, [alertId]) {
   if (!ACTIONS[action]) return null;
   const { guild, user } = interaction;
-  if (!isMod(interaction.member)) throw new UserError('Only moderators and administrators can act on impersonation alerts.');
+  if (!isMod(interaction.member)) throw new UserError('Na alerty o podszywaniu się mogą reagować tylko moderatorzy i administratorzy.');
   const alert = store(guild.id).alerts[alertId];
-  if (!alert) throw new UserError('This alert is too old – act on the member directly (right-click → Ban / Kick / Timeout).');
+  if (!alert) throw new UserError('Ten alert jest za stary – zajmij się tą osobą bezpośrednio (prawy przycisk myszy → Zbanuj / Wyrzuć / Wycisz).');
   const final = alert.actions.find((a) => ACTIONS[a.action].final);
-  if (final) throw new UserError(`This alert was already handled: **${ACTIONS[final.action].done}** by <@${final.by}>.`);
-  if (action === 'timeout' && alert.actions.some((a) => a.action === 'timeout')) throw new UserError('This member is already timed out.');
+  if (final) throw new UserError(`Ten alert został już obsłużony: **${ACTIONS[final.action].done}** (<@${final.by}>).`);
+  if (action === 'timeout' && alert.actions.some((a) => a.action === 'timeout')) throw new UserError('Ta osoba jest już wyciszona.');
   await ACT[action](guild, alert, user);
   alert.actions.push({ action, by: user.id, at: Date.now() });
   db.save();

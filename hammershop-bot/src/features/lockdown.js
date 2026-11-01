@@ -29,20 +29,21 @@ const db = require('../lib/db');
 const { e, COLORS } = require('../lib/theme');
 const { allStaffRoleIds, isStaff } = require('../lib/permissions');
 const { toBits } = require('../builder/permissions');
-const { UserError, embed, logEmbed, ts, duration, truncate, sendToChannel } = require('../lib/utils');
+const { UserError, embed, logEmbed, ts, duration, truncate, sendToChannel, plural, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { container, text, header, v2 } = require('../lib/v2');
 
 const LOCKED = ['SendMessages', 'SendMessagesInThreads', 'CreatePublicThreads', 'CreatePrivateThreads', 'AddReactions', 'Connect', 'Speak'];
 const LOCK_BITS = toBits(LOCKED);
 const INVITES_DISABLED = 'INVITES_DISABLED';
 const LABELS = {
-  SendMessages: 'Send Messages',
-  SendMessagesInThreads: 'Send Messages in Threads',
-  CreatePublicThreads: 'Create Public Threads',
-  CreatePrivateThreads: 'Create Private Threads',
-  AddReactions: 'Add Reactions',
-  Connect: 'Connect',
-  Speak: 'Speak',
+  SendMessages: 'Wysyłanie wiadomości',
+  SendMessagesInThreads: 'Wysyłanie wiadomości w wątkach',
+  CreatePublicThreads: 'Tworzenie wątków publicznych',
+  CreatePrivateThreads: 'Tworzenie wątków prywatnych',
+  AddReactions: 'Dodawanie reakcji',
+  Connect: 'Łączenie',
+  Speak: 'Mówienie',
 };
 
 const current = (guildId) => db.guild(guildId).security.lockdown ?? null;
@@ -58,7 +59,7 @@ function memberRole(guild, id = null) {
 /** { SendMessages: value, … } for every permission in `bits`. */
 const flags = (bits, value) => Object.fromEntries(new PermissionsBitField(bits).toArray().map((name) => [name, value]));
 
-const auditReason = (member, what) => `${config.brand.name}: ${what} by ${member.user?.tag ?? member.user?.username ?? member.id}`.slice(0, 512);
+const auditReason = (member, what) => `${config.brand.name}: ${what} – ${member.user?.tag ?? member.user?.username ?? member.id}`.slice(0, 512);
 
 /** Lock and unlock of one server run one after another – an /unlock never cuts into a running /lockdown. */
 const queues = new Map();
@@ -83,11 +84,11 @@ function untouchable(guild, staff) {
  */
 const canEdit = (guild, role) => role.editable || (role.managed && !role.tags?.botId && (guild.members.me?.roles?.highest?.position ?? 0) > role.position);
 
-const roleList = (roles, max = 15) => `${roles.slice(0, max).map((r) => `${r}`).join(', ')}${roles.length > max ? ` and ${roles.length - max} more` : ''}`;
-/** "**Send Messages**, **Add Reactions** and **Connect**" – the locked permissions in `bits`. */
+const roleList = (roles, max = 15) => `${roles.slice(0, max).map((r) => `${r}`).join(', ')}${roles.length > max ? ` i jeszcze ${roles.length - max}` : ''}`;
+/** "**Wysyłanie wiadomości**, **Dodawanie reakcji** i **Łączenie**" – the locked permissions in `bits`. */
 function allowed(bits) {
   const names = new PermissionsBitField(bits & LOCK_BITS).toArray().map((name) => `**${LABELS[name] ?? name}**`);
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join('');
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} i ${names.at(-1)}` : names.join('');
 }
 
 /** #announcements, or #chat when there is none. */
@@ -100,13 +101,13 @@ function lockedCard(guild, lockdown) {
   const c = container(COLORS.warning);
   header(
     c,
-    `## ${e(guild, 'lock_locked')} The server is locked\n` +
-      `We're dealing with an issue right now${lockdown.reason ? `: **${truncate(lockdown.reason, 200)}**` : ''}. ` +
-      'Chat, reactions, threads and voice are paused for members for a moment – and so are new tickets, orders and vouches.\n' +
-      `> ${e(guild, 'ticket')} Your open tickets keep working – the team can still help you there.`,
+    `## ${e(guild, 'lock_locked')} Serwer jest zablokowany\n` +
+      `Właśnie zajmujemy się pewnym problemem${lockdown.reason ? `: **${truncate(lockdown.reason, 200)}**` : ''}. ` +
+      'Czat, reakcje, wątki i kanały głosowe są na chwilę wstrzymane dla członków – podobnie jak nowe tickety, zamówienia i opinie.\n' +
+      `> ${e(guild, 'ticket')} Twoje otwarte tickety nadal działają – zespół wciąż może Ci w nich pomóc.`,
     guild.iconURL?.({ size: 128 }),
   );
-  c.addTextDisplayComponents(text(`-# Locked ${ts(lockdown.at, 'R')} · we'll post here as soon as everything is back to normal 🧡`));
+  c.addTextDisplayComponents(text(`-# Zablokowano ${ts(lockdown.at, 'R')} · napiszemy tutaj, gdy tylko wszystko wróci do normy 🧡`));
   return v2(c);
 }
 
@@ -114,11 +115,11 @@ function unlockedCard(guild, lockdown, now = Date.now()) {
   const c = container(COLORS.success);
   header(
     c,
-    `## ${e(guild, 'lock_unlocked')} The server is unlocked\n` +
-      'Everything is back to normal – chat, reactions, voice, tickets, orders and vouches are open again. Thank you for your patience 🧡',
+    `## ${e(guild, 'lock_unlocked')} Serwer jest odblokowany\n` +
+      'Wszystko wróciło do normy – czat, reakcje, kanały głosowe, tickety, zamówienia i opinie znów działają. Dziękujemy za cierpliwość 🧡',
     guild.iconURL?.({ size: 128 }),
   );
-  c.addTextDisplayComponents(text(`-# Unlocked ${ts(now, 'R')} · the lockdown lasted ${duration(now - lockdown.at)}`));
+  c.addTextDisplayComponents(text(`-# Odblokowano ${ts(now, 'R')} · blokada trwała ${duration(now - lockdown.at)}`));
   return v2(c);
 }
 
@@ -133,12 +134,12 @@ const lock = (guild, by, reason = null) => serial(guild.id, () => applyLock(guil
 async function applyLock(guild, by, reason) {
   const security = db.guild(guild.id).security;
   const active = security.lockdown;
-  if (active) throw new UserError(`The server is already locked – since ${ts(active.at, 'R')} by <@${active.by}>. Use \`/unlock\` to lift it.`);
+  if (active) throw new UserError(`Serwer jest już zablokowany – blokadę założono ${ts(active.at, 'R')} (<@${active.by}>). Użyj \`${slash('unlock')}\`, żeby ją zdjąć.`);
   const role = memberRole(guild);
-  if (!role) throw new UserError('There is no Member role to lock – run `/build` first.');
-  if (!role.editable) throw new UserError(`I can't edit ${role} – drag my role above it in **Server Settings → Roles** and try again.`);
+  if (!role) throw new UserError(`Nie ma roli Członek do zablokowania – najpierw użyj \`${slash('build')}\`.`);
+  if (!role.editable) throw new UserError(`Nie mogę edytować roli ${role} – przeciągnij moją rolę nad nią w **Ustawienia serwera → Role** i spróbuj ponownie.`);
 
-  const why = auditReason(by, 'lockdown');
+  const why = auditReason(by, 'blokada serwera');
   const staff = staffRoleIds(guild);
   const leftAlone = untouchable(guild, staff);
   const lockable = (r) => r.id === role.id || !leftAlone(r);
@@ -239,19 +240,19 @@ async function applyLock(guild, by, reason) {
         invites = 'paused';
       } catch (err) {
         invites = 'failed';
-        console.warn(`[lockdown] ${guild.name}: could not pause invites –`, err.message);
+        console.warn(`[lockdown] ${guild.name}: nie udało się wstrzymać zaproszeń –`, err.message);
       }
     }
     db.save();
   }
 
   const notice = await postNotice(guild, lockedCard(guild, lockdown));
-  await log(guild, '🔒 Server locked', COLORS.warning, [
-    `**By:** <@${by.id}>`,
-    `**Reason:** ${lockdown.reason ? truncate(lockdown.reason, 500) : '—'}`,
-    `**Roles locked:** ${roleList([role, ...roles])}`,
-    ...(gaps.length ? [`**Can't lock:** ${roleList(gaps)}`] : []),
-    `**Invites:** ${{ paused: 'paused', already: 'were already paused', failed: "couldn't be paused", open: 'stay open' }[invites]}`,
+  await log(guild, '🔒 Serwer zablokowany', COLORS.warning, [
+    `**Kto:** <@${by.id}>`,
+    `**Powód:** ${lockdown.reason ? truncate(lockdown.reason, 500) : '—'}`,
+    `**Zablokowane role:** ${roleList([role, ...roles])}`,
+    ...(gaps.length ? [`**Nie da się zablokować:** ${roleList(gaps)}`] : []),
+    `**Zaproszenia:** ${{ paused: 'wstrzymane', already: 'były już wstrzymane', failed: 'nie udało się ich wstrzymać', open: 'pozostają otwarte' }[invites]}`,
   ]);
   return { role, roles, gaps, kept, quiet, channels: new Set(lockdown.channels.map((c) => c.id)).size, invites, notice };
 }
@@ -262,11 +263,11 @@ const unlock = (guild, by) => serial(guild.id, () => applyUnlock(guild, by));
 async function applyUnlock(guild, by) {
   const security = db.guild(guild.id).security;
   const lockdown = security.lockdown;
-  if (!lockdown) throw new UserError("The server isn't locked – there's nothing to unlock.");
+  if (!lockdown) throw new UserError('Serwer nie jest zablokowany – nie ma czego odblokowywać.');
   const role = memberRole(guild, lockdown.roleId) ?? memberRole(guild);
-  if (role && !role.editable) throw new UserError(`I can't edit ${role} – drag my role above it in **Server Settings → Roles** and try again.`);
+  if (role && !role.editable) throw new UserError(`Nie mogę edytować roli ${role} – przeciągnij moją rolę nad nią w **Ustawienia serwera → Role** i spróbuj ponownie.`);
 
-  const why = auditReason(by, 'end of lockdown');
+  const why = auditReason(by, 'koniec blokady serwera');
   // Only the locked permissions are given back – other changes made during the lockdown stay.
   const giveBack = (r, permissions) => r.setPermissions((r.permissions.bitfield & ~LOCK_BITS) | (BigInt(permissions) & LOCK_BITS), why);
   if (role) await giveBack(role, lockdown.memberPermissions);
@@ -313,7 +314,7 @@ async function applyUnlock(guild, by) {
       invites = 'resumed';
     } catch (err) {
       invites = 'failed';
-      console.warn(`[lockdown] ${guild.name}: could not resume invites –`, err.message);
+      console.warn(`[lockdown] ${guild.name}: nie udało się wznowić zaproszeń –`, err.message);
     }
   }
   delete security.lockdown;
@@ -321,78 +322,78 @@ async function applyUnlock(guild, by) {
 
   const now = Date.now();
   const notice = await postNotice(guild, unlockedCard(guild, lockdown, now));
-  await log(guild, '🔓 Server unlocked', COLORS.success, [`**By:** <@${by.id}>`, `**Locked for:** ${duration(now - lockdown.at)} (by <@${lockdown.by}>)`]);
+  await log(guild, '🔓 Serwer odblokowany', COLORS.success, [`**Kto:** <@${by.id}>`, `**Blokada trwała:** ${duration(now - lockdown.at)} (założona przez <@${lockdown.by}>)`]);
   return { role, roles, failed, channels, invites, notice, lockdown };
 }
 
 // ───────────── Replies ─────────────
 
-const where = (notice) => (notice ? `in <#${notice.channelId ?? notice.channel?.id}>` : null);
+const where = (notice) => (notice ? `na <#${notice.channelId ?? notice.channel?.id}>` : null);
 
 function lockReply(guild, result, reason) {
   const { roles = [], gaps = [], kept = [], quiet = [] } = result;
   const one = (list, a, b) => (list.length === 1 ? a : b);
   const lines = [
     gaps.length
-      ? `⚠️ ${result.role} can't send messages, react, create threads or use voice anymore – but members with the roles below still can:`
-      : `✅ ${result.role} can't send messages, react, create threads or use voice anymore.`,
+      ? `⚠️ ${result.role} nie może już wysyłać wiadomości, reagować, tworzyć wątków ani korzystać z kanałów głosowych – ale członkowie z poniższymi rolami nadal mogą:`
+      : `✅ ${result.role} nie może już wysyłać wiadomości, reagować, tworzyć wątków ani korzystać z kanałów głosowych.`,
   ];
   for (const gap of gaps.slice(0, 10)) {
-    lines.push(`⚠️ ${gap} still allows ${allowed(gap.permissions.bitfield)} – I can't edit it (it's above my role or managed by an integration). Take it away in **Server Settings → Roles**.`);
+    lines.push(`⚠️ ${gap} nadal daje: ${allowed(gap.permissions.bitfield)} – nie mogę jej edytować (jest nad moją rolą albo zarządza nią integracja). Odbierz te uprawnienia w **Ustawienia serwera → Role**.`);
   }
-  if (gaps.length > 10) lines.push(`⚠️ … and ${gaps.length - 10} more roles like that.`);
-  if (roles.length) lines.push(`✅ Also locked: ${roleList(roles)} – ${one(roles, 'it allowed', 'they allowed')} chatting too.`);
-  if (result.channels) lines.push(`✅ Also paused in **${result.channels}** ${result.channels === 1 ? 'channel' : 'channels'} that allowed it for members.`);
-  lines.push('✅ New tickets, orders and vouches are paused for members – open tickets keep working.');
+  if (gaps.length > 10) lines.push(`⚠️ … i jeszcze ${count(gaps.length - 10, 'taka rola', 'takie role', 'takich ról')}.`);
+  if (roles.length) lines.push(`✅ Zablokowano też: ${roleList(roles)} – ${one(roles, 'ta rola też pozwalała', 'te role też pozwalały')} pisać.`);
+  if (result.channels) lines.push(`✅ Wstrzymano też na **${result.channels}** ${plural(result.channels, 'kanale', 'kanałach', 'kanałach')}, które na to pozwalały członkom.`);
+  lines.push('✅ Nowe tickety, zamówienia i opinie są wstrzymane dla członków – otwarte tickety nadal działają.');
   lines.push(
     {
-      paused: '✅ Invites are paused – nobody new can join.',
-      already: 'ℹ️ Invites were already paused – they stay paused after `/unlock` too.',
-      failed: "⚠️ I couldn't pause invites (I need **Manage Server**) – pause them in **Server Settings → Invites**.",
-      open: 'ℹ️ Invites stay open (`security.lockdownPausesInvites` is off).',
+      paused: '✅ Zaproszenia są wstrzymane – nikt nowy nie może dołączyć.',
+      already: `ℹ️ Zaproszenia były już wstrzymane – po \`${slash('unlock')}\` też takie zostaną.`,
+      failed: '⚠️ Nie udało mi się wstrzymać zaproszeń (potrzebuję uprawnienia **Zarządzanie serwerem**) – wstrzymaj je w **Ustawienia serwera → Zaproszenia**.',
+      open: 'ℹ️ Zaproszenia pozostają otwarte (`security.lockdownPausesInvites` jest wyłączone).',
     }[result.invites],
   );
-  lines.push(result.notice ? `✅ Notice posted ${where(result.notice)}.` : '⚠️ There is no #announcements or #chat channel – no notice was posted.');
+  lines.push(result.notice ? `✅ Komunikat opublikowany ${where(result.notice)}.` : '⚠️ Nie ma kanału #ogłoszenia ani #czat – komunikat nie został opublikowany.');
   if (kept.length) {
     lines.push(
-      `✅ ${roleList(kept)} had no **Send Messages** of ${one(kept, 'its', 'their')} own – ${one(kept, 'it gets', 'they get')} it until \`/unlock\`, ` +
-        `so ${one(kept, 'its', 'their')} members can still talk.`,
+      `✅ ${roleList(kept)} ${one(kept, 'nie miała', 'nie miały')} własnego uprawnienia **Wysyłanie wiadomości** – ${one(kept, 'dostaje', 'dostają')} je do \`${slash('unlock')}\`, ` +
+        `żeby ${one(kept, 'jej', 'ich')} członkowie nadal mogli pisać.`,
     );
   }
   if (quiet.length) {
     lines.push(
-      `⚠️ ${roleList(quiet)} ${one(quiet, 'has', 'have')} no **Send Messages** of ${one(quiet, 'its', 'their')} own and I can't edit ${one(quiet, 'it', 'them')} – ` +
-        `${one(quiet, 'its', 'their')} members can't talk until \`/unlock\`. Drag my role above ${one(quiet, 'it', 'them')} or give ${one(quiet, 'it', 'them')} **Send Messages**.`,
+      `⚠️ ${roleList(quiet)} ${one(quiet, 'nie ma', 'nie mają')} własnego uprawnienia **Wysyłanie wiadomości**, a nie mogę ${one(quiet, 'jej', 'ich')} edytować – ` +
+        `${one(quiet, 'jej', 'ich')} członkowie nie mogą pisać do \`${slash('unlock')}\`. Przeciągnij moją rolę nad ${one(quiet, 'nią', 'nie')} albo daj ${one(quiet, 'jej', 'im')} uprawnienie **Wysyłanie wiadomości**.`,
     );
   } else if (!kept.length) {
-    lines.push('✅ Staff roles keep their own permissions – the team can still talk.');
+    lines.push('✅ Role zespołu zachowują własne uprawnienia – zespół nadal może pisać.');
   }
-  const out = embed(COLORS.warning).setTitle('🔒 Server locked').setDescription(`${lines.join('\n')}\n\nUse \`/unlock\` to lift the lockdown.`);
-  if (reason) out.addFields({ name: 'Reason', value: truncate(reason, 1024) });
+  const out = embed(COLORS.warning).setTitle('🔒 Serwer zablokowany').setDescription(`${lines.join('\n')}\n\nUżyj \`${slash('unlock')}\`, żeby zdjąć blokadę.`);
+  if (reason) out.addFields({ name: 'Powód', value: truncate(reason, 1024) });
   return out;
 }
 
 function unlockReply(guild, result) {
   const { roles = [], failed = [] } = result;
-  const lines = [result.role ? `✅ ${result.role} has its permissions back.` : '⚠️ The Member role no longer exists – nothing to give back.'];
-  if (roles.length) lines.push(`✅ So ${roles.length === 1 ? 'does' : 'do'} ${roleList(roles)}.`);
-  if (failed.length) lines.push(`⚠️ I couldn't restore ${roleList(failed)} – check ${failed.length === 1 ? 'its' : 'their'} permissions in **Server Settings → Roles**.`);
-  if (result.channels) lines.push(`✅ Restored **${result.channels}** channel ${result.channels === 1 ? 'permission' : 'permissions'}.`);
+  const lines = [result.role ? `✅ ${result.role} ma z powrotem swoje uprawnienia.` : '⚠️ Rola Członek już nie istnieje – nie ma czego oddać.'];
+  if (roles.length) lines.push(`✅ Tak samo: ${roleList(roles)}.`);
+  if (failed.length) lines.push(`⚠️ Nie udało mi się przywrócić: ${roleList(failed)} – sprawdź ${failed.length === 1 ? 'jej' : 'ich'} uprawnienia w **Ustawienia serwera → Role**.`);
+  if (result.channels) lines.push(`✅ Przywrócono **${result.channels}** ${plural(result.channels, 'uprawnienie na kanale', 'uprawnienia na kanałach', 'uprawnień na kanałach')}.`);
   const invites = {
-    resumed: '✅ Invites are open again.',
-    'still paused': 'ℹ️ Invites were paused before the lockdown, so they stay paused.',
-    failed: "⚠️ I couldn't resume invites – turn them back on in **Server Settings → Invites**.",
+    resumed: '✅ Zaproszenia znów są otwarte.',
+    'still paused': 'ℹ️ Zaproszenia były wstrzymane już przed blokadą, więc takie zostają.',
+    failed: '⚠️ Nie udało mi się wznowić zaproszeń – włącz je z powrotem w **Ustawienia serwera → Zaproszenia**.',
   }[result.invites];
   if (invites) lines.push(invites);
-  lines.push(result.notice ? `✅ Notice posted ${where(result.notice)}.` : '⚠️ There is no #announcements or #chat channel – no notice was posted.');
-  lines.push(`-# The lockdown lasted ${duration(Date.now() - result.lockdown.at)} · locked by <@${result.lockdown.by}>`);
-  return embed(COLORS.success).setTitle('🔓 Server unlocked').setDescription(lines.join('\n'));
+  lines.push(result.notice ? `✅ Komunikat opublikowany ${where(result.notice)}.` : '⚠️ Nie ma kanału #ogłoszenia ani #czat – komunikat nie został opublikowany.');
+  lines.push(`-# Blokada trwała ${duration(Date.now() - result.lockdown.at)} · założona przez <@${result.lockdown.by}>`);
+  return embed(COLORS.success).setTitle('🔓 Serwer odblokowany').setDescription(lines.join('\n'));
 }
 
 hooks.on('ready', (client) => {
   for (const guild of client.guilds.cache.values()) {
     const lockdown = current(guild.id);
-    if (lockdown) console.log(`🔒 ${guild.name} is still locked (since ${new Date(lockdown.at).toISOString()}) – /unlock lifts it.`);
+    if (lockdown) console.log(`🔒 Serwer ${guild.name} jest nadal zablokowany (od ${new Date(lockdown.at).toISOString()}) – ${slash('unlock')} zdejmie blokadę.`);
   }
 });
 

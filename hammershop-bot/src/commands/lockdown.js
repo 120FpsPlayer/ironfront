@@ -14,7 +14,7 @@ module.exports = {
     .addStringOption((o) => o.setName('reason').setDescription('Shown in the lockdown notice, e.g. "Raid in progress"').setMaxLength(200)),
 
   async execute(interaction) {
-    if (!isMod(interaction.member)) return replyError(interaction, 'Only moderators and administrators can lock the server.');
+    if (!isMod(interaction.member)) return replyError(interaction, 'Tylko moderatorzy i administratorzy mogą zablokować serwer.');
     const reason = interaction.options.getString('reason')?.trim() || null;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // many permission edits – can take a few seconds
     const result = await lockdown.lock(interaction.guild, interaction.member, reason);

@@ -19,12 +19,12 @@ module.exports = {
     .addSubcommand((s) => s.setName('top').setDescription('The top 10 inviters')),
 
   async execute(interaction) {
-    if (config.invites.enabled === false) throw new UserError('Invite tracking is turned off on this server.');
+    if (config.invites.enabled === false) throw new UserError('Śledzenie zaproszeń jest wyłączone na tym serwerze.');
     const guild = interaction.guild;
     if (interaction.options.getSubcommand() === 'top') return reply(interaction, { embeds: [invites.topEmbed(guild, interaction.user.id)] });
 
     const user = interaction.options.getUser('user') ?? interaction.user;
-    if (user.bot) throw new UserError("Bots don't invite anyone – pick a member.");
+    if (user.bot) throw new UserError('Boty nikogo nie zapraszają – wybierz osobę.');
     const member = user.id === interaction.user.id ? interaction.member : guild.members.cache.get(user.id);
     return reply(interaction, { embeds: [invites.statsEmbed(guild, user, { self: user.id === interaction.user.id, displayName: member?.displayName })] });
   },

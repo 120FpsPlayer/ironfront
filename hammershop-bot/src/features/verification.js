@@ -7,7 +7,8 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const { e, ce, COLORS } = require('../lib/theme');
 const { isSafeSelfRole } = require('../lib/guards');
-const { sendToChannel, ts, embed } = require('../lib/utils');
+const { sendToChannel, ts, embed, count } = require('../lib/utils');
+const { slash } = require('../lib/commandsPl');
 const { container, text, divider, btn, linkBtn, row, header, v2, channelUrl } = require('../lib/v2');
 
 /**
@@ -35,24 +36,24 @@ function verifyPanel(guild) {
   const rules = db.channelId(guild.id, 'rules');
   header(
     c,
-    `# ${e(guild, 'shield')} Verify your account\n` +
-      `Welcome to **${config.brand.name}**! To keep our community safe from bots, raiders and scammers, ` +
-      'every member verifies once – it takes about five seconds.',
+    `# ${e(guild, 'shield')} Zweryfikuj swoje konto\n` +
+      `Witamy w **${config.brand.name}**! Żeby chronić naszą społeczność przed botami, raiderami i oszustami, ` +
+      'każdy członek weryfikuje się raz – zajmuje to około pięciu sekund.',
     guild.iconURL?.({ size: 256 }),
   );
   c.addSeparatorComponents(divider());
   const steps = [
-    rules ? `Read the rules in <#${rules}>` : 'Read the server rules',
-    'Click **Verify** below',
-    v.captcha ? 'Answer a quick math question – done!' : 'Done – the whole server unlocks instantly!',
+    rules ? `Przeczytaj regulamin na <#${rules}>` : 'Przeczytaj regulamin serwera',
+    'Kliknij **Zweryfikuj się** poniżej',
+    v.captcha ? 'Odpowiedz na szybkie pytanie matematyczne – gotowe!' : 'Gotowe – cały serwer odblokuje się od razu!',
   ];
-  c.addTextDisplayComponents(text(`### ${e(guild, 'info')} How it works\n${steps.map((s, i) => `> **${i + 1}.** ${s}`).join('\n')}`));
+  c.addTextDisplayComponents(text(`### ${e(guild, 'info')} Jak to działa\n${steps.map((s, i) => `> **${i + 1}.** ${s}`).join('\n')}`));
   c.addSeparatorComponents(divider());
-  const notes = ['By verifying you agree to our rules and to Discord\'s Terms of Service.'];
-  if (v.minAccountAgeDays > 0) notes.push(`Accounts younger than **${v.minAccountAgeDays} days** can't verify yet.`);
-  notes.push('Trouble verifying? Ask a staff member.');
+  const notes = ['Weryfikując się, akceptujesz nasz regulamin i Warunki korzystania z usługi Discorda.'];
+  if (v.minAccountAgeDays > 0) notes.push(`Konta młodsze niż **${count(v.minAccountAgeDays, 'dzień', 'dni', 'dni')}** nie mogą się jeszcze zweryfikować.`);
+  notes.push('Problem z weryfikacją? Zapytaj kogoś z zespołu.');
   c.addTextDisplayComponents(text(notes.map((n) => `-# ${n}`).join('\n')));
-  c.addActionRowComponents(row(btn('verify:start', 'Verify', ce(guild, 'check'), ButtonStyle.Success)));
+  c.addActionRowComponents(row(btn('verify:start', 'Zweryfikuj się', ce(guild, 'check'), ButtonStyle.Success)));
   return v2(c);
 }
 
@@ -67,33 +68,33 @@ async function log(interaction, { ok, reason }) {
   const ageDays = Math.floor((Date.now() - user.createdTimestamp) / DAY);
   const e1 = embed(ok ? COLORS.success : COLORS.warning)
     .setAuthor({ name: user.tag ?? user.username, iconURL: user.displayAvatarURL?.() })
-    .setDescription(ok ? `✅ ${user} passed verification.` : `⚠️ ${user} failed verification: ${reason}`)
+    .setDescription(ok ? `✅ ${user} – weryfikacja zakończona sukcesem.` : `⚠️ ${user} – weryfikacja nieudana: ${reason}`)
     .addFields(
-      { name: 'Account created', value: `${ts(user.createdTimestamp, 'R')}${ageDays < 7 ? ' ⚠️ new account' : ''}`, inline: true },
-      { name: 'User ID', value: `\`${user.id}\``, inline: true },
+      { name: 'Konto utworzone', value: `${ts(user.createdTimestamp, 'R')}${ageDays < 7 ? ' ⚠️ nowe konto' : ''}`, inline: true },
+      { name: 'ID użytkownika', value: `\`${user.id}\``, inline: true },
     );
   await sendToChannel(guild, channelId, { embeds: [e1], allowedMentions: { parse: [] } });
 }
 
 function checkRole(interaction) {
   const role = memberRole(interaction.guild);
-  if (!role) return { error: '❌ The verification role is missing. Please tell the staff (an admin can fix it with `/build`).' };
-  if (!isSafeSelfRole(role)) return { error: '❌ I cannot assign the verification role (it is above my role or has moderation permissions). Please tell the staff.' };
+  if (!role) return { error: `❌ Brakuje roli weryfikacji. Daj znać zespołowi (administrator naprawi to komendą \`${slash('build')}\`).` };
+  if (!isSafeSelfRole(role)) return { error: '❌ Nie mogę nadać roli weryfikacji (jest nad moją rolą albo ma uprawnienia moderacyjne). Daj znać zespołowi.' };
   if (interaction.member.roles.cache.has(role.id)) return { done: true, role };
   return { role };
 }
 
 async function grant(interaction, role) {
-  await interaction.member.roles.add(role, 'Verification');
+  await interaction.member.roles.add(role, 'Weryfikacja');
   const g = interaction.guild;
   const c = container(COLORS.success);
   c.addTextDisplayComponents(
-    text(`## ${e(g, 'check')} You're verified!\nWelcome to **${config.brand.name}**, ${interaction.member.displayName} 🧡 Every channel is unlocked now – here's where to start:`),
+    text(`## ${e(g, 'check')} Konto zweryfikowane!\nWitamy w **${config.brand.name}**, ${interaction.member.displayName} 🧡 Wszystkie kanały są już odblokowane – zacznij tutaj:`),
   );
   const links = [
-    ['shop', 'Shop', 'cart'],
-    ['tickets', 'Support', 'ticket'],
-    ['roles', 'Roles', 'bell'],
+    ['shop', 'Sklep', 'cart'],
+    ['tickets', 'Pomoc', 'ticket'],
+    ['roles', 'Role', 'bell'],
   ]
     .map(([key, label, icon]) => [db.channelId(g.id, key), label, icon])
     .filter(([id]) => id)
@@ -104,7 +105,7 @@ async function grant(interaction, role) {
   } finally {
     // The role is given at this point – log it and run the 'verified' features (invite credit, welcome code)
     // even when Discord refused a late reply. Logging comes after the reply: Discord needs an answer within 3 seconds.
-    await log(interaction, { ok: true }).catch((err) => console.warn('[verify] log:', err.message));
+    await log(interaction, { ok: true }).catch((err) => console.warn('[verify] Nie udało się zapisać logu:', err.message));
     await hooks.emit('verified', interaction.member);
   }
 }
@@ -112,7 +113,7 @@ async function grant(interaction, role) {
 async function handleButton(interaction) {
   const check = checkRole(interaction);
   if (check.error) return reply(interaction, COLORS.danger, check.error);
-  if (check.done) return reply(interaction, COLORS.success, '✅ You are already verified – enjoy your stay!');
+  if (check.done) return reply(interaction, COLORS.success, '✅ Twoje konto jest już zweryfikowane – miłego pobytu!');
 
   const minDays = Number(config.verification.minAccountAgeDays) || 0;
   if (minDays > 0) {
@@ -121,9 +122,9 @@ async function handleButton(interaction) {
       await reply(
         interaction,
         COLORS.warning,
-        `⏳ Your Discord account is too new. Accounts must be at least **${minDays} days** old to join ${config.brand.name}.\nYou can verify ${ts(created + minDays * DAY, 'R')}.`,
+        `⏳ Twoje konto Discord jest za nowe. Żeby dołączyć do ${config.brand.name}, konto musi mieć co najmniej **${count(minDays, 'dzień', 'dni', 'dni')}**.\nZweryfikujesz się ${ts(created + minDays * DAY, 'R')}.`,
       );
-      return log(interaction, { ok: false, reason: `account younger than ${minDays} days` });
+      return log(interaction, { ok: false, reason: `konto młodsze niż ${count(minDays, 'dzień', 'dni', 'dni')}` });
     }
   }
 
@@ -133,12 +134,12 @@ async function handleButton(interaction) {
     const sig = sign(interaction.user.id, a, b);
     const modal = new ModalBuilder()
       .setCustomId(`verify:answer:${a}:${b}:${sig}`)
-      .setTitle(`${config.brand.name} · Verification`.slice(0, 45))
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent('Quick check to make sure you\'re a human 🤖❌'))
+      .setTitle(`${config.brand.name} · Weryfikacja`.slice(0, 45))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('Szybkie sprawdzenie, czy jesteś człowiekiem 🤖❌'))
       .addLabelComponents(
         new LabelBuilder()
-          .setLabel(`What is ${a} + ${b}?`)
-          .setDescription('Type the result as a number, e.g. 12')
+          .setLabel(`Ile to jest ${a} + ${b}?`)
+          .setDescription('Wpisz wynik jako liczbę, np. 12')
           .setTextInputComponent(new TextInputBuilder().setCustomId('answer').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(4)),
       );
     return interaction.showModal(modal);
@@ -149,7 +150,7 @@ async function handleButton(interaction) {
 async function handleAnswer(interaction) {
   const [, , a, b, sig] = interaction.customId.split(':');
   if (sig !== sign(interaction.user.id, a, b)) {
-    return reply(interaction, COLORS.warning, '⌛ This question expired – click **Verify** again.');
+    return reply(interaction, COLORS.warning, '⌛ To pytanie wygasło – kliknij **Zweryfikuj się** jeszcze raz.');
   }
   let answer = '';
   try {
@@ -158,12 +159,12 @@ async function handleAnswer(interaction) {
     answer = '';
   }
   if (Number.parseInt(answer, 10) !== Number(a) + Number(b)) {
-    await reply(interaction, COLORS.danger, '❌ Wrong answer. Click **Verify** and try again.');
-    return log(interaction, { ok: false, reason: 'wrong answer to the check question' });
+    await reply(interaction, COLORS.danger, '❌ Zła odpowiedź. Kliknij **Zweryfikuj się** i spróbuj ponownie.');
+    return log(interaction, { ok: false, reason: 'błędna odpowiedź na pytanie matematyczne' });
   }
   const check = checkRole(interaction);
   if (check.error) return reply(interaction, COLORS.danger, check.error);
-  if (check.done) return reply(interaction, COLORS.success, '✅ You are already verified – enjoy your stay!');
+  if (check.done) return reply(interaction, COLORS.success, '✅ Twoje konto jest już zweryfikowane – miłego pobytu!');
   return grant(interaction, check.role);
 }
 

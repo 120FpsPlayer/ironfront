@@ -7,6 +7,7 @@ const { RateLimitError } = require('discord.js');
 const db = require('../lib/db');
 const panels = require('../lib/panels');
 const { ASSETS, EMOJI_PRIORITY, emojiName } = require('../lib/theme');
+const { slash } = require('../lib/commandsPl');
 
 /** Static emoji slots per boost level. */
 const SLOTS = { 0: 50, 1: 100, 2: 150, 3: 250 };
@@ -56,7 +57,7 @@ function outdatedEmojis(guild, existing) {
  * Existing :hs_*: emojis are reused, so running it again only fills the gaps.
  * Stops gracefully when the server is full or Discord rate-limits emoji uploads.
  */
-async function syncEmojis(guild, { reason = 'HammerShop setup', onProgress = () => {}, shouldAbort = () => false } = {}) {
+async function syncEmojis(guild, { reason = 'Konfiguracja HammerShop', onProgress = () => {}, shouldAbort = () => false } = {}) {
   const result = { reused: 0, uploaded: 0, replaced: 0, missing: [], stopped: null, errors: [] };
   const existing = await guild.emojis.fetch();
 
@@ -69,7 +70,7 @@ async function syncEmojis(guild, { reason = 'HammerShop setup', onProgress = () 
       if (name) db.setEmoji(guild.id, name, null);
       result.replaced += 1;
     } catch (err) {
-      result.errors.push(`removing :${em.name}: – ${err.message}`);
+      result.errors.push(`usuwanie :${em.name}: – ${err.message}`);
     }
   }
   for (const name of RETIRED) if (db.emojiIds(guild.id)[name]) db.setEmoji(guild.id, name, null);
@@ -126,15 +127,15 @@ async function syncEmojis(guild, { reason = 'HammerShop setup', onProgress = () 
 }
 
 function describeEmojiResult(r) {
-  const parts = [`${r.uploaded} uploaded`, `${r.reused} already there`];
-  if (r.replaced) parts.push(`${r.replaced} old emojis replaced with the new design`);
+  const parts = [`wgrane: ${r.uploaded}`, `już były: ${r.reused}`];
+  if (r.replaced) parts.push(`stare emotki zamienione na nowy wygląd: ${r.replaced}`);
   if (r.missing.length) {
     const why = {
-      full: 'the server has no free emoji slots (50 without boosts)',
-      ratelimit: 'Discord limits how fast emojis can be uploaded',
-      aborted: 'the build was stopped',
-    }[r.stopped] ?? 'some uploads failed';
-    parts.push(`${r.missing.length} not uploaded – ${why}. Run \`/build only:emojis\` later to add the rest`);
+      full: 'serwer nie ma wolnych miejsc na emotki (50 bez boostów)',
+      ratelimit: 'Discord ogranicza tempo wgrywania emotek',
+      aborted: 'budowa została zatrzymana',
+    }[r.stopped] ?? 'części emotek nie udało się wgrać';
+    parts.push(`niewgrane: ${r.missing.length} – ${why}. Użyj później \`${slash('build')} tylko:emojis\`, żeby dodać resztę`);
   }
   return parts.join(' · ');
 }

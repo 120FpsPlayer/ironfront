@@ -7,11 +7,9 @@ const { e, ce, COLORS } = require('../lib/theme');
 const { embed, ts, truncate, sendToChannel, duration } = require('../lib/utils');
 const { container, section, row, linkBtn, v2, channelUrl } = require('../lib/v2');
 
-/** "1st", "2nd", "23rd", "111th" */
+/** Polish ordinal number: "1.", "2.", "23.", "111." */
 function ordinal(n) {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+  return `${n}.`;
 }
 
 /** The card posted in #welcome when someone joins. */
@@ -22,16 +20,16 @@ function welcomeCard(member) {
   const c = container(COLORS.brand);
   c.addSectionComponents(
     section(
-      `## ${e(g, 'moon')} Welcome to ${config.brand.name}, ${member}!\n` +
-        `You're our **${ordinal(g.memberCount ?? 1)}** member – glad you're here 🧡\n` +
-        (verify ? `> ${e(g, 'shield')} Verify in <#${verify}> to unlock the server\n` : '') +
-        (shop ? `> ${e(g, 'cart')} Then check out <#${shop}>` : ''),
+      `## ${e(g, 'moon')} Witaj w ${config.brand.name}, ${member}!\n` +
+        `Jesteś naszym **${ordinal(g.memberCount ?? 1)}** członkiem – cieszymy się, że jesteś z nami 🧡\n` +
+        (verify ? `> ${e(g, 'shield')} Zweryfikuj się na <#${verify}>, żeby odblokować serwer\n` : '') +
+        (shop ? `> ${e(g, 'cart')} A potem zajrzyj na <#${shop}>` : ''),
       member.displayAvatarURL?.({ size: 256 }),
     ),
   );
   const links = [];
-  if (verify) links.push(linkBtn(channelUrl(g.id, verify), 'Verify', ce(g, 'check')));
-  if (shop) links.push(linkBtn(channelUrl(g.id, shop), 'Shop', ce(g, 'cart')));
+  if (verify) links.push(linkBtn(channelUrl(g.id, verify), 'Zweryfikuj się', ce(g, 'check')));
+  if (shop) links.push(linkBtn(channelUrl(g.id, shop), 'Sklep', ce(g, 'cart')));
   if (links.length) c.addActionRowComponents(row(...links));
   return v2(c, { mentions: { users: [member.id] } });
 }
@@ -44,11 +42,11 @@ async function onMemberAdd(member) {
   const age = Date.now() - member.user.createdTimestamp;
   const log = embed(age < 7 * 86_400_000 ? COLORS.warning : COLORS.success)
     .setAuthor({ name: member.user.tag ?? member.user.username, iconURL: member.displayAvatarURL?.() })
-    .setTitle('📥 Member joined')
-    .setDescription(`${member} · member #${g.memberCount}`)
+    .setTitle('📥 Nowy członek')
+    .setDescription(`${member} · członek nr ${g.memberCount}`)
     .addFields(
-      { name: 'Account created', value: `${ts(member.user.createdTimestamp, 'D')} (${ts(member.user.createdTimestamp, 'R')})${age < 7 * 86_400_000 ? '\n⚠️ **New account**' : ''}`, inline: true },
-      { name: 'User ID', value: `\`${member.id}\``, inline: true },
+      { name: 'Konto utworzone', value: `${ts(member.user.createdTimestamp, 'D')} (${ts(member.user.createdTimestamp, 'R')})${age < 7 * 86_400_000 ? '\n⚠️ **Nowe konto**' : ''}`, inline: true },
+      { name: 'ID użytkownika', value: `\`${member.id}\``, inline: true },
     )
     .setThumbnail(member.displayAvatarURL?.() ?? null);
   await sendToChannel(g, db.channelId(g.id, 'serverLogs'), { embeds: [log] });
@@ -59,11 +57,11 @@ async function onMemberRemove(member) {
   const roles = member.roles?.cache?.filter((r) => r.id !== g.id).map((r) => `${r}`) ?? [];
   const log = embed(COLORS.danger)
     .setAuthor({ name: member.user?.tag ?? member.user?.username ?? member.id, iconURL: member.displayAvatarURL?.() })
-    .setTitle('📤 Member left')
+    .setTitle('📤 Członek opuścił serwer')
     .setDescription(`<@${member.id}> · \`${member.id}\``)
     .addFields(
-      { name: 'Was here for', value: member.joinedTimestamp ? duration(Date.now() - member.joinedTimestamp) : 'unknown', inline: true },
-      { name: 'Roles', value: truncate(roles.join(' ') || '—', 1024), inline: false },
+      { name: 'Czas na serwerze', value: member.joinedTimestamp ? duration(Date.now() - member.joinedTimestamp) : 'nieznany', inline: true },
+      { name: 'Role', value: truncate(roles.join(' ') || '—', 1024), inline: false },
     );
   await sendToChannel(g, db.channelId(g.id, 'serverLogs'), { embeds: [log] });
 }
@@ -73,14 +71,14 @@ async function onMessageDelete(message) {
   const channelId = db.channelId(message.guild.id, 'serverLogs');
   if (!channelId || message.channelId === channelId) return;
   const log = embed(COLORS.danger)
-    .setTitle('🗑️ Message deleted')
+    .setTitle('🗑️ Wiadomość usunięta')
     .setDescription(
-      `**Channel:** <#${message.channelId}>\n**Author:** ${message.author ? `${message.author} (\`${message.author.id}\`)` : 'unknown (message was not cached)'}\n\n` +
-        (message.partial ? '*Content unavailable – the message was sent before the bot started.*' : `>>> ${truncate(message.content || '*(no text)*', 1800)}`),
+      `**Kanał:** <#${message.channelId}>\n**Autor:** ${message.author ? `${message.author} (\`${message.author.id}\`)` : 'nieznany (wiadomości nie było w pamięci bota)'}\n\n` +
+        (message.partial ? '*Treść niedostępna – wiadomość wysłano przed uruchomieniem bota.*' : `>>> ${truncate(message.content || '*(brak tekstu)*', 1800)}`),
     );
   if (message.author) log.setAuthor({ name: message.author.tag ?? message.author.username, iconURL: message.author.displayAvatarURL?.() });
   const files = [...(message.attachments?.values() ?? [])].map((a) => a.name).slice(0, 5);
-  if (files.length) log.addFields({ name: 'Attachments', value: truncate(files.join('\n'), 1024) });
+  if (files.length) log.addFields({ name: 'Załączniki', value: truncate(files.join('\n'), 1024) });
   await sendToChannel(message.guild, channelId, { embeds: [log] });
 }
 
@@ -91,11 +89,11 @@ async function onMessageUpdate(before, after) {
   if (!channelId) return;
   const log = embed(COLORS.warning)
     .setAuthor({ name: after.author.tag ?? after.author.username, iconURL: after.author.displayAvatarURL?.() })
-    .setTitle('✏️ Message edited')
-    .setDescription(`**Channel:** <#${after.channelId}> · [Jump to message](${after.url})\n**Author:** ${after.author}`)
+    .setTitle('✏️ Wiadomość edytowana')
+    .setDescription(`**Kanał:** <#${after.channelId}> · [Przejdź do wiadomości](${after.url})\n**Autor:** ${after.author}`)
     .addFields(
-      { name: 'Before', value: truncate(before.content || '*(empty)*', 1024) },
-      { name: 'After', value: truncate(after.content || '*(empty)*', 1024) },
+      { name: 'Przed', value: truncate(before.content || '*(pusta)*', 1024) },
+      { name: 'Po', value: truncate(after.content || '*(pusta)*', 1024) },
     );
   await sendToChannel(after.guild, channelId, { embeds: [log] });
 }
@@ -115,7 +113,7 @@ async function migrateWelcomeVisibility(guild) {
     await channel.permissionOverwrites.edit(
       guild.id,
       { ViewChannel: true, ReadMessageHistory: true, SendMessages: false, AddReactions: false },
-      { reason: `${config.brand.name}: newcomers can see their welcome message` },
+      { reason: `${config.brand.name}: nowi członkowie widzą swoje powitanie` },
     );
   }
   db.setBuild(guild.id, { ...build, welcomePublic: true });
