@@ -4,7 +4,7 @@
 (() => {
   const { api, h, clear, icon, bus, state, toast, attempt } = HS;
 
-  const NAV = ['home', 'instances', 'mods', 'servers', 'worlds', 'optimize', 'gallery', 'console', 'settings'];
+  const NAV = ['home', 'instances', 'mods', 'servers', 'worlds', 'optimize', 'skin', 'gallery', 'console', 'settings'];
   let current = null;
   let cleanup = null;
 
@@ -199,12 +199,14 @@
 
   bus.on('accounts', drawFoot);
   bus.on('settings', drawFoot);
+  bus.on('settings', (s) => HS.applyAccent(s?.accent));
 
   /* ── start ── */
   (async () => {
     try {
       state.info = await api.app.info();
       state.settings = await api.settings.get();
+      HS.applyAccent(state.settings.accent);
       state.accounts = await api.accounts.list();
       await state.refreshInstances();
       for (const id of await api.game.running()) state.running.set(id, 'running');
@@ -230,11 +232,12 @@
     }
   })();
 
-  // Ctrl+1…9 switches tabs.
+  // Ctrl+1…9 switches tabs, Ctrl+0 opens the tenth.
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && /^[1-9]$/.test(e.key) && NAV[Number(e.key) - 1]) {
+    const tab = /^[0-9]$/.test(e.key) ? NAV[(Number(e.key) + 9) % 10] : null;
+    if ((e.ctrlKey || e.metaKey) && tab) {
       e.preventDefault();
-      go(NAV[Number(e.key) - 1]);
+      go(tab);
     }
   });
 })();

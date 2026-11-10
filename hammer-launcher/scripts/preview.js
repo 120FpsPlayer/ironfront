@@ -31,23 +31,47 @@ function mock() {
   const scene = (sky, ground, label) =>
     `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky}"/><stop offset="1" stop-color="#ffffff" stop-opacity=".6"/></linearGradient></defs><rect width="640" height="360" fill="url(#s)"/><circle cx="500" cy="80" r="34" fill="#fff6c7" opacity=".9"/><path d="M0 250 L80 200 L160 230 L240 170 L330 220 L420 180 L520 230 L640 190 L640 360 L0 360Z" fill="${ground}"/><g fill="${ground}" opacity=".7">${Array.from({ length: 16 }, (_, i) => `<rect x="${i * 40}" y="${290 + (i % 3) * 8}" width="40" height="80"/>`).join('')}</g><text x="20" y="340" font-family="Arial" font-size="18" fill="#fff" opacity=".7">${label}</text></svg>`)}`;
 
-  // A small Minecraft-like skin (64×64) drawn on a canvas.
-  function skin() {
+  // A whole 64×64 skin (both layers), so the Skórka tab has something to draw from the front and from behind.
+  function fullSkin({ tone = '#c98b5e', hair = '#4a2c17', shirt = '#3a6fd8', pants = '#2d3a66', shoes = '#3b3b44', trim = '#ff9f43', eye = '#2b4a9c', slim = false, legacy = false } = {}) {
     const c = document.createElement('canvas');
-    c.width = c.height = 64;
+    c.width = 64;
+    c.height = legacy ? 32 : 64;
     const g = c.getContext('2d');
-    const px = (x, y, col) => ((g.fillStyle = col), g.fillRect(x, y, 1, 1));
-    for (let y = 8; y < 16; y++) for (let x = 8; x < 16; x++) px(x, y, (x + y) % 3 ? '#c98b5e' : '#bd7f53');
-    for (let x = 8; x < 16; x++) px(x, 8, '#4a2c17'), px(x, 9, '#4a2c17');
-    px(8, 10, '#4a2c17'), px(15, 10, '#4a2c17');
-    px(9, 12, '#fff'), px(10, 12, '#3a6fd8'), px(13, 12, '#3a6fd8'), px(14, 12, '#fff');
-    px(11, 14, '#8a4c33'), px(12, 14, '#8a4c33');
-    for (let x = 40; x < 48; x++) px(x, 8, '#ff9f43'), px(x, 9, '#ff8a2b');
+    const rect = (x, y, w, hgt, col) => ((g.fillStyle = col), g.fillRect(x, y, w, hgt));
+    // head: sides, front and back in one strip; hair on top, a fringe in front, long hair behind
+    rect(0, 8, 32, 8, tone), rect(8, 0, 8, 8, hair), rect(16, 0, 8, 8, tone);
+    rect(0, 8, 32, 2, hair), rect(0, 8, 8, 5, hair), rect(16, 8, 8, 5, hair), rect(24, 8, 8, 7, hair);
+    rect(9, 12, 2, 1, '#fff'), rect(10, 12, 1, 1, eye), rect(13, 12, 2, 1, '#fff'), rect(13, 12, 1, 1, eye), rect(11, 14, 2, 1, '#8a4c33');
+    // body, right arm, right leg
+    rect(16, 16, 24, 16, shirt), rect(20, 25, 8, 2, trim), rect(32, 22, 8, 3, trim);
+    rect(40, 16, 16, 16, shirt), rect(40, 28, 16, 4, tone);
+    rect(0, 16, 16, 16, pants), rect(0, 29, 16, 3, shoes);
+    // hat layer: a cap with a brim in front
+    rect(40, 0, 8, 8, trim), rect(32, 8, 32, 2, trim), rect(40, 10, 8, 1, '#00000055');
+    if (!legacy) {
+      rect(16, 48, 16, 16, pants), rect(16, 61, 16, 3, shoes);
+      rect(32, 48, 16, 16, shirt), rect(32, 60, 16, 4, tone);
+      rect(20, 36, 2, 12, trim), rect(26, 36, 2, 12, trim), rect(32, 36, 8, 2, trim); // an open jacket
+      rect(44, 36, 4, 2, trim), rect(52, 52, 4, 2, trim); // cuffs
+      if (slim) g.clearRect(54, 16, 2, 16), g.clearRect(46, 48, 2, 16), g.clearRect(54, 32, 2, 16), g.clearRect(62, 48, 2, 16);
+    }
+    return c.toDataURL();
+  }
+  // A cape texture (64×32): the outer side is the 10×16 block at 1,1.
+  function capeArt(c1, c2) {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 32;
+    const g = c.getContext('2d');
+    g.fillStyle = c1;
+    g.fillRect(0, 0, 22, 17);
+    g.fillStyle = c2;
+    g.fillRect(3, 4, 6, 2), g.fillRect(5, 6, 2, 7), g.fillRect(3, 13, 6, 1);
     return c.toDataURL();
   }
 
   const now = Date.now();
-  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false };
+  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, accent: 'orange' };
   const instances = [
     { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
@@ -121,6 +145,40 @@ function mock() {
     { file: '2026-10-28_18-02-51_New World.zip', size: 121e6, createdAt: now - 13 * 864e5, world: 'New World' },
   ];
 
+  // Skórka: the account's skin and capes, and the library of skins used before.
+  const hex = (ch) => ch.repeat(40);
+  const SKINS = {
+    kowal: fullSkin(),
+    rycerz: fullSkin({ shirt: '#8d99ae', pants: '#4a4e69', trim: '#e63946', hair: '#22223b' }),
+    alex: fullSkin({ tone: '#e0ac8a', hair: '#d9822b', shirt: '#4c9a5b', pants: '#6b4a2f', trim: '#ffe08a', eye: '#2f6f3a', slim: true }),
+    zima: fullSkin({ shirt: '#e8f1f8', pants: '#5d7a99', trim: '#7cc4ff', hair: '#f4f4f4' }),
+    stara: fullSkin({ shirt: '#00a8a8', pants: '#3c2a8f', trim: '#00a8a8', legacy: true }),
+    nowa: fullSkin({ shirt: '#2b2d42', pants: '#1b1b2f', trim: '#b08cff', hair: '#111', tone: '#d9a074' }),
+  };
+  const skinLib = [
+    { id: hex('a'), name: 'Kowal Hammer', variant: 'classic', dataUrl: SKINS.kowal, addedAt: now - 3 * 864e5, usedAt: now - 3600e3 },
+    { id: hex('b'), name: 'Rycerz w czerwieni', variant: 'classic', dataUrl: SKINS.rycerz, addedAt: now - 9 * 864e5, usedAt: now - 2 * 864e5 },
+    { id: hex('c'), name: 'Alex z lasu', variant: 'slim', dataUrl: SKINS.alex, addedAt: now - 20 * 864e5, usedAt: now - 12 * 864e5 },
+    { id: hex('d'), name: 'Zimowy', variant: 'classic', dataUrl: SKINS.zima, addedAt: now - 40 * 864e5, usedAt: now - 30 * 864e5 },
+    { id: hex('e'), name: 'Stara skórka z 2013 (64×32)', variant: 'classic', dataUrl: SKINS.stara, addedAt: now - 300 * 864e5, usedAt: now - 200 * 864e5 },
+  ];
+  const wardrobe = { worn: hex('a'), capes: [{ id: 'migrator', name: 'Migrator', url: capeArt('#b3261e', '#ffd166'), active: true }, { id: 'vanilla', name: 'Vanilla', url: capeArt('#2f7a3f', '#e7f7ff'), active: false }, { id: 'mcc15', name: '15th Anniversary', url: capeArt('#3a2a6b', '#b08cff'), active: false }] };
+  const skinState = () => {
+    const worn = skinLib.find((x) => x.id === wardrobe.worn);
+    return { account: { id: 'acc1', name: 'HammerGracz' }, skin: worn ? { url: `https://textures.minecraft.net/texture/${worn.id}`, variant: worn.variant, dataUrl: worn.dataUrl, libraryId: worn.id } : null, capes: wardrobe.capes.map((c) => ({ ...c })), library: skinLib.map((x) => ({ ...x, active: x.id === wardrobe.worn })) };
+  };
+
+  // Zestawy: which parts of a set exist for the instance and which are already there.
+  const BUNDLES = [
+    { id: 'pvp', name: 'PvP', icon: 'shield', description: 'Czytelna gra na serwerach: ping w tabeli, głowy graczy na czacie i obsługa paczek tekstur jak w OptiFine.', note: 'Tylko dodatki dozwolone na większości serwerów – żadnych cheatów ani ułatwień w walce.', mods: [['3D Skin Layers', 'Druga warstwa skórki (czapki, kurtki) jest wypukła.', 2], ['Chat Heads', 'Głowa gracza przy każdej wiadomości na czacie.', 1], ['Better Ping Display', 'Ping w milisekundach na liście graczy (Tab).', 1], ['Entity Texture Features', 'Tekstury mobów i graczy z paczek do OptiFine.', 1], ['Entity Model Features', 'Własne modele z paczek tekstur do OptiFine.', 1], ['Continuity', 'Łączone tekstury (szkło bez ramek) z paczek tekstur.', 1], ['LambDynamicLights', 'Pochodnia w ręce naprawdę świeci.', 1], ['Shulker Box Tooltip', 'Podgląd zawartości shulkera po najechaniu myszką.', 1]] },
+    { id: 'survival', name: 'Survival+', icon: 'compass', description: 'Wszystko, czego brakuje w zwykłym survivalu: minimapa, mapa świata, receptury i wygodny ekwipunek.', note: 'Niektóre serwery nie pozwalają na minimapy – przed grą zerknij do regulaminu.', mods: [["Xaero's Minimap", 'Minimapa z punktami, do których chcesz wrócić.', 2], ["Xaero's World Map", 'Mapa całego odkrytego świata pod klawiszem M.', 1], ['Just Enough Items', 'Wszystkie receptury i zastosowania przedmiotów.', 1], ['Jade', 'Podpowiada, na jaki blok albo moba patrzysz.', 1], ['AppleSkin', 'Pokazuje, ile głodu i nasycenia da jedzenie.', 2], ['Mouse Tweaks', 'Przenoszenie przedmiotów przeciąganiem i kółkiem myszy.', 1], ['Inventory Profiles Next', 'Sortowanie ekwipunku i skrzyń jednym przyciskiem.', 1], ['Enchantment Descriptions', 'Opis każdego zaklęcia na przedmiocie.', 1], ['Shulker Box Tooltip', 'Podgląd zawartości shulkera po najechaniu myszką.', 1]] },
+    { id: 'building', name: 'Budowanie', icon: 'bricks', description: 'Narzędzia budowniczego: szybkie kopiowanie i wypełnianie, schematy budowli i duże zrzuty ekranu.', note: 'WorldEdit i Axiom działają w grze jednoosobowej; na serwerze potrzebujesz uprawnień od administracji.', mods: [['WorldEdit', 'Kopiowanie, wypełnianie i zamiana tysięcy bloków naraz.', 1], ['WorldEdit CUI', 'Pokazuje zaznaczony obszar WorldEdita liniami.', 1], ['Axiom', 'Edytor świata w grze: pędzle, kształty, płynne budowanie.', 1], ['Litematica', 'Wyświetla schemat budowli jako podpowiedź, gdzie stawiać bloki.', 1], ['Fabrishot', 'Zrzuty ekranu w ogromnej rozdzielczości (F9).', 0]] },
+    { id: 'shaders', name: 'Shadery', icon: 'sun', description: 'Iris i trzy lubiane paczki shaderów: cienie, falująca woda i ciepłe światło.', note: 'Shader wybierasz w grze: Opcje → Ustawienia graficzne → Paczki shaderów. Potrzebna jest dobra karta graficzna.', mods: [['Iris Shaders', 'Obsługa shaderów – działa razem z Sodium.', 2], ['Complementary Reimagined', 'Najpopularniejszy shader – ładny i w stylu Minecrafta.', 2, 'shader'], ['BSL Shaders', 'Miękkie światło i filmowe kolory.', 2, 'shader'], ['MakeUp – Ultra Fast', 'Lekki shader dla słabszych kart graficznych.', 2, 'shader']] },
+    { id: 'visuals', name: 'Wygląd i klimat', icon: 'sparkles', description: 'Gra wygląda i brzmi ładniej bez shaderów: animacje postaci, spadające liście, odgłosy otoczenia.', note: 'Same ozdoby – nie zmieniają rozgrywki i działają na każdym serwerze.', mods: [['Not Enough Animations', 'Postać naprawdę je, trzyma mapę i wiosłuje.', 1], ['3D Skin Layers', 'Druga warstwa skórki (czapki, kurtki) jest wypukła.', 2], ['Wavey Capes', 'Peleryna faluje na wietrze.', 1], ['Visuality', 'Drobne efekty: iskry, bąbelki, krople.', 1], ['Falling Leaves', 'Z drzew spadają liście.', 1], ['Particle Rain', 'Deszcz, śnieg i burze piaskowe z prawdziwych kropel.', 1], ['AmbientSounds', 'Odgłosy lasu, jaskiń i morza w tle.', 1], ['Presence Footsteps', 'Inny odgłos kroków na każdym podłożu.', 1], ['LambDynamicLights', 'Pochodnia w ręce naprawdę świeci.', 1]] },
+  ];
+  const bundleMeta = (b) => ({ id: b.id, name: b.name, icon: b.icon, description: b.description, note: b.note, size: b.mods.length });
+  // state of a part: 0 = no version for this game, 1 = available, 2 = installed
+
   window.hs = {
     on(ch, fn) {
       if (!listeners.has(ch)) listeners.set(ch, new Set());
@@ -128,7 +186,7 @@ function mock() {
       return () => listeners.get(ch).delete(fn);
     },
     pathForFile: () => null,
-    app: { info: async () => ({ version: '1.0.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1'], available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ version: '1.0.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.0.0', available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: { get: async () => ({ ...settings }), set: async (p) => Object.assign(settings, p) && { ...settings } },
     system: { info: async () => ({}) },
@@ -138,9 +196,9 @@ function mock() {
       { title: 'Tysiące modów w zakładce Mody', body: 'Szukaj modów, paczek tekstur, shaderów i całych paczek modów z Modrinth – zależności instalują się same.', tag: 'Mody' },
     ] },
     server: { ping: async (address) => (address === 'nowy.example.pl' ? new Promise(() => {}) : (await wait(), PINGS[address] ?? { online: true, latency: 23, version: '1.21.4', players: { online: 137, max: 500 } })) },
-    accounts: { list: async () => accounts.map((a) => ({ ...a, skinUrl: a.skinUrl ?? skin() })), login: async () => accounts[0], remove: async () => true, select: async () => true },
+    accounts: { list: async () => (window.__noAccount ? [] : accounts.map((a) => ({ ...a, skinUrl: skinLib.find((x) => x.id === wardrobe.worn)?.dataUrl ?? null }))), login: async () => accounts[0], remove: async () => true, select: async () => true },
     versions: {
-      minecraft: async () => ['1.21.4', '1.21.3', '1.21.1', '1.21', '1.20.6', '1.20.4', '1.20.1', '1.19.4', '1.18.2', '1.16.5', '1.12.2', '1.8.9'].map((id) => ({ id, type: 'release' })),
+      minecraft: async () => ['26.3', '26.2', '26.1.2', '26.1.1', '26.1', '1.21.11', '1.21.10', '1.21.8', '1.21.4', '1.21.3', '1.21.1', '1.21', '1.20.6', '1.20.4', '1.20.1', '1.19.4', '1.18.2', '1.16.5', '1.12.2', '1.8.9'].map((id) => ({ id, type: 'release' })),
       loaders: async (l) => (l === 'vanilla' ? [] : [{ version: '0.16.10', stable: true }, { version: '0.16.9', stable: true }, { version: '0.16.8', stable: true }]),
     },
     instances: { list: async () => instances.map((i) => ({ ...i })), ensureDefault: async () => null, create: async (d) => ({ id: 'x', ...d }), update: async (id, p) => Object.assign(instances.find((i) => i.id === id), p), remove: async () => true, duplicate: async () => ({}), repair: async () => ({}), select: async () => true },
@@ -183,18 +241,47 @@ function mock() {
       remove: async () => true, copy: async () => true, show: async () => true,
     },
     optimizer: {
-      info: async () => ({ system: { platform: 'win32', totalMem: 16 * GB, freeMem: 7.4 * GB, cpuModel: 'AMD Ryzen 5 5600X 6-Core Processor', cpuCores: 12, gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)' }, modCount: 14, recommendation: { memoryMb: 4096, jvmPreset: 'recommended', optionsPreset: 'balanced' } }),
-      plan: async () => (await wait(), { supported: true, mods: [
-        { slug: 'sodium', name: 'Sodium', why: 'Nowy silnik renderowania – zwykle 2–3× więcej FPS.', available: true, installed: true, version: { number: '0.6.5' } },
-        { slug: 'lithium', name: 'Lithium', why: 'Szybsza logika gry: moby, fizyka, redstone.', available: true, installed: true, version: { number: '0.14.3' } },
-        { slug: 'ferrite-core', name: 'FerriteCore', why: 'Gra zużywa nawet o połowę mniej pamięci RAM.', available: true, installed: true, version: { number: '7.1.1' } },
-        { slug: 'modernfix', name: 'ModernFix', why: 'Szybsze uruchamianie gry i mniej zużytej pamięci.', available: true, installed: false, version: { number: '5.20.2' } },
-        { slug: 'entityculling', name: 'Entity Culling', why: 'Nie rysuje mobów i skrzyń, których nie widać.', available: true, installed: false, version: { number: '1.7.3' } },
-        { slug: 'immediatelyfast', name: 'ImmediatelyFast', why: 'Szybsze rysowanie interfejsu, tekstu i map.', available: true, installed: false, version: { number: '1.3.4' } },
-        { slug: 'dynamic-fps', name: 'Dynamic FPS', why: 'Zmniejsza FPS, gdy gra jest w tle – mniej grzania i prądu.', available: true, installed: false, version: { number: '3.8.0' } },
-        { slug: 'krypton', name: 'Krypton', why: 'Szybszy kod sieciowy – mniejsze lagi na serwerach.', available: false, installed: false, version: null },
+      info: async (id) => {
+        const i = instances.find((x) => x.id === id) ?? instances[0];
+        const major = /^26/.test(i.mcVersion) ? 25 : /^1\.(21|20\.[5-9])/.test(i.mcVersion) ? 21 : /^1\.(1[89]|20)/.test(i.mcVersion) ? 17 : 8;
+        const g1 = ['-XX:+IgnoreUnrecognizedVMOptions', '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-XX:+UseG1GC', '-XX:+ParallelRefProcEnabled', '-XX:MaxGCPauseMillis=37', '-XX:+UnlockExperimentalVMOptions', '-XX:+UnlockDiagnosticVMOptions', '-XX:+DisableExplicitGC', '-XX:G1NewSizePercent=23', '-XX:G1MaxNewSizePercent=40', '-XX:G1HeapRegionSize=16M', '-XX:G1ReservePercent=20', '-XX:G1HeapWastePercent=5', '-XX:G1MixedGCCountTarget=3', '-XX:InitiatingHeapOccupancyPercent=20', '-XX:G1MixedGCLiveThresholdPercent=90', '-XX:SurvivorRatio=32', '-XX:MaxTenuringThreshold=1', '-XX:+PerfDisableSharedMem', '-XX:+UseStringDeduplication', '-XX:+UseFastUnorderedTimeStamps', '-XX:+OmitStackTraceInFastThrow'];
+        return {
+          system: { platform: 'win32', totalMem: 16 * GB, freeMem: 7.4 * GB, cpuModel: 'AMD Ryzen 5 5600X 6-Core Processor', cpuCores: 12, gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)', gpus: ['NVIDIA GeForce RTX 3060'] },
+          modCount: 14,
+          recommendation: {
+            memoryMb: 4096, jvmPreset: 'recommended', optionsPreset: 'balanced', turbo: true, gpuClass: 'highend',
+            reasons: [
+              { key: 'memory', title: 'Pamięć: 4 GB', text: 'Masz 16 GB pamięci i 14 modów w instancji. Gra dostanie 4 GB – nigdy więcej niż połowę, bo system, Discord i przeglądarka też jej potrzebują, a zbyt duża pamięć spowalnia Javę.' },
+              { key: 'jvm', title: 'Flagi Javy: zalecane (G1GC)', text: `Dostrojony G1GC to najlepszy wybór dla większości komputerów. Flagi są dobrane do Javy ${major}, na której działa ta instancja.` },
+              { key: 'options', title: 'Grafika: Zrównoważony', text: 'Twój komputer spokojnie uciągnie ładną grafikę przy wysokim FPS.' },
+              { key: 'mods', title: 'Mody: zestaw podstawowy', text: 'Sprawdzone mody, bezpieczne dla każdego komputera. Twój procesor ma 12 wątków, więc możesz też włączyć dodatki Turbo (przełącznik przy liście modów) – szybciej wczytują świat.' },
+            ],
+          },
+          presets: { low: 'Słaby komputer', fps: 'Maks. FPS', balanced: 'Zrównoważony', quality: 'Jakość' },
+          java: { major, known: true, own: false, zgc: major >= 21 },
+          jvm: { memoryMb: 4096, flags: { recommended: major >= 25 ? [...g1, '-XX:+UseCompactObjectHeaders'] : g1, zgc: ['-XX:+IgnoreUnrecognizedVMOptions', '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-XX:+UseZGC', '-XX:+ZGenerational', '-XX:+DisableExplicitGC', '-XX:+PerfDisableSharedMem', '-XX:+OmitStackTraceInFastThrow'], vanilla: g1.slice(0, 3) } },
+        };
+      },
+      plan: async (id, opts) => (await wait(), { supported: true, mods: [
+        { slug: 'sodium', name: 'Sodium', why: 'Nowy silnik renderowania – zwykle 2–3× więcej FPS.', tier: 'core', available: true, installed: true, version: { number: '0.6.5' } },
+        { slug: 'lithium', name: 'Lithium', why: 'Szybsza logika gry: moby, fizyka, redstone.', tier: 'core', available: true, installed: true, version: { number: '0.14.3' } },
+        { slug: 'ferrite-core', name: 'FerriteCore', why: 'Gra zużywa nawet o połowę mniej pamięci RAM.', tier: 'core', available: true, installed: true, version: { number: '7.1.1' } },
+        { slug: 'modernfix', name: 'ModernFix', why: 'Szybsze uruchamianie i mniej zużytej pamięci.', tier: 'core', available: true, installed: false, version: { number: '5.20.2' } },
+        { slug: 'entityculling', name: 'Entity Culling', why: 'Nie rysuje mobów i skrzyń, których nie widać.', tier: 'core', available: true, installed: false, version: { number: '1.7.3' } },
+        { slug: 'immediatelyfast', name: 'ImmediatelyFast', why: 'Szybsze rysowanie tekstu, map i interfejsu.', tier: 'core', available: true, installed: false, version: { number: '1.3.4' } },
+        { slug: 'dynamic-fps', name: 'Dynamic FPS', why: 'Mniej FPS w tle – laptop się nie grzeje, gdy grasz w innym oknie.', tier: 'core', available: true, installed: false, version: { number: '3.8.0' } },
+        { slug: 'krypton', name: 'Krypton', why: 'Lżejsza obsługa sieci na serwerach.', tier: 'core', available: false, installed: false, version: null },
+        ...(opts?.turbo ? [
+          { slug: 'c2me-fabric', name: 'C2ME', why: 'Generuje i wczytuje chunki na wielu rdzeniach procesora naraz.', tier: 'turbo', available: true, installed: false, version: { number: '0.4.0-alpha.0.30+1.21.1' } },
+          { slug: 'scalablelux', name: 'ScalableLux', why: 'Szybszy silnik światła – płynniejsze ładowanie nowych terenów.', tier: 'turbo', available: true, installed: false, version: { number: '0.3.0' } },
+          { slug: 'ksyxis', name: 'Ksyxis', why: 'Świat otwiera się szybciej – gra nie czeka na chunki wokół spawnu.', tier: 'turbo', available: true, installed: true, version: { number: '1.4.6' } },
+        ] : []),
+        ...(opts?.shaders ? [{ slug: 'iris', name: 'Iris Shaders', why: 'Shadery na Sodium – ładniejsza grafika, gdy masz mocny komputer.', tier: 'shaders', available: true, installed: false, version: { number: '1.8.8' } }] : []),
       ] }),
-      apply: async () => ({ installed: [], skipped: [], warnings: [], missing: [] }),
+      apply: async (id, opts) => (await wait(200), {
+        installed: opts?.mods ? ['ModernFix', 'Entity Culling', 'ImmediatelyFast', 'Dynamic FPS', ...(opts.turbo ? ['C2ME', 'ScalableLux'] : [])] : [], skipped: ['Sodium', 'Lithium', 'FerriteCore'], warnings: [], missing: opts?.mods ? ['Krypton'] : [],
+        summary: { mods: opts?.mods ? { installed: ['ModernFix', 'Entity Culling', 'ImmediatelyFast', 'Dynamic FPS', ...(opts.turbo ? ['C2ME', 'ScalableLux'] : [])], already: 3, missing: ['Krypton'] } : null, memoryMb: 4096, memoryAuto: true, jvmPreset: 'recommended', javaMajor: 21, optionsPreset: opts?.optionsPreset ? { key: opts.optionsPreset, label: { low: 'Słaby komputer', fps: 'Maks. FPS', balanced: 'Zrównoważony', quality: 'Jakość' }[opts.optionsPreset] } : null, priority: 'above_normal', turbo: Boolean(opts?.turbo), shaders: Boolean(opts?.shaders) },
+      }),
     },
     servers: {
       list: async (id) => (await wait(), serverList(id)),
@@ -231,6 +318,36 @@ function mock() {
       apply: async () => ({ freed: 993e6, removed: 63, failed: 0 }),
     },
     logs: { share: async () => (await wait(200), { url: 'https://mclo.gs/HaMm3rX', id: 'HaMm3rX' }) },
+    bundles: {
+      list: async () => BUNDLES.map(bundleMeta),
+      plan: async (id, bundleId) => {
+        await wait(120);
+        const b = BUNDLES.find((x) => x.id === bundleId);
+        return { ...bundleMeta(b), supported: true, mods: b.mods.map(([name, why, st, type]) => ({ slug: name.toLowerCase().replace(/\W+/g, '-'), name, why, type: type ?? 'mod', available: st > 0, installed: st === 2, version: st ? { number: '1.0.0' } : null })) };
+      },
+      install: async (id, bundleId) => {
+        await wait(300);
+        const b = BUNDLES.find((x) => x.id === bundleId);
+        const added = b.mods.filter((m) => m[2] === 1).map((m) => m[0]);
+        b.mods.forEach((m) => m[2] === 1 && (m[2] = 2));
+        return { installed: [...added, 'Fabric API'], skipped: [], warnings: [], missing: b.mods.filter((m) => m[2] === 0).map((m) => m[0]) };
+      },
+    },
+    skins: {
+      get: async () => (await wait(150), skinState()),
+      pick: async () => ({ name: 'Nocny łowca', dataUrl: SKINS.nowa, legacy: false }),
+      upload: async ({ png, variant, name }) => {
+        await wait(250);
+        const entry = { id: hex(String(skinLib.length)), name: name || 'Skórka', variant, dataUrl: png, addedAt: Date.now(), usedAt: Date.now() };
+        skinLib.unshift(entry);
+        wardrobe.worn = entry.id;
+        return skinState();
+      },
+      use: async (id) => (await wait(250), (wardrobe.worn = id), skinState()),
+      reset: async () => (await wait(250), (wardrobe.worn = null), skinState()),
+      cape: async (capeId) => (await wait(200), wardrobe.capes.forEach((c) => (c.active = c.id === capeId)), skinState()),
+      forget: async (id) => (skinLib.splice(skinLib.findIndex((x) => x.id === id), 1), skinLib.map((x) => ({ ...x }))),
+    },
   };
 }
 
@@ -409,6 +526,145 @@ async function main() {
   await page.waitForTimeout(300);
   await page.locator('button[title="Policz ponownie"]').click();
   await page.waitForTimeout(400);
+
+  /* ── optimisation: explanations, exact flags, Turbo, the summary of "Zoptymalizuj wszystko" ── */
+  const viewTop = (selector, text) => page.locator(selector, { hasText: text }).first().evaluate((el) => (document.getElementById('view').scrollTop = (el.closest('.card') ?? el).offsetTop - 16));
+  // Messages of the steps before must not cover the new screens.
+  const noToasts = () => page.evaluate(() => document.getElementById('toasts').replaceChildren());
+  await noToasts();
+  await nav('Optymalizacja');
+  await page.waitForTimeout(400);
+  await page.locator('button', { hasText: 'Dlaczego?' }).click();
+  await shot('22-optymalizacja-dlaczego');
+  await closeModal();
+  await page.locator('button', { hasText: 'Pokaż flagi' }).click();
+  await shot('23-optymalizacja-flagi');
+  await closeModal();
+  await page.locator('label.check', { hasText: 'Turbo' }).click();
+  await page.locator('label.check', { hasText: 'z shaderami' }).click();
+  await page.waitForTimeout(300);
+  await page.locator('.tier-head', { hasText: 'Turbo' }).evaluate((el) => (document.getElementById('view').scrollTop += el.getBoundingClientRect().top - 330));
+  await shot('24-optymalizacja-turbo');
+  await page.locator('.view').evaluate((v) => (v.scrollTop = 0));
+  await page.locator('button', { hasText: 'Zoptymalizuj wszystko' }).click();
+  await page.waitForTimeout(600);
+  await shot('25-optymalizacja-gotowe');
+  await closeModal();
+  await page.setViewportSize({ width: 1040, height: 660 });
+  await shot('08b-optymalizacja-male-okno');
+  await viewTop('h2', 'Flagi Javy');
+  await shot('09b-optymalizacja-dol-male-okno');
+  await page.locator('button', { hasText: 'Dlaczego?' }).click();
+  await shot('22b-optymalizacja-dlaczego-male-okno');
+  await closeModal();
+  await page.setViewportSize({ width: 1240, height: 780 });
+  // An old vanilla instance: Java 8 has no ZGC, and there are no mods without a loader.
+  await page.evaluate(() => HS.state.selectInstance('pvp'));
+  await page.waitForTimeout(400);
+  await viewTop('h2', 'Flagi Javy');
+  await shot('26-optymalizacja-java8');
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+
+  /* ── Mody → Zestawy ── */
+  await nav('Mody');
+  await page.locator('.seg button', { hasText: 'Zestawy' }).click();
+  await page.waitForTimeout(500);
+  await shot('27-zestawy');
+  await page.locator('.view').evaluate((v) => (v.scrollTop = v.scrollHeight));
+  await shot('27b-zestawy-dol');
+  await page.locator('.view').evaluate((v) => (v.scrollTop = 0));
+  await page.locator('.bundle', { hasText: 'Budowanie' }).locator('.btn.primary').click();
+  await page.waitForTimeout(700);
+  await count('.bundle .btn.primary:disabled', 2); // Shadery was complete, Budowanie is now
+  await noToasts();
+  await page.setViewportSize({ width: 1040, height: 660 });
+  await shot('27c-zestawy-male-okno');
+  await page.setViewportSize({ width: 1240, height: 780 });
+  await page.evaluate(() => HS.state.selectInstance('pvp'));
+  await page.waitForTimeout(300);
+  await shot('27d-zestawy-vanilla');
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+
+  /* ── Skórka ── */
+  await nav('Skórka');
+  await page.waitForTimeout(600);
+  await shot('28-skorka');
+  await page.locator('button', { hasText: 'Wgraj skórkę' }).click();
+  await page.waitForTimeout(400);
+  await shot('29-skorka-nowa');
+  await page.locator('.modal .seg button', { hasText: 'Smukły' }).click();
+  await page.locator('.modal input').fill('Nocny łowca');
+  await confirm();
+  await page.waitForTimeout(700);
+  await count('.skin-tile', 6);
+  await count('.skin-tile.on', 1);
+  await noToasts();
+  await shot('30-skorka-po-zmianie');
+  await page.locator('.skin-tile', { hasText: 'Alex z lasu' }).locator('.btn.primary').click();
+  await page.waitForTimeout(600);
+  await page.locator('.cape-row', { hasText: 'Vanilla' }).locator('.btn.primary').click();
+  await page.waitForTimeout(500);
+  await count('.cape-row.on', 1);
+  await page.locator('.cape-row.on button', { hasText: 'Ukryj' }).click();
+  await page.waitForTimeout(500);
+  await count('.cape-row.on', 0);
+  await page.locator('.skin-tile button[title="Usuń z biblioteki"]').last().click();
+  await confirm();
+  await count('.skin-tile', 5);
+  await noToasts();
+  await page.setViewportSize({ width: 1040, height: 660 });
+  await shot('28b-skorka-male-okno');
+  await page.locator('.view').evaluate((v) => (v.scrollTop = v.scrollHeight));
+  await shot('28c-skorka-peleryny-male-okno');
+  await page.setViewportSize({ width: 1240, height: 780 });
+  await page.locator('button', { hasText: 'Przywróć domyślną' }).click();
+  await shot('31-skorka-domyslna-pytanie');
+  await confirm();
+  await page.waitForTimeout(600);
+  await noToasts();
+  await page.locator('.view').evaluate((v) => (v.scrollTop = 0));
+  await shot('32-skorka-domyslna');
+  // Not signed in.
+  await page.evaluate(async () => {
+    window.__noAccount = true;
+    await HS.state.refreshAccounts();
+  });
+  await page.waitForTimeout(300);
+  await shot('33-skorka-bez-konta');
+  await page.evaluate(async () => {
+    window.__noAccount = false;
+    await HS.state.refreshAccounts();
+  });
+  await page.waitForTimeout(500);
+  await count('.skin-card', 1);
+
+  /* ── Ustawienia → Wygląd: the launcher's colour ── */
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await viewTop('h2', 'Wygląd');
+  await shot('34-ustawienia-wyglad');
+  for (const [label, file] of [['Niebieski', '35-kolor-niebieski'], ['Zielony', '36-kolor-zielony'], ['Fioletowy', '37-kolor-fioletowy'], ['Czerwony', '38-kolor-czerwony'], ['Złoty', '39-kolor-zloty']]) {
+    await nav('Ustawienia');
+    await viewTop('h2', 'Wygląd');
+    await page.locator(`.swatch[title="${label}"]`).click();
+    await page.waitForTimeout(150);
+    await nav(file === '36-kolor-zielony' ? 'Optymalizacja' : file === '37-kolor-fioletowy' ? 'Instancje' : file === '38-kolor-czerwony' ? 'Skórka' : 'Graj');
+    await page.waitForTimeout(500);
+    await shot(file);
+  }
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await page.locator('.swatch[title="Pomarańczowy"]').click();
+  await count('.swatch.on[title="Pomarańczowy"]', 1);
+
+  // Ten tabs and the task card still fit in the smallest window.
+  await page.setViewportSize({ width: 1040, height: 660 });
+  await page.evaluate(() => window.__emit('task:progress', { label: 'Instalacja: Sodium', done: 3, total: 8 }));
+  await nav('Graj');
+  await shot('01c-graj-male-okno');
+  const overflow = await page.locator('.sidebar').evaluate((el) => el.scrollHeight - el.clientHeight);
+  if (overflow > 0) errors.push(`Pasek boczny nie mieści się w najmniejszym oknie (o ${overflow} px).`);
+  await page.setViewportSize({ width: 1240, height: 780 });
 
   await browser.close();
   if (errors.length) {

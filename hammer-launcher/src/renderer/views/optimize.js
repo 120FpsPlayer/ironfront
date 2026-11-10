@@ -1,25 +1,35 @@
 'use strict';
-/* Optymalizacja – one-click tuning: RAM, Java flags, performance mods, graphics presets, process priority. */
+/* Optymalizacja – one-click tuning: RAM, Java flags, performance mods (Podstawowe / Turbo), graphics presets, process priority. */
 
 (() => {
-  const { api, h, clear, icon, fmt, LOADERS, tile, bus, state, attempt } = HS;
+  const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
 
+  // Each preset in one plain sentence.
   const JVM = [
-    { value: 'recommended', icon: 'gauge', title: 'Zalecane (G1GC)', text: 'Dostrojony garbage collector – płynna gra bez przycięć. Najlepszy wybór dla większości.', tag: 'Zalecane' },
-    { value: 'zgc', icon: 'bolt', title: 'ZGC', text: 'Prawie zerowe przycięcia przy dużych paczkach modów. Dla mocnych PC (16 GB+, 6+ rdzeni).' },
-    { value: 'vanilla', icon: 'cube', title: 'Domyślne Mojang', text: 'Ustawienia jak w oficjalnym launcherze. Do porównań.' },
+    { value: 'recommended', icon: 'gauge', title: 'Zalecane (G1GC)', text: 'Dostrojone sprzątanie pamięci – krótkie przerwy, czyli gra bez przycięć. Najlepszy wybór dla większości.' },
+    { value: 'zgc', icon: 'bolt', title: 'ZGC', text: 'Sprząta pamięć w tle, prawie bez przerw – dla mocnych PC (16 GB+, 6+ wątków) i dużych paczek modów.' },
+    { value: 'vanilla', icon: 'cube', title: 'Domyślne Mojang', text: 'Tylko ustawienie pamięci, jak w oficjalnym launcherze – do porównań.' },
     { value: 'custom', icon: 'terminal', title: 'Własne', text: 'Twoje argumenty z ustawień instancji – dla zaawansowanych.' },
   ];
   const GFX = [
+    { value: 'low', icon: 'heartbeat', title: 'Słaby komputer', text: 'Najlżejsze ustawienia: render 6 chunków, bez cieni, chmur i wygładzania. Dla starych laptopów.' },
     { value: 'fps', icon: 'bolt', title: 'Maks. FPS', text: 'Szybka grafika, render 8 chunków, bez cieni i chmur. Dla słabszych komputerów i PvP.' },
     { value: 'balanced', icon: 'sliders', title: 'Zrównoważony', text: 'Ładna grafika i wysoki FPS. Render 12 chunków, szybkie chmury.' },
-    { value: 'quality', icon: 'sparkles', title: 'Jakość', text: 'Pełne efekty i daleki render. Dla mocnych kart graficznych.' },
+    { value: 'quality', icon: 'sparkles', title: 'Jakość', text: 'Pełne efekty i daleki render (16 chunków). Dla mocnych kart graficznych.' },
   ];
   const PRIORITY = [
     { value: 'normal', label: 'Normalny' },
-    { value: 'above_normal', label: 'Powyżej normalnego (zalecany)' },
+    { value: 'above_normal', label: 'Podwyższony (zalecany)' },
     { value: 'high', label: 'Wysoki' },
   ];
+  const TIERS = [
+    { key: 'core', title: 'Podstawowe', text: 'Sprawdzone i bezpieczne – nie zmieniają rozgrywki.' },
+    { key: 'turbo', title: 'Turbo', text: 'Dodatki dla mocnych procesorów. Część to wersje testowe – wyłącz je, jeśli coś działa dziwnie.' },
+    { key: 'shaders', title: 'Shadery', text: 'Ładniejsza grafika kosztem FPS.' },
+  ];
+  const jvmTitle = (v) => JVM.find((j) => j.value === v)?.title ?? v;
+  const gfxTitle = (v) => GFX.find((g) => g.value === v)?.title ?? v;
+  const priorityLabel = (v) => ({ normal: 'normalny', above_normal: 'podwyższony', high: 'wysoki' })[v] ?? v;
 
   /** "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)" → "NVIDIA GeForce RTX 3060". */
   function gpuName(raw) {
@@ -28,6 +38,70 @@
     const angle = /^ANGLE \((.*)\)$/.exec(s);
     if (angle) s = angle[1].split(', ')[1] ?? angle[1];
     return s.replace(/\(R\)|\(TM\)|\(0x[0-9a-f]+\)/gi, '').replace(/\s*(Direct3D|vs_|OpenGL|Vulkan).*$/i, '').replace(/\s+/g, ' ').trim().slice(0, 48) || null;
+  }
+
+  /** "Dlaczego?" – the recommendation explained, one point per setting. */
+  function whyDialog(info) {
+    const m = HS.modal({
+      title: 'Dlaczego takie ustawienia?',
+      icon: 'info',
+      body: h(
+        'div.why',
+        h('p.muted', 'Launcher sprawdził Twój komputer i tę instancję. Oto, co proponuje i z jakiego powodu:'),
+        info.recommendation.reasons.map((r) => h('div.why-item', h('span.why-icon', icon({ memory: 'memory', jvm: 'java', options: 'palette', mods: 'bolt' }[r.key] ?? 'check')), h('div', h('b', r.title), h('p', r.text)))),
+      ),
+      foot: [h('button.btn.primary', { onclick: () => m.close() }, 'Rozumiem')],
+    });
+  }
+
+  /** The window after "Zoptymalizuj wszystko": what exactly was done. */
+  function summaryDialog(instance, res) {
+    const s = res.summary ?? {};
+    const line = (ic, title, text) => h('div.why-item', h('span.why-icon.ok', icon(ic)), h('div', h('b', title), text ? h('p', text) : null));
+    const mods = s.mods;
+    const added = mods?.installed?.length ?? 0;
+    const m = HS.modal({
+      title: 'Gotowe – instancja zoptymalizowana',
+      icon: 'check-circle',
+      body: h(
+        'div.why',
+        h('p.muted', `Oto, co launcher zrobił dla „${instance.name}”:`),
+        mods
+          ? line(
+              'bolt',
+              added ? `Mody wydajnościowe: dodano ${added}${s.turbo ? ' (z dodatkami Turbo)' : ''}` : 'Mody wydajnościowe: komplet',
+              [added ? `${mods.installed.join(', ')}.` : 'Wszystkie pasujące mody były już zainstalowane.', mods.missing?.length ? ` Jeszcze niedostępne dla Minecrafta ${instance.mcVersion}: ${mods.missing.join(', ')}.` : ''].join(''),
+            )
+          : null,
+        line('memory', `Pamięć RAM: ${fmt.mb(s.memoryMb)}`, s.memoryAuto ? 'Dobierana automatycznie do komputera i liczby modów przy każdym starcie.' : 'Ustawiona ręcznie – launcher jej nie zmienia.'),
+        line('java', `Flagi Javy: ${jvmTitle(s.jvmPreset)}`, `Dobrane do Javy ${s.javaMajor}, na której działa ta instancja.`),
+        s.optionsPreset ? line('palette', `Grafika: ${s.optionsPreset.label}`, 'Zapisana w ustawieniach gry tej instancji – klawisze i reszta ustawień zostały bez zmian.') : null,
+        line('gauge', `Priorytet gry: ${priorityLabel(s.priority)}`, 'System daje grze pierwszeństwo przed programami w tle.'),
+        (res.warnings ?? []).map((w) => h('div.why-item', h('span.why-icon.warn', icon('warning')), h('div', h('p', w)))),
+        h('p.hint', { style: { marginTop: '4px' } }, state.running.has(instance.id) ? 'Gra jest teraz włączona – zmiany zobaczysz po jej ponownym uruchomieniu.' : 'Zmiany zadziałają przy następnym uruchomieniu gry.'),
+      ),
+      foot: [h('button.btn.ghost', { onclick: () => m.close() }, 'Zamknij'), h('button.btn.primary', { disabled: state.running.has(instance.id), onclick: () => (m.close(), HS.play(instance.id)) }, icon('play'), 'Graj')],
+    });
+  }
+
+  /** The exact arguments a preset starts the game with. */
+  function flagsDialog(info, preset) {
+    const flags = info.jvm.flags[preset] ?? [];
+    const text = [`-Xmx${info.jvm.memoryMb}M`, ...flags].join(' ');
+    const m = HS.modal({
+      title: `Flagi: ${jvmTitle(preset)}`,
+      icon: 'java',
+      wide: true,
+      body: h(
+        'div',
+        h('p.muted', { style: { marginBottom: '12px' } }, `Z takimi argumentami launcher uruchomi tę instancję na Javie ${info.java.major}. Nieznane flagi nigdy nie zatrzymają gry – Java je po prostu pominie.`),
+        h('div.flags', h('code', `-Xmx${info.jvm.memoryMb}M`), flags.map((f) => h('code', f))),
+      ),
+      foot: [
+        h('button.btn', { onclick: () => navigator.clipboard?.writeText(text).then(() => HS.toast('ok', 'Skopiowano flagi do schowka.'), () => HS.toast('err', 'Nie udało się skopiować.')) }, icon('copy'), 'Kopiuj'),
+        h('button.btn.primary', { onclick: () => m.close() }, 'Zamknij'),
+      ],
+    });
   }
 
   function render(root) {
@@ -45,6 +119,8 @@
     const sysCard = h('section.card');
     let info = null;
     let gfx = null;
+    let turbo = false;
+    let shaders = false;
 
     const inst = () => state.instance;
 
@@ -76,28 +152,27 @@
     function drawAuto() {
       const i = inst();
       const r = info.recommendation;
-      const btn = h('button.btn.primary', { style: { height: '46px', padding: '0 22px', fontSize: '14px' } }, icon('magic'), 'Optymalizuj automatycznie');
+      const modded = i.loader !== 'vanilla';
+      const btn = h('button.btn.primary.big', {}, icon('magic'), 'Zoptymalizuj wszystko');
       btn.onclick = () =>
         HS.busy(btn, async () => {
-          const res = await attempt(() => api.optimizer.apply(i.id, { mods: i.loader !== 'vanilla', optionsPreset: r.optionsPreset, memoryMb: null, jvmPreset: r.jvmPreset }));
+          const res = await attempt(() => api.optimizer.apply(i.id, { mods: modded, turbo, shaders, optionsPreset: r.optionsPreset, memoryMb: null, jvmPreset: r.jvmPreset }));
           if (!res) return;
           await state.refreshInstances();
-          const n = res.installed?.length ?? 0;
-          HS.toast('ok', i.loader === 'vanilla' ? 'Gotowe! Dobrano RAM, flagi Javy i grafikę.' : `Gotowe! ${n ? `Dodano ${fmt.count(n, 'mod', 'mody', 'modów')} wydajnościowe, ` : ''}dobrano RAM, flagi Javy i grafikę.`, 6000);
-          for (const m of res.missing ?? []) HS.toast('info', `${m} – brak wersji dla ${i.mcVersion}, pominięto.`);
-          load();
+          await load();
+          summaryDialog(inst(), res);
         });
       clear(
         autoCard,
         h(
-          'div.row',
-          { style: { gap: '18px', alignItems: 'center' } },
-          h('div', { style: { width: '58px', height: '58px', borderRadius: '16px', display: 'grid', placeItems: 'center', background: 'linear-gradient(160deg,var(--accent2),var(--accent3))', color: 'var(--accent-ink)', fontSize: '26px', boxShadow: '0 10px 30px rgba(var(--glow),.35)', flex: 'none' } }, icon('rocket')),
+          'div.auto',
+          h('div.auto-icon', icon('rocket')),
           h(
             'div.grow',
             h('h2', 'Jedno kliknięcie – więcej FPS'),
-            h('p.muted', { style: { marginTop: '2px' } }, `Dla Twojego komputera: ${fmt.mb(r.memoryMb)} RAM, flagi „${JVM.find((j) => j.value === r.jvmPreset)?.title}”, grafika „${GFX.find((g) => g.value === r.optionsPreset)?.title}”${i.loader !== 'vanilla' ? ' i pakiet modów wydajnościowych' : ''}.`),
+            h('p.muted', { style: { marginTop: '2px' } }, `Dla Twojego komputera: ${fmt.mb(r.memoryMb)} RAM, flagi „${jvmTitle(r.jvmPreset)}”, grafika „${gfxTitle(r.optionsPreset)}”${modded ? ` i mody wydajnościowe${turbo ? ' z dodatkami Turbo' : ''}` : ''}.`),
           ),
+          h('button.btn.ghost', { onclick: () => whyDialog(info) }, icon('info'), 'Dlaczego?'),
           btn,
         ),
       );
@@ -150,42 +225,58 @@
       return h(
         `div.grid.g${cols}`,
         { style: { gap: '10px' } },
-        list.map((p) => h(`button.preset${p.value === current ? '.on' : ''}`, { onclick: () => onPick(p.value) }, h('b', icon(p.icon), p.title, p.tag ? HS.chip(p.tag, 'accent') : null), h('small', p.text))),
+        list.map((p) => h(`button.preset${p.value === current ? '.on' : ''}${p.off ? '.off' : ''}`, { onclick: () => onPick(p.value) }, h('b', icon(p.icon), p.title, p.tag ? HS.chip(p.tag, p.off ? 'warn' : 'accent') : null), h('small', p.text))),
       );
     }
 
     function drawJvm() {
       const i = inst();
       const current = i.jvmPreset ?? state.settings.jvmPreset ?? 'recommended';
+      const java = info.java;
+      const rec = info.recommendation.jvmPreset;
+      // ZGC without generational mode (before Java 21) would stutter – there the launcher starts the tuned G1 instead.
+      const list = JVM.map((p) => {
+        if (p.value === 'zgc' && !java.zgc) return { ...p, off: true, tag: `Wymaga Javy 21`, text: `Dostępne od Minecrafta 1.20.5. W tej instancji (Java ${java.major}) launcher użyje flag zalecanych.` };
+        return { ...p, tag: p.value === rec ? 'Zalecane' : null };
+      });
+      const shown = current === 'custom' ? null : current;
       clear(
         jvmCard,
-        h('div.card-head', icon('java'), h('h2', 'Flagi Javy')),
-        presetGrid(JVM, current, async (v) => {
+        h('div.card-head', icon('java'), h('h2.grow', 'Flagi Javy'), HS.chip(`Java ${java.major}`, 'accent'), shown ? h('button.btn.sm', { onclick: () => flagsDialog(info, shown === 'zgc' && !java.zgc ? 'recommended' : shown) }, icon('list'), 'Pokaż flagi') : null),
+        presetGrid(list, current, async (v) => {
           await attempt(() => api.instances.update(i.id, { jvmPreset: v }));
           await state.refreshInstances();
           drawJvm();
         }),
-        h('p.hint', { style: { marginTop: '10px' } }, 'Launcher sam pobiera właściwą Javę (8, 17, 21…) dla każdej wersji gry – nic nie musisz instalować.'),
+        h(
+          'p.hint',
+          { style: { marginTop: '10px' } },
+          java.own
+            ? `Ta instancja używa własnej Javy ${java.major} – flagi są dobrane właśnie do niej.`
+            : `Ta instancja ${java.known ? 'działa' : 'będzie działać'} na Javie ${java.major} – launcher sam ją pobiera i dobiera do niej flagi${java.major >= 25 ? ' (w Javie 25 także mniejsze obiekty w pamięci)' : ''}.`,
+        ),
       );
     }
 
     function drawGfx() {
       const i = inst();
-      const btn = h('button.btn', {}, icon('check'), 'Zastosuj ustawienia grafiki');
+      const rec = info.recommendation.optionsPreset;
+      const btn = h('button.btn', {}, icon('check'), 'Zastosuj');
       btn.onclick = () =>
         HS.busy(btn, async () => {
           if (state.running.get(i.id) === 'running') HS.toast('warning', 'Zmiany zobaczysz po ponownym uruchomieniu gry.');
-          await attempt(() => api.optimizer.apply(i.id, { mods: false, optionsPreset: gfx }), `Ustawiono grafikę „${GFX.find((g) => g.value === gfx)?.title}”.`);
+          await attempt(() => api.optimizer.apply(i.id, { mods: false, optionsPreset: gfx }), `Ustawiono grafikę „${gfxTitle(gfx)}”.`);
         });
       clear(
         gfxCard,
         h('div.card-head', icon('palette'), h('h2.grow', 'Ustawienia grafiki'), btn),
-        presetGrid(GFX, gfx, (v) => ((gfx = v), drawGfx()), 3),
-        h('p.hint', { style: { marginTop: '10px' } }, 'Zmienia options.txt instancji (odległość renderowania, cienie, cząsteczki, VSync…). Pozostałe ustawienia zostają.'),
+        presetGrid(GFX.map((p) => ({ ...p, tag: p.value === rec ? 'Zalecane' : null })), gfx, (v) => ((gfx = v), drawGfx())),
+        h('p.hint', { style: { marginTop: '10px' } }, 'Zmienia ustawienia gry tej instancji (odległość renderowania, cienie, cząsteczki, VSync…). Klawisze i reszta zostają.'),
       );
     }
 
     function drawSys() {
+      const i = inst();
       const s = state.settings;
       const win = state.info?.platform === 'win32';
       clear(
@@ -193,7 +284,15 @@
         h('div.card-head', icon('gauge'), h('h2', 'System')),
         h(
           'div.settings',
-          setRow('Priorytet procesu gry', 'Windows daje grze więcej czasu procesora niż programom w tle.', HS.select(PRIORITY, s.processPriority, (v) => state.setSettings({ processPriority: v }))),
+          setRow('Wysoki priorytet gry', 'System daje grze więcej czasu procesora niż programom w tle. Dla wszystkich instancji.', HS.select(PRIORITY, s.processPriority, (v) => state.setSettings({ processPriority: v }))),
+          setRow(
+            'Priorytet tej instancji',
+            `Możesz ustawić inny tylko dla „${i.name}”.`,
+            HS.select([{ value: '', label: 'Jak wyżej' }, ...PRIORITY.map((p) => ({ value: p.value, label: p.label.replace(' (zalecany)', '') }))], i.processPriority ?? '', async (v) => {
+              await attempt(() => api.instances.update(i.id, { processPriority: v || null }));
+              await state.refreshInstances();
+            }),
+          ),
           win ? setRow('Wydajna karta graficzna', 'Na laptopach wymusza kartę dedykowaną (NVIDIA/AMD) zamiast zintegrowanej.', HS.toggle(s.gpuPreference, (v) => state.setSettings({ gpuPreference: v }))) : null,
           setRow('Po uruchomieniu gry', 'Ukryty launcher nie zabiera pamięci ani procesora.', HS.select([{ value: 'hide', label: 'Ukryj do zasobnika' }, { value: 'minimize', label: 'Zminimalizuj' }, { value: 'keep', label: 'Zostaw otwarty' }], s.afterLaunch, (v) => state.setSettings({ afterLaunch: v }))),
         ),
@@ -201,45 +300,64 @@
     }
     const setRow = (title, text, ctl) => h('div.set-row', h('div.txt', h('b', title), h('small', text)), h('div.ctl', ctl));
 
-    let shaders = false;
+    let planRun = 0;
     async function drawMods() {
       const i = inst();
+      const mine = ++planRun;
       const head = h('div.card-head', icon('bolt'), h('h2.grow', 'Mody wydajnościowe'));
       if (i.loader === 'vanilla') {
         return clear(modsCard, head, HS.empty('puzzle', 'Instancja bez loadera', 'Mody wydajnościowe (Sodium, Lithium…) działają z Fabric, Quilt, Forge i NeoForge. Zmień loader, aby je dodać – zwykle to +100% FPS.', h('button.btn.primary', { onclick: () => HS.editInstance(i) }, icon('pen'), 'Zmień loader')));
       }
-      const list = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }, [1, 2, 3, 4].map(() => h('div.skeleton', { style: { height: '50px' } })));
+      const list = h('div.rows', [1, 2, 3, 4].map(() => h('div.skeleton', { style: { height: '50px' } })));
       const btn = h('button.btn.primary', { disabled: true }, icon('download'), 'Zainstaluj');
-      const shaderToggle = h('label.row', { style: { gap: '8px', fontSize: '12.5px', color: 'var(--muted)', cursor: 'pointer', whiteSpace: 'nowrap', flex: 'none' } }, h('input', { type: 'checkbox', checked: shaders, onchange: (e) => ((shaders = e.target.checked), drawMods()) }), 'z shaderami (Iris)');
+      const check = (label, on, set, title) => h('label.check', { title }, h('input', { type: 'checkbox', checked: on, onchange: (e) => (set(e.target.checked), drawAuto(), drawMods()) }), label);
       head.append(btn);
-      clear(modsCard, head, h('div.row', { style: { margin: '-6px 0 12px', justifyContent: 'space-between' } }, h('span.hint', 'Sprawdzone mody, które nie zmieniają rozgrywki.'), shaderToggle), list);
+      clear(
+        modsCard,
+        head,
+        h(
+          'div.row',
+          { style: { margin: '-6px 0 12px', gap: '16px' } },
+          h('span.hint.grow', info.recommendation.turbo ? 'Twój procesor poradzi sobie z dodatkami Turbo.' : 'Zestaw podstawowy wystarczy na tym komputerze.'),
+          check('Turbo', turbo, (v) => (turbo = v), 'Dodatki dla mocnych procesorów: wielowątkowe chunki, szybsze światło'),
+          check('z shaderami', shaders, (v) => (shaders = v), 'Dodaje Iris – obsługę shaderów'),
+        ),
+        list,
+      );
       let plan;
       try {
-        plan = await api.optimizer.plan(i.id, { shaders });
+        plan = await api.optimizer.plan(i.id, { turbo, shaders });
       } catch (err) {
+        if (mine !== planRun) return undefined;
         return clear(list, HS.empty('warning', 'Brak połączenia z Modrinth', err.message, h('button.btn', { onclick: drawMods }, icon('refresh'), 'Spróbuj ponownie')));
       }
+      if (mine !== planRun) return undefined;
       const missing = plan.mods.filter((m) => m.available && !m.installed);
       btn.disabled = !missing.length;
       btn.lastChild.textContent = missing.length ? `Zainstaluj (${missing.length})` : 'Komplet';
       btn.onclick = () =>
         HS.busy(btn, async () => {
-          const res = await attempt(() => api.optimizer.apply(i.id, { mods: true, shaders }));
+          const res = await attempt(() => api.optimizer.apply(i.id, { mods: true, turbo, shaders }));
           if (!res) return;
           HS.toast('ok', `Zainstalowano: ${res.installed.join(', ') || 'nic nowego'}.`);
+          for (const w of res.warnings ?? []) HS.toast('warning', w, 8000);
           await state.refreshInstances();
           drawMods();
         });
-      clear(
+      const row = (m) =>
+        h(
+          `div.mod-check${m.available ? '' : '.na'}`,
+          h('span', { style: { color: m.installed ? 'var(--ok)' : 'var(--accent)', display: 'grid', fontSize: '18px' } }, icon(m.installed ? 'check-circle' : m.available ? 'download' : 'x-circle')),
+          h('div.grow', h('b', m.name), h('small', m.why)),
+          h('span.state', m.installed ? HS.chip('Zainstalowany', 'ok') : m.available ? HS.chip(m.version?.number ? `Dostępny · ${m.version.number}`.slice(0, 26) : 'Dostępny', 'accent') : HS.chip(`Brak dla ${i.mcVersion}`)),
+        );
+      return clear(
         list,
-        plan.mods.map((m) =>
-          h(
-            `div.mod-check${m.available ? '' : '.na'}`,
-            h('span', { style: { color: m.installed ? 'var(--ok)' : 'var(--accent)', display: 'grid', fontSize: '18px' } }, icon(m.installed ? 'check-circle' : m.available ? 'download' : 'x-circle')),
-            h('div.grow', h('b', m.name), h('small', m.why)),
-            h('span.state', m.installed ? HS.chip('Zainstalowany', 'ok') : m.available ? HS.chip(m.version?.number ? `Dostępny · ${m.version.number}`.slice(0, 32) : 'Dostępny', 'accent') : HS.chip(`Brak dla ${i.mcVersion}`)),
-          ),
-        ),
+        TIERS.map((t) => {
+          const mods = plan.mods.filter((m) => (m.tier ?? 'core') === t.key);
+          if (!mods.length) return null;
+          return [h('div.tier-head', h('b', t.title), h('span', t.text), h('span.count', `${mods.filter((m) => m.installed).length}/${mods.filter((m) => m.available).length}`)), mods.map(row)];
+        }),
       );
     }
 
@@ -259,15 +377,25 @@
       ),
     );
     load();
-    let lastId = inst().id;
-    const off = bus.on('settings', () => {
-      if (inst()?.id !== lastId) {
-        lastId = inst().id;
-        drawInstBtn();
+    // Another instance, or the same one with another game version, loader or Java → fresh advice and a fresh mod list.
+    const key = () => {
+      const i = inst();
+      return i ? [i.id, i.mcVersion, i.loader, i.javaPath ?? ''].join('|') : '';
+    };
+    let shown = key();
+    const refresh = () => {
+      drawInstBtn();
+      if (!inst()) return;
+      if (key() !== shown) {
+        shown = key();
         load();
-      }
-    });
-    return off;
+      } else if (info) drawSys();
+    };
+    const offs = [bus.on('settings', refresh), bus.on('instances', refresh)];
+    return () => {
+      planRun += 1;
+      offs.forEach((f) => f());
+    };
   }
 
   HS.views.optimize = { title: 'Optymalizacja', icon: 'gauge', render };

@@ -153,3 +153,38 @@ test('versions: NeoForge → Minecraft mapping and the default loader version', 
   const toml = readModsToml("modLoader=\"javafml\"\n[[mods]]\nmodId=\"create\"\nversion=\"0.5.1\"\ndisplayName=\"Create\"\ndescription='''\nBuilding tools\n'''\n[[dependencies.create]]\nmodId=\"forge\"");
   assert.deepEqual([toml.modId, toml.version, toml.displayName], ['create', '0.5.1', 'Create']);
 });
+
+test('settings: the accent colour is one of the known ones; instances keep their own process priority', () => {
+  const { ACCENTS } = require('../src/main/settings');
+  assert.deepEqual(ACCENTS, ['orange', 'gold', 'red', 'blue', 'green', 'purple']);
+  assert.equal(DEFAULT_SETTINGS.accent, 'orange');
+  const file = path.join(tmpDir(), 'settings.json');
+  const s = createSettings(file);
+  assert.equal(s.set({ accent: 'blue' }).accent, 'blue');
+  assert.equal(s.set({ accent: 'url(javascript:alert(1))' }).accent, 'blue', 'anything else is ignored');
+  assert.equal(createSettings(file).get().accent, 'blue');
+  const instances = createInstances(createPaths(tmpDir()));
+  const a = instances.create({ name: 'A', mcVersion: '1.21.1' });
+  assert.equal(a.processPriority, undefined, 'new instances follow the launcher setting');
+  assert.equal(instances.update(a.id, { processPriority: 'high' }).processPriority, 'high');
+  assert.equal(instances.update(a.id, { processPriority: 'realtime' }).processPriority, null);
+  assert.equal(instances.update(a.id, { processPriority: '' }).processPriority, null);
+  assert.equal(instances.duplicate(instances.update(a.id, { processPriority: 'normal' }).id).processPriority, 'normal');
+});
+
+test('accounts: the skin shown in the launcher can be updated, a forced refresh skips the stored token', async () => {
+  let key = null;
+  const crypt = createCrypt({ keyFile: 'k', readKey: () => key, writeKey: (f, k) => (key = k) });
+  FakeAuth.profile = { id: 'uuid-1', name: 'Gracz', skins: [] };
+  FakeAuth.refreshed.length = 0;
+  const file = path.join(tmpDir(), 'accounts.json');
+  const accounts = createAccounts({ file, crypt, AuthClass: FakeAuth });
+  await accounts.login();
+  assert.equal((await accounts.launchAuth('uuid-1')).accessToken, 'mc-token-1');
+  assert.equal((await accounts.launchAuth('uuid-1', { force: true })).accessToken, 'mc-token-2');
+  assert.deepEqual(FakeAuth.refreshed, ['refresh-1']);
+  assert.equal((await accounts.launchAuth('uuid-1')).accessToken, 'mc-token-2', 'the fresh token is stored');
+  const changed = accounts.setSkin('uuid-1', { skinUrl: 'http://textures.minecraft.net/texture/abc', skinVariant: 'slim' });
+  assert.deepEqual([changed.skinUrl, changed.skinVariant], ['https://textures.minecraft.net/texture/abc', 'SLIM']);
+  assert.deepEqual([createAccounts({ file, crypt, AuthClass: FakeAuth }).list()[0].skinUrl, accounts.setSkin('uuid-1').skinUrl, accounts.setSkin('nie-ma', {})], ['https://textures.minecraft.net/texture/abc', null, null]);
+});

@@ -1,5 +1,5 @@
 'use strict';
-/* Ustawienia – accounts, game window, Java, downloads, Discord, folders, disk space and clean-up, about. */
+/* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's colour, folders, disk space and clean-up, about. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -41,6 +41,31 @@
             )
           : HS.empty('user', 'Brak kont', 'Zaloguj się kontem Microsoft z kupionym Minecraftem: Java Edition.'),
         h('p.hint', { style: { marginTop: '12px' } }, state.info?.secureStorage ? 'Tokeny logowania są zaszyfrowane przez system (Windows DPAPI / pęk kluczy). Launcher nigdy nie widzi Twojego hasła.' : 'Tokeny logowania są zaszyfrowane kluczem launchera. Launcher nigdy nie widzi Twojego hasła.'),
+      );
+    };
+    draw();
+    return { el: card, draw };
+  }
+
+  /** Wygląd: the accent colour of the whole launcher (buttons, highlights, progress bars). */
+  function lookCard() {
+    const card = h('section.card');
+    const draw = () => {
+      const current = HS.ACCENTS.find((a) => a.value === state.settings.accent) ?? HS.ACCENTS[0];
+      clear(
+        card,
+        h('div.card-head', icon('palette'), h('h2', 'Wygląd')),
+        row(
+          'Kolor launchera',
+          'Przyciski, podświetlenia i paski postępu w Twoim kolorze.',
+          h(
+            'div.swatches',
+            h('span.dim', current.label),
+            HS.ACCENTS.map((a) =>
+              h(`button.swatch${a.value === current.value ? '.on' : ''}`, { type: 'button', title: a.label, 'aria-label': `Kolor: ${a.label}`, 'aria-pressed': String(a.value === current.value), style: { '--c': a.color }, onclick: () => attempt(() => state.setSettings({ accent: a.value })).then(draw) }, a.value === current.value ? icon('check') : null),
+            ),
+          ),
+        ),
       );
     };
     draw();
@@ -184,6 +209,7 @@
 
   function render(root) {
     const acc = accountsCard();
+    const look = lookCard();
     const disk = diskCard();
     const s = () => state.settings;
     const set = (patch) => attempt(() => state.setSettings(patch));
@@ -239,7 +265,7 @@
                 ramVal,
               ),
             ),
-            row('Domyślne flagi Javy', null, HS.select([{ value: 'recommended', label: 'Zalecane (G1GC)' }, { value: 'zgc', label: 'ZGC – mniej przycięć' }, { value: 'vanilla', label: 'Domyślne Mojang' }, { value: 'custom', label: 'Własne' }], s().jvmPreset, (v) => set({ jvmPreset: v }))),
+            row('Domyślne flagi Javy', 'Launcher dopasowuje je do Javy każdej instancji (8, 17, 21 albo 25).', HS.select([{ value: 'recommended', label: 'Zalecane (G1GC)' }, { value: 'zgc', label: 'ZGC – mniej przycięć (Java 21+)' }, { value: 'vanilla', label: 'Domyślne Mojang' }, { value: 'custom', label: 'Własne' }], s().jvmPreset, (v) => set({ jvmPreset: v }))),
             row('Własne argumenty Javy', 'Używane przy flagach „Własne”.', jvmArgs),
             row('Własna Java', 'Zostaw puste – launcher pobierze właściwą Javę dla każdej wersji.', javaInput),
           ),
@@ -249,6 +275,7 @@
             row('Równoległe pobierania', 'Więcej = szybciej na dobrym łączu.', HS.select([4, 8, 16, 32, 48].map((n) => ({ value: n, label: `${n}` })), s().concurrentDownloads, (v) => set({ concurrentDownloads: Number(v) }))),
             row('Folder launchera', state.info?.root ?? '', h('button.btn', { onclick: () => attempt(() => api.app.openFolder(null)) }, icon('folder'), 'Otwórz')),
           ),
+          look.el,
           disk.el,
           h(
             'section.card',

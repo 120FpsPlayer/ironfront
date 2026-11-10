@@ -41,6 +41,8 @@ function clean(data, base = {}) {
   if ('optimized' in data) out.optimized = Boolean(data.optimized);
   if ('autoJoinServer' in data) out.autoJoinServer = Boolean(data.autoJoinServer);
   if ('hammerClient' in data) out.hammerClient = Boolean(data.hammerClient);
+  // null = the launcher setting (Ustawienia / Optymalizacja)
+  if ('processPriority' in data) out.processPriority = ['normal', 'above_normal', 'high'].includes(data.processPriority) ? data.processPriority : null;
   return out;
 }
 

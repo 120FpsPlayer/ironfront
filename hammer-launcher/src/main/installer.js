@@ -11,8 +11,9 @@ const net = require('node:net');
 const path = require('node:path');
 const { Version } = require('@xmcl/core');
 const installer = require('@xmcl/installer');
-const { Agent, interceptors } = require('undici');
-const { ensureJava, componentOf, majorOf, runtimeDir } = require('./java');
+const { interceptors } = require('undici');
+const { createAgent } = require('./proxy');
+const { ensureJava, componentOf, majorOf, runtimeDir, detectJavaMajor } = require('./java');
 const { loaderVersions, pickLoaderVersion } = require('./versions');
 
 // Node tries IPv6 and IPv4 in turn and gives each address only 250 ms by default – on a busy or slow connection
@@ -23,7 +24,7 @@ const RETRY_CODES = ['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EN
 
 /** Parallel downloads with retries and redirects (@xmcl reads the redirect history from the request context). */
 function createDispatcher(connections = 16) {
-  return new Agent({ connections, pipelining: 1, connect: { timeout: 30_000, autoSelectFamily: true, autoSelectFamilyAttemptTimeout: 2000 } }).compose(
+  return createAgent({ connections, pipelining: 1, connect: { timeout: 30_000, autoSelectFamily: true, autoSelectFamilyAttemptTimeout: 2000 } }).compose(
     interceptors.retry({ maxRetries: 4, minTimeout: 500, maxTimeout: 8000, errorCodes: RETRY_CODES }),
     interceptors.redirect({ maxRedirections: 5 }),
   );
@@ -134,7 +135,7 @@ async function ensureLoader(paths, instance, { java, progress, dispatcher } = {}
 const LOADER_NAMES = { fabric: 'Fabric', quilt: 'Quilt', neoforge: 'NeoForge', forge: 'Forge', vanilla: 'Vanilla' };
 
 /**
- * Everything an instance needs before launch. Returns { versionId, javaPath, javaMajor }.
+ * Everything an instance needs before launch. Returns { versionId, javaPath, javaMajor, component }.
  * `instance.javaPath` / `settings.javaPath` override the downloaded Java.
  */
 async function prepareInstance({ paths, instance, settings, progress, instances }) {
@@ -164,7 +165,8 @@ async function prepareInstance({ paths, instance, settings, progress, instances 
       }
     }
     instances?.patchInternal(instance.id, { versionId, installedFor: key, loaderVersion: instance.loaderVersion ?? null, installedLoaderVersion: loaderVersion ?? null, verifyFiles: undefined });
-    return { versionId, javaPath, javaMajor: majorOf(vanilla), component };
+    // The JVM flags follow the Java that really starts: an own Java may be newer than the one the game asks for.
+    return { versionId, javaPath, javaMajor: (ownJava && detectJavaMajor(javaPath)) || majorOf(vanilla), component };
   } finally {
     progress?.flush();
     dispatcher.close().catch(() => null);

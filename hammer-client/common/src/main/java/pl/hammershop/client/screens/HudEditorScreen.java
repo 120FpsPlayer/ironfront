@@ -52,7 +52,7 @@ public class HudEditorScreen extends UiScreen {
         float pw = 300;
         float ph = 96;
         float px = (ui.w - pw) / 2f;
-        float py = Math.max(60, ui.h * 0.3f - ph / 2f);
+        float py = Math.max(60, ui.h * 0.5f - ph / 2f); // the middle of the screen: no default HUD stack reaches it
         boolean overPanel = dragging == null && ui.hover(px, py, pw, ph);
 
         d.push();

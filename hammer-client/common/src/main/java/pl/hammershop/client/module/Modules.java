@@ -9,11 +9,13 @@ import pl.hammershop.client.module.feature.Zoom;
 import pl.hammershop.client.module.hud.Armor;
 import pl.hammershop.client.module.hud.Compass;
 import pl.hammershop.client.module.hud.DurabilityWarning;
+import pl.hammershop.client.module.hud.HealthWarning;
 import pl.hammershop.client.module.hud.InfoHuds;
 import pl.hammershop.client.module.hud.InventoryHud;
 import pl.hammershop.client.module.hud.ItemCounter;
 import pl.hammershop.client.module.hud.Keystrokes;
 import pl.hammershop.client.module.hud.Potions;
+import pl.hammershop.client.module.hud.TargetHud;
 import pl.hammershop.client.module.hud.Watermark;
 
 import java.util.ArrayList;
@@ -53,6 +55,9 @@ public final class Modules {
             add(new InfoHuds.Combo());
             add(new InfoHuds.Reach());
         }
+        add(new TargetHud());
+        add(new InfoHuds.Health());
+        add(new InfoHuds.BlockInfo());
         add(new InfoHuds.Speed());
         add(new InfoHuds.Saturation());
         add(new InfoHuds.Server());
@@ -69,6 +74,7 @@ public final class Modules {
         add(new Tweaks.ToggleSprint());
         add(new Tweaks.ToggleSneak());
         add(new DurabilityWarning());
+        add(new HealthWarning());
         // visual
         if (p.supports(Feature.CROSSHAIR)) add(crosshair = new Crosshair());
         if (p.supports(Feature.FULLBRIGHT)) add(new Tweaks.Fullbright());

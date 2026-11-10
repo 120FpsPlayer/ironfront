@@ -32,7 +32,7 @@ T = {
     'title.shop': ('Sklep', 'Shop'), 'title.quit': ('Wyjdź', 'Quit'),
     'news.title': ('Co nowego', "What's new"),
     'news.0': ('Działa od Minecrafta 1.21 do 26.3', 'Works from Minecraft 1.21 to 26.3'),
-    'news.1': ('Ponad 30 modułów z własnymi ustawieniami', 'Over 30 modules, each with its own options'),
+    'news.1': ('Prawie 40 modułów z własnymi ustawieniami', 'Nearly 40 modules, each with its own options'),
     'news.2': ('Edytor HUD z przyciąganiem i skalowaniem', 'HUD editor with snapping and scaling'),
     'news.3': ('Profile: osobny układ na PvP i survival', 'Profiles: one layout for PvP, one for survival'),
     'news.4': ('Własny celownik, freelook i fullbright', 'Custom crosshair, freelook and fullbright'),
@@ -79,6 +79,8 @@ T = {
     'hud.reach': ('Zasięg', 'Reach'), 'hud.saturation': ('Nasycenie', 'Saturation'), 'hud.stopwatch': ('Stoper', 'Stopwatch'),
     'hud.session': ('Sesja', 'Session'), 'hud.light': ('Światło', 'Light'), 'hud.lmb': ('LPM', 'LMB'), 'hud.rmb': ('PPM', 'RMB'),
     'hud.sprinting': ('Sprint włączony', 'Sprint toggled'),
+    'hud.health': ('Życie', 'Health'), 'hud.armor': ('Pancerz', 'Armour'), 'hud.low_health': ('Mało życia: %s serca', 'Low health: %s hearts'),
+    'hud.sample_target': ('Steve', 'Steve'), 'hud.sample_block': ('Ruda diamentu', 'Diamond Ore'),
     'hud.durability': ('Niska wytrzymałość: %s (%s)', 'Low durability: %s (%s)'),
     'hud.sample_effect': ('Szybkość', 'Speed'), 'hud.sample_effect2': ('Siła', 'Strength'), 'hud.sample_item': ('Diamentowy kilof', 'Diamond Pickaxe'),
     'direction.north': ('północ', 'north'), 'direction.south': ('południe', 'south'), 'direction.east': ('wschód', 'east'), 'direction.west': ('zachód', 'west'),
@@ -115,6 +117,10 @@ MODULES = {
     'togglesneak': ('Przełączane skradanie', 'Skradanie włącza się jednym wciśnięciem.', 'Toggle sneak', 'Sneaking switches on with one press.'),
     'durability': ('Ostrzeżenie o wytrzymałości', 'Ostrzega, zanim pancerz lub narzędzie się zepsuje.', 'Durability warning', 'Warns before armour or a tool breaks.'),
     'crosshair': ('Własny celownik', 'Twój kształt, rozmiar i kolor celownika.', 'Custom crosshair', 'Your own crosshair shape, size and colour.'),
+    'target': ('Cel', 'Kogo masz na celowniku: nazwa, pasek życia i odległość.', 'Target HUD', 'Who you are aiming at: name, health bar and distance.'),
+    'health': ('Licznik życia', 'Życie i pancerz jako liczby – łatwiej niż liczyć serca.', 'Health display', 'Health and armour as numbers – easier than counting hearts.'),
+    'blockinfo': ('Co to za blok', 'Nazwa bloku, na który patrzysz.', 'Block info', 'The name of the block you are looking at.'),
+    'lowhealth': ('Ostrzeżenie o życiu', 'Miga, gdy zostaje Ci mało serc.', 'Low health warning', 'Flashes when you are down to a few hearts.'),
     'fullbright': ('Fullbright', 'Jasno w jaskiniach i w nocy, bez pochodni.', 'Fullbright', 'Bright caves and nights, no torches needed.'),
     'timechanger': ('Pora dnia', 'Własna pora dnia – widzisz ją tylko Ty.', 'Time changer', 'Your own time of day – only you see it.'),
     'weather': ('Bezchmurne niebo', 'Wyłącza deszcz i burzę na Twoim ekranie.', 'Clear weather', 'No rain or thunder on your screen.'),
@@ -150,6 +156,8 @@ SETTINGS = {
     'crosshair_style': ('Kształt', 'Shape'), 'size': ('Długość', 'Length'), 'gap': ('Odstęp od środka', 'Gap'), 'thickness': ('Grubość', 'Thickness'),
     'color': ('Kolor', 'Colour'), 'outline': ('Czarna obwódka', 'Black outline'), 'center_dot': ('Kropka w środku', 'Centre dot'),
     'hide_third_person': ('Ukryj w widoku z trzeciej osoby', 'Hide in third person'),
+    'distance': ('Odległość do celu', 'Distance to the target'), 'only_players': ('Tylko gracze', 'Players only'),
+    'armor_points': ('Punkty pancerza', 'Armour points'), 'hearts': ('Ostrzegaj poniżej (serca)', 'Warn below (hearts)'),
 }
 
 OPTIONS = {

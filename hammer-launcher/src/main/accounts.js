@@ -97,11 +97,24 @@ function createAccounts({ file, crypt, config = {}, AuthClass, windowProperties 
       return true;
     },
 
-    /** { id, name, accessToken } for a launch – refreshes the game token when it is about to expire. */
-    async launchAuth(id) {
+    /** The skin shown next to the account (after the player changed it in the Skórka tab). */
+    setSkin(id, { skinUrl = null, skinVariant = 'CLASSIC' } = {}) {
+      const account = state.accounts.find((a) => a.id === id);
+      if (!account) return null;
+      account.skinUrl = httpsUrl(skinUrl);
+      account.skinVariant = String(skinVariant).toUpperCase() === 'SLIM' ? 'SLIM' : 'CLASSIC';
+      save();
+      return publicInfo(account);
+    },
+
+    /**
+     * { id, name, accessToken } for a launch – refreshes the game token when it is about to expire, or right away
+     * with `force` (the Minecraft services refused the stored one).
+     */
+    async launchAuth(id, { force = false } = {}) {
       const account = state.accounts.find((a) => a.id === id) ?? state.accounts[0];
       if (!account) throw new Error('Zaloguj się kontem Microsoft w zakładce Konta.');
-      if (account.exp - Date.now() > 5 * 60 * 1000 && account.token) {
+      if (!force && account.exp - Date.now() > 5 * 60 * 1000 && account.token) {
         try {
           return { id: account.id, name: account.name, accessToken: crypt.decrypt(account.token) };
         } catch {

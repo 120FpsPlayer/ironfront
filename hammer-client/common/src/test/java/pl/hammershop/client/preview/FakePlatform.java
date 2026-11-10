@@ -89,4 +89,8 @@ public final class FakePlatform implements Platform, Game {
         for (int i = 0; i < 36; i++) inv.add(i % 4 == 0 ? new Item("item" + i, i == 12 ? "minecraft:arrow" : i == 16 ? "minecraft:golden_apple" : "minecraft:stone", "Przedmiot", 1 + i * 3 % 64, 0, 0) : Item.EMPTY);
         return inv;
     }
+    public int armor() { return 12; }
+    public float absorption() { return 0; }
+    public Target target() { return new Target("Steve", 13f, 20f, 2.7, true); }
+    public String block() { return "Ruda diamentu"; }
 }

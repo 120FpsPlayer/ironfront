@@ -7,6 +7,13 @@
  *
  *   node scripts/live-check.js [--no-game] [--quick]
  *
+ * Environment:
+ *   MC_VERSION            the Minecraft version of the Fabric and Hammer Client checks (default 1.21.1)
+ *   HAMMER_CLIENT_DIR     the built Hammer Client folder (versions.json + jars, `./gradlew dist` → build/dist)
+ *   HAMMER_CLIENT_JAR     the old single jar for 1.21 / 1.21.1 (still accepted)
+ *   HAMMER_CLIENT_ONLY=1  only install and start the Hammer Client instance for MC_VERSION – one run per version
+ *   GAME_TIMEOUT_MS, KEEP=1 (keep the test folder), DISCORD_INVITE
+ *
  * The game is started with a placeholder test profile only to verify the launch command; the launcher
  * itself has no offline accounts – players always sign in with Microsoft.
  */
@@ -17,6 +24,9 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createServices } = require('../src/main/services');
 const { loadConfig } = require('../src/main/config');
+const { useSystemProxy } = require('../src/main/proxy');
+
+useSystemProxy();
 
 const args = new Set(process.argv.slice(2));
 const NO_GAME = args.has('--no-game');
@@ -55,8 +65,10 @@ const javaOnly = async (options) => spawn(options.javaPath.replace(/javaw(\.exe)
 
 const testProfile = { launchAuth: async () => ({ id: '0123456789abcdef0123456789abcdef', name: 'HammerShopCI', accessToken: '0' }) };
 const config = loadConfig(path.join(__dirname, '..', 'launcher.config.json'));
+const clientDir = process.env.HAMMER_CLIENT_DIR ? path.resolve(process.env.HAMMER_CLIENT_DIR) : null;
 const clientJar = process.env.HAMMER_CLIENT_JAR ? path.resolve(process.env.HAMMER_CLIENT_JAR) : null;
-const services = createServices({ root, config: { ...config, server: { address: '' } }, accounts: testProfile, emit, clientJar, launchFn: NO_GAME ? javaOnly : undefined });
+const HC_ONLY = process.env.HAMMER_CLIENT_ONLY === '1';
+const services = createServices({ root, config: { ...config, server: { address: '' } }, accounts: testProfile, emit, clientDir, clientJar, launchFn: NO_GAME ? javaOnly : undefined });
 
 async function step(name, fn) {
   const t = Date.now();
@@ -110,9 +122,55 @@ function playAndWatch(instance, ready) {
   });
 }
 
+/**
+ * Hammer Client for MC_VERSION: the launcher picks the jar made for that version, adds Fabric API and starts the
+ * game; the mod reports its main menu in the log ("[Hammer Client] Menu główne Hammer otwarte").
+ */
+async function hammerClientCheck() {
+  const client = services.hammerClient.info();
+  if (!clientDir && !clientJar) {
+    if (HC_ONLY) await step('Hammer Client', async () => assert(false, 'HAMMER_CLIENT_ONLY=1 wymaga HAMMER_CLIENT_DIR (albo HAMMER_CLIENT_JAR).'));
+    else log('\n(pominięto Hammer Client – brak HAMMER_CLIENT_DIR / HAMMER_CLIENT_JAR)');
+    return;
+  }
+  const label = `Hammer Client${client.version ? ` ${client.version}` : ''} na Minecraft ${MC}`;
+  if (!client.available || !client.versions.includes(MC)) {
+    const why = client.versions.length ? `obsługiwane wersje: ${client.versions.join(', ')}` : `brak poprawnego versions.json w ${clientDir ?? clientJar}`;
+    // Asked for exactly this version → a failure; in the full run only a note.
+    if (HC_ONLY) await step(label, async () => assert(false, `Brak Hammer Client dla Minecrafta ${MC} – ${why}.`));
+    else log(`\n(pominięto Hammer Client – brak pliku dla Minecrafta ${MC}; ${why})`);
+    return;
+  }
+  const hc = services.instances.create({ name: 'Test Hammer Client', mcVersion: MC, loader: 'fabric', optimized: false, hammerClient: true });
+  await step(`${label}: ${NO_GAME ? 'instalacja w instancji' : 'start gry z menu Hammer'}`, async () => {
+    const line = await playAndWatch(hc, NO_GAME ? undefined : /\[Hammer Client\] Menu główne Hammer otwarte/);
+    const dir = services.instances.dir(hc.id);
+    const mods = fs.readdirSync(path.join(dir, 'mods'));
+    assert(mods.includes('hammer-client.jar'), `Brak hammer-client.jar: ${mods.join(', ')}`);
+    assert(mods.some((f) => /^fabric-api/i.test(f)), `Brak Fabric API: ${mods.join(', ')}`);
+    assert(fs.existsSync(path.join(dir, 'config', 'hammerclient-launcher.json')), 'Brak pliku ustawień od launchera');
+    return `${mods.join(', ')}; ${line}`;
+  });
+}
+
+function finish() {
+  const failed = results.filter((r) => !r.ok);
+  log(`\n── Podsumowanie ──\n${results.map((r) => `${r.ok ? '✔' : '✘'} ${r.name} (${r.s} s)`).join('\n')}`);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Test na żywo – ${process.platform}${HC_ONLY ? ` – Hammer Client ${MC}` : ''}\n\n| | Krok | Czas | Wynik |\n|---|---|---|---|\n${results.map((r) => `| ${r.ok ? '✅' : '❌'} | ${r.name} | ${r.s} s | ${String(r.detail ?? '').replace(/\|/g, '/').replace(/\n[\s\S]*/, '').slice(0, 160)} |`).join('\n')}\n\n`);
+  }
+  if (!process.env.KEEP) fs.rmSync(root, { recursive: true, force: true });
+  process.exit(failed.length ? 1 : 0);
+}
+
 async function main() {
   log(`Hammer Launcher – test na żywo (${process.platform}, Node ${process.version})\nFolder: ${root}`);
   services.settings.set({ concurrentDownloads: 24 });
+
+  if (HC_ONLY) {
+    await hammerClientCheck();
+    return finish();
+  }
 
   await step('Modrinth: wyszukiwanie', async () => {
     const res = await services.modrinth.search({ query: 'sodium', type: 'mod', mcVersion: MC, loader: 'fabric' });
@@ -160,20 +218,7 @@ async function main() {
     assert(mods.some((m) => /sodium/i.test(m)), `Brak Sodium po optymalizacji: ${mods.join(', ')}`);
     return `${mods.length} modów; ${line}`;
   });
-  if (clientJar && fs.existsSync(clientJar)) {
-    const hc = services.instances.create({ name: 'Test Hammer Client', mcVersion: MC, loader: 'fabric', optimized: false, hammerClient: true });
-    await step(`Hammer Client: ${NO_GAME ? 'instalacja w instancji' : 'start gry z menu Hammer'}`, async () => {
-      const line = await playAndWatch(hc, NO_GAME ? undefined : /\[Hammer Client\] Menu główne Hammer otwarte/);
-      const dir = services.instances.dir(hc.id);
-      const mods = fs.readdirSync(path.join(dir, 'mods'));
-      assert(mods.includes('hammer-client.jar'), `Brak hammer-client.jar: ${mods.join(', ')}`);
-      assert(mods.some((f) => /^fabric-api/i.test(f)), `Brak Fabric API: ${mods.join(', ')}`);
-      assert(fs.existsSync(path.join(dir, 'config', 'hammerclient-launcher.json')), 'Brak pliku ustawień od launchera');
-      return `${mods.join(', ')}; ${line}`;
-    });
-  } else {
-    log('\n(pominięto Hammer Client – brak HAMMER_CLIENT_JAR)');
-  }
+  await hammerClientCheck();
 
   await step('Sprawdzenie aktualizacji modów', async () => {
     const upd = await services.content.checkUpdates(services.instances.get(inst.id), 'mod');
@@ -212,13 +257,7 @@ async function main() {
     });
   }
 
-  const failed = results.filter((r) => !r.ok);
-  log(`\n── Podsumowanie ──\n${results.map((r) => `${r.ok ? '✔' : '✘'} ${r.name} (${r.s} s)`).join('\n')}`);
-  if (process.env.GITHUB_STEP_SUMMARY) {
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Test na żywo – ${process.platform}\n\n| | Krok | Czas | Wynik |\n|---|---|---|---|\n${results.map((r) => `| ${r.ok ? '✅' : '❌'} | ${r.name} | ${r.s} s | ${String(r.detail ?? '').replace(/\|/g, '/').replace(/\n[\s\S]*/, '').slice(0, 160)} |`).join('\n')}\n\n`);
-  }
-  if (!process.env.KEEP) fs.rmSync(root, { recursive: true, force: true });
-  process.exit(failed.length ? 1 : 0);
+  finish();
 }
 
 main().catch((err) => {

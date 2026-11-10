@@ -29,8 +29,12 @@ import net.minecraft.util.Util;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import pl.hammershop.client.Hammer;
 import pl.hammershop.client.api.Game;
 import pl.hammershop.client.api.Keys;
@@ -57,8 +61,7 @@ public final class FabricPlatform implements Platform, Game {
     public static final FabricPlatform INSTANCE = new FabricPlatform();
     static final Map<String, KeyMapping> KEYS = new LinkedHashMap<>();
     private static final GfxImpl GFX = new GfxImpl();
-    /** Time of day as the server says, before the time changer (set by TimeMixin). */
-    public static long realDayTime = Long.MIN_VALUE;
+    private static boolean readingRealTime;
     private static boolean ready;
     private static boolean failed;
     private static long pauseDrawn;
@@ -107,6 +110,7 @@ public final class FabricPlatform implements Platform, Game {
         if (failed) return false;
         Minecraft mc = mc();
         if (mc == null || mc.options == null) return false;
+        loadHookedClasses();
         try {
             Hammer.init(INSTANCE);
             Runtime.getRuntime().addShutdownHook(new Thread(Hammer::shutdown, "Hammer Client"));
@@ -116,6 +120,26 @@ public final class FabricPlatform implements Platform, Game {
             Log.warn("Nie udało się uruchomić Hammer Client – gra działa dalej bez niego", t);
         }
         return ready;
+    }
+
+    /**
+     * Some of our hooks sit in classes the game only loads when you join a world. Touching those classes at start
+     * makes a hook that does not fit this game version fail right away – where the automatic tests of every
+     * supported version see it – instead of in the middle of joining a server.
+     */
+    private static void loadHookedClasses() {
+        Class<?>[] hooked = {
+            PauseScreen.class, net.minecraft.client.multiplayer.MultiPlayerGameMode.class, net.minecraft.client.multiplayer.ClientPacketListener.class,
+            ClientLevel.class, net.minecraft.world.level.Level.class, LocalPlayer.class, net.minecraft.client.Camera.class,
+            //#if MC >= 26.3
+            net.minecraft.client.ClientClockManager.ClientClockInstance.class,
+            //#elif MC >= 26.1
+            net.minecraft.client.ClientClockManager.class,
+            //#else
+            ClientLevel.ClientLevelData.class,
+            //#endif
+        };
+        if (hooked.length == 0) throw new IllegalStateException();
     }
 
     // ───────────── hooks (called by the mixins) ─────────────
@@ -143,6 +167,11 @@ public final class FabricPlatform implements Platform, Game {
 
     private static boolean onKeyboard(KeyMapping mapping) {
         return !mapping.isUnbound() && InputConstants.getKey(mapping.saveString()).getType() == InputConstants.Type.KEYSYM;
+    }
+
+    /** The time the game should show: the time changer's pick, or the real one (always the real one for our own HUD). */
+    public static long shownTime(long real) {
+        return readingRealTime ? real : Hammer.dayTime(real);
     }
 
     /** The vanilla title screen becomes our main menu (unless the player turned that off). */
@@ -454,15 +483,6 @@ public final class FabricPlatform implements Platform, Game {
         return screen() == null && mc().mouseHandler.isMouseGrabbed();
     }
 
-    @Override
-    public boolean supports(Feature feature) {
-        //#if MC >= 26.1
-        return feature != Feature.TIME_CHANGER;
-        //#else
-        return true;
-        //#endif
-    }
-
     // ───────────── Game ─────────────
 
     private static LocalPlayer player() {
@@ -556,12 +576,16 @@ public final class FabricPlatform implements Platform, Game {
     public long dayTime() {
         ClientLevel level = mc().level;
         if (level == null) return 0;
-        //#if MC >= 26.1
-        return level.getDefaultClockTime();
-        //#else
-        long shown = level.getDayTime(); // TimeMixin notes the real time on the way
-        return realDayTime != Long.MIN_VALUE ? realDayTime : shown;
-        //#endif
+        readingRealTime = true; // the day counter and clock show the server's time, not the time changer's
+        try {
+            //#if MC >= 26.1
+            return level.getDefaultClockTime();
+            //#else
+            return level.getDayTime();
+            //#endif
+        } finally {
+            readingRealTime = false;
+        }
     }
 
     @Override
@@ -611,6 +635,39 @@ public final class FabricPlatform implements Platform, Game {
         LocalPlayer p = player();
         if (p == null) return 0;
         return mc().level.getLightEngine().getLayerListener(LightLayer.BLOCK).getLightValue(p.blockPosition());
+    }
+
+    @Override
+    public int armor() {
+        LocalPlayer p = player();
+        return p == null ? 0 : p.getArmorValue();
+    }
+
+    @Override
+    public float absorption() {
+        LocalPlayer p = player();
+        return p == null ? 0 : p.getAbsorptionAmount();
+    }
+
+    @Override
+    public Target target() {
+        LocalPlayer p = player();
+        if (p == null || !(mc().crosshairPickEntity instanceof LivingEntity e) || !e.isAlive()) return null;
+        double distance = Math.sqrt(e.getBoundingBox().distanceToSqr(p.getEyePosition()));
+        return new Target(e.getName().getString(), e.getHealth(), e.getMaxHealth(), distance, e instanceof Player);
+    }
+
+    private String block = "";
+    private int blockTick = -1;
+
+    @Override
+    public String block() {
+        Minecraft mc = mc();
+        if (player() == null) return "";
+        if (blockTick == ticks) return block;
+        blockTick = ticks;
+        block = mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? mc.level.getBlockState(hit.getBlockPos()).getBlock().getName().getString() : "";
+        return block;
     }
 
     // The lists below are rebuilt once per game tick, not per frame.

@@ -84,6 +84,16 @@ const api = {
   },
   cleanup: { usage: () => call('cleanup:usage'), plan: () => call('cleanup:plan'), apply: (keys) => call('cleanup:apply', keys) },
   logs: { share: (id) => call('logs:share', id) },
+  bundles: { list: () => call('bundles:list'), plan: (id, bundleId) => call('bundles:plan', id, bundleId), install: (id, bundleId) => call('bundles:install', id, bundleId) },
+  skins: {
+    get: () => call('skins:get'),
+    pick: () => call('skins:pick'),
+    upload: (data) => call('skins:upload', data),
+    use: (id, variant) => call('skins:use', id, variant),
+    reset: () => call('skins:reset'),
+    cape: (capeId) => call('skins:cape', capeId),
+    forget: (id) => call('skins:forget', id),
+  },
 };
 
 contextBridge.exposeInMainWorld('hs', api);

@@ -184,3 +184,44 @@ test('play on a chosen server or in a chosen world: Quick Play on 1.20+, --serve
   const plain = buildLaunchOptions({ ...base, instance: modern });
   assert.deepEqual([plain.quickPlayMultiplayer, plain.quickPlaySingleplayer, plain.server, plain.extraMCArgs], [undefined, undefined, undefined, undefined]);
 });
+
+test('process priority: the instance wins over the launcher setting; a refusal of the system is silent', () => {
+  const { priorityFor, raisePriority, PRIORITY } = require('../src/main/launch');
+  assert.equal(priorityFor({}, { processPriority: 'high' }), 'high');
+  assert.equal(priorityFor({ processPriority: 'normal' }, { processPriority: 'high' }), 'normal');
+  assert.equal(priorityFor({ processPriority: null }, { processPriority: 'normal' }), 'normal');
+  assert.equal(priorityFor({ processPriority: 'realtime' }, { processPriority: 'turbo' }), 'above_normal', 'unknown values fall back to the default');
+  assert.equal(priorityFor(undefined, undefined), 'above_normal');
+  const calls = [];
+  const setPriority = (pid, value) => calls.push([pid, value]);
+  assert.equal(raisePriority(4242, 'high', { setPriority }), true);
+  assert.equal(raisePriority(4242, 'above_normal', { setPriority }), true);
+  assert.deepEqual(calls, [[4242, PRIORITY.high], [4242, PRIORITY.above_normal]]);
+  assert.equal(raisePriority(4242, 'normal', { setPriority }), false, 'normal = leave the process alone');
+  assert.equal(raisePriority(undefined, 'high', { setPriority }), false, 'no process id (the start failed)');
+  assert.equal(raisePriority(4242, 'realtime', { setPriority }), false);
+  assert.equal(calls.length, 2);
+  // Linux / macOS without admin rights: the system says no, the game runs on.
+  assert.equal(raisePriority(4242, 'high', { setPriority: () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); } }), false);
+});
+
+test('the game manager raises the priority of the started game', async () => {
+  const child = fakeChild();
+  child.pid = 31337;
+  const calls = [];
+  const games = new GameManager({ launchFn: async () => child, setPriority: (pid, value) => calls.push([pid, value]) });
+  await games.start({ instance: { id: 'p', dir: tmpDir() }, options: {}, priority: 'high' });
+  assert.deepEqual(calls, [[31337, require('node:os').constants.priority.PRIORITY_HIGH]]);
+  child.emit('exit', 0, null);
+});
+
+test('launch options carry flags for the Java, the heap and the number of mods of the instance', () => {
+  const base = { paths: createPaths('/r'), settings: { ...DEFAULT_SETTINGS }, account: { id: 'a', name: 'b', accessToken: 'c' }, versionId: 'v', javaPath: 'j', totalMem: 16 * GB };
+  const instance = { id: 'x', dir: '/d', name: 'x', mcVersion: '26.3', loader: 'fabric', jvmPreset: 'zgc' };
+  const modern = buildLaunchOptions({ ...base, instance, javaMajor: 25, modCount: 200 });
+  assert.ok(modern.extraJVMArgs.includes('-XX:+UseZGC') && !modern.extraJVMArgs.includes('-XX:+ZGenerational'));
+  assert.ok(modern.extraJVMArgs.includes('-XX:+UseCompactObjectHeaders') && modern.extraJVMArgs.includes('-XX:ReservedCodeCacheSize=512M'));
+  const old = buildLaunchOptions({ ...base, instance: { ...instance, mcVersion: '1.16.5' }, javaMajor: 8, modCount: 0, totalMem: 4 * GB });
+  assert.ok(old.extraJVMArgs.includes('-XX:+UseG1GC') && old.extraJVMArgs.includes('-XX:G1HeapRegionSize=8M'), 'Java 8, small heap: G1 with smaller regions');
+  assert.ok(!old.extraJVMArgs.some((f) => /ZGC|CompactObjectHeaders|ReservedCodeCache|FastUnordered/.test(f)));
+});

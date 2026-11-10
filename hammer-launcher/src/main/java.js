@@ -29,6 +29,37 @@ function majorOf(versionJson) {
   return versionJson?.javaVersion?.majorVersion ?? MAJOR[componentOf(versionJson)] ?? 8;
 }
 
+/**
+ * The Java a Minecraft version needs, for when its version JSON is not downloaded yet:
+ * 26.1 and newer → 25, 1.20.5+ → 21, 1.18+ → 17, 1.17 → 16, older → 8.
+ */
+function javaMajorFor(mcVersion) {
+  const m = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(String(mcVersion ?? ''));
+  if (!m) return 21;
+  const [a, b, c] = [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)];
+  if (a >= 26) return 25;
+  if (a !== 1 || b >= 21 || (b === 20 && c >= 5)) return 21;
+  if (b >= 18) return 17;
+  if (b === 17) return 16;
+  return 8;
+}
+
+/**
+ * The major version of a Java installation, read from the `release` file next to bin/ (no process is started).
+ * JAVA_VERSION="1.8.0_202" → 8, "21.0.7" → 21. null when it cannot be told.
+ */
+function detectJavaMajor(javaPath) {
+  try {
+    const text = fs.readFileSync(path.join(path.dirname(path.dirname(javaPath)), 'release'), 'utf8');
+    const m = /^JAVA_VERSION="?(\d+)(?:\.(\d+))?/m.exec(text);
+    if (!m) return null;
+    const major = Number(m[1]) === 1 ? Number(m[2]) : Number(m[1]);
+    return Number.isInteger(major) && major >= 5 ? major : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The java executable inside a runtime folder (javaw on Windows – no console window). */
 function javaExecutable(dir, platform = process.platform) {
   if (platform === 'win32') return path.join(dir, 'bin', 'javaw.exe');
@@ -90,4 +121,5 @@ async function ensureJava(paths, component, { progress, dispatcher, fetchFn } = 
   return exe;
 }
 
-module.exports = { ensureJava, fetchRuntimeManifest, runtimePlatform, javaExecutable, runtimeDir, componentOf, majorOf, MAJOR };
+module.exports = { ensureJava, fetchRuntimeManifest, runtimePlatform, javaExecutable, runtimeDir, componentOf, majorOf, javaMajorFor, detectJavaMajor, MAJOR };
+

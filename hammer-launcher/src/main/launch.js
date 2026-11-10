@@ -15,6 +15,27 @@ const { analyze } = require('./crash');
 
 const PRIORITY = { normal: os.constants.priority.PRIORITY_NORMAL, above_normal: os.constants.priority.PRIORITY_ABOVE_NORMAL, high: os.constants.priority.PRIORITY_HIGH };
 
+/** The process priority of a launch: the instance's own choice, else the launcher setting. */
+function priorityFor(instance, settings) {
+  const own = instance?.processPriority;
+  return own && own in PRIORITY ? own : settings?.processPriority in PRIORITY ? settings.processPriority : 'above_normal';
+}
+
+/**
+ * Gives the game more processor time than programs in the background. Node asks the system directly (Windows:
+ * the priority class of the process, others: its nice value) – no helper program is started. Systems that do not
+ * allow it (a higher priority without admin rights on Linux / macOS) simply keep the normal one: returns false.
+ */
+function raisePriority(pid, level, { setPriority = os.setPriority } = {}) {
+  if (!pid || !(level in PRIORITY) || level === 'normal') return false;
+  try {
+    setPriority(pid, PRIORITY[level]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const XML_ENTITIES = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&apos;': "'" };
 const unxml = (s) => s.replace(/&(lt|gt|amp|quot|apos);/g, (m) => XML_ENTITIES[m]);
 
@@ -105,7 +126,7 @@ function buildLaunchOptions({ paths, instance, settings, account, versionId, jav
     gameName: config.brand ? `${config.brand} · ${instance.name}` : instance.name,
     maxMemory,
     minMemory: preset === 'vanilla' ? undefined : Math.max(512, Math.floor(maxMemory / 2 / 256) * 256),
-    extraJVMArgs: jvmArgs({ preset, custom, javaMajor }),
+    extraJVMArgs: jvmArgs({ preset, custom, javaMajor, memoryMb: maxMemory, modCount }),
     resolution: settings.resolution?.fullscreen ? { fullscreen: true } : { width: settings.resolution?.width ?? 1280, height: settings.resolution?.height ?? 720 },
   };
   const quickPlay = supportsQuickPlay(instance.mcVersion);
@@ -142,9 +163,10 @@ function newestCrashReport(dir, since) {
  *   state  { instanceId, state: 'starting' | 'running' | 'exited' | 'crashed', crash?, code? }
  */
 class GameManager extends EventEmitter {
-  constructor({ launchFn = launch } = {}) {
+  constructor({ launchFn = launch, setPriority = os.setPriority } = {}) {
     super();
     this.launchFn = launchFn;
+    this.setPriority = setPriority;
     this.running = new Map(); // instanceId → { process, startedAt, logs }
   }
 
@@ -171,13 +193,7 @@ class GameManager extends EventEmitter {
     this.emit('state', { instanceId: instance.id, state: 'starting' });
     const child = await this.launchFn(options);
     this.running.set(instance.id, { process: child, startedAt, logs });
-    if (child.pid && PRIORITY[priority] != null) {
-      try {
-        os.setPriority(child.pid, PRIORITY[priority]);
-      } catch {
-        // not allowed on this system (e.g. "high" without admin rights on Linux) – the game still runs
-      }
-    }
+    raisePriority(child.pid, priority, { setPriority: this.setPriority }); // not allowed on this system → the game still runs
     for (const [stream, src] of [['stdout', child.stdout], ['stderr', child.stderr]]) {
       let rest = '';
       src?.setEncoding?.('utf8');
@@ -216,4 +232,4 @@ class GameManager extends EventEmitter {
   }
 }
 
-module.exports = { GameManager, buildLaunchOptions, createLogParser, memoryFor, parseAddress, supportsQuickPlay, countMods };
+module.exports = { GameManager, buildLaunchOptions, createLogParser, memoryFor, parseAddress, supportsQuickPlay, countMods, priorityFor, raisePriority, PRIORITY };

@@ -57,6 +57,21 @@ public interface Game {
     /** The 36 inventory slots (0–8 hotbar, then the three rows), empty slots included. */
     List<Item> inventory();
 
+    /** Total armour points of the player (0–20). */
+    int armor();
+
+    /** Extra (yellow) hearts in half-heart points. */
+    float absorption();
+
+    /** The mob or player under the crosshair, or null. */
+    Target target();
+
+    /** Localised name of the block under the crosshair, or "". */
+    String block();
+
+    record Target(String name, float health, float maxHealth, double distance, boolean player) {
+    }
+
     record Effect(String name, int amplifier, int ticks, boolean infinite, int rgb, boolean beneficial) {
     }
 

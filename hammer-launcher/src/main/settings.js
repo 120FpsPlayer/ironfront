@@ -19,11 +19,13 @@ const DEFAULT_SETTINGS = Object.freeze({
   selectedInstance: null,
   selectedAccount: null,
   closeOnExit: false,
+  accent: 'orange', // the launcher's colour: orange | gold | red | blue | green | purple
 });
 
 const PRESETS = ['recommended', 'zgc', 'vanilla', 'custom'];
 const AFTER = ['hide', 'minimize', 'keep'];
 const PRIORITY = ['normal', 'above_normal', 'high'];
+const ACCENTS = ['orange', 'gold', 'red', 'blue', 'green', 'purple'];
 
 function clampInt(v, min, max, fallback) {
   const n = Math.round(Number(v));
@@ -46,6 +48,7 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
       fullscreen: Boolean(patch.resolution.fullscreen),
     };
   }
+  if (ACCENTS.includes(patch.accent)) out.accent = patch.accent;
   for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit']) if (key in patch) out[key] = Boolean(patch[key]);
   if ('concurrentDownloads' in patch) out.concurrentDownloads = clampInt(patch.concurrentDownloads, 1, 64, base.concurrentDownloads);
   for (const key of ['selectedInstance', 'selectedAccount']) if (key in patch) out[key] = patch[key] ? String(patch[key]) : null;
@@ -64,4 +67,4 @@ function createSettings(file) {
   };
 }
 
-module.exports = { createSettings, sanitize, DEFAULT_SETTINGS };
+module.exports = { createSettings, sanitize, DEFAULT_SETTINGS, ACCENTS };

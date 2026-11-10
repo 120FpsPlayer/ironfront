@@ -1,5 +1,5 @@
 'use strict';
-/* Mody – browse Modrinth (mods, resource packs, shaders, modpacks) and manage what is installed in an instance. */
+/* Mody – browse Modrinth (mods, resource packs, shaders, modpacks), one-click sets and what is installed in an instance. */
 
 (() => {
   const { api, h, clear, icon, fmt, LOADERS, tile, bus, state, attempt } = HS;
@@ -71,6 +71,7 @@
         HS.seg(
           [
             { value: 'browse', label: 'Przeglądaj', icon: 'search' },
+            { value: 'bundles', label: 'Zestawy', icon: 'layers' },
             { value: 'installed', label: 'Zainstalowane', icon: 'check' },
           ],
           ui.tab,
@@ -85,6 +86,7 @@
       drawTypes();
     }
     function drawTypes() {
+      if (ui.tab === 'bundles') return clear(typeSeg); // a set mixes mods and shader packs
       const types = Object.entries(TYPES).filter(([k]) => ui.tab === 'browse' || k !== 'modpack');
       clear(
         typeSeg,
@@ -315,6 +317,83 @@
         .catch((err) => clear(versions, h('p.muted', err.message)));
     }
 
+    /* ── bundles: curated sets, one click each ── */
+    let bundleRun = 0;
+    function drawBundles() {
+      const i = inst();
+      const my = ++bundleRun;
+      if (!i) return clear(body, h('div.card', HS.empty('cube', 'Brak instancji', 'Utwórz instancję, aby dodawać zestawy modów.', h('button.btn.primary', { onclick: () => HS.editInstance() }, icon('plus'), 'Nowa instancja'))));
+      if (i.loader === 'vanilla') {
+        return clear(
+          body,
+          h('div.card', HS.empty('puzzle', 'Ta instancja to czysty Minecraft', 'Zestawy modów wymagają loadera. Zmień loader instancji na Fabric (zalecany) – wtedy zainstalujesz cały zestaw jednym kliknięciem.', h('button.btn.primary', { onclick: () => HS.editInstance(i) }, icon('pen'), 'Zmień loader'))),
+        );
+      }
+      const grid = h('div.bundle-grid', [1, 2, 3, 4].map(() => h('div.skeleton', { style: { height: '280px' } })));
+      clear(body, h('div.hint', { style: { marginBottom: '12px' } }, `Gotowe zestawy na jedno kliknięcie. Launcher dobiera wersje do Minecrafta ${i.mcVersion} (${LOADERS[i.loader]?.name}) i sam doinstalowuje zależności.`), grid);
+      api.bundles
+        .list()
+        .then((list) => my === bundleRun && clear(grid, list.map((b) => bundleCard(i, b, () => my === bundleRun))))
+        .catch((err) => my === bundleRun && clear(grid, HS.empty('warning', 'Nie udało się wczytać zestawów', err.message)));
+      return undefined;
+    }
+
+    function bundleCard(i, b, current) {
+      const items = h('div.bundle-items', [1, 2, 3, 4].map(() => h('div.skeleton', { style: { height: '24px', margin: '3px 0' } })));
+      const btn = h('button.btn.primary', { disabled: true }, icon('download'), 'Zainstaluj zestaw');
+      const count = h('span.chip');
+      const stateIcon = (m) => h(`span.st${m.installed ? '.ok' : m.available ? '.get' : ''}`, icon(m.installed ? 'check-circle' : m.available ? 'download' : 'x-circle'));
+      async function load() {
+        let plan;
+        try {
+          plan = await api.bundles.plan(i.id, b.id);
+        } catch (err) {
+          if (current()) clear(items, h('p.muted', { style: { fontSize: '12.5px' } }, err.message), h('button.btn.sm', { style: { width: 'fit-content', marginTop: '8px' }, onclick: load }, icon('refresh'), 'Spróbuj ponownie'));
+          return;
+        }
+        if (!current()) return;
+        const available = plan.mods.filter((m) => m.available);
+        const todo = available.filter((m) => !m.installed);
+        btn.disabled = !todo.length;
+        clear(btn, icon(todo.length ? 'download' : available.length ? 'check' : 'x-circle'), todo.length ? `Zainstaluj (${todo.length})` : available.length ? 'Zainstalowany' : 'Niedostępny');
+        count.textContent = `${available.length - todo.length}/${available.length}`;
+        count.className = `chip${available.length && !todo.length ? ' ok' : ''}`;
+        count.title = `Zainstalowane: ${available.length - todo.length} z ${available.length} dostępnych dla Minecrafta ${i.mcVersion}`;
+        clear(
+          items,
+          plan.mods.map((m) =>
+            h(
+              `div.bundle-item${m.available ? '' : '.na'}`,
+              { title: m.available ? `${m.name} – ${m.why}` : `${m.name} – nie ma jeszcze wersji dla Minecrafta ${i.mcVersion} (${LOADERS[i.loader]?.name})` },
+              stateIcon(m),
+              h('b', m.name),
+              h('small.ellipsis', m.available ? m.why : `brak dla ${i.mcVersion}`),
+              m.type === 'shader' ? h('em', 'shader') : null,
+            ),
+          ),
+        );
+      }
+      btn.onclick = async () => {
+        const done = await HS.busy(btn, async () => {
+          const res = await attempt(() => api.bundles.install(i.id, b.id));
+          if (!res) return false;
+          const n = res.installed?.length ?? 0;
+          HS.toast('ok', n ? `Zestaw „${b.name}”: zainstalowano ${fmt.count(n, 'dodatek', 'dodatki', 'dodatków')} (razem z zależnościami).` : `Zestaw „${b.name}” był już zainstalowany.`, 6000);
+          for (const w of res.warnings ?? []) HS.toast('warning', w, 8000);
+          return true;
+        });
+        // After the spinner is gone (it switches the button back on): the fresh state of the set.
+        if (done) load();
+      };
+      load();
+      return h(
+        'section.card.bundle',
+        h('div.bundle-head', h('div.bundle-icon', icon(b.icon)), h('div.grow', h('div.row', h('h2', b.name), count), h('p.muted', b.description))),
+        items,
+        h('div.bundle-foot', h('span.hint.grow', b.note), btn),
+      );
+    }
+
     /* ── installed ── */
     function drawInstalled() {
       const i = inst();
@@ -446,11 +525,13 @@
 
     function drawBody() {
       ui.offset = 0;
+      bundleRun += 1;
       if (ui.tab === 'browse') drawBrowse();
+      else if (ui.tab === 'bundles') drawBundles();
       else drawInstalled();
     }
 
-    clear(root, h('div.page', h('div.page-head', h('div', h('h1', 'Mody i dodatki'), h('p', 'Tysiące modów, paczek tekstur i shaderów z Modrinth – zależności instalują się same.')), h('div.actions', instBtn)), h('div.toolbar', tabs, typeSeg), body));
+    clear(root, h('div.page', h('div.page-head', h('div', h('h1', 'Mody i dodatki'), h('p', 'Mody, paczki tekstur, shadery i gotowe zestawy z Modrinth – zależności instalują się same.')), h('div.actions', instBtn)), h('div.toolbar', tabs, typeSeg), body));
     drawHead();
     drawBody();
     let lastId = inst()?.id;
@@ -462,7 +543,7 @@
       drawBody();
     });
     const off2 = bus.on('instances', drawHead);
-    return () => (off(), off2());
+    return () => ((bundleRun += 1), off(), off2());
   }
 
   HS.views.mods = { title: 'Mody', icon: 'puzzle', render };

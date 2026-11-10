@@ -26,7 +26,7 @@ const ICONS = {
   utensils: 'solid/utensils', wrench: 'solid/wrench', book: 'solid/book', map: 'solid/map', compass: 'solid/compass', paw: 'solid/paw', music: 'solid/music',
   tag: 'solid/tag', list: 'solid/list', grid: 'solid/table-cells-large', 'arrow-up': 'solid/arrow-up', sun: 'solid/sun', heartbeat: 'solid/heart-pulse',
   'arrow-down': 'solid/arrow-down', archive: 'solid/box-archive', history: 'solid/clock-rotate-left', broom: 'solid/broom', upload: 'solid/cloud-arrow-up',
-  disk: 'solid/hard-drive',
+  disk: 'solid/hard-drive', shirt: 'solid/shirt', undo: 'solid/arrow-rotate-left', 'eye-off': 'solid/eye-slash', bricks: 'solid/trowel-bricks',
 };
 
 const out = {};

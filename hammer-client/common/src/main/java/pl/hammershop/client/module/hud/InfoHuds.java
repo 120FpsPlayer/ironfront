@@ -270,4 +270,37 @@ public final class InfoHuds {
             out.add(line(hud("light"), String.valueOf(l)));
         }
     }
+
+    /** Health and armour as numbers (hearts are hard to count in a fight). */
+    public static final class Health extends TextHud {
+        private final Setting.Bool armor = bool("armor_points", true);
+
+        public Health() {
+            super("health", "heart", false, Anchor.BOTTOM_LEFT);
+            order = 2;
+        }
+
+        @Override
+        protected void lines(Game g, boolean editor, List<String[]> out) {
+            float hp = editor && !g.inWorld() ? 17f : g.health();
+            float extra = g.absorption();
+            out.add(line(hud("health"), Fmt.num(hp, 1) + (extra > 0 ? " + " + Fmt.num(extra, 1) : "") + " / " + Fmt.num(g.maxHealth(), 0)));
+            if (armor.on()) out.add(line(hud("armor"), String.valueOf(editor && !g.inWorld() ? 12 : g.armor())));
+        }
+    }
+
+    /** The block you are looking at. */
+    public static final class BlockInfo extends TextHud {
+        public BlockInfo() {
+            super("blockinfo", "cube", false, Anchor.TOP_CENTER);
+            order = 6;
+        }
+
+        @Override
+        protected void lines(Game g, boolean editor, List<String[]> out) {
+            String block = g.block();
+            if (block.isEmpty() && editor) block = Lang.t("hud.sample_block");
+            if (!block.isEmpty()) out.add(line("", block));
+        }
+    }
 }

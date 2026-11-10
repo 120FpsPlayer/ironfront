@@ -13,7 +13,7 @@ const { createSettings } = require('./settings');
 const { createInstances } = require('./instances');
 const versions = require('./versions');
 const { prepareInstance, describeError } = require('./installer');
-const { GameManager, buildLaunchOptions, countMods } = require('./launch');
+const { GameManager, buildLaunchOptions, countMods, memoryFor, priorityFor } = require('./launch');
 const { createModrinth } = require('./modrinth');
 const { createContent } = require('./content');
 const { createModpacks } = require('./modpacks');
@@ -22,21 +22,26 @@ const { createProgress } = require('./progress');
 const { ping } = require('./serverping');
 const { loadNews } = require('./news');
 const { systemInfo } = require('./system');
-const { majorOf } = require('./java');
+const { majorOf, javaMajorFor, detectJavaMajor } = require('./java');
+const { jvmArgs, effectivePreset, zgcSupported } = require('./jvm');
 const { LOADER_NAMES } = require('./installer');
 const { createCommunity } = require('./community');
 const { listScreenshots, removeScreenshot, screenshotPath } = require('./gallery');
-const { syncHammerClient, supports: hammerClientSupports, SUPPORTED: HAMMER_CLIENT_VERSIONS } = require('./hammerclient');
+const { loadHammerClient, syncHammerClient } = require('./hammerclient');
 const serverList = require('./servers');
 const worldSaves = require('./worlds');
 const diskCleanup = require('./cleanup');
 const { shareLog } = require('./logshare');
+const { createBundles } = require('./bundles');
+const { createSkins } = require('./skins');
 
 /**
  * `trash(path)` moves a file or folder to the system trash (Electron's shell.trashItem in main.js). Without it –
  * in the tests – worlds and backups are simply deleted.
+ * `clientDir` is the bundled Hammer Client folder (versions.json + one jar per Minecraft version); `clientJar` is the
+ * old single jar for 1.21 / 1.21.1. `versionsApi` replaces the version lists in the tests.
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientJar = null, trash = null }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const settings = createSettings(paths.settings);
@@ -45,9 +50,13 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   const content = createContent({ modrinth, fetchFn });
   const modpacks = createModpacks({ modrinth, instances, fetchFn });
   const optimizer = createOptimizer({ modrinth, content });
+  const bundles = createBundles({ modrinth, content });
+  const skinStore = createSkins({ dir: path.join(root, 'skins'), fetchFn });
   const games = new GameManager(launchFn ? { launchFn } : {});
   const community = createCommunity({ config, fetchFn });
   const busy = new Set(); // instances being prepared
+  // Read again each time it is needed – the index is tiny, and a rebuilt mod is picked up without a restart.
+  const hammerClient = () => loadHammerClient({ dir: clientDir, jar: clientJar });
   const worldTasks = new Set(); // instances with a world backup or restore in progress
 
   games.on('log', (e) => emit('game:log', e));
@@ -59,15 +68,31 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     return instance;
   };
 
-  /** First start: one ready-to-play instance (newest release, Fabric, optimisation on). */
+  /**
+   * First start: one ready-to-play instance – Fabric with optimisation on, on the newest Minecraft release the
+   * bundled Hammer Client has a jar for (custom menu, HUD). Without the mod: the configured version, else the newest.
+   */
   async function ensureDefaultInstance() {
     if (instances.list().length) return null;
     const def = config.defaultInstance ?? {};
-    const list = await versions.minecraftVersions();
-    // The version Hammer Client is made for (custom menu, HUD) – or the newest release.
-    const mc = (def.mcVersion && list.find((v) => v.id === def.mcVersion)) || list[0];
+    const list = await versionsApi.minecraftVersions();
     let loader = def.loader ?? 'fabric';
-    if (loader !== 'vanilla' && !(await versions.loaderVersions(loader, mc.id).catch(() => [])).length) loader = 'vanilla';
+    const hasLoader = async (id) => (await versionsApi.loaderVersions(loader, id).catch(() => [])).length > 0;
+    let mc = null;
+    const client = hammerClient();
+    if (client.available && ['fabric', 'quilt'].includes(loader)) {
+      for (const id of [...client.versions].reverse()) {
+        const release = list.find((v) => v.id === id && v.type === 'release');
+        if (release && (await hasLoader(id))) {
+          mc = release;
+          break;
+        }
+      }
+    }
+    if (!mc) {
+      mc = (def.mcVersion && list.find((v) => v.id === def.mcVersion)) || list[0];
+      if (loader !== 'vanilla' && !(await hasLoader(mc.id))) loader = 'vanilla';
+    }
     const instance = instances.create({ name: def.name ?? config.brand ?? 'HammerShop', mcVersion: mc.id, loader, icon: 'hammer', optimized: loader !== 'vanilla' && def.optimized !== false, hammerClient: true });
     settings.set({ selectedInstance: instance.id });
     return instance;
@@ -113,8 +138,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       // Hammer Client (custom menu, module panel, HUD) for supported Fabric versions.
       try {
         const invite = await community.invite().catch(() => null);
-        const res = await syncHammerClient({ instance, jar: clientJar, content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand } });
-        if (!res.active && res.reason === 'missing' && instance.hammerClient !== false && hammerClientSupports(instance)) emit('toast', { kind: 'warning', text: 'Brak pliku Hammer Client w launcherze – gra uruchomi się bez własnego menu.' });
+        const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand } });
+        if (!res.active && res.reason === 'missing') emit('toast', { kind: 'warning', text: `Brak pliku Hammer Client dla Minecrafta ${instance.mcVersion} w launcherze – gra uruchomi się bez własnego menu.` });
       } catch (err) {
         emit('toast', { kind: 'warning', text: `Nie udało się przygotować Hammer Client: ${err.message}` });
       }
@@ -125,7 +150,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       await games.start({
         instance,
         options,
-        priority: s.processPriority,
+        priority: priorityFor(instance, s),
         onExit: ({ playedMs }) => {
           const current = instances.get(instance.id);
           if (current) instances.patchInternal(instance.id, { playTimeMs: (current.playTimeMs ?? 0) + playedMs });
@@ -147,33 +172,77 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     }
   }
 
-  async function optimizerInfo(instanceId) {
-    const instance = need(instanceId);
-    const sys = systemInfo(gpuInfo());
-    let javaMajor = 21;
+  /** The Java an instance starts with: its own Java, else what the game version asks for (a guess until installed). */
+  function javaOf(instance, s = settings.get()) {
+    const own = instance.javaPath || s.javaPath;
+    const ownMajor = own && fs.existsSync(own) ? detectJavaMajor(own) : null;
+    if (ownMajor) return { major: ownMajor, known: true, own: true };
     try {
-      javaMajor = majorOf(JSON.parse(fs.readFileSync(path.join(paths.versions, instance.mcVersion, `${instance.mcVersion}.json`), 'utf8')));
+      return { major: majorOf(JSON.parse(fs.readFileSync(path.join(paths.versions, instance.mcVersion, `${instance.mcVersion}.json`), 'utf8'))), known: true, own: false };
     } catch {
-      // not installed yet – assume a modern version
+      return { major: javaMajorFor(instance.mcVersion), known: false, own: false }; // not installed yet
     }
-    const modCount = countMods(instance.dir);
-    return { system: sys, modCount, recommendation: recommend({ totalMem: sys.totalMem, cpuCores: sys.cpuCores, javaMajor }, instance, modCount), presets: Object.fromEntries(Object.entries(OPTION_PRESETS).map(([k, v]) => [k, v.label])) };
   }
 
-  async function applyOptimization(instanceId, { mods = true, shaders = false, optionsPreset = null, memoryMb, jvmPreset } = {}) {
+  /**
+   * Everything the Optymalizacja tab shows: the computer, the recommendation with its reasons ("Dlaczego?"), the
+   * Java of the instance and the exact flags each preset would start the game with.
+   */
+  async function optimizerInfo(instanceId) {
+    const instance = need(instanceId);
+    const s = settings.get();
+    const sys = systemInfo(gpuInfo());
+    const java = javaOf(instance, s);
+    const modCount = countMods(instance.dir);
+    const memoryMb = memoryFor({ instance, settings: s, totalMem: sys.totalMem, modCount });
+    const flags = (preset) => jvmArgs({ preset, javaMajor: java.major, memoryMb, modCount });
+    return {
+      system: sys,
+      modCount,
+      recommendation: recommend({ totalMem: sys.totalMem, cpuCores: sys.cpuCores, javaMajor: java.major, gpu: sys.gpus.length ? sys.gpus : sys.gpu }, instance, modCount),
+      presets: Object.fromEntries(Object.entries(OPTION_PRESETS).map(([k, v]) => [k, v.label])),
+      java: { major: java.major, known: java.known, own: java.own, zgc: zgcSupported(java.major) },
+      jvm: { memoryMb, flags: { recommended: flags('recommended'), zgc: flags('zgc'), vanilla: flags('vanilla') } },
+    };
+  }
+
+  /**
+   * Applies what the tab asked for and says what was done: { installed, skipped, warnings, missing, summary }.
+   * summary: { mods, memoryMb, memoryAuto, jvmPreset, javaMajor, optionsPreset, priority, turbo, shaders } – the
+   * "Gotowe" window after "Zoptymalizuj wszystko" is built from it.
+   */
+  async function applyOptimization(instanceId, { mods = true, turbo = false, shaders = false, optionsPreset = null, memoryMb, jvmPreset } = {}) {
     let instance = need(instanceId);
     const patch = {};
     if (memoryMb !== undefined) patch.memoryMb = memoryMb;
     if (jvmPreset !== undefined) patch.jvmPreset = jvmPreset;
     if (Object.keys(patch).length) instance = instances.update(instance.id, patch);
     let result = { installed: [], skipped: [], warnings: [], missing: [] };
-    if (mods && instance.loader !== 'vanilla') {
-      const planned = await optimizer.plan(instance, { shaders });
+    const withMods = mods && instance.loader !== 'vanilla';
+    if (withMods) {
+      const planned = await optimizer.plan(instance, { turbo, shaders });
       result = await optimizer.installMods(instance, planned, { onProgress: (p) => emit('task:progress', { instanceId, ...p }) });
-      instances.patchInternal(instance.id, { optimized: true, optimizedFor: `${instance.mcVersion}|${instance.loader}` });
+      instance = instances.patchInternal(instance.id, { optimized: true, optimizedFor: `${instance.mcVersion}|${instance.loader}` });
+      // The newest builds of some Turbo mods ask for a current mod loader.
+      if (turbo && instance.loaderVersion) result.warnings.push('Dodatki Turbo mogą wymagać najnowszego loadera – jeśli gra zgłosi niezgodne mody, ustaw w instancji wersję loadera „Najnowsza zalecana”.');
     }
     if (optionsPreset) writeOptionsPreset(instance.dir, optionsPreset);
-    return result;
+    const s = settings.get();
+    const java = javaOf(instance, s);
+    const modCount = countMods(instance.dir);
+    const preset = instance.jvmPreset || s.jvmPreset || 'recommended';
+    const summary = {
+      mods: withMods ? { installed: result.installed, already: result.skipped.length, missing: result.missing } : null,
+      memoryMb: memoryFor({ instance, settings: s, totalMem: os.totalmem(), modCount }),
+      memoryAuto: instance.memoryMb == null && s.memoryMb == null,
+      jvmPreset: effectivePreset(preset, java.major),
+      javaMajor: java.major,
+      optionsPreset: optionsPreset ? { key: optionsPreset, label: OPTION_PRESETS[optionsPreset].label } : null,
+      priority: priorityFor(instance, s),
+      turbo: withMods && turbo,
+      shaders: withMods && shaders,
+    };
+    return { ...result, summary };
   }
 
   /** Changes that the running game would overwrite or trip over wait until it is closed. */
@@ -245,6 +314,18 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
 
   const cleanupOptions = () => ({ javaPaths: [settings.get().javaPath] });
 
+  /**
+   * Skins and capes of the selected account. Each change answers with the new state; the account's head in the
+   * launcher follows it. A token the Minecraft services refuse is refreshed once (force) before the player is asked
+   * to sign in again.
+   */
+  async function withSkins(fn) {
+    const id = settings.get().selectedAccount;
+    const res = await fn((force) => accounts.launchAuth(id, { force }));
+    accounts.setSkin?.(res.account.id, { skinUrl: res.skin?.url ?? null, skinVariant: res.skin?.variant ?? 'classic' });
+    return res;
+  }
+
   return {
     paths,
     settings,
@@ -254,7 +335,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     modpacks,
     optimizer,
     games,
-    versions,
+    versions: versionsApi,
     ensureDefaultInstance,
     launch,
     optimizerInfo,
@@ -263,7 +344,13 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     news: () => loadNews(config.newsUrl, { fetchFn }),
     system: () => systemInfo(gpuInfo()),
     community,
-    hammerClient: { versions: HAMMER_CLIENT_VERSIONS, available: () => Boolean(clientJar && fs.existsSync(clientJar)) },
+    /** { versions: every supported Minecraft version, oldest → newest; version: the mod's version; available }. */
+    hammerClient: {
+      info: () => {
+        const { versions: list, version, available } = hammerClient();
+        return { versions: [...list], version, available };
+      },
+    },
     gallery: {
       list: (instanceId) => listScreenshots(instances, instanceId ? [need(instanceId)] : instances.list()),
       remove: (instanceId, file) => removeScreenshot(need(instanceId), file),
@@ -303,6 +390,20 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       },
     },
     shareLog: async (id) => shareLog(currentLog(need(id)), { fetchFn }),
+    bundles: {
+      list: () => bundles.list(),
+      plan: (id, bundleId) => bundles.plan(need(id), bundleId),
+      install: (id, bundleId) => bundles.install(need(id), bundleId, { onProgress: (p) => emit('task:progress', { instanceId: id, ...p }) }),
+    },
+    skins: {
+      get: () => withSkins((auth) => skinStore.state(auth)),
+      upload: ({ png, variant, name } = {}) => withSkins((auth) => skinStore.upload(auth, { png, variant, name })),
+      use: (id, variant) => withSkins((auth) => skinStore.use(auth, id, variant)),
+      reset: () => withSkins((auth) => skinStore.reset(auth)),
+      cape: (capeId) => withSkins((auth) => skinStore.setCape(auth, capeId ?? null)),
+      forget: (id) => skinStore.forget(id),
+      inspect: (png, name) => skinStore.inspect(png, name),
+    },
   };
 }
 

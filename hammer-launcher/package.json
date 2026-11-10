@@ -80,10 +80,11 @@
     },
     "extraResources": [
       {
-        "from": "resources",
-        "to": ".",
+        "from": "resources/hammer-client",
+        "to": "hammer-client",
         "filter": [
-          "hammer-client.jar"
+          "versions.json",
+          "*.jar"
         ]
       }
     ]

@@ -100,6 +100,6 @@ class PreviewTest {
             assertTrue(pl.hammershop.client.ui.Draw.hasIcon(m.icon), "icon of " + m.id + ": " + m.icon);
             for (var s : m.settings) assertTrue(!s.label().startsWith("setting."), "label of " + m.id + "." + s.id);
         }
-        assertEquals(34, Modules.ALL.size());
+        assertEquals(38, Modules.ALL.size());
     }
 }

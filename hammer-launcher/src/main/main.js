@@ -14,6 +14,10 @@ const { createAccounts, createCrypt } = require('./accounts');
 const { createServices } = require('./services');
 const { createPresence } = require('./discordrpc');
 const { safeName } = require('./net');
+const { fromDataUrl } = require('./skins');
+const { useSystemProxy } = require('./proxy');
+
+useSystemProxy(); // networks that require a proxy (HTTPS_PROXY) – without it the launcher would look offline there
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -108,12 +112,13 @@ if (!app.requestSingleInstanceLock()) {
       windowProperties: { width: 520, height: 680, resizable: false, title: 'Logowanie Microsoft', icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'), parent: win ?? undefined, modal: Boolean(win), autoHideMenuBar: true },
     });
     presence = createPresence(config.discordClientId);
-    const clientJar = app.isPackaged ? path.join(process.resourcesPath, 'hammer-client.jar') : path.join(__dirname, '..', '..', 'resources', 'hammer-client.jar');
+    // Hammer Client: versions.json and one jar per Minecraft version (built by `./gradlew dist` in hammer-client/).
+    const clientDir = app.isPackaged ? path.join(process.resourcesPath, 'hammer-client') : path.join(__dirname, '..', '..', 'resources', 'hammer-client');
     services = createServices({
       root,
       config,
       accounts,
-      clientJar,
+      clientDir,
       emit: send,
       presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() },
       gpuInfo: () => gpu,
@@ -161,7 +166,7 @@ if (!app.requestSingleInstanceLock()) {
       config: { name: config.name, brand: config.brand, website: config.website, shopUrl: config.shopUrl, discordInvite: config.discordInvite, server: config.server },
       root: s().paths.root,
       secureStorage: safeStorage.isEncryptionAvailable(),
-      hammerClient: { versions: s().hammerClient.versions, available: s().hammerClient.available() },
+      hammerClient: s().hammerClient.info(),
     }));
     handle('app:open-external', (url) => openExternal(url));
     handle('app:open-folder', (instanceId, sub) => {
@@ -303,6 +308,24 @@ if (!app.requestSingleInstanceLock()) {
 
     handle('logs:share', (id) => s().shareLog(id));
 
+    handle('bundles:list', () => s().bundles.list());
+    handle('bundles:plan', (id, bundleId) => s().bundles.plan(id, bundleId));
+    handle('bundles:install', (id, bundleId) => s().bundles.install(id, bundleId));
+
+    // Skórka: the picture always travels as PNG data and is checked here (64×64 PNG) before anything is sent.
+    handle('skins:get', () => s().skins.get());
+    handle('skins:pick', async () => {
+      const res = await dialog.showOpenDialog(win, { title: 'Wybierz skórkę', properties: ['openFile'], filters: [{ name: 'Skórka Minecraft (.png)', extensions: ['png'] }] });
+      if (res.canceled || !res.filePaths[0]) return null;
+      if (fs.statSync(res.filePaths[0]).size > 1024 * 1024) throw new Error('Ten plik jest za duży na skórkę. Skórka to mały obrazek PNG 64×64 pikseli.');
+      return s().skins.inspect(fs.readFileSync(res.filePaths[0]), path.basename(res.filePaths[0]));
+    });
+    handle('skins:upload', (data) => s().skins.upload({ png: fromDataUrl(data?.png), variant: data?.variant, name: data?.name }));
+    handle('skins:use', (id, variant) => s().skins.use(id, variant));
+    handle('skins:reset', () => s().skins.reset());
+    handle('skins:cape', (capeId) => s().skins.cape(capeId));
+    handle('skins:forget', (id) => s().skins.forget(id));
+
     handle('optimizer:info', (id) => s().optimizerInfo(id));
     handle('optimizer:plan', (id, opts) => s().optimizer.plan(inst(id), opts));
     handle('optimizer:apply', (id, opts) => s().applyOptimization(id, opts));
@@ -318,8 +341,11 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     try {
       const info = await app.getGPUInfo('complete');
+      // Every graphics card of the computer: on a laptop the launcher window may use the weak one, the game the fast one.
+      const VENDORS = { 0x10de: 'NVIDIA', 0x1002: 'AMD', 0x8086: 'Intel' };
+      const name = (d) => `${d.vendorString || VENDORS[d.vendorId] || ''} ${d.deviceString ?? ''}`.trim();
       const device = info?.gpuDevice?.find((d) => d.active) ?? info?.gpuDevice?.[0];
-      gpu = info?.auxAttributes?.glRenderer || (device ? `${device.vendorString ?? ''} ${device.deviceString ?? ''}`.trim() || null : null);
+      gpu = { name: info?.auxAttributes?.glRenderer || (device ? name(device) : '') || null, devices: (info?.gpuDevice ?? []).map(name).filter(Boolean) };
     } catch {
       gpu = null;
     }

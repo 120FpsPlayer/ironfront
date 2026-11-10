@@ -54,9 +54,9 @@
       versionSel.disabled = true;
       try {
         const list = await api.versions.minecraft({ snapshots });
-        // New instances start on the Hammer Client version (custom menu and HUD) when it is available.
-        const hc = (state.info?.hammerClient?.versions ?? []).slice(-1)[0];
-        if (!data.mcVersion) data.mcVersion = hc && list.some((v) => v.id === hc) ? hc : list[0]?.id;
+        // New instances start on the newest version Hammer Client supports (custom menu and HUD), else the newest one.
+        const hc = [...HS.hammerClientVersions()].reverse().find((id) => list.some((v) => v.id === id));
+        if (!data.mcVersion) data.mcVersion = hc ?? list[0]?.id;
         clear(
           versionSel,
           list.map((v) => h('option', { value: v.id, selected: v.id === data.mcVersion }, v.type === 'snapshot' ? `${v.id} (snapshot)` : v.id)),
@@ -118,8 +118,8 @@
 
     const optBox = { padding: '12px 14px', borderRadius: '10px', background: 'rgba(var(--glow),.07)', border: '1px solid rgba(var(--glow),.22)' };
     function drawOpt() {
-      const hcVersions = state.info?.hammerClient?.versions ?? ['1.21.1'];
-      const hcOk = ['fabric', 'quilt'].includes(data.loader) && hcVersions.includes(data.mcVersion);
+      const hcOk = HS.hammerClientFits(data.mcVersion, data.loader);
+      const hcRange = HS.hammerClientRange();
       clear(
         optRow,
         h(
@@ -130,7 +130,9 @@
             : h('div.row', { style: optBox }, icon('bolt'), h('div.grow', h('b', 'Optymalizacja HammerShop'), h('div.hint', 'Przy pierwszym uruchomieniu doda Sodium, Lithium, FerriteCore i inne mody na więcej FPS.')), HS.toggle(data.optimized, (v) => (data.optimized = v))),
           hcOk
             ? h('div.row', { style: optBox }, icon('hammer'), h('div.grow', h('b', 'Hammer Client – menu w grze'), h('div.hint', 'Własne menu główne, panel modułów (prawy Shift), HUD: FPS, CPS, klawisze, pancerz… i zoom pod C.')), HS.toggle(data.hammerClient, (v) => (data.hammerClient = v)))
-            : h('div.hint', h('span', { style: { color: 'var(--accent2)' } }, 'Hammer Client'), ` (menu i HUD w grze, jak Lunar) działa na Minecraft ${hcVersions[hcVersions.length - 1]} z Fabric.`),
+            : hcRange
+              ? h('div.hint', h('span', { style: { color: 'var(--accent2)' } }, 'Hammer Client'), ` (menu i HUD w grze, jak Lunar) działa z Fabric i Quilt na ${hcRange}.`)
+              : null,
         ),
       );
     }
@@ -153,7 +155,7 @@
                   [
                     { value: '', label: 'Jak w ustawieniach' },
                     { value: 'recommended', label: 'Zalecane (G1GC)' },
-                    { value: 'zgc', label: 'ZGC – mniej przycięć' },
+                    { value: 'zgc', label: 'ZGC – mniej przycięć (Java 21+)' },
                     { value: 'vanilla', label: 'Domyślne Mojang' },
                     { value: 'custom', label: 'Własne' },
                   ],

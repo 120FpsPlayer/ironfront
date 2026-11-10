@@ -48,32 +48,106 @@ jobs:
           path: hammer-launcher/preview/*.png
           retention-days: 14
 
-  mod:
-    name: Hammer Client (mod Fabric 1.21.1)
+  changes:
+    name: Co się zmieniło
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 5
+    outputs:
+      mod: ${{ steps.diff.outputs.mod }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        working-directory: .
+        shell: bash
+        run: |
+          # The per-version game test of the mod (17 jobs) only runs when the mod or this workflow changed.
+          base="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "mod=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$base" "${{ github.sha }}" | grep -qE '^(hammer-client/|\.github/workflows/hammer-launcher\.yml)'; then
+            echo "mod=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mod=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  mod:
+    name: Hammer Client (mod Fabric, Minecraft 1.21 – 26.3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: hammer-client
+    outputs:
+      versions: ${{ steps.versions.outputs.list }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.12'
-      - run: gradle build --no-daemon --stacktrace
-      - run: ls -la build/libs
+      - name: Budowanie (jeden jar na wersję gry) i testy
+        shell: bash
+        run: |
+          # Maven Central sometimes answers 429 to CI runners – try again instead of failing the whole run.
+          for attempt in 1 2 3; do
+            ./gradlew build dist --no-daemon --stacktrace && exit 0
+            echo "::warning::Budowanie nie powiodło się (próba $attempt) – ponawiam za 30 s"
+            sleep 30
+          done
+          exit 1
+      - run: ls -la build/dist && cat build/dist/versions.json
+      - id: versions
+        name: Lista wersji gry do testu
+        run: echo "list=$(jq -c '[.jars[].minecraft[]]' build/dist/versions.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: hammer-client-jar
-          path: |
-            hammer-client/build/libs/hammer-client-*.jar
-            !hammer-client/build/libs/*-sources.jar
+          name: hammer-client
+          path: hammer-client/build/dist/
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: podglad-hammer-client
+          path: hammer-client/common/build/preview/*.png
+          retention-days: 14
+
+  mod-live:
+    name: Hammer Client w grze (${{ matrix.mc }})
+    needs: [changes, mod]
+    if: needs.changes.outputs.mod == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        mc: ${{ fromJson(needs.mod.outputs.versions) }}
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hammer-launcher/package-lock.json
+      - name: Xvfb i Mesa (OpenGL bez karty graficznej)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: hammer-client
+          path: hammer-launcher/resources/hammer-client
+      - run: npm ci
+      - name: Start gry z Hammer Client (menu główne musi się otworzyć)
+        run: xvfb-run -a -s "-screen 0 1280x720x24" node scripts/live-check.js
+        env:
+          HAMMER_CLIENT_DIR: resources/hammer-client
+          HAMMER_CLIENT_ONLY: '1'
+          MC_VERSION: ${{ matrix.mc }}
 
   live-linux:
     name: Test na żywo (Linux, start gry)
@@ -94,15 +168,15 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
       - uses: actions/download-artifact@v4
         with:
-          name: hammer-client-jar
-          path: hammer-launcher/resources/mod
-      - name: Hammer Client do launchera
+          name: hammer-client
+          path: hammer-launcher/resources/hammer-client
+      - name: Hammer Client w launcherze
         shell: bash
-        run: cp resources/mod/hammer-client-*.jar resources/hammer-client.jar && ls -la resources
+        run: ls -la resources/hammer-client
       - run: npm ci
       - run: xvfb-run -a -s "-screen 0 1280x720x24" node scripts/live-check.js
         env:
-          HAMMER_CLIENT_JAR: resources/hammer-client.jar
+          HAMMER_CLIENT_DIR: resources/hammer-client
 
   live-windows:
     name: Test na żywo (Windows)
@@ -120,16 +194,16 @@ jobs:
           cache-dependency-path: hammer-launcher/package-lock.json
       - uses: actions/download-artifact@v4
         with:
-          name: hammer-client-jar
-          path: hammer-launcher/resources/mod
-      - name: Hammer Client do launchera
+          name: hammer-client
+          path: hammer-launcher/resources/hammer-client
+      - name: Hammer Client w launcherze
         shell: bash
-        run: cp resources/mod/hammer-client-*.jar resources/hammer-client.jar && ls -la resources
+        run: ls -la resources/hammer-client
       - run: npm ci
       - run: npm test
       - run: node scripts/live-check.js --no-game
         env:
-          HAMMER_CLIENT_JAR: resources/hammer-client.jar
+          HAMMER_CLIENT_DIR: resources/hammer-client
 
   build-windows:
     name: Instalator Windows (.exe)
@@ -147,11 +221,11 @@ jobs:
           cache-dependency-path: hammer-launcher/package-lock.json
       - uses: actions/download-artifact@v4
         with:
-          name: hammer-client-jar
-          path: hammer-launcher/resources/mod
-      - name: Hammer Client do launchera
+          name: hammer-client
+          path: hammer-launcher/resources/hammer-client
+      - name: Hammer Client w launcherze
         shell: bash
-        run: cp resources/mod/hammer-client-*.jar resources/hammer-client.jar && ls -la resources
+        run: ls -la resources/hammer-client
       - run: npm ci
       - run: npm run dist:win
       - uses: actions/upload-artifact@v4

@@ -137,6 +137,125 @@
     return el;
   }
 
+  /* ── Minecraft skins on a canvas ── */
+  // Where each body part sits in the skin file: [x, y] of its front and back, for the base and the second layer.
+  const SKIN_PARTS = {
+    head: { size: [8, 8], front: [8, 8], back: [24, 8], over: { front: [40, 8], back: [56, 8] }, grow: 0.5 },
+    body: { size: [8, 12], front: [20, 20], back: [32, 20], over: { front: [20, 36], back: [32, 36] }, grow: 0.25 },
+    rightArm: { size: [4, 12], front: [44, 20], back: [52, 20], over: { front: [44, 36], back: [52, 36] }, grow: 0.25, arm: true },
+    leftArm: { size: [4, 12], front: [36, 52], back: [44, 52], over: { front: [52, 52], back: [60, 52] }, grow: 0.25, arm: true, mirror: 'rightArm' },
+    rightLeg: { size: [4, 12], front: [4, 20], back: [12, 20], over: { front: [4, 36], back: [12, 36] }, grow: 0.25 },
+    leftLeg: { size: [4, 12], front: [20, 52], back: [28, 52], over: { front: [4, 52], back: [12, 52] }, grow: 0.25, mirror: 'rightLeg' },
+  };
+
+  /**
+   * Draws a player from a skin image: head, body, arms and legs, with the second layer (hat, jacket, sleeves)
+   * slightly bigger on top. slim = the 3-pixel "Alex" arms; back = seen from behind. Old 64×32 skins have no left
+   * arm and leg of their own – those mirror the right ones.
+   */
+  function paintSkin(canvas, img, { slim = false, back = false } = {}) {
+    const g = canvas.getContext('2d');
+    const u = canvas.width / 18; // the figure is 16×32 skin pixels, plus one pixel of room around for the second layer
+    const legacy = img.naturalHeight === 32;
+    const arm = slim && !legacy ? 3 : 4;
+    const side = back ? 'back' : 'front';
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    // Where the parts stand, seen from the front; from behind, left and right swap places.
+    const place = { head: [4, 0], body: [4, 8], rightArm: [4 - arm, 8], leftArm: [12, 8], rightLeg: [4, 20], leftLeg: [8, 20] };
+    if (back) Object.assign(place, { rightArm: [12, 8], leftArm: [4 - arm, 8], rightLeg: [8, 20], leftLeg: [4, 20] });
+    const draw = (name, layer) => {
+      const part = SKIN_PARTS[name];
+      const mirrored = legacy && part.mirror;
+      const from = mirrored ? SKIN_PARTS[part.mirror] : part;
+      let [sx, sy] = layer ? from.over[side] : from[side];
+      const w = part.arm ? arm : part.size[0];
+      // Slim arms are one pixel narrower, so the back of the arm starts one pixel earlier in the file.
+      if (part.arm && back && arm === 3) sx -= 1;
+      const grow = layer ? part.grow : 0;
+      const x = (1 + place[name][0] - grow) * u;
+      const y = (1 + place[name][1] - grow) * u;
+      const dw = (w + grow * 2) * u;
+      const dh = (part.size[1] + grow * 2) * u;
+      g.save();
+      if (mirrored) {
+        g.translate(x + dw, y);
+        g.scale(-1, 1);
+        g.drawImage(img, sx, sy, w, part.size[1], 0, 0, dw, dh);
+      } else g.drawImage(img, sx, sy, w, part.size[1], x, y, dw, dh);
+      g.restore();
+    };
+    const order = ['rightLeg', 'leftLeg', 'body', 'rightArm', 'leftArm', 'head'];
+    for (const name of order) draw(name, false);
+    // The second layer: old skins only have the hat.
+    for (const name of legacy ? ['head'] : order) draw(name, true);
+  }
+
+  /** A canvas with the player drawn from a skin (https or data URL). height = pixels on screen. */
+  function skinView(src, { slim = false, back = false, height = 256 } = {}) {
+    const unit = Math.max(1, Math.round(height / 34));
+    const canvas = h('canvas.skin-view', { width: 18 * unit, height: 34 * unit, role: 'img', 'aria-label': back ? 'Skórka od tyłu' : 'Skórka od przodu' });
+    if (!src || !/^(https:\/\/|data:image\/png)/.test(src)) return canvas;
+    const img = new Image();
+    img.onload = () => {
+      try {
+        paintSkin(canvas, img, { slim, back });
+      } catch {
+        canvas.classList.add('broken');
+      }
+    };
+    img.onerror = () => canvas.classList.add('broken');
+    img.src = src;
+    return canvas;
+  }
+
+  /** A cape as the player sees it from behind (the 10×16 outer side of the cape texture). */
+  function capeView(src, height = 64) {
+    const unit = Math.max(1, Math.round(height / 16));
+    const canvas = h('canvas.cape-view', { width: 10 * unit, height: 16 * unit, role: 'img', 'aria-label': 'Peleryna' });
+    if (!src || !/^(https:\/\/|data:image\/png)/.test(src)) return canvas;
+    const img = new Image();
+    img.onload = () => {
+      const g = canvas.getContext('2d');
+      const k = img.naturalWidth / 64; // high-resolution capes keep the same layout
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, k, k, 10 * k, 16 * k, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = src;
+    return canvas;
+  }
+
+  /** Slim ("Alex") skins leave the fourth column of the arm empty – a good first guess for the model switch. */
+  function looksSlim(img) {
+    if (img.naturalWidth !== 64 || img.naturalHeight !== 64) return false;
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      const px = g.getImageData(54, 20, 2, 12).data;
+      for (let i = 3; i < px.length; i += 4) if (px[i] !== 0) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /* ── the launcher's colour (Ustawienia → Wygląd) ── */
+  const ACCENTS = [
+    { value: 'orange', label: 'Pomarańczowy', color: '#ff9f43' },
+    { value: 'gold', label: 'Złoty', color: '#f5c542' },
+    { value: 'red', label: 'Czerwony', color: '#ff6b5e' },
+    { value: 'blue', label: 'Niebieski', color: '#5aa9ff' },
+    { value: 'green', label: 'Zielony', color: '#4fd68a' },
+    { value: 'purple', label: 'Fioletowy', color: '#b08cff' },
+  ];
+  function applyAccent(value) {
+    const accent = ACCENTS.some((a) => a.value === value) ? value : 'orange';
+    if (accent === 'orange') delete document.documentElement.dataset.accent;
+    else document.documentElement.dataset.accent = accent;
+  }
+
   /* ── tiny event bus + app state ── */
   const listeners = new Map();
   const bus = {
@@ -431,10 +550,12 @@
     const parts = Array.from({ length: reduced ? 14 : 42 }, () => spawn(true));
     const draw = () => {
       ctx.clearRect(0, 0, w, hgt);
+      // The sparks are warm by default and take the launcher's colour when another one is chosen.
+      const tint = document.documentElement.dataset.accent ? getComputedStyle(document.documentElement).getPropertyValue('--glow').trim() : '';
       for (const p of parts) {
         const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
-        glow.addColorStop(0, `rgba(255,190,120,${p.a})`);
-        glow.addColorStop(1, 'rgba(255,140,40,0)');
+        glow.addColorStop(0, `rgba(${tint || '255,190,120'},${p.a})`);
+        glow.addColorStop(1, `rgba(${tint || '255,140,40'},0)`);
         ctx.fillStyle = glow;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r * 4, 0, 6.283);
@@ -464,8 +585,18 @@
     };
   }
 
+  /* ── Hammer Client: the Minecraft versions the bundled mod has a jar for (oldest → newest) ── */
+  const hammerClientVersions = () => state.info?.hammerClient?.versions ?? [];
+  /** The mod can run in this game version + loader (Fabric or Quilt). */
+  const hammerClientFits = (mcVersion, loader) => ['fabric', 'quilt'].includes(loader) && hammerClientVersions().includes(mcVersion);
   /** Hammer Client (in-game menu and HUD) runs in this instance. */
-  const hammerClientOn = (i) => Boolean(i && i.hammerClient !== false && ['fabric', 'quilt'].includes(i.loader) && (state.info?.hammerClient?.versions ?? ['1.21.1']).includes(i.mcVersion));
+  const hammerClientOn = (i) => Boolean(i && i.hammerClient !== false && hammerClientFits(i.mcVersion, i.loader));
+  /** "Minecraft 1.21 – 26.3" – from the list, never hard-coded. Nothing when the launcher has no mod bundled. */
+  function hammerClientRange() {
+    const list = hammerClientVersions();
+    if (!list.length) return null;
+    return list.length === 1 ? `Minecraft ${list[0]}` : `Minecraft ${list[0]} – ${list[list.length - 1]}`;
+  }
 
   /** The "Instancja" switcher used at the top of Mody / Optymalizacja / Konsola. */
   function instancePicker() {
@@ -485,5 +616,5 @@
     return { el, draw };
   }
 
-  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn };
+  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent };
 })();

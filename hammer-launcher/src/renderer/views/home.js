@@ -111,14 +111,17 @@
     function drawClient() {
       const i = state.instance;
       const on = HS.hammerClientOn(i);
-      const versions = state.info?.hammerClient?.versions ?? ['1.21.1'];
+      const range = HS.hammerClientRange();
+      // No mod bundled in this build of the launcher → nothing to advertise.
+      if (!range) return clear(clientBox);
+      const version = state.info?.hammerClient?.version;
       const key = (k, what) => h('div.row', { style: { gap: '10px', fontSize: '12.5px' } }, h('kbd.kbd', k), h('span.muted', what));
       clear(
         clientBox,
         h(
           'section.card.client-card',
-          h('div.card-head', icon('hammer'), h('h2.grow', 'Hammer Client w grze'), on ? HS.chip('Włączony', 'ok', 'check') : HS.chip(`Minecraft ${versions[versions.length - 1]}`, 'warn')),
-          h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, on ? 'Własne menu, panel modułów i HUD jak w Lunar Client – wszystko po polsku.' : `Menu i HUD w grze działają w instancjach Fabric na Minecraft ${versions[versions.length - 1]}.`),
+          h('div.card-head', icon('hammer'), h('h2.grow', 'Hammer Client w grze'), on ? HS.chip('Włączony', 'ok', 'check') : HS.chip(range, 'warn')),
+          h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, on ? `Własne menu, panel modułów i HUD jak w Lunar Client – wszystko po polsku. Działa na ${range}${version ? ` (wersja ${version})` : ''}.` : `Menu i HUD w grze działają w instancjach Fabric i Quilt na ${range}.`),
           h('div', { style: { display: 'flex', flexDirection: 'column', gap: '7px', marginBottom: '12px' } }, key('Prawy Shift', 'panel modułów i edytor HUD'), key('C', 'przybliżenie (zoom)'), key('Esc', 'Hammer Mody i Discord w menu pauzy')),
           h('div.perks', ['FPS i CPS', 'Klawisze', 'Pancerz', 'Efekty', 'Koordynaty', 'Zegar'].map((x) => HS.chip(x))),
           !on && i ? h('button.btn.sm', { style: { marginTop: '10px' }, onclick: () => HS.editInstance(i) }, icon('pen'), 'Ustaw instancję') : null,
