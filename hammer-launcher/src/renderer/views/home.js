@@ -131,7 +131,7 @@
       'section.hero',
       h('canvas.embers', { 'aria-hidden': 'true' }),
       h('div.grid-bg'),
-      h('img.mark', { src: 'assets/hammershop-mark.svg', alt: '' }),
+      h('img.mark', { src: 'assets/hammer-mark.png', alt: '' }),
       h('div.eyebrow', icon('hammer'), 'Hammer Launcher'),
       h('h1', 'Minecraft, który ', h('span', 'po prostu działa'), '.'),
       h('p', 'Więcej FPS, mody w jednym kliknięciu i zero kombinowania z Javą. Wybierz instancję i graj.'),

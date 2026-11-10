@@ -119,7 +119,7 @@
             h(
               'div.row',
               { style: { gap: '16px' } },
-              h('img', { src: 'assets/hammershop-mark.svg', alt: '', style: { width: '56px', height: '56px' } }),
+              h('img', { src: 'assets/hammer-mark.png', alt: '', style: { width: '56px', height: '56px' } }),
               h('div.grow', h('h3', `${state.info?.config?.name ?? 'Hammer Launcher'} ${state.info?.version ?? ''}`), h('p.muted', 'Szybki launcher Minecrafta z modami i optymalizacją. Mody i paczki pochodzą z Modrinth. Minecraft jest znakiem towarowym Mojang Studios – launcher nie jest z nim powiązany.')),
               state.info?.config?.website ? h('button.btn', { onclick: () => HS.open(state.info.config.website) }, icon('globe'), 'Strona') : null,
             ),
