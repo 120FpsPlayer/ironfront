@@ -107,3 +107,40 @@ test('server list: a damaged servers.dat reads as empty (like in the game) and i
   assert.deepEqual(servers.add(instance, { name: 'A', address: 'a.pl' }).map((s) => s.address), ['a.pl']);
   assert.equal(get(readNbt(fs.readFileSync(path.join(dir, servers.FILE))), 'servers').elementType, 'compound');
 });
+
+test('server list: servers of the official Minecraft are brought over – only the missing ones, icons included', () => {
+  const official = instanceWithServers(); // stands for %APPDATA%\.minecraft: HammerShop (icon), a hidden entry, Survival
+  const instance = { id: 'new', dir: tmpDir() };
+  servers.add(instance, { name: 'Mój survival', address: '83.12.45.201:25570' });
+  servers.add(instance, { name: 'Tylko tutaj', address: 'tylko.tutaj.pl' });
+
+  assert.deepEqual(servers.importFrom(instance, official.dir), { found: true, added: 1, skipped: 1 });
+  assert.deepEqual(
+    servers.list(instance).map((s) => [s.name, s.address, Boolean(s.icon), s.acceptTextures]),
+    [
+      ['Mój survival', '83.12.45.201:25570', false, null], // already here – kept as it was
+      ['Tylko tutaj', 'tylko.tutaj.pl', false, null],
+      ['HammerShop', 'mc.hammershop.pl', true, true], // came over with its icon and resource-pack choice
+    ],
+  );
+  const hidden = get(onDisk(instance), 'servers').value.filter((e) => number(get(e, 'hidden')));
+  assert.equal(hidden.length, 0, 'the direct-connect history stays where it was');
+
+  assert.deepEqual(servers.importFrom(instance, official.dir), { found: true, added: 0, skipped: 2 }, 'a second import adds nothing');
+  // The same address in another letter case is the same server.
+  const upper = { id: 'u', dir: tmpDir() };
+  servers.add(upper, { name: 'HS', address: 'MC.HammerShop.PL' });
+  assert.deepEqual(servers.importFrom(upper, official.dir), { found: true, added: 1, skipped: 1 });
+});
+
+test('server list: no official Minecraft, an empty or a broken list there – nothing happens', () => {
+  const instance = { id: 'new', dir: tmpDir() };
+  assert.deepEqual(servers.importFrom(instance, path.join(tmpDir(), 'nie-ma')), { found: false, added: 0, skipped: 0 });
+  const broken = tmpDir();
+  fs.writeFileSync(path.join(broken, servers.FILE), 'to nie jest NBT');
+  assert.deepEqual(servers.importFrom(instance, broken), { found: false, added: 0, skipped: 0 });
+  const empty = tmpDir();
+  fs.writeFileSync(path.join(empty, servers.FILE), writeNbt(Object.assign(tag.compound({ servers: tag.list('compound', []) }), { name: '' })));
+  assert.deepEqual(servers.importFrom(instance, empty), { found: true, added: 0, skipped: 0 });
+  assert.equal(fs.existsSync(path.join(instance.dir, servers.FILE)), false, 'nothing was written');
+});

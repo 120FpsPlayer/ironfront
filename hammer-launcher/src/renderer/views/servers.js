@@ -107,6 +107,17 @@
       );
     }
 
+    let official = false; // this computer has a "normal" Minecraft with a server list to bring over
+    const importBtn = h('button.btn', { hidden: true, title: 'Dodaj serwery, które masz w zwykłym Minecrafcie (z oficjalnego launchera)', onclick: () => importOfficial() }, icon('download'), 'Z Minecrafta');
+
+    /** Brings over the servers of the official Minecraft that are not on this instance's list yet. */
+    async function importOfficial() {
+      const instance = inst();
+      if (!instance) return;
+      const result = await attempt(() => api.servers.importOfficial(instance.id), (r) => (r.added ? `Dodano ${fmt.count(r.added, 'serwer', 'serwery', 'serwerów')} z Twojego Minecrafta.` : 'Wszystkie serwery z Twojego Minecrafta są już na liście.'));
+      if (result && inst()?.id === instance.id) show(result.servers);
+    }
+
     function drawSummary() {
       const online = servers.filter((s) => status.get(s.address)?.online).length;
       summary.textContent = servers.length ? `${fmt.count(servers.length, 'serwer', 'serwery', 'serwerów')} · online: ${online}` : '';
@@ -125,8 +136,15 @@
             HS.empty(
               'server',
               'Nie masz jeszcze żadnych serwerów',
-              'Dodaj serwer, a zobaczysz tutaj, czy działa i ilu graczy jest online. Ta sama lista pojawi się w grze w trybie wieloosobowym.',
-              h('button.btn.primary', { onclick: () => editServer(instance, null, show) }, icon('plus'), 'Dodaj serwer'),
+              official
+                ? 'Lista serwerów jest zapisana w folderze gry, nie na koncie Microsoft – dlatego nowa instancja zaczyna z pustą. Możesz przenieść serwery ze zwykłego Minecrafta albo dodać własny.'
+                : 'Dodaj serwer, a zobaczysz tutaj, czy działa i ilu graczy jest online. Ta sama lista pojawi się w grze w trybie wieloosobowym.',
+              h(
+                'div.row',
+                { style: { gap: '10px', justifyContent: 'center', flexWrap: 'wrap' } },
+                official ? h('button.btn', { onclick: () => importOfficial() }, icon('download'), 'Przenieś z Minecrafta') : null,
+                h('button.btn.primary', { onclick: () => editServer(instance, null, show) }, icon('plus'), 'Dodaj serwer'),
+              ),
             ),
           ),
         );
@@ -195,6 +213,7 @@
           h(
             'div.actions',
             h('button.btn.icon', { title: 'Odśwież status', 'aria-label': 'Odśwież status serwerów', onclick: () => load({ fresh: true }) }, icon('refresh')),
+            importBtn,
             h('button.btn.primary', { onclick: () => inst() && editServer(inst(), null, show) }, icon('plus'), 'Dodaj serwer'),
             picker.el,
           ),
@@ -203,6 +222,14 @@
       ),
     );
     load();
+    api.servers
+      .official()
+      .then((o) => {
+        official = Boolean(o?.available);
+        importBtn.hidden = !official;
+        if (!servers.length && inst()) draw();
+      })
+      .catch(() => null);
 
     let lastId = inst()?.id;
     const offs = [

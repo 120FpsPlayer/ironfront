@@ -145,3 +145,44 @@ test('services: "Wyślij logi" sends the log of the last game, or the game\'s la
   assert.equal(new URLSearchParams(fetchFn.calls.at(-1).init.body).get('content'), '[Render thread/INFO]: live line 1\n[Render thread/ERROR]: live line 2');
   await assert.rejects(services.shareLog('nie-ma'), /Nie ma takiej instancji/);
 });
+
+/** A folder that stands for the official Minecraft's game folder, with two servers on its list. */
+function officialFolder() {
+  const dir = tmpDir();
+  const root = Object.assign(tag.compound({ servers: tag.list('compound', [tag.compound({ name: tag.string('Hypixel'), ip: tag.string('mc.hypixel.net') }), tag.compound({ name: tag.string('HammerShop'), ip: tag.string('mc.hammershop.pl') })]) }), { name: '' });
+  fs.writeFileSync(path.join(dir, 'servers.dat'), writeNbt(root));
+  return dir;
+}
+
+test('services: the servers of the official Minecraft are added to an instance once, and on request', () => {
+  const officialDir = officialFolder();
+  const { services, instance, events } = setup({ officialDir });
+  services.servers.add(instance.id, { name: 'Mój', address: 'moj.serwer.pl' });
+
+  assert.deepEqual(services.servers.official(), { available: true });
+  // First look at the list: the official servers join the instance's own one.
+  assert.deepEqual(services.servers.list(instance.id).map((s) => s.address), ['moj.serwer.pl', 'mc.hypixel.net', 'mc.hammershop.pl']);
+  assert.match(events.find((e) => e.channel === 'toast')?.text ?? '', /Dodano 2 serwery z Twojego Minecrafta/);
+  assert.equal(services.instances.get(instance.id).serversImported, true);
+
+  // Only once: a server the player removes does not come back by itself…
+  services.servers.remove(instance.id, 1, 'mc.hypixel.net');
+  assert.deepEqual(services.servers.list(instance.id).map((s) => s.address), ['moj.serwer.pl', 'mc.hammershop.pl']);
+  assert.equal(events.filter((e) => e.channel === 'toast').length, 1);
+  // …but the button brings it back.
+  const result = services.servers.importOfficial(instance.id);
+  assert.deepEqual([result.added, result.skipped, result.servers.map((s) => s.address)], [1, 1, ['moj.serwer.pl', 'mc.hammershop.pl', 'mc.hypixel.net']]);
+});
+
+test('services: without an official Minecraft nothing is imported and the button explains why', () => {
+  const none = setup(); // no folder configured (tests, live check)
+  assert.deepEqual(none.services.servers.official(), { available: false });
+  assert.deepEqual(none.services.servers.list(none.instance.id), []);
+  assert.throws(() => none.services.servers.importOfficial(none.instance.id), /Nie znalazłem listy serwerów zwykłego Minecrafta/);
+
+  const missing = setup({ officialDir: path.join(tmpDir(), '.minecraft') }); // configured, but the game was never installed
+  assert.deepEqual(missing.services.servers.official(), { available: false });
+  assert.deepEqual(missing.services.servers.list(missing.instance.id), []);
+  assert.equal(missing.services.instances.get(missing.instance.id).serversImported, undefined, 'it is tried again once the game exists');
+  assert.equal(missing.events.filter((e) => e.channel === 'toast').length, 0);
+});

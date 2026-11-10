@@ -143,4 +143,40 @@ function move(instance, from, to) {
   return list(instance);
 }
 
-module.exports = { list, add, update, remove, move, cleanAddress, FILE };
+/**
+ * Adds the servers of another game folder (the official Minecraft's) that this instance does not have yet.
+ * A server is "already here" when its address matches. Names, icons and resource-pack choices come along;
+ * hidden entries (the game's history of direct connections) do not.
+ * Returns { found, added, skipped } – found is false when that folder has no readable server list.
+ */
+function importFrom(instance, sourceDir) {
+  let source;
+  try {
+    source = readNbt(fs.readFileSync(path.join(sourceDir, FILE)));
+  } catch {
+    return { found: false, added: 0, skipped: 0 };
+  }
+  const theirs = get(source, 'servers');
+  if (theirs?.type !== 'list') return { found: false, added: 0, skipped: 0 };
+  const data = load(instance);
+  const shown = shownOf(data.list);
+  const key = (entry) => String(text(get(entry, 'ip')) ?? '').trim().toLowerCase();
+  const have = new Set(shown.map(key));
+  let added = 0;
+  let skipped = 0;
+  for (const entry of theirs.elementType === 'compound' ? theirs.value : []) {
+    const address = key(entry);
+    if (!address || isHidden(entry)) continue;
+    if (have.has(address) || shown.length >= 500) {
+      skipped += 1;
+      continue;
+    }
+    have.add(address);
+    shown.push(entry);
+    added += 1;
+  }
+  if (added) save(instance, data, shown);
+  return { found: true, added, skipped };
+}
+
+module.exports = { list, add, update, remove, move, importFrom, cleanAddress, FILE };

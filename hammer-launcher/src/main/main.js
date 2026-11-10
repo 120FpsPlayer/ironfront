@@ -16,6 +16,7 @@ const { createPresence } = require('./discordrpc');
 const { safeName } = require('./net');
 const { fromDataUrl } = require('./skins');
 const { useSystemProxy } = require('./proxy');
+const { officialMinecraftDir } = require('./official');
 
 useSystemProxy(); // networks that require a proxy (HTTPS_PROXY) – without it the launcher would look offline there
 
@@ -119,6 +120,7 @@ if (!app.requestSingleInstanceLock()) {
       config,
       accounts,
       clientDir,
+      officialDir: officialMinecraftDir(),
       emit: send,
       presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() },
       gpuInfo: () => gpu,
@@ -288,6 +290,8 @@ if (!app.requestSingleInstanceLock()) {
     handle('gallery:show', (id, file) => shell.showItemInFolder(s().gallery.file(id, file)));
 
     handle('servers:list', (id) => s().servers.list(id));
+    handle('servers:official', () => s().servers.official());
+    handle('servers:importOfficial', (id) => s().servers.importOfficial(id));
     handle('servers:add', (id, data) => s().servers.add(id, data));
     handle('servers:update', (id, index, patch, expected) => s().servers.update(id, index, patch, expected));
     handle('servers:remove', (id, index, expected) => s().servers.remove(id, index, expected));

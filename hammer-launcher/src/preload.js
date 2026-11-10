@@ -67,6 +67,8 @@ const api = {
   optimizer: { info: (id) => call('optimizer:info', id), plan: (id, o) => call('optimizer:plan', id, o), apply: (id, o) => call('optimizer:apply', id, o) },
   servers: {
     list: (id) => call('servers:list', id),
+    official: () => call('servers:official'),
+    importOfficial: (id) => call('servers:importOfficial', id),
     add: (id, data) => call('servers:add', id, data),
     update: (id, index, patch, expected) => call('servers:update', id, index, patch, expected),
     remove: (id, index, expected) => call('servers:remove', id, index, expected),

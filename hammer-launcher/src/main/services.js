@@ -41,7 +41,7 @@ const { createSkins } = require('./skins');
  * `clientDir` is the bundled Hammer Client folder (versions.json + one jar per Minecraft version); `clientJar` is the
  * old single jar for 1.21 / 1.21.1. `versionsApi` replaces the version lists in the tests.
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const settings = createSettings(paths.settings);
@@ -98,6 +98,25 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     return instance;
   }
 
+  const serwerow = (n) => `${n} ${n === 1 ? 'serwer' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'serwery' : 'serwerów'}`;
+
+  /**
+   * The server list is a file in the game folder, not part of the Microsoft account – a new instance would start
+   * with an empty list. Once per instance the servers of the player's official Minecraft are added to it.
+   */
+  function seedServers(instance) {
+    if (!officialDir || instance.serversImported || games.isRunning(instance.id)) return instance;
+    let result;
+    try {
+      result = serverList.importFrom(instance, officialDir);
+    } catch {
+      return instance; // e.g. the list could not be saved – try again next time
+    }
+    if (!result.found) return instance; // no official Minecraft here (yet)
+    if (result.added) emit('toast', { kind: 'ok', text: `Dodano ${serwerow(result.added)} z Twojego Minecrafta do instancji „${instance.name}”.` });
+    return instances.patchInternal(instance.id, { serversImported: true }) ?? instance;
+  }
+
   /**
    * Install everything, then start the game. Progress → 'game:progress', states → 'game:state'.
    * `server` ("host:port") joins that server, `world` (a folder in saves/) opens that world, `join` joins the
@@ -122,7 +141,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       } catch (err) {
         throw new Error(`Nie udało się przygotować gry: ${describeError(err)}. Sprawdź internet i spróbuj ponownie.`, { cause: err });
       }
-      instance = need(instance.id);
+      instance = seedServers(need(instance.id));
       // Optimised instance: performance mods for this game version (once per version / loader).
       const optKey = `${instance.mcVersion}|${instance.loader}`;
       if (instance.optimized && instance.optimizedFor !== optKey && instance.loader !== 'vanilla') {
@@ -358,7 +377,17 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     },
     repairInstance,
     servers: {
-      list: (id) => serverList.list(need(id)),
+      list: (id) => serverList.list(seedServers(need(id))),
+      /** Whether this computer has an official Minecraft with a server list to bring over. */
+      official: () => ({ available: Boolean(officialDir) && fs.existsSync(path.join(officialDir, serverList.FILE)) }),
+      /** The button in the Serwery tab: adds the official Minecraft's servers that are not on the list yet. */
+      importOfficial: (id) => {
+        const instance = need(id);
+        const result = officialDir ? serverList.importFrom(instance, officialDir) : { found: false, added: 0, skipped: 0 };
+        if (!result.found) throw new Error('Nie znalazłem listy serwerów zwykłego Minecrafta na tym komputerze. Uruchom go raz i dodaj w nim serwer – wtedy lista się pojawi.');
+        instances.patchInternal(instance.id, { serversImported: true });
+        return { added: result.added, skipped: result.skipped, servers: serverList.list(instance) };
+      },
       add: (id, data) => serverList.add(need(id), data ?? {}),
       update: (id, index, patch, expected) => serverList.update(need(id), index, patch ?? {}, expected),
       remove: (id, index, expected) => serverList.remove(need(id), index, expected),
