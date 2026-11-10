@@ -13,7 +13,11 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po pol
   - wymuszenie wydajnej karty graficznej na laptopach (Windows),
   - przycisk **Optymalizuj automatycznie**, który robi to wszystko naraz.
 - **Mody** (zakładka *Mody*): wyszukiwarka Modrinth z modami, paczkami tekstur, shaderami i paczkami modów. Ma kategorie i sortowanie, a zależności instalują się same. Do tego lista zainstalowanych z włączaniem i wyłączaniem, aktualizacje jednym kliknięciem, przeciąganie plików `.jar` / `.zip` i import paczek `.mrpack`.
-- **Konsola.** Logi gry na żywo. Gdy gra się wyłączy, launcher wyjaśnia po polsku, co się stało i co zrobić (brak RAM, zła Java, niezgodne lub zdublowane mody, sterowniki…).
+- **Serwery** (zakładka *Serwery*): lista serwerów instancji – ta sama, którą widzisz w grze (`servers.dat`). Przy każdym serwerze status na żywo: gracze, ping, wersja i opis. Dodawanie ze sprawdzeniem adresu, zmiana kolejności i przycisk **Graj**, który uruchamia grę od razu na wybranym serwerze.
+- **Światy** (zakładka *Światy*): światy jednoosobowe instancji z trybem gry, wersją, datą ostatniej gry i rozmiarem. **Graj** otwiera wybrany świat od razu po starcie (Minecraft 1.20+). Kopie zapasowe do plików `.zip` w folderze `backups/` instancji (tam, gdzie zapisuje je też sama gra), przywracanie zawsze jako nowy świat, zmiana nazwy i usuwanie do kosza systemowego.
+- **Konsola.** Logi gry na żywo. Gdy gra się wyłączy, launcher wyjaśnia po polsku, co się stało i co zrobić (brak RAM, zła Java, niezgodne lub zdublowane mody, sterowniki…). Przycisk **Wyślij logi** wrzuca log na [mclo.gs](https://mclo.gs) i daje link do wklejenia na Discordzie – token logowania jest wcześniej usuwany.
+- **Miejsce na dysku** (w *Ustawieniach*): ile zajmują instancje, pliki gry i Java oraz sprzątanie jednym kliknięciem – stare logi i raporty crashy, pamięć podręczna, wersje gry i Javy, z których nie korzysta żadna instancja.
+- **Napraw instancję** (menu instancji): przy następnym starcie launcher instaluje loader od nowa i sprawdza wszystkie pliki gry. Światy, mody i ustawienia zostają.
 - **Konta Microsoft.** Logowanie przez oficjalne okno Microsoftu. Tokeny są szyfrowane przez system (Windows DPAPI / pęk kluczy), a hasła launcher nigdy nie widzi.
 - **Hammer Client – menu w grze jak w Lunar Client.** W instancjach Fabric 1.21.1 launcher sam dodaje nasz mod:
   - własne menu główne,

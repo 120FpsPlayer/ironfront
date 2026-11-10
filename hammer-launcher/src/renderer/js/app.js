@@ -4,7 +4,7 @@
 (() => {
   const { api, h, clear, icon, bus, state, toast, attempt } = HS;
 
-  const NAV = ['home', 'instances', 'mods', 'optimize', 'gallery', 'console', 'settings'];
+  const NAV = ['home', 'instances', 'mods', 'servers', 'worlds', 'optimize', 'gallery', 'console', 'settings'];
   let current = null;
   let cleanup = null;
 
@@ -117,7 +117,8 @@
   HS.login = login;
 
   /* ── play / stop ── */
-  async function play(instanceId, { join = false } = {}) {
+  /** `server` ("host:port") joins that server, `world` (a folder in saves/) opens that world, `join` the launcher's own server. */
+  async function play(instanceId, { join = false, server = null, world = null, worldName = null } = {}) {
     if (!state.account) {
       toast('warning', 'Najpierw zaloguj się kontem Microsoft.');
       return login();
@@ -135,9 +136,11 @@
     bus.emit('game');
     drawNav();
     try {
-      const res = await api.game.launch(instanceId, { join });
+      const res = await api.game.launch(instanceId, { join, server, world });
       if (state.running.get(instanceId) === 'preparing') state.running.set(instanceId, 'starting');
-      if (res?.memoryMb) toast('ok', `Uruchamiam grę (${HS.fmt.mb(res.memoryMb)} RAM).`, 3000);
+      if (res?.memoryMb) toast('ok', `${server ? `Uruchamiam grę i łączę z ${server}` : 'Uruchamiam grę'} (${HS.fmt.mb(res.memoryMb)} RAM).`, 3000);
+      // Minecraft older than 1.20 cannot open a world from the launcher.
+      if (world && res && res.worldOpened === false) toast('info', `Ta wersja Minecrafta nie otwiera świata sama – wybierz „${worldName ?? world}” w grze: Tryb jednoosobowy.`, 9000);
     } catch (err) {
       state.running.delete(instanceId);
       toast('err', err.message, 8000);
@@ -227,9 +230,9 @@
     }
   })();
 
-  // Ctrl+1…7 switches tabs.
+  // Ctrl+1…9 switches tabs.
   document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && /^[1-7]$/.test(e.key)) {
+    if ((e.ctrlKey || e.metaKey) && /^[1-9]$/.test(e.key) && NAV[Number(e.key) - 1]) {
       e.preventDefault();
       go(NAV[Number(e.key) - 1]);
     }

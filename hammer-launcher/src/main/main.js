@@ -109,7 +109,17 @@ if (!app.requestSingleInstanceLock()) {
     });
     presence = createPresence(config.discordClientId);
     const clientJar = app.isPackaged ? path.join(process.resourcesPath, 'hammer-client.jar') : path.join(__dirname, '..', '..', 'resources', 'hammer-client.jar');
-    services = createServices({ root, config, accounts, clientJar, emit: send, presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() }, gpuInfo: () => gpu });
+    services = createServices({
+      root,
+      config,
+      accounts,
+      clientJar,
+      emit: send,
+      presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() },
+      gpuInfo: () => gpu,
+      // Worlds and backups the player removes go to the system trash, never straight off the disk.
+      trash: (target) => shell.trashItem(target).catch(() => Promise.reject(new Error('Nie udało się przenieść do kosza. Zamknij programy, które mogą używać tych plików, i spróbuj ponownie.'))),
+    });
     services.accounts = accounts;
 
     // The launcher window steps aside while the game runs and comes back when it closes.
@@ -199,9 +209,11 @@ if (!app.requestSingleInstanceLock()) {
       return s().instances.remove(id);
     });
     handle('instances:duplicate', (id) => s().instances.duplicate(id));
+    handle('instances:repair', (id) => s().repairInstance(id));
     handle('instances:select', (id) => s().settings.set({ selectedInstance: id }));
 
-    handle('game:launch', (id, opts) => s().launch(id, { join: Boolean(opts?.join) }));
+    const str = (v) => (typeof v === 'string' && v ? v : undefined);
+    handle('game:launch', (id, opts) => s().launch(id, { join: Boolean(opts?.join), server: str(opts?.server), world: str(opts?.world) }));
     handle('game:stop', (id) => s().games.stop(id));
     handle('game:logs', (id) => s().games.logs(id));
     handle('game:running', () => [...s().games.running.keys()]);
@@ -269,6 +281,27 @@ if (!app.requestSingleInstanceLock()) {
       return true;
     });
     handle('gallery:show', (id, file) => shell.showItemInFolder(s().gallery.file(id, file)));
+
+    handle('servers:list', (id) => s().servers.list(id));
+    handle('servers:add', (id, data) => s().servers.add(id, data));
+    handle('servers:update', (id, index, patch, expected) => s().servers.update(id, index, patch, expected));
+    handle('servers:remove', (id, index, expected) => s().servers.remove(id, index, expected));
+    handle('servers:move', (id, from, to) => s().servers.move(id, from, to));
+
+    handle('worlds:list', (id) => s().worlds.list(id));
+    handle('worlds:rename', (id, folder, name) => s().worlds.rename(id, folder, name));
+    handle('worlds:remove', (id, folder) => s().worlds.remove(id, folder));
+    handle('worlds:open', (id, folder) => shell.openPath(s().worlds.dir(id, folder)));
+    handle('worlds:backup', (id, folder) => s().worlds.backup(id, folder));
+    handle('worlds:backups', (id) => s().worlds.listBackups(id));
+    handle('worlds:restore', (id, file) => s().worlds.restoreBackup(id, file));
+    handle('worlds:remove-backup', (id, file) => s().worlds.removeBackup(id, file));
+
+    handle('cleanup:usage', () => s().cleanup.usage());
+    handle('cleanup:plan', () => s().cleanup.plan());
+    handle('cleanup:apply', (keys) => s().cleanup.apply(keys));
+
+    handle('logs:share', (id) => s().shareLog(id));
 
     handle('optimizer:info', (id) => s().optimizerInfo(id));
     handle('optimizer:plan', (id, opts) => s().optimizer.plan(inst(id), opts));

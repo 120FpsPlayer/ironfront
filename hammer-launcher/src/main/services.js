@@ -27,8 +27,16 @@ const { LOADER_NAMES } = require('./installer');
 const { createCommunity } = require('./community');
 const { listScreenshots, removeScreenshot, screenshotPath } = require('./gallery');
 const { syncHammerClient, supports: hammerClientSupports, SUPPORTED: HAMMER_CLIENT_VERSIONS } = require('./hammerclient');
+const serverList = require('./servers');
+const worldSaves = require('./worlds');
+const diskCleanup = require('./cleanup');
+const { shareLog } = require('./logshare');
 
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientJar = null }) {
+/**
+ * `trash(path)` moves a file or folder to the system trash (Electron's shell.trashItem in main.js). Without it –
+ * in the tests – worlds and backups are simply deleted.
+ */
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientJar = null, trash = null }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const settings = createSettings(paths.settings);
@@ -40,6 +48,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   const games = new GameManager(launchFn ? { launchFn } : {});
   const community = createCommunity({ config, fetchFn });
   const busy = new Set(); // instances being prepared
+  const worldTasks = new Set(); // instances with a world backup or restore in progress
 
   games.on('log', (e) => emit('game:log', e));
   games.on('state', (e) => emit('game:state', e));
@@ -64,11 +73,19 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     return instance;
   }
 
-  /** Install everything, then start the game. Progress → 'game:progress', states → 'game:state'. */
-  async function launch(instanceId, { join } = {}) {
+  /**
+   * Install everything, then start the game. Progress → 'game:progress', states → 'game:state'.
+   * `server` ("host:port") joins that server, `world` (a folder in saves/) opens that world, `join` joins the
+   * launcher's configured server. Returns { ok, memoryMb, versionId, worldOpened } – worldOpened is false when the
+   * game version cannot open a world by itself and the player has to pick it in the game.
+   */
+  async function launch(instanceId, { join, server, world } = {}) {
     let instance = need(instanceId);
     if (games.isRunning(instance.id)) throw new Error('Ta instancja już działa.');
     if (busy.has(instance.id)) throw new Error('Gra jest już przygotowywana.');
+    if (worldTasks.has(instance.id)) throw new Error('Poczekaj, aż launcher skończy kopię zapasową świata – potem uruchom grę.');
+    const joinAddress = server ? serverList.cleanAddress(server) : undefined;
+    const openWorld = world && !joinAddress ? path.basename(worldSaves.worldDir(instance, world)) : undefined;
     busy.add(instance.id);
     const progress = createProgress((p) => emit('game:progress', { instanceId: instance.id, ...p }));
     try {
@@ -103,7 +120,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       }
       if (s.gpuPreference) await setGpuPreference(prepared.javaPath);
       progress.stage('launch');
-      const options = buildLaunchOptions({ paths, instance, settings: s, account, versionId: prepared.versionId, javaPath: prepared.javaPath, javaMajor: prepared.javaMajor, totalMem: os.totalmem(), modCount: countMods(instance.dir), config, join: join ? true : undefined });
+      const options = buildLaunchOptions({ paths, instance, settings: s, account, versionId: prepared.versionId, javaPath: prepared.javaPath, javaMajor: prepared.javaMajor, totalMem: os.totalmem(), modCount: countMods(instance.dir), config, join: join ? true : undefined, server: joinAddress, world: openWorld });
       instances.patchInternal(instance.id, { lastPlayed: Date.now() });
       await games.start({
         instance,
@@ -124,7 +141,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         assets: { large_image: 'logo', large_text: config.name ?? 'Hammer Launcher' },
         ...(buttons.length ? { buttons } : {}),
       });
-      return { ok: true, memoryMb: options.maxMemory, versionId: prepared.versionId };
+      return { ok: true, memoryMb: options.maxMemory, versionId: prepared.versionId, worldOpened: openWorld ? Boolean(options.quickPlaySingleplayer) : undefined };
     } finally {
       busy.delete(instance.id);
     }
@@ -159,6 +176,75 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     return result;
   }
 
+  /** Changes that the running game would overwrite or trip over wait until it is closed. */
+  const idle = (id, what) => {
+    const instance = need(id);
+    if (games.isRunning(instance.id) || busy.has(instance.id)) throw new Error(`Najpierw zamknij grę – ${what}.`);
+    if (worldTasks.has(instance.id)) throw new Error('Poczekaj, aż skończy się kopia zapasowa albo przywracanie świata.');
+    return instance;
+  };
+
+  /** One backup or restore per instance at a time; the game cannot be started in the middle of it. */
+  async function worldTask(instance, label, fn) {
+    worldTasks.add(instance.id);
+    try {
+      return await withProgress(label, fn);
+    } finally {
+      worldTasks.delete(instance.id);
+    }
+  }
+
+  /**
+   * Runs a long task with a progress bar in the sidebar ('task:progress', a few events per second at most).
+   * A bar that was shown always ends at 100 % – also when the task fails – so it never hangs there.
+   */
+  async function withProgress(label, fn) {
+    let last = 0;
+    const update = ({ done, total }) => {
+      const now = Date.now();
+      if (now - last < 150) return;
+      last = now;
+      emit('task:progress', { label, done, total });
+    };
+    try {
+      return await fn(update);
+    } finally {
+      if (last) emit('task:progress', { label, done: 1, total: 1 });
+    }
+  }
+
+  /**
+   * "Napraw instancję": the next start installs the mod loader again and checks every game file against Mojang's
+   * checksums. Worlds, mods and settings are not touched.
+   */
+  function repairInstance(instanceId) {
+    const instance = idle(instanceId, 'naprawa zmienia pliki, których gra właśnie używa');
+    return instances.patchInternal(instance.id, { versionId: null, installedFor: null, verifyFiles: true });
+  }
+
+  /** The log of the last (or running) game of an instance; after a launcher restart the game's own latest.log. */
+  function currentLog(instance) {
+    const lines = games.logs(instance.id);
+    if (lines.length) return lines.map((l) => l.line).join('\n');
+    try {
+      const file = path.join(instance.dir, 'logs', 'latest.log');
+      const size = fs.statSync(file).size;
+      const length = Math.min(size, 12 * 1024 * 1024);
+      const buf = Buffer.alloc(length);
+      const fd = fs.openSync(file, 'r');
+      try {
+        fs.readSync(fd, buf, 0, length, size - length);
+      } finally {
+        fs.closeSync(fd);
+      }
+      return buf.toString('utf8');
+    } catch {
+      return '';
+    }
+  }
+
+  const cleanupOptions = () => ({ javaPaths: [settings.get().javaPath] });
+
   return {
     paths,
     settings,
@@ -183,6 +269,40 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       remove: (instanceId, file) => removeScreenshot(need(instanceId), file),
       file: (instanceId, file) => screenshotPath(need(instanceId), file),
     },
+    repairInstance,
+    servers: {
+      list: (id) => serverList.list(need(id)),
+      add: (id, data) => serverList.add(need(id), data ?? {}),
+      update: (id, index, patch, expected) => serverList.update(need(id), index, patch ?? {}, expected),
+      remove: (id, index, expected) => serverList.remove(need(id), index, expected),
+      move: (id, from, to) => serverList.move(need(id), from, to),
+    },
+    worlds: {
+      list: async (id) => worldSaves.list(need(id)),
+      dir: (id, folder) => worldSaves.worldDir(need(id), folder),
+      rename: async (id, folder, name) => worldSaves.rename(idle(id, 'gra mogłaby nadpisać zmianę nazwy'), folder, name),
+      remove: async (id, folder) => worldSaves.remove(idle(id, 'świat może być właśnie otwarty'), folder, { trash }),
+      backup: async (id, folder) => {
+        const instance = idle(id, 'kopia otwartego świata mogłaby być niekompletna');
+        return worldTask(instance, `Kopia zapasowa: ${folder}`, (onProgress) => worldSaves.backup(instance, folder, { onProgress }));
+      },
+      listBackups: async (id) => worldSaves.listBackups(need(id)),
+      restoreBackup: async (id, file) => {
+        const instance = idle(id, 'gra pokazałaby na liście świat przywrócony tylko w połowie');
+        return worldTask(instance, 'Przywracanie świata z kopii', (onProgress) => worldSaves.restoreBackup(instance, file, { onProgress }));
+      },
+      removeBackup: async (id, file) => worldSaves.removeBackup(need(id), file, { trash }),
+    },
+    cleanup: {
+      usage: () => diskCleanup.usage(paths, instances.list()),
+      plan: () => diskCleanup.plan(paths, instances.list(), cleanupOptions()),
+      apply: async (keys) => {
+        // Nothing is deleted while a game runs or is being installed – it may be using exactly those files.
+        if (games.running.size || busy.size) throw new Error('Najpierw zamknij grę – sprzątanie usuwa pliki, których gra może używać.');
+        return diskCleanup.apply(paths, instances.list(), keys, cleanupOptions());
+      },
+    },
+    shareLog: async (id) => shareLog(currentLog(need(id)), { fetchFn }),
   };
 }
 

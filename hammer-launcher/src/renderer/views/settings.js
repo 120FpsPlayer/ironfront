@@ -1,5 +1,5 @@
 'use strict';
-/* Ustawienia – accounts, game window, Java, downloads, Discord, folders, about. */
+/* Ustawienia – accounts, game window, Java, downloads, Discord, folders, disk space and clean-up, about. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -47,8 +47,144 @@
     return { el: card, draw };
   }
 
+  /* What the launcher's folder is made of, and what can be freed safely. */
+  const PARTS = [
+    { key: 'instances', label: 'Instancje', color: 'var(--accent)' },
+    { key: 'game', label: 'Pliki gry', color: 'var(--info)' },
+    { key: 'java', label: 'Java', color: 'var(--ok)' },
+    { key: 'temp', label: 'Cache i logi', color: 'var(--warn)' },
+  ];
+  // `what` finishes the sentence "Launcher usunie na stałe: …".
+  const CLEAN = {
+    logs: { title: 'Stare logi i raporty crashy', what: 'stare logi i raporty crashy', hint: (g) => `Starsze niż 7 dni · ${fmt.count(g.count, 'plik', 'pliki', 'plików')}` },
+    cache: { title: 'Pamięć podręczna launchera', what: 'pamięć podręczną launchera', hint: () => 'Pliki tymczasowe – launcher pobierze je ponownie, gdy będą potrzebne.' },
+    versions: { title: 'Nieużywane wersje gry', what: 'nieużywane wersje gry', hint: (g) => `Nie korzysta z nich żadna instancja: ${g.items.map((i) => i.name).join(', ')}` },
+    runtimes: { title: 'Nieużywana Java', what: 'nieużywaną Javę', hint: (g) => `Żadna instancja jej nie potrzebuje: ${g.items.map((i) => (i.java ? `Java ${i.java}` : i.name)).join(', ')}` },
+  };
+  let diskCache = null; // { at, usage, plan } – switching tabs does not scan the disk again
+
+  function diskCard() {
+    const card = h('section.card');
+    let usage = null;
+    let plan = null;
+    let failed = null;
+    let alive = true;
+    const selected = new Set();
+
+    const usageBox = () => {
+      if (!usage) return [h('div.skeleton', { style: { height: '12px' } }), h('div.skeleton', { style: { height: '74px', marginTop: '14px' } })];
+      const parts = { instances: usage.instances.reduce((sum, i) => sum + i.size, 0), game: usage.versions + usage.libraries + usage.assets, java: usage.runtime, temp: usage.cache + usage.logs };
+      const biggest = Math.max(1, ...usage.instances.map((i) => i.size));
+      const shown = usage.instances.slice(0, 6);
+      return [
+        h('div.disk-bar', PARTS.filter((p) => parts[p.key] > 0).map((p) => h('i', { title: `${p.label}: ${fmt.size(parts[p.key])}`, style: { '--c': p.color, flexGrow: String(parts[p.key]) } }))),
+        h('div.disk-legend', PARTS.map((p) => h('span', h('i', { style: { '--c': p.color } }), p.label, h('b', parts[p.key] ? fmt.size(parts[p.key]) : '—')))),
+        shown.length
+          ? h(
+              'div.disk-list',
+              shown.map((i) => h('div.disk-item', h('span.ellipsis', i.name), h('div.progress', h('i', { style: { '--w': `${Math.max(1, Math.round((i.size / biggest) * 100))}%` } })), h('span.size', fmt.size(i.size)))),
+              usage.instances.length > shown.length ? h('div.hint', `…i jeszcze ${fmt.count(usage.instances.length - shown.length, 'mniejsza instancja', 'mniejsze instancje', 'mniejszych instancji')}.`) : null,
+            )
+          : null,
+      ];
+    };
+
+    const cleanBox = () => {
+      if (!plan) return h('div.skeleton', { style: { height: '56px' } });
+      if (!plan.groups.length) return null;
+      const running = state.running.size > 0;
+      const chosen = () => plan.groups.filter((g) => selected.has(g.key));
+      const sum = () => chosen().reduce((total, g) => total + g.size, 0);
+      const label = h('span');
+      const free = h('button.btn.primary', {}, icon('broom'), label);
+      // Ticking a box only changes the button – the list is not redrawn, so the keyboard focus stays on the box.
+      const sync = () => {
+        label.textContent = `Zwolnij ${fmt.size(sum())}`;
+        free.disabled = running || !selected.size;
+      };
+      sync();
+      free.onclick = async () => {
+        const keys = chosen().map((g) => g.key);
+        const what = keys.map((k) => CLEAN[k]?.what ?? k).join(', ');
+        const ok = await HS.confirmDialog({ title: `Zwolnić ${fmt.size(sum())}?`, text: `Launcher usunie na stałe: ${what}. Twoje światy, mody i ustawienia zostają, a potrzebne pliki gry pobiorą się ponownie przy starcie.`, confirm: 'Zwolnij miejsce', danger: true });
+        if (!ok) return;
+        await HS.busy(free, async () => {
+          const res = await attempt(() => api.cleanup.apply(keys));
+          if (!res) return;
+          HS.toast(res.failed ? 'warning' : 'ok', `Zwolniono ${fmt.size(res.freed)}.${res.failed ? ` Nie udało się usunąć ${fmt.count(res.failed, 'elementu', 'elementów', 'elementów')} – mogą być używane przez inny program.` : ''}`, 6000);
+          await load(true);
+        });
+      };
+      return [
+        h(
+          'div.rows',
+          plan.groups.map((g) =>
+            h(
+              'label.clean-row',
+              h('input', { type: 'checkbox', checked: selected.has(g.key), onchange: (e) => ((e.target.checked ? selected.add(g.key) : selected.delete(g.key)), sync()) }),
+              h('div.grow', h('b', CLEAN[g.key]?.title ?? g.key), h('small.ellipsis', CLEAN[g.key]?.hint(g) ?? '')),
+              h('span.size', fmt.size(g.size)),
+            ),
+          ),
+        ),
+        h('div.row', { style: { marginTop: '12px' } }, h('span.grow.hint', running ? h('span.warn', 'Zamknij grę, żeby posprzątać – może właśnie używać tych plików.') : 'Usuwane są tylko pliki, które launcher potrafi pobrać ponownie, oraz stare logi.'), free),
+      ];
+    };
+
+    function draw() {
+      clear(
+        card,
+        h(
+          'div.card-head',
+          icon('disk'),
+          h('h2.grow', 'Miejsce na dysku'),
+          usage ? h('span.dim', { style: { fontSize: '12.5px' } }, `Launcher zajmuje ${fmt.size(usage.total)}`) : null,
+          h('button.btn.sm.icon', { title: 'Policz ponownie', 'aria-label': 'Policz ponownie', onclick: () => load(true) }, icon('refresh')),
+        ),
+        failed ? h('p.warn', { style: { fontSize: '13px' } }, `Nie udało się policzyć plików: ${failed}`) : usageBox(),
+        h(
+          'div.sub-head',
+          icon('broom'),
+          h('div.grow', h('h3', 'Sprzątanie'), h('p.muted', !plan ? 'Sprawdzam, co można bezpiecznie usunąć…' : plan.groups.length ? `Możesz bezpiecznie zwolnić ${fmt.size(plan.total)}.` : 'Nie ma nic do sprzątania – wszystko, co leży na dysku, jest w użyciu.')),
+        ),
+        failed ? null : cleanBox(),
+      );
+    }
+
+    /** Everything that can be freed starts ticked – the player unticks what should stay. */
+    const setPlan = (res) => {
+      plan = res;
+      selected.clear();
+      res.groups.forEach((g) => selected.add(g.key));
+    };
+    const redraw = () => alive && draw();
+
+    async function load(fresh = false) {
+      if (!fresh && diskCache && Date.now() - diskCache.at < 60_000) {
+        usage = diskCache.usage;
+        setPlan(diskCache.plan);
+        return redraw();
+      }
+      usage = null;
+      plan = null;
+      failed = null;
+      redraw();
+      try {
+        // The plan is quick, the sizes of big folders take a moment – each part shows up when it is ready.
+        await Promise.all([api.cleanup.plan().then((res) => (setPlan(res), redraw())), api.cleanup.usage().then((res) => ((usage = res), redraw()))]);
+        diskCache = { at: Date.now(), usage, plan };
+      } catch (err) {
+        failed = err?.message ?? 'nieznany błąd';
+      }
+      return redraw();
+    }
+    load();
+    return { el: card, draw: () => plan && redraw(), stop: () => (alive = false) };
+  }
+
   function render(root) {
     const acc = accountsCard();
+    const disk = diskCard();
     const s = () => state.settings;
     const set = (patch) => attempt(() => state.setSettings(patch));
 
@@ -113,6 +249,7 @@
             row('Równoległe pobierania', 'Więcej = szybciej na dobrym łączu.', HS.select([4, 8, 16, 32, 48].map((n) => ({ value: n, label: `${n}` })), s().concurrentDownloads, (v) => set({ concurrentDownloads: Number(v) }))),
             row('Folder launchera', state.info?.root ?? '', h('button.btn', { onclick: () => attempt(() => api.app.openFolder(null)) }, icon('folder'), 'Otwórz')),
           ),
+          disk.el,
           h(
             'section.card',
             h('div.card-head', icon('info'), h('h2', 'O launcherze')),
@@ -129,8 +266,11 @@
     );
     ram.disabled = s().memoryMb == null;
     showRam();
-    const off = bus.on('accounts', acc.draw);
-    return off;
+    const offs = [bus.on('accounts', acc.draw), bus.on('game', disk.draw)];
+    return () => {
+      disk.stop();
+      offs.forEach((f) => f());
+    };
   }
 
   HS.views.settings = { title: 'Ustawienia', icon: 'gear', render };

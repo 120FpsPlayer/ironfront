@@ -60,7 +60,7 @@
     compact: (n) => new Intl.NumberFormat('pl-PL', { notation: 'compact', maximumFractionDigits: 1 }).format(n ?? 0),
     gb: (bytes, d = 1) => `${(bytes / 1024 ** 3).toFixed(d).replace('.', ',')} GB`,
     mb: (mb) => (mb >= 1024 ? `${(mb / 1024).toFixed(mb % 1024 ? 1 : 0).replace('.', ',')} GB` : `${mb} MB`),
-    size: (b) => (b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`),
+    size: (b) => (b >= 1024 ** 3 ? fmt.gb(b, b >= 10 * 1024 ** 3 ? 1 : 2) : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`),
     plural: (n, one, few, many) => {
       const a = Math.abs(n);
       if (a === 1) return one;

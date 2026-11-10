@@ -208,6 +208,16 @@
       { icon: 'puzzle', label: 'Mody', onClick: () => state.selectInstance(i.id).then(() => HS.go('mods')) },
       { icon: 'folder', label: 'Otwórz folder', onClick: () => attempt(() => api.app.openFolder(i.id)) },
       { icon: 'copy', label: 'Duplikuj', onClick: () => attempt(() => api.instances.duplicate(i.id), 'Utworzono kopię instancji.').then(() => state.refreshInstances()) },
+      {
+        icon: 'wrench',
+        label: 'Napraw instancję',
+        onClick: async () => {
+          // Nothing is deleted: the next start checks every game file and installs the loader again.
+          if (!(await attempt(() => api.instances.repair(i.id)))) return;
+          HS.toast('ok', `Gotowe – przy następnym uruchomieniu launcher sprawdzi wszystkie pliki gry${i.loader !== 'vanilla' ? ` i zainstaluje ${LOADERS[i.loader]?.name ?? 'loader'} od nowa` : ''}. Światy, mody i ustawienia zostają bez zmian.`, 8000);
+          await state.refreshInstances();
+        },
+      },
       '-',
       {
         icon: 'trash',

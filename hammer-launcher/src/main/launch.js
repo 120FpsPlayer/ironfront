@@ -82,8 +82,12 @@ function memoryFor({ instance, settings, totalMem = os.totalmem(), modCount = 0 
   return memoryFromCustom(custom) ?? instance.memoryMb ?? settings.memoryMb ?? recommendMemory(totalMem, { modCount, loader: instance.loader });
 }
 
-/** The @xmcl/core launch options – a pure function, so it is easy to test. */
-function buildLaunchOptions({ paths, instance, settings, account, versionId, javaPath, javaMajor = 21, totalMem, modCount = 0, config = {}, join } = {}) {
+/**
+ * The @xmcl/core launch options – a pure function, so it is easy to test.
+ * Where the game starts: `server` ("host:port" from the Serwery tab) joins that server, `world` (a folder in saves/)
+ * opens that singleplayer world, otherwise `join` / the instance's autoJoinServer joins the configured server.
+ */
+function buildLaunchOptions({ paths, instance, settings, account, versionId, javaPath, javaMajor = 21, totalMem, modCount = 0, config = {}, join, server: joinAddress, world } = {}) {
   const preset = instance.jvmPreset || settings.jvmPreset || 'recommended';
   const custom = preset === 'custom' ? instance.customJvmArgs || settings.customJvmArgs : '';
   const maxMemory = memoryFor({ instance, settings, totalMem, modCount });
@@ -104,10 +108,15 @@ function buildLaunchOptions({ paths, instance, settings, account, versionId, jav
     extraJVMArgs: jvmArgs({ preset, custom, javaMajor }),
     resolution: settings.resolution?.fullscreen ? { fullscreen: true } : { width: settings.resolution?.width ?? 1280, height: settings.resolution?.height ?? 720 },
   };
-  const server = (join ?? instance.autoJoinServer) ? parseAddress(config.server?.address) : null;
+  const quickPlay = supportsQuickPlay(instance.mcVersion);
+  const server = joinAddress ? parseAddress(joinAddress) : world ? null : (join ?? instance.autoJoinServer) ? parseAddress(config.server?.address) : null;
   if (server) {
-    if (supportsQuickPlay(instance.mcVersion)) options.quickPlayMultiplayer = `${server.ip}:${server.port}`;
+    if (quickPlay) options.quickPlayMultiplayer = `${server.ip}:${server.port}`;
     else options.server = server;
+  } else if (world && quickPlay) {
+    // @xmcl/core has no option for this one; older versions have no way to open a world from the command line.
+    options.quickPlaySingleplayer = String(world);
+    options.extraMCArgs = ['--quickPlaySingleplayer', String(world)];
   }
   return options;
 }

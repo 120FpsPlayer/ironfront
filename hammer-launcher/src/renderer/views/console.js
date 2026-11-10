@@ -1,5 +1,5 @@
 'use strict';
-/* Konsola – live game log with colours, filter, copy, and a plain-Polish crash explanation. */
+/* Konsola – live game log with colours, filter, copy, sharing on mclo.gs and a plain-Polish crash explanation. */
 
 (() => {
   const { api, h, clear, icon, LOADERS, tile, bus, state, attempt } = HS;
@@ -62,6 +62,35 @@
     const stopBtn = h('button.btn.danger', { onclick: () => inst() && HS.stop(inst().id) }, icon('stop'), 'Zatrzymaj grę');
     const drawStop = () => (stopBtn.style.display = inst() && state.running.has(inst().id) ? '' : 'none');
 
+    /** "Wyślij logi": uploads the log to mclo.gs and shows the link to paste on Discord. */
+    async function shareLogs(btn) {
+      const i = inst();
+      if (!i) return;
+      const ok = await HS.confirmDialog({
+        title: 'Wysłać logi?',
+        text: 'Log tej instancji trafi do serwisu mclo.gs, a Ty dostaniesz link do wklejenia np. na Discordzie. Zobaczy go każdy, kto ma link – token logowania launcher usuwa przed wysłaniem.',
+        confirm: 'Wyślij logi',
+      });
+      if (!ok) return;
+      const res = await HS.busy(btn, () => attempt(() => api.logs.share(i.id)));
+      if (!res?.url) return;
+      const copy = () =>
+        navigator.clipboard.writeText(res.url).then(
+          () => HS.toast('ok', 'Skopiowano link do logów.'),
+          () => HS.toast('err', 'Nie udało się skopiować – zaznacz link i skopiuj go ręcznie.'),
+        );
+      const m = HS.modal({
+        title: 'Logi wysłane',
+        icon: 'check-circle',
+        body: h(
+          'div.form',
+          h('p.muted', 'Wklej ten link na Discordzie, gdy prosisz o pomoc – od razu będzie widać, co poszło nie tak.'),
+          h('div.row', h('input.input', { value: res.url, readOnly: true, 'aria-label': 'Link do logów', onfocus: (e) => e.target.select() }), h('button.btn.primary', { onclick: copy }, icon('copy'), 'Kopiuj link')),
+        ),
+        foot: [h('button.btn.ghost', { onclick: () => HS.open(res.url) }, icon('external'), 'Otwórz w przeglądarce'), h('button.btn', { onclick: () => m.close() }, 'Gotowe')],
+      });
+    }
+
     const search = h('input.input', {
       type: 'search',
       placeholder: 'Szukaj w logach…',
@@ -79,8 +108,9 @@
         crashBox,
         h(
           'div.toolbar',
-          h('div.search', { style: { width: '280px' } }, icon('search'), search),
+          h('div.search', { style: { width: '200px' } }, icon('search'), search),
           h('span.grow'),
+          h('button.btn', { title: 'Wyślij log na mclo.gs i skopiuj link, np. na Discorda', onclick: (e) => shareLogs(e.currentTarget) }, icon('upload'), 'Wyślij logi'),
           h(
             'button.btn',
             {

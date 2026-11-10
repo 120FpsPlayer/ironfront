@@ -46,6 +46,7 @@ const api = {
     update: (id, patch) => call('instances:update', id, patch),
     remove: (id) => call('instances:remove', id),
     duplicate: (id) => call('instances:duplicate', id),
+    repair: (id) => call('instances:repair', id),
     select: (id) => call('instances:select', id),
   },
   game: { launch: (id, opts) => call('game:launch', id, opts), stop: (id) => call('game:stop', id), logs: (id) => call('game:logs', id), running: () => call('game:running') },
@@ -64,6 +65,25 @@ const api = {
   community: { discord: () => call('community:discord'), shop: (o) => call('community:shop', o) },
   gallery: { list: (id) => call('gallery:list', id), remove: (id, file) => call('gallery:remove', id, file), copy: (id, file) => call('gallery:copy', id, file), show: (id, file) => call('gallery:show', id, file) },
   optimizer: { info: (id) => call('optimizer:info', id), plan: (id, o) => call('optimizer:plan', id, o), apply: (id, o) => call('optimizer:apply', id, o) },
+  servers: {
+    list: (id) => call('servers:list', id),
+    add: (id, data) => call('servers:add', id, data),
+    update: (id, index, patch, expected) => call('servers:update', id, index, patch, expected),
+    remove: (id, index, expected) => call('servers:remove', id, index, expected),
+    move: (id, from, to) => call('servers:move', id, from, to),
+  },
+  worlds: {
+    list: (id) => call('worlds:list', id),
+    rename: (id, folder, name) => call('worlds:rename', id, folder, name),
+    remove: (id, folder) => call('worlds:remove', id, folder),
+    open: (id, folder) => call('worlds:open', id, folder),
+    backup: (id, folder) => call('worlds:backup', id, folder),
+    backups: (id) => call('worlds:backups', id),
+    restore: (id, file) => call('worlds:restore', id, file),
+    removeBackup: (id, file) => call('worlds:remove-backup', id, file),
+  },
+  cleanup: { usage: () => call('cleanup:usage'), plan: () => call('cleanup:plan'), apply: (keys) => call('cleanup:apply', keys) },
+  logs: { share: (id) => call('logs:share', id) },
 };
 
 contextBridge.exposeInMainWorld('hs', api);

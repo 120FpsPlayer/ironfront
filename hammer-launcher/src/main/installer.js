@@ -12,7 +12,7 @@ const path = require('node:path');
 const { Version } = require('@xmcl/core');
 const installer = require('@xmcl/installer');
 const { Agent, interceptors } = require('undici');
-const { ensureJava, componentOf, majorOf } = require('./java');
+const { ensureJava, componentOf, majorOf, runtimeDir } = require('./java');
 const { loaderVersions, pickLoaderVersion } = require('./versions');
 
 // Node tries IPv6 and IPv4 in turn and gives each address only 250 ms by default – on a busy or slow connection
@@ -85,16 +85,19 @@ function describeError(err) {
 
 const versionJsonPath = (paths, id) => path.join(paths.versions, id, `${id}.json`);
 
-/** Vanilla Minecraft: version JSON + jar + libraries + assets. */
-async function ensureMinecraft(paths, mcVersion, { progress, dispatcher } = {}) {
+/**
+ * Vanilla Minecraft: version JSON + jar + libraries + assets.
+ * `full` (after "Napraw instancję") checks everything against Mojang's checksums again, the game jar included.
+ */
+async function ensureMinecraft(paths, mcVersion, { progress, dispatcher, full = false } = {}) {
   const resolvedPath = versionJsonPath(paths, mcVersion);
-  progress?.stage('minecraft');
-  if (!validVersionJson(resolvedPath)) {
+  progress?.stage('minecraft', full ? 'Sprawdzanie wszystkich plików gry' : undefined);
+  if (full || !validVersionJson(resolvedPath)) {
     const list = await installer.getVersionList({ dispatcher });
     const meta = list.versions.find((v) => v.id === mcVersion);
     if (!meta) throw new Error(`Nie ma takiej wersji Minecrafta: ${mcVersion}`);
     const task = installer.installTask(meta, paths.root, { side: 'client', dispatcher });
-    await task.startAndWait(progress?.context('minecraft', task));
+    await task.startAndWait(progress?.context('minecraft', task, full ? 'Sprawdzanie wszystkich plików gry' : undefined));
   } else {
     // Installed before: check libraries and assets (fast when everything is there, repairs missing files).
     const resolved = await Version.parse(paths.root, mcVersion);
@@ -137,10 +140,14 @@ const LOADER_NAMES = { fabric: 'Fabric', quilt: 'Quilt', neoforge: 'NeoForge', f
 async function prepareInstance({ paths, instance, settings, progress, instances }) {
   const dispatcher = createDispatcher(settings.concurrentDownloads);
   try {
-    const vanilla = await ensureMinecraft(paths, instance.mcVersion, { progress, dispatcher });
+    // "Napraw instancję" sets verifyFiles: one start that checks every file again and installs the loader anew.
+    const full = Boolean(instance.verifyFiles);
+    const vanilla = await ensureMinecraft(paths, instance.mcVersion, { progress, dispatcher, full });
     const component = componentOf(vanilla);
     const custom = instance.javaPath || settings.javaPath;
-    const javaPath = custom && fs.existsSync(custom) ? custom : await ensureJava(paths, component, { progress, dispatcher });
+    const ownJava = Boolean(custom && fs.existsSync(custom));
+    if (full && !ownJava) fs.rmSync(path.join(runtimeDir(paths, component), '.hammer-ok'), { force: true }); // Java is checked again too
+    const javaPath = ownJava ? custom : await ensureJava(paths, component, { progress, dispatcher });
     let versionId = instance.mcVersion;
     let loaderVersion = instance.loaderVersion;
     const key = `${instance.mcVersion}|${instance.loader}|${instance.loaderVersion ?? ''}`;
@@ -156,7 +163,7 @@ async function prepareInstance({ paths, instance, settings, progress, instances 
         loaderVersion = res.version;
       }
     }
-    instances?.patchInternal(instance.id, { versionId, installedFor: key, loaderVersion: instance.loaderVersion ?? null, installedLoaderVersion: loaderVersion ?? null });
+    instances?.patchInternal(instance.id, { versionId, installedFor: key, loaderVersion: instance.loaderVersion ?? null, installedLoaderVersion: loaderVersion ?? null, verifyFiles: undefined });
     return { versionId, javaPath, javaMajor: majorOf(vanilla), component };
   } finally {
     progress?.flush();

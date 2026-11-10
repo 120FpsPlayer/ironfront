@@ -147,3 +147,40 @@ test('game log: log4j XML events become readable lines, other lines pass through
   assert.match(out[2], /\[main\/ERROR\]: Unreported exception thrown!$/);
   assert.deepEqual(out.slice(3), ['java.lang.OutOfMemoryError: Java heap space', '\tat net.minecraft.class_2818.method_12011(class_2818.java:212)']);
 });
+
+test('play on a chosen server or in a chosen world: Quick Play on 1.20+, --server (or nothing) before', async () => {
+  const root = tmpDir();
+  fixtureVersion(root);
+  const base = { paths: createPaths(root), settings: { ...DEFAULT_SETTINGS }, account: { id: 'a', name: 'b', accessToken: 'c' }, versionId: '1.21.1', javaPath: 'java', totalMem: 8 * GB, config: { server: { address: 'play.hammershop.pl' } } };
+  const modern = { id: 'x', dir: path.join(root, 'instances', 'x'), name: 'x', mcVersion: '1.21.1', loader: 'vanilla' };
+  const old = { ...modern, mcVersion: '1.16.5' };
+  const has = (args, ...seq) => args.join('\u0000').includes(seq.join('\u0000'));
+
+  // A server from the Serwery tab.
+  const onServer = buildLaunchOptions({ ...base, instance: modern, server: 'mc.example.pl:25570' });
+  assert.equal(onServer.quickPlayMultiplayer, 'mc.example.pl:25570');
+  assert.equal(onServer.server, undefined);
+  assert.ok(has(await generateArguments(onServer), '--quickPlayMultiplayer', 'mc.example.pl:25570'));
+  assert.equal(buildLaunchOptions({ ...base, instance: modern, server: 'mc.example.pl' }).quickPlayMultiplayer, 'mc.example.pl:25565', 'the default port is added');
+  const legacy = buildLaunchOptions({ ...base, instance: old, server: 'mc.example.pl:25570' });
+  assert.deepEqual([legacy.server, legacy.quickPlayMultiplayer], [{ ip: 'mc.example.pl', port: 25570 }, undefined]);
+  // The chosen server wins over the launcher's own server and over a world.
+  const both = buildLaunchOptions({ ...base, instance: { ...modern, autoJoinServer: true }, join: true, server: 'inny.pl', world: 'Świat' });
+  assert.deepEqual([both.quickPlayMultiplayer, both.quickPlaySingleplayer, both.extraMCArgs], ['inny.pl:25565', undefined, undefined]);
+
+  // A world from the Światy tab.
+  const inWorld = buildLaunchOptions({ ...base, instance: { ...modern, autoJoinServer: true }, world: 'Nasz świat (2)' });
+  assert.equal(inWorld.quickPlaySingleplayer, 'Nasz świat (2)');
+  assert.equal(inWorld.quickPlayMultiplayer, undefined, 'a world is not combined with auto-join');
+  const args = await generateArguments(inWorld);
+  assert.ok(has(args, '--quickPlaySingleplayer', 'Nasz świat (2)'), args.join(' '));
+  assert.ok(!args.includes('--quickPlayMultiplayer') && !args.includes('--server'));
+  const oldWorld = buildLaunchOptions({ ...base, instance: old, world: 'Nasz świat' });
+  assert.deepEqual([oldWorld.quickPlaySingleplayer, oldWorld.extraMCArgs, oldWorld.server], [undefined, undefined, undefined], 'before 1.20 the world has to be opened in the game');
+
+  // The existing behaviour: join / autoJoinServer use the configured server, nothing by default.
+  assert.equal(buildLaunchOptions({ ...base, instance: modern, join: true }).quickPlayMultiplayer, 'play.hammershop.pl:25565');
+  assert.equal(buildLaunchOptions({ ...base, instance: { ...modern, autoJoinServer: true } }).quickPlayMultiplayer, 'play.hammershop.pl:25565');
+  const plain = buildLaunchOptions({ ...base, instance: modern });
+  assert.deepEqual([plain.quickPlayMultiplayer, plain.quickPlaySingleplayer, plain.server, plain.extraMCArgs], [undefined, undefined, undefined, undefined]);
+});

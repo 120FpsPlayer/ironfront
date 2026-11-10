@@ -90,6 +90,37 @@ function mock() {
     '\tat net.minecraft.class_3898.method_17979(class_3898.java:744)',
   ];
 
+  // Serwery: the list (servers.dat) and what each address answers to a ping. One address never answers (spinner).
+  const servers = [
+    { name: 'HammerShop', address: 'mc.hammershop.pl' },
+    { name: 'Survival ze znajomymi', address: '83.12.45.201:25570' },
+    { name: 'Hypixel', address: 'mc.hypixel.net' },
+    { name: 'Serwer testowy u Kuby', address: 'kuba.example.pl:25566' },
+    { name: 'Nowy serwer', address: 'nowy.example.pl' },
+  ];
+  const PINGS = {
+    'mc.hammershop.pl': { online: true, latency: 23, version: 'Paper 1.21.1', players: { online: 137, max: 500, sample: ['HammerGracz', 'Kowal', 'Mlotek'] }, motd: 'HammerShop – survival, skyblock i eventy co weekend!', favicon: logo('H', '#ffc27e', '#ff8a2b') },
+    '83.12.45.201:25570': { online: true, latency: 148, version: 'Fabric 1.20.1', players: { online: 3, max: 10, sample: [] }, motd: 'Nasz survival · wipe dopiero w grudniu', favicon: null },
+    'mc.hypixel.net': { online: true, latency: 312, version: 'Requires MC 1.8 / 1.21', players: { online: 28431, max: 200000, sample: [] }, motd: 'Hypixel Network [1.8-1.21] · SKYBLOCK · BEDWARS · SKYWARS', favicon: logo('Hy', '#ffe08a', '#d49a12') },
+    'kuba.example.pl:25566': { online: false, error: 'Serwer jest offline.' },
+  };
+  // Only the main instance has servers, worlds and backups – the others show the empty states.
+  const serverList = (id = 'hammershop') => (id === 'hammershop' ? servers.map((x, index) => ({ index, icon: null, acceptTextures: null, ...x })) : []);
+
+  // Światy: square world icons like the game's icon.png.
+  const worldIcon = (sky, ground) =>
+    `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="${sky}"/><circle cx="48" cy="14" r="7" fill="#fff6c7"/><path d="M0 40 L12 30 L24 38 L38 26 L52 36 L64 30 L64 64 L0 64Z" fill="${ground}"/><rect y="50" width="64" height="14" fill="${ground}" opacity=".6"/></svg>`)}`;
+  const worlds = [
+    { folder: 'Nasz survival', name: 'Nasz survival', gameType: 0, gameMode: 'Przetrwanie', hardcore: false, version: '1.21.1', lastPlayed: now - 3 * 3600e3, size: 1.42 * GB, sizePartial: false, iconUrl: worldIcon('#7cc8ff', '#2f7a3f'), broken: false },
+    { folder: 'New World', name: 'Miasto kreatywne', gameType: 1, gameMode: 'Kreatywny', hardcore: false, version: '1.21.1', lastPlayed: now - 2 * 864e5, size: 312e6, sizePartial: false, iconUrl: worldIcon('#ffd36b', '#8a5a2b'), broken: false },
+    { folder: 'Hardcore 3', name: 'Hardcore – podejście trzecie', gameType: 0, gameMode: 'Przetrwanie', hardcore: true, version: '1.21.1', lastPlayed: now - 9 * 864e5, size: 86e6, sizePartial: false, iconUrl: null, broken: false },
+    { folder: 'Stary swiat', name: 'Stary swiat', gameType: null, gameMode: null, hardcore: false, version: null, lastPlayed: now - 200 * 864e5, size: 4.2e6, sizePartial: false, iconUrl: null, broken: true },
+  ];
+  const backups = [
+    { file: 'Nasz survival-2026-11-09_21-14.zip', size: 688e6, createdAt: now - 20 * 3600e3, world: 'Nasz survival' },
+    { file: '2026-10-28_18-02-51_New World.zip', size: 121e6, createdAt: now - 13 * 864e5, world: 'New World' },
+  ];
+
   window.hs = {
     on(ch, fn) {
       if (!listeners.has(ch)) listeners.set(ch, new Set());
@@ -106,13 +137,13 @@ function mock() {
       { title: 'Jedno kliknięcie – więcej FPS', body: 'Zakładka Optymalizacja dobiera RAM, flagi Javy i mody wydajnościowe (Sodium, Lithium, FerriteCore…) pod Twoją wersję gry.', tag: 'Wydajność' },
       { title: 'Tysiące modów w zakładce Mody', body: 'Szukaj modów, paczek tekstur, shaderów i całych paczek modów z Modrinth – zależności instalują się same.', tag: 'Mody' },
     ] },
-    server: { ping: async () => (await wait(), { online: true, latency: 23, version: '1.21.4', players: { online: 137, max: 500 } }) },
+    server: { ping: async (address) => (address === 'nowy.example.pl' ? new Promise(() => {}) : (await wait(), PINGS[address] ?? { online: true, latency: 23, version: '1.21.4', players: { online: 137, max: 500 } })) },
     accounts: { list: async () => accounts.map((a) => ({ ...a, skinUrl: a.skinUrl ?? skin() })), login: async () => accounts[0], remove: async () => true, select: async () => true },
     versions: {
       minecraft: async () => ['1.21.4', '1.21.3', '1.21.1', '1.21', '1.20.6', '1.20.4', '1.20.1', '1.19.4', '1.18.2', '1.16.5', '1.12.2', '1.8.9'].map((id) => ({ id, type: 'release' })),
       loaders: async (l) => (l === 'vanilla' ? [] : [{ version: '0.16.10', stable: true }, { version: '0.16.9', stable: true }, { version: '0.16.8', stable: true }]),
     },
-    instances: { list: async () => instances.map((i) => ({ ...i })), ensureDefault: async () => null, create: async (d) => ({ id: 'x', ...d }), update: async (id, p) => Object.assign(instances.find((i) => i.id === id), p), remove: async () => true, duplicate: async () => ({}), select: async () => true },
+    instances: { list: async () => instances.map((i) => ({ ...i })), ensureDefault: async () => null, create: async (d) => ({ id: 'x', ...d }), update: async (id, p) => Object.assign(instances.find((i) => i.id === id), p), remove: async () => true, duplicate: async () => ({}), repair: async () => ({}), select: async () => true },
     game: { launch: async () => new Promise(() => {}), stop: async () => true, logs: async () => LOG.map((line) => ({ line })), running: async () => [] },
     content: {
       list: async (id, type) => (type === 'mod' ? installed.map((x) => ({ ...x })) : []),
@@ -165,6 +196,41 @@ function mock() {
       ] }),
       apply: async () => ({ installed: [], skipped: [], warnings: [], missing: [] }),
     },
+    servers: {
+      list: async (id) => (await wait(), serverList(id)),
+      add: async (id, d) => (servers.push({ name: d.name || d.address, address: d.address }), serverList()),
+      update: async (id, index, d) => (Object.assign(servers[index], { name: d.name || d.address, address: d.address }), serverList()),
+      remove: async (id, index) => (servers.splice(index, 1), serverList()),
+      move: async (id, from, to) => (servers.splice(to, 0, ...servers.splice(from, 1)), serverList()),
+    },
+    worlds: {
+      list: async (id) => (await wait(), id === 'hammershop' ? worlds.map((w) => ({ ...w })) : []),
+      rename: async (id, folder, name) => Object.assign(worlds.find((w) => w.folder === folder), { name }),
+      remove: async (id, folder) => (worlds.splice(worlds.findIndex((w) => w.folder === folder), 1), true),
+      open: async () => '',
+      backup: async (id, folder) => (await wait(300), backups.unshift({ file: `${folder}-2026-11-10_18-05.zip`, size: 702e6, createdAt: Date.now(), world: folder }), backups[0]),
+      backups: async (id) => (id === 'hammershop' ? backups.map((b) => ({ ...b })) : []),
+      restore: async (id, file) => ({ folder: `${backups.find((b) => b.file === file).world} (2)` }),
+      removeBackup: async (id, file) => (backups.splice(backups.findIndex((b) => b.file === file), 1), true),
+    },
+    cleanup: {
+      usage: async () => (await wait(150), {
+        total: 12.18 * GB,
+        instances: [{ id: 'hammershop', name: 'Hammer', size: 5.2 * GB }, { id: 'survival', name: 'Survival z ekipą', size: 2.1 * GB }, { id: 'fo', name: 'Fabulously Optimized', size: 0.9 * GB }, { id: 'pvp', name: 'PvP 1.8.9', size: 118e6 }],
+        versions: 0.31 * GB, libraries: 0.62 * GB, assets: 1.9 * GB, runtime: 0.94 * GB, runtimes: [{ name: 'java-runtime-delta', size: 0.5 * GB }, { name: 'java-runtime-gamma', size: 0.44 * GB }], cache: 96e6, logs: 2.1e6,
+      }),
+      plan: async () => (await wait(), {
+        total: 12.4e6 + 96e6 + 412e6 + 0.44 * GB,
+        groups: [
+          { key: 'logs', size: 12.4e6, count: 48, items: [] },
+          { key: 'cache', size: 96e6, count: 12, items: [] },
+          { key: 'versions', size: 412e6, count: 2, items: [{ name: '1.19.4', size: 380e6 }, { name: 'fabric-loader-0.15.11-1.19.4', size: 32e6 }] },
+          { key: 'runtimes', size: 0.44 * GB, count: 1, items: [{ name: 'java-runtime-gamma', size: 0.44 * GB, java: 17 }] },
+        ],
+      }),
+      apply: async () => ({ freed: 993e6, removed: 63, failed: 0 }),
+    },
+    logs: { share: async () => (await wait(200), { url: 'https://mclo.gs/HaMm3rX', id: 'HaMm3rX' }) },
   };
 }
 
@@ -219,6 +285,45 @@ async function main() {
   await page.locator('button', { hasText: 'Sprawdź aktualizacje' }).click();
   await shot('07-mody-zainstalowane');
 
+  await nav('Serwery');
+  await page.waitForTimeout(400);
+  await shot('14-serwery');
+  await page.locator('.page-head .btn.primary').click();
+  await page.locator('.modal input').nth(0).fill('Skyblock u Oli');
+  await page.locator('.modal input').nth(1).fill('mc.hammershop.pl');
+  await page.locator('.modal button', { hasText: 'Sprawdź' }).click();
+  await shot('15-serwer-dodaj');
+  await closeModal();
+
+  await nav('Światy');
+  await page.waitForTimeout(300);
+  await shot('16-swiaty');
+  await page.locator('.world-row button[title="Zmień nazwę"]').first().click();
+  await shot('17-swiat-zmiana-nazwy');
+  await closeModal();
+
+  // The new lists at the smallest window size (nothing may overflow or wrap badly).
+  await page.setViewportSize({ width: 1040, height: 660 });
+  await shot('16b-swiaty-male-okno');
+  await nav('Serwery');
+  await page.waitForTimeout(400);
+  await shot('14b-serwery-male-okno');
+  await page.setViewportSize({ width: 1240, height: 780 });
+
+  // An instance without servers and worlds.
+  await page.evaluate(() => HS.state.selectInstance('pvp'));
+  await page.waitForTimeout(300);
+  await shot('14c-serwery-pusto');
+  await nav('Światy');
+  await page.waitForTimeout(300);
+  await shot('16c-swiaty-pusto');
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+
+  await nav('Instancje');
+  await page.locator('.inst-card .more').first().click();
+  await shot('03b-instancja-menu');
+  await page.mouse.click(700, 720);
+
   await nav('Optymalizacja');
   await page.waitForTimeout(300);
   await shot('08-optymalizacja');
@@ -229,6 +334,12 @@ async function main() {
   await nav('Konsola');
   await page.waitForTimeout(300);
   await shot('10-konsola');
+  await page.locator('button', { hasText: 'Wyślij logi' }).click();
+  await shot('18-logi-pytanie');
+  await page.locator('.modal .btn.primary').click();
+  await page.waitForTimeout(300);
+  await shot('19-logi-link');
+  await closeModal();
 
   await nav('Galeria');
   await page.waitForTimeout(300);
@@ -239,6 +350,65 @@ async function main() {
 
   await nav('Ustawienia');
   await shot('11-ustawienia');
+  await page.waitForTimeout(300);
+  const diskTop = () => page.locator('.card', { hasText: 'Miejsce na dysku' }).evaluate((card) => (document.getElementById('view').scrollTop = card.offsetTop - 16));
+  await diskTop();
+  await shot('20-ustawienia-dysk');
+  await page.locator('.clean-row').first().click();
+  await page.locator('button', { hasText: 'Zwolnij' }).click();
+  await shot('21-sprzatanie-pytanie');
+  await closeModal();
+  await page.setViewportSize({ width: 1040, height: 660 });
+  await diskTop();
+  await shot('20b-ustawienia-dysk-male-okno');
+  await page.setViewportSize({ width: 1240, height: 780 });
+
+  // Click through the new actions once (no screenshots) – an error in any handler fails the preview.
+  const confirm = () => page.locator('.modal-foot .btn').last().click();
+  const count = async (selector, expected) => {
+    await page.waitForTimeout(250);
+    const n = await page.locator(selector).count();
+    if (n !== expected) errors.push(`${selector}: ${n} zamiast ${expected}`);
+  };
+  await nav('Serwery');
+  await count('.server-row', 5);
+  await page.locator('.server-row button[title="Przesuń niżej"]').first().click();
+  await page.locator('.server-row button[title="Edytuj"]').first().click();
+  await page.locator('.modal input').nth(0).fill('Zmieniona nazwa');
+  await confirm();
+  await page.locator('.server-row button[title="Usuń"]').last().click();
+  await confirm();
+  await count('.server-row', 4);
+  await page.locator('.page-head .btn.primary').click();
+  await page.locator('.modal input').nth(1).fill('nowy.example.com:25570');
+  await confirm();
+  await count('.server-row', 5);
+  await page.locator('button[title="Odśwież status"]').click();
+  await count('.server-row', 5);
+
+  await nav('Światy');
+  await count('.world-row', 4);
+  await page.locator('.world-row button', { hasText: 'Kopia zapasowa' }).first().click();
+  await page.waitForTimeout(500);
+  await count('.card .installed-row', 3);
+  await page.locator('button', { hasText: 'Przywróć' }).first().click();
+  await page.locator('button[title="Usuń kopię"]').last().click();
+  await confirm();
+  await count('.card .installed-row', 2);
+  await page.locator('.world-row button[title="Zmień nazwę"]').first().click();
+  await page.locator('.modal input').fill('Nowa nazwa świata');
+  await confirm();
+  await page.locator('.world-row button[title="Usuń"]').last().click();
+  await confirm();
+  await count('.world-row', 3);
+
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await page.locator('button', { hasText: 'Zwolnij' }).click();
+  await confirm();
+  await page.waitForTimeout(300);
+  await page.locator('button[title="Policz ponownie"]').click();
+  await page.waitForTimeout(400);
 
   await browser.close();
   if (errors.length) {
