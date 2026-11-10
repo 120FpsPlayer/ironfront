@@ -69,6 +69,22 @@ public final class Draw {
         g.pop();
     }
 
+    /** How deep the transform and clip stacks are right now – see {@link #rewind}. */
+    public int[] mark() {
+        return new int[] {stack.size(), clips.size()};
+    }
+
+    /** After a failure in the middle of drawing: drops every push and clip made since {@link #mark}. */
+    public void rewind(int[] mark) {
+        while (clips.size() > mark[1]) unclip();
+        while (stack.size() > mark[0]) pop();
+    }
+
+    /** After a failure: hands the game back a clean state (no clip, no transform of ours left). */
+    public void unwind() {
+        rewind(new int[] {0, 0});
+    }
+
     public void translate(float x, float y) {
         tx += x * scale;
         ty += y * scale;

@@ -98,6 +98,14 @@ public final class Hammer {
     /** 20 times per second. */
     public static void tick() {
         if (platform == null) return;
+        try {
+            tickNow();
+        } catch (RuntimeException e) {
+            problem("Błąd w obsłudze modułów", e);
+        }
+    }
+
+    private static void tickNow() {
         Game g = platform.game();
         boolean inWorld = g.inWorld();
         if (wasInWorld && !inWorld) STATS.leftWorld();
@@ -114,17 +122,39 @@ public final class Hammer {
         if (++ticks % 100 == 0) config.saveIfDirty();
     }
 
-    /** Draws the HUD modules (and the custom crosshair) over the game. */
+    /** Draws the HUD modules (and the custom crosshair) over the game. A failure never reaches the game. */
     public static void renderHud(Gfx g) {
         if (platform == null || !platform.game().inWorld()) return;
-        STATS.frame(platform);
         Draw d = new Draw(g);
-        WelcomeHint.render(d);
-        if (!config.hudVisible) return;
-        if (Modules.crosshair != null && Modules.crosshair.enabled() && !(Modules.crosshair.hiddenInThirdPerson() && platform.cameraMode() != 0)) {
-            Modules.crosshair.render(d, g.width() / 2f, g.height() / 2f);
+        try {
+            STATS.frame(platform);
+            WelcomeHint.render(d);
+            if (!config.hudVisible) return;
+            if (Modules.crosshair != null && Modules.crosshair.enabled() && !(Modules.crosshair.hiddenInThirdPerson() && platform.cameraMode() != 0)) {
+                Modules.crosshair.render(d, g.width() / 2f, g.height() / 2f);
+            }
+            drawHud(d, false);
+        } catch (RuntimeException e) {
+            d.unwind();
+            problem("HUD nie narysował się", e);
         }
-        drawHud(d, false);
+    }
+
+    private static long lastProblem;
+    private static int problems;
+
+    /** How many failures of ours were caught so far (the tests expect none). */
+    public static int problemCount() {
+        return problems;
+    }
+
+    /** Logs a failure of ours at most once every ten seconds (a broken frame would repeat it 60 times a second). */
+    private static void problem(String what, Throwable e) {
+        problems++;
+        long now = System.currentTimeMillis();
+        if (now - lastProblem < 10_000) return;
+        lastProblem = now;
+        Log.warn(what, e);
     }
 
     /** All enabled HUD modules at their places; the editor draws them too, with sample content. */
@@ -139,28 +169,35 @@ public final class Hammer {
         HudLayout.arrange(Modules.HUD, sw, sh, effects, editor);
         for (HudModule m : Modules.HUD) {
             if (!m.enabled()) continue;
+            int[] mark = d.mark();
             d.push();
             d.translate(m.left(sw), m.top(sh));
             d.scale(m.scale.value());
             try {
                 m.render(new HudCanvas(d, game, platform, editor, smooth));
+                d.pop();
             } catch (RuntimeException e) {
                 // One broken module must never take the whole HUD (or the game) down.
+                d.rewind(mark);
                 m.w = 0;
                 m.h = 0;
-                if (ticks % 200 == 0) Log.warn("Moduł " + m.id + " nie narysował się", e);
+                problem("Moduł " + m.id + " nie narysował się", e);
             }
-            d.pop();
         }
     }
 
-    /** Draws one of our screens for this frame (mouse in GUI pixels). */
-    public static void renderScreen(UiScreen screen, Gfx g, float mouseX, float mouseY) {
+    /** Draws one of our screens for this frame (mouse in GUI pixels). False = it failed and should be closed. */
+    public static boolean renderScreen(UiScreen screen, Gfx g, float mouseX, float mouseY) {
         Ui ui = new Ui(g, screen.state, INPUT, mouseX, mouseY);
         try {
             screen.render(ui);
-        } finally {
             ui.end();
+            return true;
+        } catch (RuntimeException e) {
+            ui.d.unwind();
+            problems++;
+            Log.warn("Ekran " + screen.getClass().getSimpleName() + " nie narysował się – zamykam go", e);
+            return false;
         }
     }
 
@@ -198,12 +235,20 @@ public final class Hammer {
 
     /** Extra buttons drawn over the vanilla pause menu. */
     public static void renderPauseOverlay(Gfx g, float mouseX, float mouseY) {
-        if (config != null && config.pauseButtons) PAUSE.render(g, mouseX, mouseY);
+        if (config == null || !config.pauseButtons || pauseBroken) return;
+        try {
+            PAUSE.render(g, mouseX, mouseY);
+        } catch (RuntimeException e) {
+            pauseBroken = true; // the vanilla pause menu stays as it is
+            Log.warn("Przyciski Hammer w menu pauzy nie narysowały się – wyłączam je do końca gry", e);
+        }
     }
+
+    private static boolean pauseBroken;
 
     /** A click on the pause menu; true = one of our buttons took it. */
     public static boolean pauseClick(float mouseX, float mouseY) {
-        return config != null && config.pauseButtons && PAUSE.click(mouseX, mouseY);
+        return config != null && config.pauseButtons && !pauseBroken && PAUSE.click(mouseX, mouseY);
     }
 
     // ───────────── hooks called from the game (mixins) ─────────────

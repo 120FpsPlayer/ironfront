@@ -33,8 +33,10 @@ public final class PauseOverlay {
             ui.button("mods", Hammer.t("pause.mods"), "puzzle", x, y, w, 28, Ui.Style.PRIMARY);
             mods = new float[] {x * s, y * s, w * s, 28 * s};
             ui.d.text("Hammer Client " + Hammer.version(), x + 2, y - 14, 7.5f, Theme.MUTED, Font.MEDIUM);
-        } finally {
             ui.end();
+        } catch (RuntimeException e) {
+            ui.d.unwind();
+            throw e;
         }
     }
 

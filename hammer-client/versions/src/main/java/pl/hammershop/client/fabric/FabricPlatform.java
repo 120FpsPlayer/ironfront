@@ -42,6 +42,7 @@ import pl.hammershop.client.api.Platform;
 import pl.hammershop.client.core.Log;
 import pl.hammershop.client.fabric.mixin.OptionAccessor;
 import pl.hammershop.client.screens.HudEditorScreen;
+import pl.hammershop.client.screens.MainMenuScreen;
 import pl.hammershop.client.ui.UiScreen;
 
 import java.nio.file.Path;
@@ -65,6 +66,7 @@ public final class FabricPlatform implements Platform, Game {
     private static boolean ready;
     private static boolean failed;
     private static long pauseDrawn;
+    private static boolean menuBroken;
     private static int ticks;
 
     private FabricPlatform() {
@@ -177,7 +179,7 @@ public final class FabricPlatform implements Platform, Game {
     /** The vanilla title screen becomes our main menu (unless the player turned that off). */
     public static Screen swap(Screen screen) {
         if (!(screen instanceof TitleScreen) && !(screen == null && mc().level == null)) return screen;
-        if (!ok()) return screen;
+        if (menuBroken || !ok()) return screen;
         UiScreen menu = Hammer.mainMenu();
         return menu == null ? screen : new BridgeScreen(menu);
     }
@@ -204,11 +206,17 @@ public final class FabricPlatform implements Platform, Game {
     static void drawScreen(GuiGraphicsExtractor g, UiScreen ui) {
         if (!ok()) return;
         Minecraft mc = mc();
+        boolean drawn;
         GFX.begin(g);
         try {
-            Hammer.renderScreen(ui, GFX, mouseX(mc), mouseY(mc));
+            drawn = Hammer.renderScreen(ui, GFX, mouseX(mc), mouseY(mc));
         } finally {
             GFX.end();
+        }
+        if (!drawn) {
+            // Never let one of our screens take the game down: close it; a broken main menu gives way to the vanilla one.
+            if (ui instanceof MainMenuScreen) menuBroken = true;
+            setScreen(null);
         }
     }
 

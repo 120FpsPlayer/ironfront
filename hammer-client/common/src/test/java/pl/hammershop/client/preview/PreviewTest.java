@@ -36,7 +36,7 @@ class PreviewTest {
         for (int frame = 0; frame < 3; frame++) {
             g = new Java2DGfx(w, h, guiScale);
             if (world) fakeWorld(g);
-            Hammer.renderScreen(screen, g, mouseX, mouseY);
+            assertTrue(Hammer.renderScreen(screen, g, mouseX, mouseY), name + " did not draw");
             Thread.sleep(60);
         }
         g.save(new File(out, name + ".png"));
@@ -90,6 +90,7 @@ class PreviewTest {
         g.save(new File(out, "11-hud-smooth-font.png"));
         Hammer.config().hudFont = "minecraft";
         for (Module m : Modules.ALL) m.data().enabled = null;
+        assertEquals(0, Hammer.problemCount(), "a HUD module or screen failed while drawing (see the log)");
     }
 
     @Test
