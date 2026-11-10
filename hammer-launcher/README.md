@@ -15,6 +15,14 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po pol
 - **Mody** (zakładka *Mody*): wyszukiwarka Modrinth z modami, paczkami tekstur, shaderami i paczkami modów. Ma kategorie i sortowanie, a zależności instalują się same. Do tego lista zainstalowanych z włączaniem i wyłączaniem, aktualizacje jednym kliknięciem, przeciąganie plików `.jar` / `.zip` i import paczek `.mrpack`.
 - **Konsola.** Logi gry na żywo. Gdy gra się wyłączy, launcher wyjaśnia po polsku, co się stało i co zrobić (brak RAM, zła Java, niezgodne lub zdublowane mody, sterowniki…).
 - **Konta Microsoft.** Logowanie przez oficjalne okno Microsoftu. Tokeny są szyfrowane przez system (Windows DPAPI / pęk kluczy), a hasła launcher nigdy nie widzi.
+- **Hammer Client – menu w grze jak w Lunar Client.** W instancjach Fabric 1.21.1 launcher sam dodaje nasz mod:
+  - własne menu główne,
+  - panel modułów pod prawym Shiftem,
+  - HUD z edytorem (FPS, CPS, klawisze, koordynaty, pancerz, efekty, zegar, ping…),
+  - zoom pod C i przełączany sprint,
+  - przycisk Discorda w menu pauzy.
+
+  Włączasz i wyłączasz go w edytorze instancji. Kod moda jest w folderze `hammer-client/`.
 - **Nasz Discord.** Karta na ekranie głównym i przycisk w menu: nazwa i ikona serwera, ile osób jest online i ilu jest członków, przycisk **Dołącz do Discorda**. Dane pochodzą z publicznego API zaproszeń Discorda (bez tokenu bota).
 - **Nowości ze sklepu HammerShop.** Produkty, ceny i obrazki prosto ze strony bota (`/api/shop/store`) – zmienisz coś w bocie, launcher pokaże to sam.
 - **Galeria.** Zrzuty ekranu (F2) ze wszystkich instancji: podgląd na pełnym ekranie, kopiowanie do schowka (np. żeby wkleić na Discorda), pokazanie w folderze, usuwanie.
