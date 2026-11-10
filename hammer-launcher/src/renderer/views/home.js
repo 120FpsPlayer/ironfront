@@ -107,6 +107,25 @@
       info.website && info.website !== info.shopUrl && { icon: 'globe', title: 'Strona', sub: new URL(info.website).host, url: info.website },
     ].filter(Boolean);
     const discordBox = h('div');
+    const clientBox = h('div');
+    function drawClient() {
+      const i = state.instance;
+      const on = HS.hammerClientOn(i);
+      const versions = state.info?.hammerClient?.versions ?? ['1.21.1'];
+      const key = (k, what) => h('div.row', { style: { gap: '10px', fontSize: '12.5px' } }, h('kbd.kbd', k), h('span.muted', what));
+      clear(
+        clientBox,
+        h(
+          'section.card.client-card',
+          h('div.card-head', icon('hammer'), h('h2.grow', 'Hammer Client w grze'), on ? HS.chip('Włączony', 'ok', 'check') : HS.chip(`Minecraft ${versions[versions.length - 1]}`, 'warn')),
+          h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, on ? 'Własne menu, panel modułów i HUD jak w Lunar Client – wszystko po polsku.' : `Menu i HUD w grze działają w instancjach Fabric na Minecraft ${versions[versions.length - 1]}.`),
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: '7px', marginBottom: '12px' } }, key('Prawy Shift', 'panel modułów i edytor HUD'), key('C', 'przybliżenie (zoom)'), key('Esc', 'Hammer Mody i Discord w menu pauzy')),
+          h('div.perks', ['FPS i CPS', 'Klawisze', 'Pancerz', 'Efekty', 'Koordynaty', 'Zegar'].map((x) => HS.chip(x))),
+          !on && i ? h('button.btn.sm', { style: { marginTop: '10px' }, onclick: () => HS.editInstance(i) }, icon('pen'), 'Ustaw instancję') : null,
+        ),
+      );
+    }
+    drawClient();
     const shopBox = h('div');
     const hero = h(
       'section.hero',
@@ -128,13 +147,13 @@
         hero,
         h(
           'div.home-grid',
-          h('section.card', h('div.card-head', icon('book'), h('h2', 'Aktualności')), newsList),
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, h('section.card', h('div.card-head', icon('book'), h('h2', 'Aktualności')), newsList), h('section.card', h('div.card-head', icon('cube'), h('h2', 'Wybrana instancja')), statsBody)),
           h(
             'div',
             { style: { display: 'flex', flexDirection: 'column', gap: '16px' } },
             discordBox,
+            clientBox,
             info.server?.address ? h('section.card.server-card', h('div.card-head', icon('server'), h('h2', info.server.name || 'Serwer')), serverBody) : null,
-            h('section.card', h('div.card-head', icon('cube'), h('h2', 'Wybrana instancja')), statsBody),
             links.length ? h('div.links', { style: { gridTemplateColumns: `repeat(${links.length}, minmax(0,1fr))`, marginTop: 0 } }, links.map((l) => h('button.link-card', { onclick: () => open(l.url) }, icon(l.icon), h('b', l.title), h('small', l.sub)))) : null,
           ),
         ),
@@ -208,7 +227,7 @@
     ping();
     const timer = setInterval(ping, 60000);
 
-    const offs = [bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home'))];
+    const offs = [bus.on('instances', drawClient), bus.on('settings', drawClient), bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home'))];
     return () => {
       clearInterval(timer);
       stopEmbers();

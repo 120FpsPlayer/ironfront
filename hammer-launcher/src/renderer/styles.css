@@ -377,3 +377,5 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 .lightbox .lb-nav.prev{left:14px}.lightbox .lb-nav.next{right:14px}
 .lightbox .lb-nav.prev svg.i{transform:rotate(180deg)}
 @media (max-width:1150px){.shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;padding:0 8px;border-radius:7px;background:var(--panel3);border:1px solid var(--line2);border-bottom-width:3px;font:800 11.5px/1 var(--font);color:var(--text);white-space:nowrap}
+.client-card .perks{display:flex;flex-wrap:wrap;gap:6px}

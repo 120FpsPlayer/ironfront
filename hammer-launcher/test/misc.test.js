@@ -44,7 +44,7 @@ test('instances: create (game in Polish), edit (new version = install again), du
   assert.throws(() => instances.create({ name: 'Bez wersji' }), /Wybierz wersję/);
   const a = instances.create({ name: 'Moja Żółta Instancja', mcVersion: '1.21.1', loader: 'fabric', icon: 'diamond', memoryMb: 6000 });
   assert.equal(a.id, 'moja-zolta-instancja');
-  assert.equal(fs.readFileSync(path.join(a.dir, 'options.txt'), 'utf8'), 'lang:pl_pl\n');
+  assert.equal(fs.readFileSync(path.join(a.dir, 'options.txt'), 'utf8'), 'lang:pl_pl\nonboardAccessibility:false\n');
   assert.ok(fs.existsSync(path.join(a.dir, 'mods')) && fs.existsSync(path.join(a.dir, 'shaderpacks')));
   instances.patchInternal(a.id, { versionId: 'fabric-loader-x-1.21.1', installedFor: 'k' });
   const same = instances.update(a.id, { name: 'Nowa nazwa' });

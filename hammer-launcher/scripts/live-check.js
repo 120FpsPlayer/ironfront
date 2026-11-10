@@ -55,7 +55,8 @@ const javaOnly = async (options) => spawn(options.javaPath.replace(/javaw(\.exe)
 
 const testProfile = { launchAuth: async () => ({ id: '0123456789abcdef0123456789abcdef', name: 'HammerShopCI', accessToken: '0' }) };
 const config = loadConfig(path.join(__dirname, '..', 'launcher.config.json'));
-const services = createServices({ root, config: { ...config, server: { address: '' } }, accounts: testProfile, emit, launchFn: NO_GAME ? javaOnly : undefined });
+const clientJar = process.env.HAMMER_CLIENT_JAR ? path.resolve(process.env.HAMMER_CLIENT_JAR) : null;
+const services = createServices({ root, config: { ...config, server: { address: '' } }, accounts: testProfile, emit, clientJar, launchFn: NO_GAME ? javaOnly : undefined });
 
 async function step(name, fn) {
   const t = Date.now();
@@ -78,11 +79,11 @@ const assert = (cond, msg) => {
 };
 
 /** Launches an instance and waits until the game window starts rendering (or Java answers, with --no-game). */
-function playAndWatch(instance) {
+function playAndWatch(instance, ready) {
   return new Promise((resolve, reject) => {
     const lines = [];
     let done = false;
-    const READY = NO_GAME ? /version "\d+|openjdk version/i : /Backend library: LWJGL|Reloading ResourceManager|Created: \d+x\d+x\d+ minecraft:textures/;
+    const READY = ready ?? (NO_GAME ? /version "\d+|openjdk version/i : /Backend library: LWJGL|Reloading ResourceManager|Created: \d+x\d+x\d+ minecraft:textures/);
     const finish = (err, msg) => {
       if (done) return;
       done = true;
@@ -159,6 +160,21 @@ async function main() {
     assert(mods.some((m) => /sodium/i.test(m)), `Brak Sodium po optymalizacji: ${mods.join(', ')}`);
     return `${mods.length} modów; ${line}`;
   });
+  if (clientJar && fs.existsSync(clientJar)) {
+    const hc = services.instances.create({ name: 'Test Hammer Client', mcVersion: MC, loader: 'fabric', optimized: false, hammerClient: true });
+    await step(`Hammer Client: ${NO_GAME ? 'instalacja w instancji' : 'start gry z menu Hammer'}`, async () => {
+      const line = await playAndWatch(hc, NO_GAME ? undefined : /\[Hammer Client\] Menu główne Hammer otwarte/);
+      const dir = services.instances.dir(hc.id);
+      const mods = fs.readdirSync(path.join(dir, 'mods'));
+      assert(mods.includes('hammer-client.jar'), `Brak hammer-client.jar: ${mods.join(', ')}`);
+      assert(mods.some((f) => /^fabric-api/i.test(f)), `Brak Fabric API: ${mods.join(', ')}`);
+      assert(fs.existsSync(path.join(dir, 'config', 'hammerclient-launcher.json')), 'Brak pliku ustawień od launchera');
+      return `${mods.join(', ')}; ${line}`;
+    });
+  } else {
+    log('\n(pominięto Hammer Client – brak HAMMER_CLIENT_JAR)');
+  }
+
   await step('Sprawdzenie aktualizacji modów', async () => {
     const upd = await services.content.checkUpdates(services.instances.get(inst.id), 'mod');
     return `${upd.length} do aktualizacji`;

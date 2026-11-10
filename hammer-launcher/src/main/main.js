@@ -108,7 +108,8 @@ if (!app.requestSingleInstanceLock()) {
       windowProperties: { width: 520, height: 680, resizable: false, title: 'Logowanie Microsoft', icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'), parent: win ?? undefined, modal: Boolean(win), autoHideMenuBar: true },
     });
     presence = createPresence(config.discordClientId);
-    services = createServices({ root, config, accounts, emit: send, presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() }, gpuInfo: () => gpu });
+    const clientJar = app.isPackaged ? path.join(process.resourcesPath, 'hammer-client.jar') : path.join(__dirname, '..', '..', 'resources', 'hammer-client.jar');
+    services = createServices({ root, config, accounts, clientJar, emit: send, presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() }, gpuInfo: () => gpu });
     services.accounts = accounts;
 
     // The launcher window steps aside while the game runs and comes back when it closes.
@@ -150,6 +151,7 @@ if (!app.requestSingleInstanceLock()) {
       config: { name: config.name, brand: config.brand, website: config.website, shopUrl: config.shopUrl, discordInvite: config.discordInvite, server: config.server },
       root: s().paths.root,
       secureStorage: safeStorage.isEncryptionAvailable(),
+      hammerClient: { versions: s().hammerClient.versions, available: s().hammerClient.available() },
     }));
     handle('app:open-external', (url) => openExternal(url));
     handle('app:open-folder', (instanceId, sub) => {

@@ -49,7 +49,7 @@ function mock() {
   const now = Date.now();
   const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false };
   const instances = [
-    { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.4', loader: 'fabric', icon: 'hammer', optimized: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
+    { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
     { id: 'fo', name: 'Fabulously Optimized', mcVersion: '1.21.1', loader: 'fabric', icon: 'star', optimized: true, modpack: { name: 'Fabulously Optimized', version: '6.4.0', iconUrl: logo('FO', '#6dd3ff', '#2563eb') }, playTimeMs: 5 * 3600e3, lastPlayed: now - 6 * 864e5 },
     { id: 'pvp', name: 'PvP 1.8.9', mcVersion: '1.8.9', loader: 'vanilla', icon: 'sword', optimized: false, playTimeMs: 0, lastPlayed: null },
@@ -97,7 +97,7 @@ function mock() {
       return () => listeners.get(ch).delete(fn);
     },
     pathForFile: () => null,
-    app: { info: async () => ({ version: '1.0.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammershop', secureStorage: true }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ version: '1.0.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1'], available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: { get: async () => ({ ...settings }), set: async (p) => Object.assign(settings, p) && { ...settings } },
     system: { info: async () => ({}) },

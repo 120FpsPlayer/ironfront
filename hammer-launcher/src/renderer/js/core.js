@@ -464,6 +464,9 @@
     };
   }
 
+  /** Hammer Client (in-game menu and HUD) runs in this instance. */
+  const hammerClientOn = (i) => Boolean(i && i.hammerClient !== false && ['fabric', 'quilt'].includes(i.loader) && (state.info?.hammerClient?.versions ?? ['1.21.1']).includes(i.mcVersion));
+
   /** The "Instancja" switcher used at the top of Mody / Optymalizacja / Konsola. */
   function instancePicker() {
     const el = h('button.instance-pick.compact', {
@@ -482,5 +485,5 @@
     return { el, draw };
   }
 
-  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers };
+  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn };
 })();

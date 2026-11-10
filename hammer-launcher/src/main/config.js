@@ -21,7 +21,7 @@ const DEFAULTS = {
   discordClientId: '',
   microsoft: { clientId: '', redirect: '' },
   updateUrl: '',
-  defaultInstance: { name: 'Hammer', loader: 'fabric', optimized: true },
+  defaultInstance: { name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', optimized: true },
 };
 
 function loadConfig(file = path.join(__dirname, '..', '..', 'launcher.config.json')) {

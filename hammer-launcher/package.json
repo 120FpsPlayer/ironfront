@@ -77,6 +77,15 @@
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.games"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": [
+          "hammer-client.jar"
+        ]
+      }
+    ]
   }
 }

@@ -26,8 +26,9 @@ const { majorOf } = require('./java');
 const { LOADER_NAMES } = require('./installer');
 const { createCommunity } = require('./community');
 const { listScreenshots, removeScreenshot, screenshotPath } = require('./gallery');
+const { syncHammerClient, supports: hammerClientSupports, SUPPORTED: HAMMER_CLIENT_VERSIONS } = require('./hammerclient');
 
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientJar = null }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const settings = createSettings(paths.settings);
@@ -53,10 +54,12 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   async function ensureDefaultInstance() {
     if (instances.list().length) return null;
     const def = config.defaultInstance ?? {};
-    const [latest] = await versions.minecraftVersions();
+    const list = await versions.minecraftVersions();
+    // The version Hammer Client is made for (custom menu, HUD) – or the newest release.
+    const mc = (def.mcVersion && list.find((v) => v.id === def.mcVersion)) || list[0];
     let loader = def.loader ?? 'fabric';
-    if (loader !== 'vanilla' && !(await versions.loaderVersions(loader, latest.id).catch(() => [])).length) loader = 'vanilla';
-    const instance = instances.create({ name: def.name ?? config.brand ?? 'HammerShop', mcVersion: latest.id, loader, icon: 'hammer', optimized: loader !== 'vanilla' && def.optimized !== false });
+    if (loader !== 'vanilla' && !(await versions.loaderVersions(loader, mc.id).catch(() => [])).length) loader = 'vanilla';
+    const instance = instances.create({ name: def.name ?? config.brand ?? 'HammerShop', mcVersion: mc.id, loader, icon: 'hammer', optimized: loader !== 'vanilla' && def.optimized !== false, hammerClient: true });
     settings.set({ selectedInstance: instance.id });
     return instance;
   }
@@ -89,6 +92,14 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         } catch (err) {
           emit('toast', { kind: 'warning', text: `Nie udało się dodać modów wydajnościowych: ${err.message}` });
         }
+      }
+      // Hammer Client (custom menu, module panel, HUD) for supported Fabric versions.
+      try {
+        const invite = await community.invite().catch(() => null);
+        const res = await syncHammerClient({ instance, jar: clientJar, content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand } });
+        if (!res.active && res.reason === 'missing' && instance.hammerClient !== false && hammerClientSupports(instance)) emit('toast', { kind: 'warning', text: 'Brak pliku Hammer Client w launcherze – gra uruchomi się bez własnego menu.' });
+      } catch (err) {
+        emit('toast', { kind: 'warning', text: `Nie udało się przygotować Hammer Client: ${err.message}` });
       }
       if (s.gpuPreference) await setGpuPreference(prepared.javaPath);
       progress.stage('launch');
@@ -166,6 +177,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     news: () => loadNews(config.newsUrl, { fetchFn }),
     system: () => systemInfo(gpuInfo()),
     community,
+    hammerClient: { versions: HAMMER_CLIENT_VERSIONS, available: () => Boolean(clientJar && fs.existsSync(clientJar)) },
     gallery: {
       list: (instanceId) => listScreenshots(instances, instanceId ? [need(instanceId)] : instances.list()),
       remove: (instanceId, file) => removeScreenshot(need(instanceId), file),

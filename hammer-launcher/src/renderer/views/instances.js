@@ -19,6 +19,7 @@
       customJvmArgs: instance?.customJvmArgs ?? '',
       javaPath: instance?.javaPath ?? '',
       autoJoinServer: instance?.autoJoinServer ?? false,
+      hammerClient: instance?.hammerClient ?? true,
     };
     let snapshots = state.settings.showSnapshots;
 
@@ -53,7 +54,9 @@
       versionSel.disabled = true;
       try {
         const list = await api.versions.minecraft({ snapshots });
-        if (!data.mcVersion || !list.some((v) => v.id === data.mcVersion)) data.mcVersion = data.mcVersion ?? list[0]?.id;
+        // New instances start on the Hammer Client version (custom menu and HUD) when it is available.
+        const hc = (state.info?.hammerClient?.versions ?? []).slice(-1)[0];
+        if (!data.mcVersion) data.mcVersion = hc && list.some((v) => v.id === hc) ? hc : list[0]?.id;
         clear(
           versionSel,
           list.map((v) => h('option', { value: v.id, selected: v.id === data.mcVersion }, v.type === 'snapshot' ? `${v.id} (snapshot)` : v.id)),
@@ -70,6 +73,7 @@
       data.mcVersion = versionSel.value;
       data.loaderVersion = null;
       loadLoaderVersions();
+      drawOpt();
     };
 
     async function loadLoaderVersions() {
@@ -112,18 +116,22 @@
       },
     );
 
+    const optBox = { padding: '12px 14px', borderRadius: '10px', background: 'rgba(var(--glow),.07)', border: '1px solid rgba(var(--glow),.22)' };
     function drawOpt() {
+      const hcVersions = state.info?.hammerClient?.versions ?? ['1.21.1'];
+      const hcOk = ['fabric', 'quilt'].includes(data.loader) && hcVersions.includes(data.mcVersion);
       clear(
         optRow,
-        data.loader === 'vanilla'
-          ? h('div.hint', 'Mody wydajnościowe wymagają loadera (np. Fabric). W Vanilli launcher nadal dobierze RAM i flagi Javy.')
-          : h(
-              'div.row',
-              { style: { padding: '12px 14px', borderRadius: '10px', background: 'rgba(var(--glow),.07)', border: '1px solid rgba(var(--glow),.22)' } },
-              icon('bolt'),
-              h('div.grow', h('b', 'Optymalizacja HammerShop'), h('div.hint', 'Przy pierwszym uruchomieniu doda Sodium, Lithium, FerriteCore i inne mody na więcej FPS.')),
-              HS.toggle(data.optimized, (v) => (data.optimized = v)),
-            ),
+        h(
+          'div.form',
+          { style: { gap: '10px' } },
+          data.loader === 'vanilla'
+            ? h('div.hint', 'Mody wydajnościowe wymagają loadera (np. Fabric). W Vanilli launcher nadal dobierze RAM i flagi Javy.')
+            : h('div.row', { style: optBox }, icon('bolt'), h('div.grow', h('b', 'Optymalizacja HammerShop'), h('div.hint', 'Przy pierwszym uruchomieniu doda Sodium, Lithium, FerriteCore i inne mody na więcej FPS.')), HS.toggle(data.optimized, (v) => (data.optimized = v))),
+          hcOk
+            ? h('div.row', { style: optBox }, icon('hammer'), h('div.grow', h('b', 'Hammer Client – menu w grze'), h('div.hint', 'Własne menu główne, panel modułów (prawy Shift), HUD: FPS, CPS, klawisze, pancerz… i zoom pod C.')), HS.toggle(data.hammerClient, (v) => (data.hammerClient = v)))
+            : h('div.hint', h('span', { style: { color: 'var(--accent2)' } }, 'Hammer Client'), ` (menu i HUD w grze, jak Lunar) działa na Minecraft ${hcVersions[hcVersions.length - 1]} z Fabric.`),
+        ),
       );
     }
 
@@ -230,6 +238,7 @@
               'div.chips',
               HS.chip(LOADERS[i.loader]?.name ?? i.loader, i.loader === 'vanilla' ? null : 'accent', i.loader === 'vanilla' ? 'cube' : 'puzzle'),
               i.optimized && i.loader !== 'vanilla' ? HS.chip('Zoptymalizowana', 'ok', 'bolt') : null,
+              HS.hammerClientOn(i) ? HS.chip('Hammer Client', 'accent', 'hammer') : null,
               i.modpack ? HS.chip(i.modpack.version ? `Paczka ${i.modpack.version}` : 'Paczka modów', null, 'box') : null,
             ),
             h(
