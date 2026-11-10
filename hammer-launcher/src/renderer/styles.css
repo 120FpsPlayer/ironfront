@@ -40,6 +40,17 @@ svg.i{width:1em;height:1em;fill:currentColor;flex:none}
 .tb-brand img{width:22px;height:22px;filter:drop-shadow(0 0 8px rgba(var(--glow),.45))}
 .tb-brand b{color:var(--accent)}
 .tb-brand em{font-style:normal;font-weight:600;color:var(--dim);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-left:2px}
+/* "developed by 120FpsPlayer": the name in the gold of the logo, with a glint that runs across it now and then */
+.tb-slash{width:1.5px;height:15px;margin:0 3px 0 5px;border-radius:2px;transform:skewX(-18deg);background:linear-gradient(180deg,transparent,rgba(255,200,60,.85),transparent)}
+.tb-dev{display:inline-flex;align-items:baseline;gap:7px;font-weight:600;color:var(--dim);font-size:11px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.tb-dev strong{font-weight:800;letter-spacing:.15em;color:transparent;-webkit-background-clip:text;background-clip:text;
+  background-image:linear-gradient(100deg,#ffd84d 0%,#ffb300 30%,#ff9f0a 42%,#fff6c9 50%,#ff9f0a 58%,#ffb300 70%,#ffd84d 100%);background-size:260% 100%;background-position:100% 0;
+  filter:drop-shadow(0 0 7px rgba(255,186,0,.55));animation:tb-glint 6s ease-in-out infinite}
+@keyframes tb-glint{0%,62%{background-position:100% 0}100%{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.tb-dev strong{animation:none}}
+@media (max-width:860px){.tb-slash,.tb-dev{display:none}}
+.dev-credit{display:inline-flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.dev-credit strong{font-weight:800;letter-spacing:.15em;color:transparent;-webkit-background-clip:text;background-clip:text;background-image:linear-gradient(100deg,#ffd84d,#ff9f0a 55%,#ffd84d);filter:drop-shadow(0 0 7px rgba(255,186,0,.5))}
 .tb-drag{flex:1;height:100%}
 .tb-buttons{display:flex;height:100%;-webkit-app-region:no-drag}
 .tb-btn{width:46px;height:100%;display:grid;place-items:center;color:var(--muted);transition:background .15s,color .15s}

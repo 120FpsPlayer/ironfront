@@ -1,7 +1,7 @@
 {
   "name": "hammer-launcher",
   "productName": "Hammer Launcher",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Launcher Minecrafta od HammerShop – instancje, mody z Modrinth, optymalizacja i logowanie Microsoft.",
   "main": "src/main/main.js",
   "author": "HammerShop",
