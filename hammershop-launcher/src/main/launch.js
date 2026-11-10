@@ -15,6 +15,45 @@ const { analyze } = require('./crash');
 
 const PRIORITY = { normal: os.constants.priority.PRIORITY_NORMAL, above_normal: os.constants.priority.PRIORITY_ABOVE_NORMAL, high: os.constants.priority.PRIORITY_HIGH };
 
+const XML_ENTITIES = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&apos;': "'" };
+const unxml = (s) => s.replace(/&(lt|gt|amp|quot|apos);/g, (m) => XML_ENTITIES[m]);
+
+/**
+ * Minecraft writes its log to stdout as log4j XML events (the format Mojang's launcher reads). This turns them back
+ * into readable lines – "[12:41:02] [Render thread/INFO]: message" – and passes any other line through.
+ */
+function createLogParser() {
+  let event = null;
+  const cdata = (text, tag) => {
+    const m = new RegExp(`<log4j:${tag}>\\s*(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))\\s*</log4j:${tag}>`).exec(text);
+    return m ? (m[1] ?? unxml(m[2] ?? '')) : null;
+  };
+  const attr = (text, name) => {
+    const m = new RegExp(`${name}="([^"]*)"`).exec(text);
+    return m ? unxml(m[1]) : '';
+  };
+  return (line) => {
+    if (!event) {
+      const start = line.indexOf('<log4j:Event');
+      if (start === -1) return [line];
+      event = line.slice(start);
+    } else event += `\n${line}`;
+    if (!event.includes('</log4j:Event>')) {
+      if (event.length > 200_000) event = null; // never buffer forever on a broken stream
+      return [];
+    }
+    const text = event;
+    event = null;
+    const ts = Number(attr(text, 'timestamp'));
+    const time = Number.isFinite(ts) && ts > 0 ? new Date(ts).toTimeString().slice(0, 8) : '';
+    const head = `${time ? `[${time}] ` : ''}[${attr(text, 'thread') || 'main'}/${attr(text, 'level') || 'INFO'}]: `;
+    const out = (cdata(text, 'Message') ?? '').split(/\r?\n/).map((l, i) => (i === 0 ? head + l : l));
+    const thrown = cdata(text, 'Throwable');
+    if (thrown) out.push(...thrown.split(/\r?\n/).filter(Boolean));
+    return out;
+  };
+}
+
 /** Number of enabled mods in an instance (for the RAM recommendation). */
 function countMods(dir) {
   try {
@@ -112,10 +151,13 @@ class GameManager extends EventEmitter {
     if (this.running.has(instance.id)) throw new Error('Ta instancja już działa.');
     const startedAt = Date.now();
     const logs = [];
-    const push = (line, stream) => {
-      logs.push({ line, stream, at: Date.now() });
-      if (logs.length > 3000) logs.splice(0, logs.length - 3000);
-      this.emit('log', { instanceId: instance.id, line, stream });
+    const parsers = { stdout: createLogParser(), stderr: createLogParser() };
+    const push = (raw, stream) => {
+      for (const line of (parsers[stream] ?? parsers.stdout)(raw)) {
+        logs.push({ line, stream, at: Date.now() });
+        if (logs.length > 3000) logs.splice(0, logs.length - 3000);
+        this.emit('log', { instanceId: instance.id, line, stream });
+      }
     };
     this.emit('state', { instanceId: instance.id, state: 'starting' });
     const child = await this.launchFn(options);
@@ -165,4 +207,4 @@ class GameManager extends EventEmitter {
   }
 }
 
-module.exports = { GameManager, buildLaunchOptions, memoryFor, parseAddress, supportsQuickPlay, countMods };
+module.exports = { GameManager, buildLaunchOptions, createLogParser, memoryFor, parseAddress, supportsQuickPlay, countMods };

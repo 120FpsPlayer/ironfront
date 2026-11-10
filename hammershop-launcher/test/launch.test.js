@@ -124,3 +124,26 @@ test('crash hints in Polish for the usual problems', () => {
   assert.equal(analyze({ code: 1, log: 'Mixin apply for mod lithium failed lithium.mixins.json' }).details[0], 'Mod: lithium');
   assert.equal(analyze({ code: 1, crashReport: '---- Minecraft Crash Report ----\nDescription: Ticking entity\n' }).details[0], 'Ticking entity');
 });
+
+test('game log: log4j XML events become readable lines, other lines pass through', () => {
+  const { createLogParser } = require('../src/main/launch');
+  const parse = createLogParser();
+  const lines = [
+    '<log4j:Event logger="net.minecraft.client.Minecraft" timestamp="1762770031000" level="INFO" thread="Render thread">',
+    '  <log4j:Message><![CDATA[Backend library: LWJGL version 3.3.3-snapshot]]></log4j:Message>',
+    '</log4j:Event>',
+    'Picked up JAVA_TOOL_OPTIONS: -Xss2m',
+    '<log4j:Event logger="x" timestamp="1762770032000" level="ERROR" thread="main">',
+    '  <log4j:Message><![CDATA[Unreported exception thrown!]]></log4j:Message>',
+    '  <log4j:Throwable><![CDATA[java.lang.OutOfMemoryError: Java heap space',
+    '\tat net.minecraft.class_2818.method_12011(class_2818.java:212)',
+    ']]></log4j:Throwable>',
+    '</log4j:Event>',
+  ];
+  const out = lines.flatMap((l) => parse(l));
+  assert.equal(out.length, 5);
+  assert.match(out[0], /^\[\d\d:\d\d:\d\d\] \[Render thread\/INFO\]: Backend library: LWJGL version 3\.3\.3-snapshot$/);
+  assert.equal(out[1], 'Picked up JAVA_TOOL_OPTIONS: -Xss2m');
+  assert.match(out[2], /\[main\/ERROR\]: Unreported exception thrown!$/);
+  assert.deepEqual(out.slice(3), ['java.lang.OutOfMemoryError: Java heap space', '\tat net.minecraft.class_2818.method_12011(class_2818.java:212)']);
+});
