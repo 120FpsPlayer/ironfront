@@ -124,7 +124,8 @@ test('worlds: only plain folder and file names inside the instance are accepted'
     assert.throws(() => worlds.worldDir(instance, 'Link'), /Nie ma już takiego świata/, 'links are not worlds');
     assert.deepEqual((await worlds.list(instance)).map((w) => w.folder), ['Świat']);
   }
-  assert.equal(isPlainName('a:b'), true);
+  // A colon is fine in a folder name on Linux and macOS; on Windows no such folder can exist ("a:" reads as a drive).
+  assert.equal(isPlainName('a:b'), process.platform !== 'win32');
   assert.equal(cleanFolderName(' a:b*c?.. ', 'x'), 'a_b_c_');
   assert.equal(cleanFolderName('..', 'Przywrócony świat'), 'Przywrócony świat');
   assert.equal(cleanFolderName('NUL', 'x'), 'x');

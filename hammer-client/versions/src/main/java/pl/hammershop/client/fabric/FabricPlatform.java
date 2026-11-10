@@ -461,8 +461,28 @@ public final class FabricPlatform implements Platform, Game {
 
     @Override
     public void setGamma(double value) {
+        Options o = mc().options;
+        double now = o.gamma().get();
+        if (value > 1.0 && now <= 1.0) normalGamma = now;
         // The option itself refuses values above 1, so the field is set directly.
-        ((OptionAccessor) (Object) mc().options.gamma()).setHammerValue(value);
+        ((OptionAccessor) (Object) o.gamma()).setHammerValue(value);
+    }
+
+    private static double normalGamma = 0.5;
+    private static double heldGamma = Double.NaN;
+
+    /** While the game writes options.txt, brightness is the player's own value; fullbright comes back right after. */
+    public static void beforeOptionsSave(Options o) {
+        double now = o.gamma().get();
+        if (now <= 1.0) return;
+        heldGamma = now;
+        ((OptionAccessor) (Object) o.gamma()).setHammerValue(normalGamma);
+    }
+
+    public static void afterOptionsSave(Options o) {
+        if (Double.isNaN(heldGamma)) return;
+        ((OptionAccessor) (Object) o.gamma()).setHammerValue(heldGamma);
+        heldGamma = Double.NaN;
     }
 
     @Override

@@ -11,6 +11,7 @@
     "MinecraftMixin",
     "MouseMixin",
     "OptionAccessor",
+    "OptionsMixin",
     "PacketMixin",
     "PauseMixin",
     "ScreenSwapMixin",
