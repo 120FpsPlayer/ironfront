@@ -12,7 +12,7 @@ const { createPaths } = require('./paths');
 const { createSettings } = require('./settings');
 const { createInstances } = require('./instances');
 const versions = require('./versions');
-const { prepareInstance } = require('./installer');
+const { prepareInstance, describeError } = require('./installer');
 const { GameManager, buildLaunchOptions, countMods } = require('./launch');
 const { createModrinth } = require('./modrinth');
 const { createContent } = require('./content');
@@ -68,7 +68,12 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     try {
       const s = settings.get();
       const account = await accounts.launchAuth(s.selectedAccount);
-      const prepared = await prepareInstance({ paths, instance, settings: s, progress, instances });
+      let prepared;
+      try {
+        prepared = await prepareInstance({ paths, instance, settings: s, progress, instances });
+      } catch (err) {
+        throw new Error(`Nie udało się przygotować gry: ${describeError(err)}. Sprawdź internet i spróbuj ponownie.`, { cause: err });
+      }
       instance = need(instance.id);
       // Optimised instance: performance mods for this game version (once per version / loader).
       const optKey = `${instance.mcVersion}|${instance.loader}`;

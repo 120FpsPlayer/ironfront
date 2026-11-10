@@ -10,12 +10,63 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Version } = require('@xmcl/core');
 const installer = require('@xmcl/installer');
-const { Agent } = require('undici');
+const { Agent, interceptors } = require('undici');
 const { ensureJava, componentOf, majorOf } = require('./java');
 const { loaderVersions, pickLoaderVersion } = require('./versions');
 
+/** Parallel downloads with retries and redirects (@xmcl reads the redirect history from the request context). */
 function createDispatcher(connections = 16) {
-  return new Agent({ connections, pipelining: 1, connect: { timeout: 20_000 } });
+  return new Agent({ connections, pipelining: 1, connect: { timeout: 20_000 } }).compose(interceptors.retry({ maxRetries: 3, minTimeout: 500 }), interceptors.redirect({ maxRedirections: 5 }));
+}
+
+/** A version JSON that exists and parses – an interrupted download leaves an empty or cut-off file behind. */
+function validVersionJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))?.id ? true : false;
+  } catch {
+    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
+    return false;
+  }
+}
+
+const NET_CODES = {
+  ENOTFOUND: 'Brak internetu albo serwer jest nieosiągalny',
+  EAI_AGAIN: 'Brak internetu albo serwer jest nieosiągalny',
+  ECONNREFUSED: 'Serwer odrzucił połączenie',
+  ECONNRESET: 'Połączenie zostało przerwane',
+  ETIMEDOUT: 'Serwer nie odpowiada',
+  UND_ERR_CONNECT_TIMEOUT: 'Serwer nie odpowiada',
+  UND_ERR_HEADERS_TIMEOUT: 'Serwer nie odpowiada',
+  UND_ERR_SOCKET: 'Połączenie zostało przerwane',
+  ENOSPC: 'Brak miejsca na dysku',
+  EACCES: 'Brak uprawnień do zapisu w folderze launchera',
+  EPERM: 'Brak uprawnień do zapisu (plik może być otwarty w innym programie lub blokowany przez antywirusa)',
+  EBUSY: 'Plik jest używany przez inny program',
+};
+
+/** One readable Polish sentence for download / install errors (AggregateError has no message of its own). */
+function describeError(err) {
+  const flat = (e) => (e instanceof AggregateError || Array.isArray(e?.errors) ? e.errors.flatMap(flat) : [e]);
+  const parts = new Set();
+  for (const e of flat(err)) {
+    const inner = e?.cause ?? e?.error ?? e;
+    const code = inner?.code ?? e?.code;
+    const url = e?.url ?? e?.urls?.[0] ?? inner?.url;
+    let host = '';
+    try {
+      host = url ? new URL(String(url)).host : '';
+    } catch {
+      host = '';
+    }
+    let text;
+    if (NET_CODES[code]) text = NET_CODES[code];
+    else if (/Checksum/i.test(e?.name ?? '')) text = 'Pobrany plik jest uszkodzony';
+    else if (inner?.statusCode ?? e?.statusCode) text = `Serwer zwrócił błąd ${inner?.statusCode ?? e?.statusCode}`;
+    else text = (e?.message || inner?.message || e?.name || '').trim();
+    if (text) parts.add(host ? `${text} (${host})` : text);
+  }
+  const list = [...parts].slice(0, 3);
+  return list.length ? list.join('; ') : 'Nieznany błąd pobierania';
 }
 
 const versionJsonPath = (paths, id) => path.join(paths.versions, id, `${id}.json`);
@@ -24,7 +75,7 @@ const versionJsonPath = (paths, id) => path.join(paths.versions, id, `${id}.json
 async function ensureMinecraft(paths, mcVersion, { progress, dispatcher } = {}) {
   const resolvedPath = versionJsonPath(paths, mcVersion);
   progress?.stage('minecraft');
-  if (!fs.existsSync(resolvedPath)) {
+  if (!validVersionJson(resolvedPath)) {
     const list = await installer.getVersionList({ dispatcher });
     const meta = list.versions.find((v) => v.id === mcVersion);
     if (!meta) throw new Error(`Nie ma takiej wersji Minecrafta: ${mcVersion}`);
@@ -80,7 +131,7 @@ async function prepareInstance({ paths, instance, settings, progress, instances 
     let loaderVersion = instance.loaderVersion;
     const key = `${instance.mcVersion}|${instance.loader}|${instance.loaderVersion ?? ''}`;
     if (instance.loader !== 'vanilla') {
-      if (instance.versionId && instance.installedFor === key && fs.existsSync(versionJsonPath(paths, instance.versionId))) {
+      if (instance.versionId && instance.installedFor === key && validVersionJson(versionJsonPath(paths, instance.versionId))) {
         versionId = instance.versionId;
         const resolved = await Version.parse(paths.root, versionId);
         const libs = installer.installLibrariesTask(resolved, { dispatcher });
@@ -99,4 +150,4 @@ async function prepareInstance({ paths, instance, settings, progress, instances 
   }
 }
 
-module.exports = { prepareInstance, ensureMinecraft, ensureLoader, createDispatcher, LOADER_NAMES, versionJsonPath };
+module.exports = { prepareInstance, ensureMinecraft, ensureLoader, createDispatcher, describeError, validVersionJson, LOADER_NAMES, versionJsonPath };

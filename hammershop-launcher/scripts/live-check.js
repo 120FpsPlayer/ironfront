@@ -102,7 +102,7 @@ function playAndWatch(instance) {
         setTimeout(() => (READY.test(lines.join('\n')) ? finish(null, 'gotowe') : finish(`Gra zakończyła się (kod ${e.code}): ${e.crash?.title ?? ''}`)), 200);
       }
     });
-    services.launch(instance.id).catch((err) => finish(err.message));
+    services.launch(instance.id).catch((err) => finish(err?.message || String(err) || 'Nieznany błąd'));
   });
 }
 
@@ -170,8 +170,10 @@ async function main() {
     ]) {
       const i = services.instances.create({ name, mcVersion: mc ?? latest, loader, optimized: false });
       await step(`Instalacja: ${name}`, async () => {
-        const { prepareInstance } = require('../src/main/installer');
-        const res = await prepareInstance({ paths: services.paths, instance: services.instances.get(i.id), settings: services.settings.get(), instances: services.instances });
+        const { prepareInstance, describeError } = require('../src/main/installer');
+        const res = await prepareInstance({ paths: services.paths, instance: services.instances.get(i.id), settings: services.settings.get(), instances: services.instances }).catch((err) => {
+          throw new Error(describeError(err), { cause: err });
+        });
         assert(fs.existsSync(res.javaPath), `Brak Javy: ${res.javaPath}`);
         return `${res.versionId}, Java ${res.javaMajor}`;
       });
