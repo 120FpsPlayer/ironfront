@@ -4,7 +4,7 @@
  * The store website, served by the bot (src/features/website.js starts it). The page (web/public/index.html) talks
  * to this API under /api/shop/:
  *
- *   GET  store            products (the bot's shop), what's switched on, the Discord invite
+ *   GET  store            products (the bot's shop), what's switched on, the Discord invite, the currency
  *   GET  session          the signed-in Discord user (signing in is all it takes to buy – there is no access fee)
  *   GET  auth/start       → Discord sign-in;  auth/callback  ← back from Discord (sets the session cookie; the bot adds
  *                         the user to the HammerShop server with the Member role – onLogin)
@@ -312,6 +312,7 @@ async function handle(req, res) {
         paymentsReady: paymentsReady(),
         accessPrice: null, // no access fee – signing in with Discord is enough
         discordUrl: hooks.info().invite || null,
+        currency: hooks.currency(), // prices are in the smallest unit (cents / grosze)
       });
     }
     if (route === 'session') return send(res, 200, sessionJson(userOf(req)));

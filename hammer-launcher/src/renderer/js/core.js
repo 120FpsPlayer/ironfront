@@ -1,0 +1,486 @@
+'use strict';
+/* Hammer Launcher – shared UI helpers: DOM builder, icons, state, toasts, modals, formatting. */
+
+(() => {
+  const api = window.hs;
+
+  /* ── DOM ── */
+  function h(tag, attrs, ...children) {
+    const [name, ...classes] = tag.split('.');
+    const el = document.createElement(name || 'div');
+    if (classes.length) el.className = classes.join(' ');
+    if (attrs && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) {
+      children.unshift(attrs);
+      attrs = null;
+    }
+    for (const [k, v] of Object.entries(attrs ?? {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className += (el.className ? ' ' : '') + v;
+      else if (k === 'style' && typeof v === 'object') for (const [prop, val] of Object.entries(v)) prop.startsWith('--') ? el.style.setProperty(prop, val) : (el.style[prop] = val);
+      else if (k === 'dataset') Object.assign(el.dataset, v);
+      else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (k === 'html') el.innerHTML = v;
+      else if (k in el && typeof v !== 'string') el[k] = v;
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    append(el, children);
+    return el;
+  }
+  function append(el, children) {
+    for (const c of children.flat(Infinity)) {
+      if (c == null || c === false) continue;
+      el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return el;
+  }
+  function clear(el, ...children) {
+    el.replaceChildren();
+    return append(el, children);
+  }
+
+  const SVG = 'http://www.w3.org/2000/svg';
+  function icon(name, cls) {
+    const def = window.HS_ICONS?.[name] ?? window.HS_ICONS?.cube;
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', def[0]);
+    svg.setAttribute('class', `i${cls ? ` ${cls}` : ''}`);
+    svg.setAttribute('aria-hidden', 'true');
+    for (const d of def[1]) {
+      const p = document.createElementNS(SVG, 'path');
+      p.setAttribute('d', d);
+      svg.append(p);
+    }
+    return svg;
+  }
+
+  /* ── formatting (Polish) ── */
+  const nf = new Intl.NumberFormat('pl-PL');
+  const fmt = {
+    num: (n) => nf.format(n ?? 0),
+    compact: (n) => new Intl.NumberFormat('pl-PL', { notation: 'compact', maximumFractionDigits: 1 }).format(n ?? 0),
+    gb: (bytes, d = 1) => `${(bytes / 1024 ** 3).toFixed(d).replace('.', ',')} GB`,
+    mb: (mb) => (mb >= 1024 ? `${(mb / 1024).toFixed(mb % 1024 ? 1 : 0).replace('.', ',')} GB` : `${mb} MB`),
+    size: (b) => (b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`),
+    plural: (n, one, few, many) => {
+      const a = Math.abs(n);
+      if (a === 1) return one;
+      if (a % 10 >= 2 && a % 10 <= 4 && (a % 100 < 10 || a % 100 >= 20)) return few;
+      return many;
+    },
+    count: (n, one, few, many) => `${nf.format(n)} ${fmt.plural(n, one, few, many)}`,
+    duration(ms) {
+      const m = Math.floor((ms ?? 0) / 60000);
+      if (m < 1) return 'mniej niż minuta';
+      if (m < 60) return `${m} min`;
+      const hrs = Math.floor(m / 60);
+      return `${hrs} h${m % 60 ? ` ${m % 60} min` : ''}`;
+    },
+    ago(ts) {
+      if (!ts) return 'nigdy';
+      const s = Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+      if (s < 60) return 'przed chwilą';
+      const m = Math.round(s / 60);
+      if (m < 60) return `${m} min temu`;
+      const hr = Math.round(m / 60);
+      if (hr < 24) return `${hr} ${fmt.plural(hr, 'godzinę', 'godziny', 'godzin')} temu`;
+      const d = Math.round(hr / 24);
+      if (d === 1) return 'wczoraj';
+      if (d < 30) return `${d} dni temu`;
+      return new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+    },
+    date: (ts) => new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }),
+  };
+
+  const LOADERS = {
+    vanilla: { name: 'Vanilla', hint: 'Czysty Minecraft, bez modów' },
+    fabric: { name: 'Fabric', hint: 'Lekki i szybki – najlepszy do optymalizacji' },
+    quilt: { name: 'Quilt', hint: 'Odgałęzienie Fabric, działa z większością jego modów' },
+    forge: { name: 'Forge', hint: 'Klasyka – duże, starsze paczki modów' },
+    neoforge: { name: 'NeoForge', hint: 'Następca Forge dla nowych wersji' },
+  };
+
+  const TILES = {
+    hammer: ['hammer', '#ffc68a', '#e8650e'],
+    grass: ['seedling', '#8fe39c', '#2b8a4a'],
+    diamond: ['gem', '#8ee8ff', '#2385d0'],
+    sword: ['shield', '#e1e6ee', '#5f6b7c'],
+    pickaxe: ['mountain', '#d9b38a', '#7a5130'],
+    creeper: ['skull', '#9be98a', '#357f2d'],
+    nether: ['fire', '#ff9a76', '#b01f1a'],
+    end: ['dragon', '#d0aaff', '#5a2cae'],
+    rocket: ['rocket', '#ffd877', '#de6b22'],
+    star: ['star', '#ffe48f', '#e59a12'],
+  };
+
+  function tile(instance, size = 44) {
+    const url = instance?.modpack?.iconUrl;
+    const [ic, c1, c2] = TILES[instance?.icon] ?? TILES.hammer;
+    const el = h('div.tile', { style: { '--s': `${size}px`, '--c1': c1, '--c2': c2 } });
+    if (url && /^(https:\/\/|data:image\/)/.test(url)) {
+      const img = h('img', { src: url, alt: '', loading: 'lazy' });
+      img.onerror = () => clear(el, icon(ic));
+      el.append(img);
+    } else el.append(icon(ic));
+    return el;
+  }
+
+  /** Player head from the Minecraft skin (face + hat layer), no third-party service. */
+  function head(account, size = 36) {
+    const el = h('div.head', { style: { '--s': `${size}px` } });
+    const skin = account?.skinUrl;
+    if (skin && /^(https:\/\/|data:image\/)/.test(skin)) {
+      const s = size;
+      el.style.backgroundImage = `url("${skin}"), url("${skin}")`;
+      el.style.backgroundSize = `${s * 8}px ${s * 8}px, ${s * 8}px ${s * 8}px`;
+      el.style.backgroundPosition = `${-s * 5}px ${-s}px, ${-s}px ${-s}px`;
+    } else el.textContent = (account?.name ?? '?').slice(0, 1).toUpperCase();
+    return el;
+  }
+
+  /* ── tiny event bus + app state ── */
+  const listeners = new Map();
+  const bus = {
+    on(evt, fn) {
+      if (!listeners.has(evt)) listeners.set(evt, new Set());
+      listeners.get(evt).add(fn);
+      return () => listeners.get(evt)?.delete(fn);
+    },
+    emit(evt, data) {
+      for (const fn of listeners.get(evt) ?? []) {
+        try {
+          fn(data);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    },
+  };
+
+  const state = {
+    info: null,
+    settings: {},
+    accounts: [],
+    instances: [],
+    running: new Map(), // instanceId → 'starting' | 'running'
+    progress: new Map(), // instanceId → { stage, label, done, total, percent }
+    logs: new Map(), // instanceId → [{ line, stream }]
+    crashes: new Map(), // instanceId → crash analysis
+    get account() {
+      return this.accounts.find((a) => a.id === this.settings.selectedAccount) ?? this.accounts[0] ?? null;
+    },
+    get instance() {
+      return this.instances.find((i) => i.id === this.settings.selectedInstance) ?? this.instances[0] ?? null;
+    },
+    async refreshInstances() {
+      this.instances = await api.instances.list();
+      bus.emit('instances', this.instances);
+      return this.instances;
+    },
+    async refreshAccounts() {
+      this.accounts = await api.accounts.list();
+      this.settings = await api.settings.get();
+      bus.emit('accounts', this.accounts);
+      return this.accounts;
+    },
+    async setSettings(patch) {
+      this.settings = await api.settings.set(patch);
+      bus.emit('settings', this.settings);
+      return this.settings;
+    },
+    async selectInstance(id) {
+      await this.setSettings({ selectedInstance: id });
+      bus.emit('instances', this.instances);
+    },
+  };
+
+  /* ── toasts ── */
+  const TOAST_ICONS = { ok: 'check-circle', err: 'x-circle', warning: 'warning', info: 'info' };
+  function toast(kind, text, ms = 4200) {
+    const root = document.getElementById('toasts');
+    const el = h(`div.toast.${kind}`, icon(TOAST_ICONS[kind] ?? 'info'), h('div', text));
+    root.append(el);
+    while (root.children.length > 4) root.firstChild.remove();
+    const close = () => {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 200);
+    };
+    el.addEventListener('click', close);
+    setTimeout(close, ms);
+  }
+
+  /** Runs an async action and shows its error as a toast; returns undefined on failure. */
+  async function attempt(fn, okText) {
+    try {
+      const res = await fn();
+      if (okText) toast('ok', typeof okText === 'function' ? okText(res) : okText);
+      return res;
+    } catch (err) {
+      toast('err', err?.message ?? String(err), 6500);
+      return undefined;
+    }
+  }
+
+  /** Disables a button and shows a spinner while the promise runs. */
+  async function busy(btn, fn) {
+    if (!btn) return fn();
+    const old = [...btn.childNodes];
+    btn.disabled = true;
+    clear(btn, h('span.spinner'), old.filter((n) => n.nodeType === 3 || n.tagName === 'SPAN').map((n) => n.cloneNode(true)));
+    try {
+      return await fn();
+    } finally {
+      btn.disabled = false;
+      clear(btn, old);
+    }
+  }
+
+  /* ── modals ── */
+  function modal({ title, icon: ic, body, foot, wide = false, onClose } = {}) {
+    const root = document.getElementById('modal-root');
+    let overlay;
+    const close = () => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      onClose?.();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    const box = h(
+      `div.modal${wide ? '.wide' : ''}`,
+      { role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+      h('div.modal-head', ic ? icon(ic) : null, h('h2', title), h('button.btn.ghost.sm.icon', { title: 'Zamknij', 'aria-label': 'Zamknij', onclick: close }, icon('close'))),
+      h('div.modal-body.scroll', body),
+      foot ? h('div.modal-foot', foot) : null,
+    );
+    overlay = h('div.overlay', { onmousedown: (e) => e.target === overlay && close() }, box);
+    root.append(overlay);
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => box.querySelector('input,select,textarea,.btn.primary')?.focus(), 30);
+    return { close, box };
+  }
+
+  function confirmDialog({ title, text, confirm = 'Potwierdź', danger = false }) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        m.close();
+        resolve(v);
+      };
+      const m = modal({
+        title,
+        icon: danger ? 'warning' : 'info',
+        body: h('p.muted', text),
+        foot: [h('button.btn.ghost', { onclick: () => finish(false) }, 'Anuluj'), h(`button.btn${danger ? '.danger' : '.primary'}`, { onclick: () => finish(true) }, confirm)],
+        onClose: () => finish(false),
+      });
+    });
+  }
+
+  /** A dropdown menu next to an element. items: [{ label, icon, hint, on, onClick }] */
+  function menu(anchor, items) {
+    document.querySelector('.menu')?.remove();
+    const r = anchor.getBoundingClientRect();
+    const el = h(
+      'div.menu',
+      { role: 'menu' },
+      items.map((it) => (it === '-' ? h('div.nav-sep') : h(`button${it.on ? '.on' : ''}`, { role: 'menuitem', onclick: () => (el.remove(), it.onClick()) }, it.node ?? (it.icon ? icon(it.icon) : null), h('span.ellipsis', it.label), it.hint ? h('small', it.hint) : null))),
+    );
+    document.body.append(el);
+    const w = Math.max(r.width, 240);
+    el.style.minWidth = `${w}px`;
+    const top = r.bottom + 6 + el.offsetHeight > innerHeight ? Math.max(8, r.top - el.offsetHeight - 6) : r.bottom + 6;
+    el.style.top = `${top}px`;
+    el.style.left = `${Math.min(r.left, innerWidth - w - 10)}px`;
+    const off = (e) => {
+      if (!el.contains(e.target)) {
+        el.remove();
+        document.removeEventListener('mousedown', off, true);
+      }
+    };
+    setTimeout(() => document.addEventListener('mousedown', off, true));
+    return el;
+  }
+
+  /* ── form controls ── */
+  function toggle(checked, onChange) {
+    const input = h('input', { type: 'checkbox', checked: Boolean(checked), onchange: (e) => onChange(e.target.checked) });
+    return h('label.switch', input, h('i'));
+  }
+  function select(options, value, onChange) {
+    const el = h('select.select', { onchange: (e) => onChange(e.target.value) }, options.map((o) => h('option', { value: o.value, selected: String(o.value) === String(value) }, o.label)));
+    return el;
+  }
+  function seg(options, value, onChange) {
+    const root = h('div.seg');
+    const draw = (v) =>
+      clear(
+        root,
+        options.map((o) =>
+          h(
+            `button${o.value === v ? '.on' : ''}`,
+            {
+              onclick: () => {
+                draw(o.value);
+                onChange(o.value);
+              },
+            },
+            o.icon ? icon(o.icon) : null,
+            o.label,
+          ),
+        ),
+      );
+    draw(value);
+    return root;
+  }
+  function range(input) {
+    const set = () => input.style.setProperty('--p', `${((input.value - input.min) / (input.max - input.min)) * 100}%`);
+    input.addEventListener('input', set);
+    set();
+    return input;
+  }
+  function field(label, control, hint) {
+    const single = control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement;
+    return h(single ? 'label.field' : 'div.field', h('span', label), control, hint ? h('div.hint', hint) : null);
+  }
+  function empty(ic, title, text, action) {
+    return h('div.empty', icon(ic), h('h3', title), text ? h('p', text) : null, action ?? null);
+  }
+  function chip(text, kind, ic) {
+    return h(`span.chip${kind ? `.${kind}` : ''}`, ic ? icon(ic) : null, text);
+  }
+  const debounce = (fn, ms = 300) => {
+    let t;
+    return (...a) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...a), ms);
+    };
+  };
+  const open = (url) => url && attempt(() => api.app.openExternal(url));
+
+  /* ── community: Discord server + HammerShop store (fetched by the launcher, cached for a minute) ── */
+  const communityCache = {};
+  const once = (key, fn) => {
+    const hit = communityCache[key];
+    if (hit && Date.now() - hit.at < 60_000) return hit.promise;
+    const promise = fn().catch(() => null);
+    communityCache[key] = { at: Date.now(), promise };
+    return promise;
+  };
+  const community = { discord: () => once('discord', () => api.community.discord()), shop: () => once('shop', () => api.community.shop({ limit: 4 })) };
+
+  function money(value, currency) {
+    try {
+      return new Intl.NumberFormat('pl-PL', currency ? { style: 'currency', currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    } catch {
+      return `${value.toFixed(2).replace('.', ',')}${currency ? ` ${currency}` : ''}`;
+    }
+  }
+
+  /** The big "Dołącz do naszego Discorda" card. */
+  function discordCard(d) {
+    const initials = (d.name ?? 'D')
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+    return h(
+      'section.card.discord-card',
+      h('div.banner', d.bannerUrl ? h('img', { src: d.bannerUrl, alt: '' }) : null, icon('discord')),
+      h(
+        'div.body',
+        h('div.guild', h('div.guild-icon', d.iconUrl ? h('img', { src: d.iconUrl, alt: '' }) : initials), h('div', { style: { minWidth: 0, paddingBottom: '2px' } }, h('small', 'Nasz Discord'), h('b.ellipsis', d.name))),
+        d.live && (d.online != null || d.members != null)
+          ? h(
+              'div.counts',
+              d.online != null ? h('span', h('i.dot.discord'), h('b', fmt.num(d.online)), 'online') : null,
+              d.members != null ? h('span', h('i.dot.idle'), h('b', fmt.num(d.members)), fmt.plural(d.members, 'członek', 'członków', 'członków')) : null,
+            )
+          : d.invalid
+            ? h('p.warn', { style: { fontSize: '12.5px', marginBottom: '12px' } }, 'Zaproszenie wygasło – ustaw nowe w launcher.config.json albo /zbuduj w bocie.')
+            : null,
+        d.description ? h('p.muted', { style: { fontSize: '12.5px', marginBottom: '12px' } }, d.description) : null,
+        h('div.perks', chip('Pomoc i tickety', null, 'heart'), chip('Giveawaye', null, 'star'), chip('Nowości i promocje', null, 'bolt')),
+        d.invalid ? null : h('button.btn.discord', { onclick: () => open(d.url) }, icon('discord'), 'Dołącz do Discorda'),
+      ),
+    );
+  }
+
+  /** Slow, warm sparks rising in the hero. Light on CPU (≈30 fps, pauses when hidden) and off for reduced motion. */
+  function embers(canvas) {
+    if (!canvas?.getContext) return () => {};
+    const ctx = canvas.getContext('2d');
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let w = 0;
+    let hgt = 0;
+    let raf = 0;
+    let last = 0;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const resize = () => {
+      w = canvas.clientWidth;
+      hgt = canvas.clientHeight;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(hgt * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    const spawn = (anywhere) => ({ x: Math.random() * w, y: anywhere ? Math.random() * hgt : hgt + 10, r: 0.6 + Math.random() * 1.8, vy: 0.15 + Math.random() * 0.45, vx: -0.15 + Math.random() * 0.3, a: 0.25 + Math.random() * 0.6, t: Math.random() * 6.28 });
+    resize();
+    const parts = Array.from({ length: reduced ? 14 : 42 }, () => spawn(true));
+    const draw = () => {
+      ctx.clearRect(0, 0, w, hgt);
+      for (const p of parts) {
+        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
+        glow.addColorStop(0, `rgba(255,190,120,${p.a})`);
+        glow.addColorStop(1, 'rgba(255,140,40,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 4, 0, 6.283);
+        ctx.fill();
+      }
+    };
+    const tick = (now) => {
+      raf = requestAnimationFrame(tick);
+      if (now - last < 33 || document.hidden) return;
+      last = now;
+      for (const p of parts) {
+        p.t += 0.03;
+        p.y -= p.vy;
+        p.x += p.vx + Math.sin(p.t) * 0.2;
+        p.a -= 0.0012;
+        if (p.y < -10 || p.a <= 0.05) Object.assign(p, spawn(false));
+      }
+      draw();
+    };
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+    if (reduced) draw();
+    else raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }
+
+  /** The "Instancja" switcher used at the top of Mody / Optymalizacja / Konsola. */
+  function instancePicker() {
+    const el = h('button.instance-pick.compact', {
+      title: 'Zmień instancję',
+      onclick: () =>
+        menu(
+          el,
+          state.instances.map((i) => ({ node: tile(i, 26), label: i.name, hint: state.running.has(i.id) ? 'w grze' : `${i.mcVersion} ${i.loader !== 'vanilla' ? LOADERS[i.loader]?.name : ''}`, on: i.id === state.instance?.id, onClick: () => state.selectInstance(i.id) })),
+        ),
+    });
+    const draw = () => {
+      const i = state.instance;
+      clear(el, i ? tile(i, 34) : null, h('div', h('b', i?.name ?? 'Brak instancji'), h('small', i ? `Minecraft ${i.mcVersion}${i.loader !== 'vanilla' ? ` · ${LOADERS[i.loader]?.name}` : ''}` : '—')), icon('chevron-down'));
+    };
+    draw();
+    return { el, draw };
+  }
+
+  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers };
+})();
