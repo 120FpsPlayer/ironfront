@@ -1,0 +1,109 @@
+name: HammerShop Launcher
+
+on:
+  push:
+    paths:
+      - 'hammershop-launcher/**'
+      - '.github/workflows/hammershop-launcher.yml'
+  pull_request:
+    paths:
+      - 'hammershop-launcher/**'
+  workflow_dispatch:
+
+concurrency:
+  group: launcher-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: hammershop-launcher
+
+jobs:
+  test:
+    name: Testy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hammershop-launcher/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Składnia interfejsu
+        run: for f in src/renderer/js/*.js src/renderer/views/*.js src/preload.js; do node --check "$f"; done
+      - name: Podgląd interfejsu (Chromium, bez błędów w konsoli)
+        run: |
+          npx playwright install --with-deps chromium
+          node scripts/preview.js preview 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: podglad-interfejsu
+          path: hammershop-launcher/preview/*.png
+          retention-days: 14
+
+  live-linux:
+    name: Test na żywo (Linux, start gry)
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hammershop-launcher/package-lock.json
+      - name: Xvfb i Mesa (OpenGL bez karty graficznej)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+      - run: npm ci
+      - run: xvfb-run -a -s "-screen 0 1280x720x24" node scripts/live-check.js
+
+  live-windows:
+    name: Test na żywo (Windows)
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hammershop-launcher/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: node scripts/live-check.js --no-game
+
+  build-windows:
+    name: Instalator Windows (.exe)
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hammershop-launcher/package-lock.json
+      - run: npm ci
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HammerShop-Launcher-Windows
+          path: |
+            hammershop-launcher/dist/*.exe
+          if-no-files-found: error
+          retention-days: 30

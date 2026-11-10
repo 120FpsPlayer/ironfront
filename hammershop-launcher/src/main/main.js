@@ -53,7 +53,11 @@ if (!app.requestSingleInstanceLock()) {
     win.once('ready-to-show', () => win.show());
     win.webContents.on('will-navigate', (e) => e.preventDefault());
     win.webContents.setWindowOpenHandler(({ url }) => {
-      openExternal(url).catch(() => null);
+      try {
+        openExternal(url).catch(() => null);
+      } catch {
+        // not an https link – ignored
+      }
       return { action: 'deny' };
     });
     win.on('maximize', () => send('window:state', { maximized: true }));
