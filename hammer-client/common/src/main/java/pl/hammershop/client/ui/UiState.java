@@ -21,6 +21,11 @@ public final class UiState {
         return (System.nanoTime() - opened) / 1e9f;
     }
 
+    /** A text field has the keyboard. */
+    public boolean typing() {
+        return focus != null;
+    }
+
     /** Esc: closes an open popup or leaves a text field; true if there was one. */
     public boolean focusOrPopupClosed() {
         if (popup != null) {

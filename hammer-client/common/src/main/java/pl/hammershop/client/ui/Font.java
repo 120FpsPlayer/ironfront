@@ -12,7 +12,7 @@ import java.util.Map;
 
 /**
  * The smooth UI font (Montserrat) as pre-rendered glyph atlases: assets/hammerclient/textures/font/&lt;name&gt;_&lt;size&gt;.png
- * with metrics in assets/hammerclient/font/&lt;name&gt;_&lt;size&gt;.json (see tools/gen_assets.py). Several sizes per weight,
+ * with metrics in assets/hammerclient/glyphs/&lt;name&gt;_&lt;size&gt;.json (see tools/gen_assets.py). Several sizes per weight,
  * so text stays sharp from small labels to big titles; the textures use linear filtering.
  */
 public enum Font {
@@ -59,7 +59,7 @@ public enum Font {
         }
 
         static Atlas load(String name) {
-            String path = "/assets/hammerclient/font/" + name + ".json";
+            String path = "/assets/hammerclient/glyphs/" + name + ".json";
             try (InputStream in = Font.class.getResourceAsStream(path)) {
                 if (in == null) throw new IllegalStateException("Missing font metrics " + path);
                 return new Atlas(name, JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject());

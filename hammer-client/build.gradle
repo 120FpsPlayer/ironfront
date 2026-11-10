@@ -32,12 +32,30 @@ subprojects { sub ->
         implementation project(':common')
     }
 
-    // The platform code of this game version: versions/src/<era>/java (+ resources), see targets.json.
-    sourceSets.main {
-        target.eras.each { era ->
-            java.srcDir rootProject.file("versions/src/${era}/java")
-            resources.srcDir rootProject.file("versions/src/${era}/resources")
+    // The platform code is one source tree for every game version (versions/src/main); the lines between
+    // "//#if MC >= 1.21.6" … "//#endif" are kept or blanked per version before compiling.
+    def platformSrc = rootProject.file('versions/src/main/java')
+    def generated = layout.buildDirectory.dir('preprocessed/java')
+    def mcVersion = target.minecraft
+    def preprocess = tasks.register('preprocess') {
+        inputs.dir(platformSrc)
+        inputs.file(rootProject.file('versions/renames.txt'))
+        inputs.property('minecraft', mcVersion)
+        outputs.dir(generated)
+        doLast {
+            def out = generated.get().asFile
+            out.deleteDir()
+            def renames = HammerPreprocessor.renames(rootProject.file('versions/renames.txt').text, mcVersion)
+            platformSrc.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                def to = new File(out, platformSrc.toPath().relativize(f.toPath()).toString())
+                to.parentFile.mkdirs()
+                to.setText(HammerPreprocessor.run(f.getText('UTF-8'), mcVersion, renames, f.name), 'UTF-8')
+            }
         }
+    }
+    sourceSets.main {
+        java.srcDir(preprocess)
+        resources.srcDir rootProject.file('versions/src/main/resources')
     }
 
     processResources {
@@ -70,5 +88,99 @@ tasks.register('dist', Copy) {
     doLast {
         def index = [version: rootProject.mod_version, jars: targets.collect { [file: "hammer-client-${it.minecraft}-${rootProject.mod_version}.jar", minecraft: it.supports] }]
         layout.buildDirectory.file('dist/versions.json').get().asFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(index))
+    }
+}
+
+
+/**
+ * A tiny source preprocessor: "//#if MC >= 1.21.6", "//#elif …", "//#else", "//#endif" (nesting allowed; conditions are
+ * MC <op> <version> joined with && or ||). Lines of branches that are not taken become empty lines, so line numbers in
+ * compiler errors match the original file. versions/renames.txt lists words that are spelled differently in some
+ * game versions (e.g. Identifier was ResourceLocation before 1.21.11).
+ */
+class HammerPreprocessor {
+    static int number(String v) {
+        def p = v.trim().tokenize('.').collect { it as int }
+        while (p.size() < 3) p << 0
+        return p[0] * 10000 + p[1] * 100 + p[2]
+    }
+
+    static boolean eval(String expr, int mc, String where) {
+        return expr.split(/\|\|/).any { orPart ->
+            orPart.split(/&&/).every { term ->
+                def m = (term.trim() =~ /^MC\s*(>=|<=|==|!=|>|<)\s*([0-9.]+)$/)
+                if (!m.matches()) throw new GradleException("${where}: nie rozumiem warunku '${term.trim()}'")
+                int v = number(m.group(2))
+                switch (m.group(1)) {
+                    case '>=': return mc >= v
+                    case '<=': return mc <= v
+                    case '==': return mc == v
+                    case '!=': return mc != v
+                    case '>': return mc > v
+                    default: return mc < v
+                }
+            }
+        }
+    }
+
+    /** Lines "condition : Word -> Replacement" of renames.txt that apply to this version. */
+    static List renames(String text, String minecraft) {
+        int mc = number(minecraft)
+        def out = []
+        text.eachLine { line ->
+            line = line.trim()
+            if (!line || line.startsWith('#')) return
+            def m = (line =~ /^(.+?)\s*:\s*(\S+)\s*->\s*(\S+)$/)
+            if (!m.matches()) throw new GradleException("renames.txt: nie rozumiem linii '${line}'")
+            if (eval(m.group(1), mc, 'renames.txt')) out << [java.util.regex.Pattern.compile('(?<![\\w.])' + java.util.regex.Pattern.quote(m.group(2)) + '(?!\\w)'), java.util.regex.Matcher.quoteReplacement(m.group(3))]
+        }
+        return out
+    }
+
+    static String run(String text, String minecraft, List renames, String name) {
+        int mc = number(minecraft)
+        def frames = [] // [parentActive, branchTaken]
+        boolean active = true
+        def out = new StringBuilder()
+        int n = 0
+        text.split('\n', -1).each { String line ->
+            n++
+            def t = line.trim()
+            def where = "${name}:${n}"
+            if (t.startsWith('//#if ')) {
+                boolean take = active && eval(t.substring(6), mc, where)
+                frames << [active, take]
+                active = take
+                out << '\n'
+            } else if (t.startsWith('//#elif ')) {
+                if (!frames) throw new GradleException("${where}: #elif bez #if")
+                def f = frames[-1]
+                boolean take = f[0] && !f[1] && eval(t.substring(8), mc, where)
+                if (take) f[1] = true
+                active = take
+                out << '\n'
+            } else if (t == '//#else') {
+                if (!frames) throw new GradleException("${where}: #else bez #if")
+                def f = frames[-1]
+                active = f[0] && !f[1]
+                f[1] = true
+                out << '\n'
+            } else if (t == '//#endif') {
+                if (!frames) throw new GradleException("${where}: #endif bez #if")
+                active = frames.remove(frames.size() - 1)[0]
+                out << '\n'
+            } else if (t.startsWith('//#')) {
+                throw new GradleException("${where}: nieznana dyrektywa '${t}'")
+            } else {
+                if (active) {
+                    renames.each { r -> line = r[0].matcher(line).replaceAll(r[1]) }
+                    out << line
+                }
+                out << '\n'
+            }
+        }
+        if (frames) throw new GradleException("${name}: brakuje #endif")
+        def s = out.toString()
+        return s.substring(0, s.length() - 1) // the split added one line break too many
     }
 }

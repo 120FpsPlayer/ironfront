@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "hammerclient",
+  "version": "${version}",
+  "name": "Hammer Client",
+  "description": "Własne menu, panel modułów, HUD, przybliżenie i dodatki od HammerShop – wbudowane w Hammer Launcher.",
+  "authors": ["HammerShop"],
+  "contact": { "homepage": "https://hammershop.pl" },
+  "license": "MIT",
+  "icon": "assets/hammerclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["pl.hammershop.client.fabric.HammerClientMod"]
+  },
+  "mixins": ["hammerclient.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "${minecraft_range}",
+    "java": ">=${java}",
+    "fabric-api": "*"
+  }
+}

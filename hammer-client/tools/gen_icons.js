@@ -44,7 +44,7 @@ const ICONS = {
   });
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: cols * cell, height: rows * cell }, deviceScaleFactor: 1 });
-  await page.setContent(`<html><body style="margin:0;background:transparent">${cells.join('')}</body></html>`);
+  await page.setContent(`<html><body style="margin:0;background:transparent;color:#fff">${cells.join('')}</body></html>`);
   fs.mkdirSync(path.join(OUT, 'textures'), { recursive: true });
   await page.screenshot({ path: path.join(OUT, 'textures', 'icons.png'), omitBackground: true });
   await browser.close();

@@ -24,6 +24,11 @@ public abstract class UiScreen {
         return false;
     }
 
+    /** Whether the world behind the screen is blurred (the HUD editor needs it sharp). */
+    public boolean blursWorld() {
+        return true;
+    }
+
     /** Esc pressed: return false to keep the screen open. */
     public boolean escape() {
         return true;

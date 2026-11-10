@@ -1,0 +1,9 @@
+# Names that are spelled differently in some Minecraft versions. The platform code (versions/src/main) uses the
+# newest spelling; for the versions matching the condition the word on the left is replaced by the one on the right.
+#   condition : Word -> Replacement        (whole words only; fully qualified names are matched as one word)
+MC < 1.21.11 : Identifier -> ResourceLocation
+MC < 1.21.11 : net.minecraft.resources.Identifier -> net.minecraft.resources.ResourceLocation
+MC < 1.21.11 : net.minecraft.util.Util -> net.minecraft.Util
+MC < 26.1 : GuiGraphicsExtractor -> GuiGraphics
+MC < 26.1 : net.minecraft.client.gui.GuiGraphicsExtractor -> net.minecraft.client.gui.GuiGraphics
+MC >= 26.3 : InputConstants.Type.KEYSYM -> InputConstants.Type.KEYBOARD

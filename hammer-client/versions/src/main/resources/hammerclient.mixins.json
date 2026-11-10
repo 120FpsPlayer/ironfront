@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "package": "pl.hammershop.client.fabric.mixin",
+  "compatibilityLevel": "JAVA_${java}",
+  "client": [
+    "CameraMixin",
+    "EntityMixin",
+    "FovMixin",
+    "GameModeMixin",
+    "HudMixin",
+    "MinecraftMixin",
+    "MouseMixin",
+    "OptionAccessor",
+    "PacketMixin",
+    "PauseMixin",
+    "ScreenSwapMixin",
+    "TimeMixin",
+    "WeatherMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

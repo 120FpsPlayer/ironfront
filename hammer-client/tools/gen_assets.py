@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'common/src/main/resources/assets/hammerclient')
 TEX = os.path.join(OUT, 'textures')
-FONT_DIR = os.path.join(OUT, 'font')
+FONT_DIR = os.path.join(OUT, 'glyphs')  # not "font": the game would read that folder as its own font definitions
 
 CHARS = ''.join(chr(c) for c in range(32, 127)) + 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż' + '„”‚’“–—…•·×°±€«»¿¡§' + 'ÄÖÜäöüßÉÈÊéèêÀÁáàÍíÚúÑñÇç' + '←→↑↓✓✕'
 FONTS = [

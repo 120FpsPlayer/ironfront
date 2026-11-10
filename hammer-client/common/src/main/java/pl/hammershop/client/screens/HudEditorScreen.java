@@ -31,6 +31,11 @@ public class HudEditorScreen extends UiScreen {
     }
 
     @Override
+    public boolean blursWorld() {
+        return false; // you place the HUD over the game you see
+    }
+
+    @Override
     public void render(Ui ui) {
         Draw d = ui.d;
         boolean inWorld = Hammer.game().inWorld();
