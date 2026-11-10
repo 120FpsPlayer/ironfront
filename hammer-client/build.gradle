@@ -1,34 +1,74 @@
 plugins {
-    id 'fabric-loom' version '1.9-SNAPSHOT'
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
 }
 
-version = project.mod_version
-group = 'pl.hammershop'
+def targets = gradle.ext.hammerTargets
 
-base {
-    archivesName = 'hammer-client'
-}
+subprojects { sub ->
+    group = 'pl.hammershop'
+    version = rootProject.mod_version
 
-dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.officialMojangMappings()
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-}
+    def target = targets.find { "mc${it.minecraft}" == sub.name }
+    if (target == null) return // :common has its own build file
+    sub.evaluationDependsOn(':common')
 
-processResources {
-    inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') {
-        expand 'version': project.version
+    apply plugin: target.remap ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+    base {
+        archivesName = "hammer-client-${target.minecraft}"
+    }
+
+    dependencies {
+        minecraft "com.mojang:minecraft:${target.minecraft}"
+        if (target.remap) {
+            mappings loom.officialMojangMappings()
+            modImplementation "net.fabricmc:fabric-loader:${rootProject.loader_version}"
+            modImplementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
+        } else {
+            implementation "net.fabricmc:fabric-loader:${rootProject.loader_version}"
+            implementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
+        }
+        implementation project(':common')
+    }
+
+    // The platform code of this game version: versions/src/<era>/java (+ resources), see targets.json.
+    sourceSets.main {
+        target.eras.each { era ->
+            java.srcDir rootProject.file("versions/src/${era}/java")
+            resources.srcDir rootProject.file("versions/src/${era}/resources")
+        }
+    }
+
+    processResources {
+        def props = [version: project.version, minecraft_range: target.range, java: target.java]
+        inputs.properties props
+        filesMatching(['fabric.mod.json', '*.mixins.json']) {
+            expand props
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        it.options.release = target.java
+        it.options.encoding = 'UTF-8'
+    }
+
+    // The common code (UI, modules, assets) goes into every jar.
+    jar {
+        from project(':common').sourceSets.main.output
+        dependsOn project(':common').tasks.named('classes')
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
-    it.options.encoding = 'UTF-8'
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+// All jars + versions.json in build/dist – what the launcher bundles.
+tasks.register('dist', Copy) {
+    targets.each { t ->
+        def p = project(":mc${t.minecraft}")
+        from(t.remap ? p.tasks.named('remapJar') : p.tasks.named('jar'))
+    }
+    into layout.buildDirectory.dir('dist')
+    doLast {
+        def index = [version: rootProject.mod_version, jars: targets.collect { [file: "hammer-client-${it.minecraft}-${rootProject.mod_version}.jar", minecraft: it.supports] }]
+        layout.buildDirectory.file('dist/versions.json').get().asFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(index))
+    }
 }

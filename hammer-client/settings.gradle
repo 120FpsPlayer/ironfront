@@ -10,3 +10,19 @@ pluginManagement {
 }
 
 rootProject.name = 'hammer-client'
+
+include 'common'
+
+// One jar per Minecraft version. Each target lists the Fabric API it compiles against, the Java release and
+// the source folders ("eras") under versions/src/ that hold the code for that game version's API.
+def targets = new groovy.json.JsonSlurper().parse(file('versions/targets.json'))
+// HAMMER_TARGETS=1.21.1,26.3 builds only those versions (faster while developing).
+def only = System.getenv('HAMMER_TARGETS')?.split(',')?.collect { it.trim() }?.findAll { it }
+if (only) targets = targets.findAll { only.contains(it.minecraft) }
+gradle.ext.hammerTargets = targets
+targets.each { t ->
+    def name = "mc${t.minecraft}"
+    include name
+    project(":${name}").projectDir = file("versions/${t.minecraft}")
+    project(":${name}").projectDir.mkdirs()
+}
