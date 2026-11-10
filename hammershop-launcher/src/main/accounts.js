@@ -31,6 +31,8 @@ function loginError(err) {
   return `Logowanie nie powiodło się${err?.message ? `: ${err.message}` : '.'}`;
 }
 
+// Mojang hands out http:// skin links; textures.minecraft.net also serves them over https.
+const httpsUrl = (url) => (typeof url === 'string' ? url.replace(/^http:\/\//, 'https://') : null);
 const activeSkin = (profile) => (profile?.skins ?? []).find((s) => s.state === 'ACTIVE') ?? profile?.skins?.[0] ?? null;
 
 /**
@@ -52,7 +54,7 @@ function createAccounts({ file, crypt, config = {}, AuthClass, windowProperties 
   }
 
   function publicInfo(a) {
-    return { id: a.id, name: a.name, skinUrl: a.skinUrl ?? null, skinVariant: a.skinVariant ?? 'CLASSIC', addedAt: a.addedAt, needsLogin: Boolean(a.needsLogin) };
+    return { id: a.id, name: a.name, skinUrl: httpsUrl(a.skinUrl), skinVariant: a.skinVariant ?? 'CLASSIC', addedAt: a.addedAt, needsLogin: Boolean(a.needsLogin) };
   }
 
   function store(mc, refreshToken) {
@@ -61,7 +63,7 @@ function createAccounts({ file, crypt, config = {}, AuthClass, windowProperties 
     const record = {
       id: mc.profile.id,
       name: mc.profile.name,
-      skinUrl: skin?.url ?? null,
+      skinUrl: httpsUrl(skin?.url),
       skinVariant: skin?.variant ?? 'CLASSIC',
       xuid: mc.xuid ?? null,
       refresh: crypt.encrypt(refreshToken),

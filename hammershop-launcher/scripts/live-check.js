@@ -48,7 +48,7 @@ const emit = (ch, payload) => {
 };
 
 // A launch function that only proves Java works (Windows CI has no OpenGL for the game).
-const javaOnly = async (options) => spawn(options.javaPath, ['-version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+const javaOnly = async (options) => spawn(options.javaPath.replace(/javaw(\.exe)?$/i, 'java$1'), ['-version'], { stdio: ['ignore', 'pipe', 'pipe'] });
 
 const testProfile = { launchAuth: async () => ({ id: '0123456789abcdef0123456789abcdef', name: 'HammerShopCI', accessToken: '0' }) };
 const config = loadConfig(path.join(__dirname, '..', 'launcher.config.json'));
