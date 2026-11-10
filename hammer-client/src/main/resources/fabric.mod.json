@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "hammerclient",
+  "version": "${version}",
+  "name": "Hammer Client",
+  "description": "Własne menu, panel modułów, HUD i przybliżenie od HammerShop – w stylu Lunar Client.",
+  "authors": ["HammerShop"],
+  "contact": { "homepage": "https://hammershop.pl" },
+  "license": "MIT",
+  "icon": "assets/hammerclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["pl.hammershop.client.HammerClient"]
+  },
+  "mixins": ["hammerclient.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": ">=1.21 <1.21.2",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'hammer-launcher/**'
+      - 'hammer-client/**'
       - '.github/workflows/hammer-launcher.yml'
   pull_request:
     paths:
       - 'hammer-launcher/**'
+      - 'hammer-client/**'
   workflow_dispatch:
 
 concurrency:
@@ -46,9 +48,36 @@ jobs:
           path: hammer-launcher/preview/*.png
           retention-days: 14
 
+  mod:
+    name: Hammer Client (mod Fabric 1.21.1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: hammer-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.12'
+      - run: gradle build --no-daemon --stacktrace
+      - run: ls -la build/libs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hammer-client-jar
+          path: |
+            hammer-client/build/libs/hammer-client-*.jar
+            !hammer-client/build/libs/*-sources.jar
+          if-no-files-found: error
+          retention-days: 30
+
   live-linux:
     name: Test na żywo (Linux, start gry)
-    needs: test
+    needs: [test, mod]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -63,12 +92,21 @@ jobs:
           cache-dependency-path: hammer-launcher/package-lock.json
       - name: Xvfb i Mesa (OpenGL bez karty graficznej)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: hammer-client-jar
+          path: hammer-launcher/resources/mod
+      - name: Hammer Client do launchera
+        shell: bash
+        run: cp resources/mod/hammer-client-*.jar resources/hammer-client.jar && ls -la resources
       - run: npm ci
       - run: xvfb-run -a -s "-screen 0 1280x720x24" node scripts/live-check.js
+        env:
+          HAMMER_CLIENT_JAR: resources/hammer-client.jar
 
   live-windows:
     name: Test na żywo (Windows)
-    needs: test
+    needs: [test, mod]
     runs-on: windows-latest
     timeout-minutes: 45
     env:
@@ -80,13 +118,22 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: hammer-launcher/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: hammer-client-jar
+          path: hammer-launcher/resources/mod
+      - name: Hammer Client do launchera
+        shell: bash
+        run: cp resources/mod/hammer-client-*.jar resources/hammer-client.jar && ls -la resources
       - run: npm ci
       - run: npm test
       - run: node scripts/live-check.js --no-game
+        env:
+          HAMMER_CLIENT_JAR: resources/hammer-client.jar
 
   build-windows:
     name: Instalator Windows (.exe)
-    needs: test
+    needs: [test, mod]
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -98,6 +145,13 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: hammer-launcher/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: hammer-client-jar
+          path: hammer-launcher/resources/mod
+      - name: Hammer Client do launchera
+        shell: bash
+        run: cp resources/mod/hammer-client-*.jar resources/hammer-client.jar && ls -la resources
       - run: npm ci
       - run: npm run dist:win
       - uses: actions/upload-artifact@v4
