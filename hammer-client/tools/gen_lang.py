@@ -30,6 +30,8 @@ T = {
     'title.mods': ('Hammer Mody', 'Hammer Mods'), 'title.mods.sub': ('Moduły, HUD i profile · %s', 'Modules, HUD and profiles · %s'),
     'title.options': ('Ustawienia gry', 'Game options'), 'title.options.sub': ('Grafika, dźwięk, sterowanie', 'Video, sound, controls'),
     'title.shop': ('Sklep', 'Shop'), 'title.quit': ('Wyjdź', 'Quit'),
+    'welcome.title': ('Witaj w Hammer Client!', 'Welcome to Hammer Client!'),
+    'welcome.text': ('Naciśnij %s, aby otworzyć panel modułów i ustawić swój HUD.', 'Press %s to open the module panel and set up your HUD.'),
     'news.title': ('Co nowego', "What's new"),
     'news.0': ('Działa od Minecrafta 1.21 do 26.3', 'Works from Minecraft 1.21 to 26.3'),
     'news.1': ('Prawie 40 modułów z własnymi ustawieniami', 'Nearly 40 modules, each with its own options'),

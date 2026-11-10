@@ -22,6 +22,8 @@
   "hammerclient.title.options.sub": "Grafika, dźwięk, sterowanie",
   "hammerclient.title.shop": "Sklep",
   "hammerclient.title.quit": "Wyjdź",
+  "hammerclient.welcome.title": "Witaj w Hammer Client!",
+  "hammerclient.welcome.text": "Naciśnij %s, aby otworzyć panel modułów i ustawić swój HUD.",
   "hammerclient.news.title": "Co nowego",
   "hammerclient.news.0": "Działa od Minecrafta 1.21 do 26.3",
   "hammerclient.news.1": "Prawie 40 modułów z własnymi ustawieniami",

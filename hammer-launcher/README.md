@@ -21,13 +21,14 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po pol
 - **Konsola.** Logi gry na żywo. Gdy gra się wyłączy, launcher wyjaśnia po polsku, co się stało i co zrobić (brak RAM, zła Java, niezgodne lub zdublowane mody, sterowniki…). Przycisk **Wyślij logi** wrzuca log na [mclo.gs](https://mclo.gs) i daje link do wklejenia na Discordzie – token logowania jest wcześniej usuwany.
 - **Miejsce na dysku** (w *Ustawieniach*): ile zajmują instancje, pliki gry i Java oraz sprzątanie jednym kliknięciem – stare logi i raporty crashy, pamięć podręczna, wersje gry i Javy, z których nie korzysta żadna instancja.
 - **Napraw instancję** (menu instancji): przy następnym starcie launcher instaluje loader od nowa i sprawdza wszystkie pliki gry. Światy, mody i ustawienia zostają.
+- **Sieci z serwerem proxy.** Gdy system ma ustawione `HTTPS_PROXY` / `HTTP_PROXY` (szkoła, firma), launcher pobiera przez proxy – bez tego wyglądałby na „brak internetu”.
 - **Konta Microsoft.** Logowanie przez oficjalne okno Microsoftu. Tokeny są szyfrowane przez system (Windows DPAPI / pęk kluczy), a hasła launcher nigdy nie widzi.
 - **Hammer Client – menu w grze jak w Lunar Client.** W instancjach Fabric i Quilt launcher sam dodaje nasz mod – dla każdej wersji Minecrafta od 1.21 do 26.3 ma osobny plik i wybiera właściwy (zmienisz wersję gry w instancji – launcher podmieni mod):
   - własne menu główne,
-  - panel modułów pod prawym Shiftem,
-  - HUD z edytorem (FPS, CPS, klawisze, koordynaty, pancerz, efekty, zegar, ping…),
-  - zoom pod C i przełączany sprint,
-  - przycisk Discorda w menu pauzy.
+  - panel modułów pod prawym Shiftem: 38 modułów z własnymi ustawieniami, profile, kolor akcentu,
+  - HUD z edytorem (FPS, CPS, klawisze, koordynaty, kompas, pancerz, efekty, cel z paskiem życia, licznik przedmiotów, ping, TPS…),
+  - zoom pod C, freelook, przełączany sprint, własny celownik, fullbright, własna pora dnia i pogoda,
+  - przyciski Hammer Mody i Discord w menu pauzy.
 
   Włączasz i wyłączasz go w edytorze instancji. Kod moda jest w folderze `hammer-client/`. Launcher bierze go z folderu `resources/hammer-client/` (plik `versions.json` i po jednym `.jar` na wersję gry) – tworzy go `./gradlew dist` w `hammer-client/` (wynik w `hammer-client/build/dist/`). Lista obsługiwanych wersji pochodzi z `versions.json`, więc nowa wersja moda nie wymaga zmian w launcherze.
 - **Nasz Discord.** Karta na ekranie głównym i przycisk w menu: nazwa i ikona serwera, ile osób jest online i ilu jest członków, przycisk **Dołącz do Discorda**. Dane pochodzą z publicznego API zaproszeń Discorda (bez tokenu bota).

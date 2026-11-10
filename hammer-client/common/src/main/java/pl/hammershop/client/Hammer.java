@@ -16,6 +16,7 @@ import pl.hammershop.client.module.Modules;
 import pl.hammershop.client.screens.MainMenuScreen;
 import pl.hammershop.client.screens.ModMenuScreen;
 import pl.hammershop.client.screens.PauseOverlay;
+import pl.hammershop.client.screens.WelcomeHint;
 import pl.hammershop.client.ui.Draw;
 import pl.hammershop.client.ui.Input;
 import pl.hammershop.client.ui.Ui;
@@ -117,8 +118,9 @@ public final class Hammer {
     public static void renderHud(Gfx g) {
         if (platform == null || !platform.game().inWorld()) return;
         STATS.frame(platform);
-        if (!config.hudVisible) return;
         Draw d = new Draw(g);
+        WelcomeHint.render(d);
+        if (!config.hudVisible) return;
         if (Modules.crosshair != null && Modules.crosshair.enabled() && !(Modules.crosshair.hiddenInThirdPerson() && platform.cameraMode() != 0)) {
             Modules.crosshair.render(d, g.width() / 2f, g.height() / 2f);
         }

@@ -135,8 +135,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: hammer-launcher/package-lock.json
-      - name: Xvfb i Mesa (OpenGL bez karty graficznej)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+      - name: Xvfb i Mesa (OpenGL i Vulkan bez karty graficznej – Minecraft 26.3+ potrzebuje Vulkana)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
       - uses: actions/download-artifact@v4
         with:
           name: hammer-client
@@ -164,8 +164,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: hammer-launcher/package-lock.json
-      - name: Xvfb i Mesa (OpenGL bez karty graficznej)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+      - name: Xvfb i Mesa (OpenGL i Vulkan bez karty graficznej – Minecraft 26.3+ potrzebuje Vulkana)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
       - uses: actions/download-artifact@v4
         with:
           name: hammer-client
