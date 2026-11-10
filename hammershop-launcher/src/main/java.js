@@ -8,7 +8,6 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { getPlatform } = require('@xmcl/core');
 const installer = require('@xmcl/installer');
 
 /** Java major version of a Mojang runtime component (for the JVM flags). */
@@ -40,18 +39,45 @@ function javaExecutable(dir, platform = process.platform) {
   return path.join(dir, 'bin', 'java');
 }
 
+const RUNTIME_INDEX = 'https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json';
+
+/** Mojang's name for this computer in the runtime index. */
+function runtimePlatform(platform = process.platform, arch = process.arch) {
+  if (platform === 'win32') return arch === 'arm64' ? 'windows-arm64' : arch === 'ia32' ? 'windows-x86' : 'windows-x64';
+  if (platform === 'darwin') return arch === 'arm64' ? 'mac-os-arm64' : 'mac-os';
+  return arch === 'ia32' ? 'linux-i386' : 'linux';
+}
+
+async function getJson(url, fetchFn) {
+  const res = await fetchFn(url, { headers: { 'user-agent': 'HammerShop-Launcher/1.0 (hammershop.pl)' }, signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw Object.assign(new Error(`Serwer zwrócił błąd ${res.status}`), { statusCode: res.status, url });
+  return res.json();
+}
+
+/**
+ * The file list of one Java runtime: { files, target, version }. (Fetched here and not with @xmcl/installer,
+ * whose version of this function passes an option the current undici no longer accepts.)
+ */
+async function fetchRuntimeManifest(component, { fetchFn = fetch, platform, arch } = {}) {
+  const index = await getJson(RUNTIME_INDEX, fetchFn);
+  const target = index?.[runtimePlatform(platform, arch)]?.[component]?.[0];
+  if (!target?.manifest?.url) throw new Error(`Mojang nie udostępnia Javy „${component}” dla tego systemu. Ustaw własną Javę w ustawieniach.`);
+  const manifest = await getJson(target.manifest.url, fetchFn);
+  return { files: manifest.files ?? {}, target: component, version: target.version };
+}
+
 function runtimeDir(paths, component) {
   return path.join(paths.runtime, component.replace(/[^\w.-]/g, '_'));
 }
 
 /** Makes sure the runtime is downloaded; returns the java executable. */
-async function ensureJava(paths, component, { progress, dispatcher } = {}) {
+async function ensureJava(paths, component, { progress, dispatcher, fetchFn } = {}) {
   const dir = runtimeDir(paths, component);
   const exe = javaExecutable(dir);
   const marker = path.join(dir, '.hammershop-ok');
   if (fs.existsSync(exe) && fs.existsSync(marker)) return exe;
   progress?.stage('java');
-  const manifest = await installer.fetchJavaRuntimeManifest({ target: component, platform: getPlatform(), dispatcher });
+  const manifest = await fetchRuntimeManifest(component, { fetchFn });
   const task = installer.installJavaRuntimeTask({ destination: dir, manifest, dispatcher, lzma: false });
   await task.startAndWait(progress?.context('java', task));
   if (process.platform !== 'win32') {
@@ -64,4 +90,4 @@ async function ensureJava(paths, component, { progress, dispatcher } = {}) {
   return exe;
 }
 
-module.exports = { ensureJava, javaExecutable, runtimeDir, componentOf, majorOf, MAJOR };
+module.exports = { ensureJava, fetchRuntimeManifest, runtimePlatform, javaExecutable, runtimeDir, componentOf, majorOf, MAJOR };

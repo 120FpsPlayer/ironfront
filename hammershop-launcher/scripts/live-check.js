@@ -35,11 +35,14 @@ const on = (ch, fn) => {
   return () => listeners.get(ch).delete(fn);
 };
 let lastProgress = 0;
+let lastLabel = '';
 const emit = (ch, payload) => {
   if (ch === 'game:progress' || ch === 'task:progress') {
     const now = Date.now();
-    if (now - lastProgress > 4000 || payload.percent === 100) {
+    const label = `${payload.label ?? payload.stage}`;
+    if (now - lastProgress > 4000 || label !== lastLabel) {
       lastProgress = now;
+      lastLabel = label;
       log(`   · ${payload.label ?? payload.stage}${payload.percent != null ? ` ${payload.percent}%` : payload.total ? ` ${payload.done}/${payload.total}` : ''}`);
     }
   }

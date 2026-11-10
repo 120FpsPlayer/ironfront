@@ -7,6 +7,7 @@
  */
 
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const { Version } = require('@xmcl/core');
 const installer = require('@xmcl/installer');
@@ -14,9 +15,18 @@ const { Agent, interceptors } = require('undici');
 const { ensureJava, componentOf, majorOf } = require('./java');
 const { loaderVersions, pickLoaderVersion } = require('./versions');
 
+// Node tries IPv6 and IPv4 in turn and gives each address only 250 ms by default – on a busy or slow connection
+// (many parallel downloads) that drops working IPv4 connections. Give every attempt more time.
+net.setDefaultAutoSelectFamilyAttemptTimeout?.(2000);
+
+const RETRY_CODES = ['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETDOWN', 'ENETUNREACH', 'EHOSTDOWN', 'EHOSTUNREACH', 'EPIPE', 'ETIMEDOUT', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'];
+
 /** Parallel downloads with retries and redirects (@xmcl reads the redirect history from the request context). */
 function createDispatcher(connections = 16) {
-  return new Agent({ connections, pipelining: 1, connect: { timeout: 20_000 } }).compose(interceptors.retry({ maxRetries: 3, minTimeout: 500 }), interceptors.redirect({ maxRedirections: 5 }));
+  return new Agent({ connections, pipelining: 1, connect: { timeout: 30_000, autoSelectFamily: true, autoSelectFamilyAttemptTimeout: 2000 } }).compose(
+    interceptors.retry({ maxRetries: 4, minTimeout: 500, maxTimeout: 8000, errorCodes: RETRY_CODES }),
+    interceptors.redirect({ maxRedirections: 5 }),
+  );
 }
 
 /** A version JSON that exists and parses – an interrupted download leaves an empty or cut-off file behind. */
@@ -35,6 +45,8 @@ const NET_CODES = {
   ECONNREFUSED: 'Serwer odrzucił połączenie',
   ECONNRESET: 'Połączenie zostało przerwane',
   ETIMEDOUT: 'Serwer nie odpowiada',
+  ENETUNREACH: 'Sieć jest niedostępna',
+  EHOSTUNREACH: 'Serwer jest nieosiągalny',
   UND_ERR_CONNECT_TIMEOUT: 'Serwer nie odpowiada',
   UND_ERR_HEADERS_TIMEOUT: 'Serwer nie odpowiada',
   UND_ERR_SOCKET: 'Połączenie zostało przerwane',
@@ -65,7 +77,9 @@ function describeError(err) {
     else text = (e?.message || inner?.message || e?.name || '').trim();
     if (text) parts.add(host ? `${text} (${host})` : text);
   }
-  const list = [...parts].slice(0, 3);
+  const all = [...parts];
+  const network = all.filter((t) => !t.startsWith('Pobrany plik jest uszkodzony'));
+  const list = (network.length ? network : all).slice(0, 3);
   return list.length ? list.join('; ') : 'Nieznany błąd pobierania';
 }
 

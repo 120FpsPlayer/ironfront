@@ -8,6 +8,7 @@ const http = require('node:http');
 const { download } = require('@xmcl/file-transfer');
 const { createDispatcher, describeError, validVersionJson } = require('../src/main/installer');
 const versions = require('../src/main/versions');
+const { fetchRuntimeManifest, runtimePlatform } = require('../src/main/java');
 const { tmpDir, mockFetch } = require('./helpers');
 
 function serve(handler) {
@@ -40,7 +41,8 @@ test('describeError turns an empty AggregateError into Polish reasons with hosts
   assert.equal(err.message, '');
   const text = describeError(err);
   assert.match(text, /Brak internetu albo serwer jest nieosiągalny \(piston-meta\.mojang\.com\)/);
-  assert.match(text, /Pobrany plik jest uszkodzony \(libraries\.minecraft\.net\)/);
+  assert.doesNotMatch(text, /uszkodzony/, 'a cut download also fails its checksum – the network reason is the real one');
+  assert.match(describeError(new AggregateError([Object.assign(new Error('x'), { name: 'ChecksumNotMatchError', url: 'https://libraries.minecraft.net/a.jar' })])), /Pobrany plik jest uszkodzony \(libraries\.minecraft\.net\)/);
   assert.equal(describeError(new AggregateError([])), 'Nieznany błąd pobierania');
   assert.match(describeError(Object.assign(new Error('x'), { code: 'ENOSPC' })), /Brak miejsca na dysku/);
 });
@@ -69,4 +71,18 @@ test('Forge versions come from Maven metadata, marked with the recommended build
   assert.equal(versions.pickLoaderVersion(list), '47.3.0');
   assert.deepEqual((await versions.forgeVersions('1.7.10', { fetchFn })).map((v) => v.version), ['10.13.4.1614-1.7.10']);
   versions._cache.clear();
+});
+
+test('Java runtime manifest is fetched from Mojang for this platform', async () => {
+  assert.equal(runtimePlatform('win32', 'x64'), 'windows-x64');
+  assert.equal(runtimePlatform('darwin', 'arm64'), 'mac-os-arm64');
+  assert.equal(runtimePlatform('linux', 'x64'), 'linux');
+  const fetchFn = mockFetch([
+    { match: /all\.json$/, json: { 'windows-x64': { 'java-runtime-delta': [{ manifest: { url: 'https://piston-meta.mojang.com/v1/packages/abc/manifest.json' }, version: { name: '21.0.7' } }], 'jre-legacy': [] } } },
+    { match: /manifest\.json$/, json: { files: { 'bin/javaw.exe': { type: 'file', downloads: { raw: { url: 'https://x/javaw.exe', sha1: 'a' } } } } } },
+  ]);
+  const m = await fetchRuntimeManifest('java-runtime-delta', { fetchFn, platform: 'win32', arch: 'x64' });
+  assert.deepEqual([m.target, m.version.name, Object.keys(m.files)], ['java-runtime-delta', '21.0.7', ['bin/javaw.exe']]);
+  await assert.rejects(fetchRuntimeManifest('jre-legacy', { fetchFn, platform: 'win32', arch: 'x64' }), /nie udostępnia Javy/);
+  await assert.rejects(fetchRuntimeManifest('java-runtime-delta', { fetchFn: mockFetch([]), platform: 'win32', arch: 'x64' }), /błąd 404/);
 });
