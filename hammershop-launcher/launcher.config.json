@@ -1,0 +1,13 @@
+{
+  "name": "HammerShop Launcher",
+  "brand": "HammerShop",
+  "website": "https://hammershop.pl",
+  "shopUrl": "https://hammershop.pl",
+  "discordInvite": "",
+  "newsUrl": "",
+  "server": { "name": "Serwer HammerShop", "address": "" },
+  "discordClientId": "",
+  "microsoft": { "clientId": "", "redirect": "" },
+  "updateUrl": "",
+  "defaultInstance": { "name": "HammerShop", "loader": "fabric", "optimized": true }
+}
