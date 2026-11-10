@@ -122,9 +122,9 @@ async function main() {
     return `${res.total_hits} wyników, ${cats.length} kategorii`;
   });
 
-  await step('Discord: zaproszenie z licznikami (publiczne API)', async () => {
+  await step(`Discord: zaproszenie ${config.discordInvite || 'testowe'} (publiczne API)`, async () => {
     const { createCommunity } = require('../src/main/community');
-    const d = await createCommunity({ config: { discordInvite: process.env.DISCORD_INVITE || 'discord-developers', website: '' } }).discord();
+    const d = await createCommunity({ config: { discordInvite: process.env.DISCORD_INVITE || config.discordInvite || 'discord-developers', website: '' } }).discord();
     assert(d?.live && d.members > 0 && d.online != null, `Brak danych: ${JSON.stringify(d)}`);
     return `${d.name}: ${d.members} członków, ${d.online} online`;
   });
