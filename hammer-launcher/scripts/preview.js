@@ -25,6 +25,23 @@ function mock() {
   const logo = (text, c1, c2) =>
     `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="96" height="96" rx="20" fill="url(#g)"/><text x="48" y="62" font-family="Arial" font-weight="900" font-size="40" fill="#fff" text-anchor="middle">${text}</text></svg>`)}`;
 
+  // A server icon the way a ping answers it: a PNG data URL.
+  function pngLogo(text, c1, c2) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const fill = g.createLinearGradient(0, 0, 64, 64);
+    fill.addColorStop(0, c1);
+    fill.addColorStop(1, c2);
+    g.fillStyle = fill;
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#fff';
+    g.font = '900 34px Arial';
+    g.textAlign = 'center';
+    g.fillText(text, 32, 44);
+    return c.toDataURL();
+  }
+
   // Product art and "screenshots" as SVG data URLs.
   const shopArt = (text, c1, c2) =>
     `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="320" height="180" fill="url(#g)"/><g fill="#fff" opacity=".12"><rect x="20" y="20" width="60" height="60"/><rect x="240" y="100" width="60" height="60"/></g><text x="160" y="104" font-family="Arial" font-weight="900" font-size="38" fill="#fff" text-anchor="middle">${text}</text></svg>`)}`;
@@ -127,6 +144,10 @@ function mock() {
     '83.12.45.201:25570': { online: true, latency: 148, version: 'Fabric 1.20.1', players: { online: 3, max: 10, sample: [] }, motd: 'Nasz survival · wipe dopiero w grudniu', favicon: null },
     'mc.hypixel.net': { online: true, latency: 312, version: 'Requires MC 1.8 / 1.21', players: { online: 28431, max: 200000, sample: [] }, motd: 'Hypixel Network [1.8-1.21] · SKYBLOCK · BEDWARS · SKYWARS', favicon: logo('Hy', '#ffe08a', '#d49a12') },
     'kuba.example.pl:25566': { online: false, error: 'Serwer jest offline.' },
+    // Polecane serwery
+    'sky.hammershop.pl': { online: true, latency: 31, version: 'Paper 1.21.1', players: { online: 58, max: 200, sample: [] }, motd: 'Hammer Skyblock', favicon: pngLogo('S', '#8be3ff', '#2a86c9') },
+    'fo.example.pl:25570': { online: true, latency: 64, version: 'Fabric 1.21.1', players: { online: 12, max: 40, sample: [] }, motd: 'Wspólny świat', favicon: null },
+    'pvp.example.pl': { online: false, error: 'Serwer jest offline.' },
   };
   // Only the main instance has servers, worlds and backups – the others show the empty states.
   const serverList = (id = 'hammershop') => (id === 'hammershop' ? servers.map((x, index) => ({ index, icon: null, acceptTextures: null, ...x })) : []);
@@ -203,6 +224,49 @@ function mock() {
     return direction === 'pull' ? { ok: true, at: plus.last.at, updatedAt: 1794400000, look: true, changed: ['Hammer'], skipped: [], missing: [] } : { ok: true, at: plus.last.at, updatedAt: 1794400000 };
   };
 
+  /* ── the official Minecraft, instance recipes, invitations, featured servers ── */
+  // Long tasks pause while window.__hold is set (so a screenshot can show them half-way); window.__release() lets them finish.
+  const gate = (ms = 150) => (window.__hold ? new Promise((resolve) => (window.__release = () => ((window.__hold = false), resolve()))) : wait(ms));
+  const officialWorlds = [
+    { folder: 'Survival 2024', name: 'Survival 2024', gameType: 0, gameMode: 'Przetrwanie', hardcore: false, version: '1.21.1', lastPlayed: now - 5 * 864e5, size: 2.31 * GB, sizePartial: false, iconUrl: worldIcon('#7cc8ff', '#2f7a3f'), broken: false, newer: false },
+    { folder: 'Testy 26', name: 'Testy nowej wersji', gameType: 1, gameMode: 'Kreatywny', hardcore: false, version: '26.1', lastPlayed: now - 864e5, size: 96e6, sizePartial: false, iconUrl: worldIcon('#b18cff', '#1c1036'), broken: false, newer: true },
+    { folder: 'New World', name: 'Zamek na wyspie', gameType: 1, gameMode: 'Kreatywny', hardcore: false, version: '1.20.4', lastPlayed: now - 40 * 864e5, size: 412e6, sizePartial: false, iconUrl: worldIcon('#ffd36b', '#8a5a2b'), broken: false, newer: false },
+    { folder: 'Hardcore z Kuba', name: 'Hardcore z Kubą – nie umieramy', gameType: 0, gameMode: 'Przetrwanie', hardcore: true, version: '1.21.1', lastPlayed: now - 70 * 864e5, size: 188e6, sizePartial: false, iconUrl: null, broken: false, newer: false },
+    { folder: 'Stary swiat 1.7', name: 'Stary swiat 1.7', gameType: null, gameMode: null, hardcore: false, version: null, lastPlayed: now - 900 * 864e5, size: 3.1e6, sizePartial: false, iconUrl: null, broken: true, newer: false },
+  ];
+  const b62 = (n, seed = 7) => Array.from({ length: n }, (_, i) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[(i * 31 + seed * 17 + ((i * i) % 23)) % 64]).join('');
+  const RECIPE_CODE = `HL1.${b62(1376)}`;
+  const recipeOf = (id, withOptions) => {
+    const i = instances.find((x) => x.id === id) ?? instances[0];
+    const pack = id === 'fo';
+    return {
+      summary: { name: i.name, mc: i.mcVersion, loader: i.loader, loaderVersion: null, hammerClient: i.loader === 'fabric', mods: pack ? 214 : 6, resourcepacks: pack ? 3 : 2, shaders: pack ? 2 : 1, servers: id === 'hammershop' ? servers.length : 0, options: Boolean(withOptions) },
+      excluded: pack ? [] : [{ type: 'mod', file: 'OptiFine_1.21.1_HD_U_J1.jar', title: 'OptiFine' }, { type: 'mod', file: 'moj-mod-testowy-0.3.jar', title: 'Mój mod testowy' }, { type: 'resourcepack', file: 'Paczka od Oli (HD).zip', title: 'Paczka od Oli (HD)' }],
+      code: pack ? null : withOptions ? `HL1.${b62(2104, 3)}` : RECIPE_CODE,
+      codeLength: pack ? 7312 : withOptions ? 2108 : RECIPE_CODE.length,
+      maxCode: 6000,
+      fileName: `${i.name}.hammerpack`,
+      hasOptions: true,
+      optionsLeftOut: false,
+    };
+  };
+  const recipePreview = (name, notes = []) => ({ token: `t${Date.now()}`, summary: { name, mc: '1.21.1', loader: 'fabric', loaderVersion: notes.length ? null : '0.16.10', hammerClient: true, mods: 38, resourcepacks: 2, shaders: 1, servers: 3, options: true }, notes });
+  const NOT_INVITE = 'To nie wygląda na zaproszenie do Hammer Launchera. Zaproszenie zaczyna się od „hammer://join” albo prowadzi do strony …/join.';
+  const FEATURED = [
+    { id: 'hammer-smp', name: 'Hammer SMP', address: 'mc.hammershop.pl', description: 'Survival bez wipe’ów: działki, ekonomia i eventy co weekend. Spokojna społeczność i aktywna administracja.', tags: ['survival', 'ekonomia', 'eventy'], icon: null, mc: '1.21.1', loader: 'fabric', pack: null },
+    { id: 'skyblock', name: 'Hammer Skyblock', address: 'sky.hammershop.pl', description: 'Wyspy, misje i ranking wysp. Nowy sezon co trzy miesiące.', tags: ['skyblock'], icon: null, mc: '1.21.1', loader: null, pack: null },
+    { id: 'fo-smp', name: 'Wspólny świat z paczką Fabulously Optimized', address: 'fo.example.pl:25570', description: 'Serwer dla graczy z paczką FO – shadery, mapa i głosowy czat zbliżeniowy.', tags: ['shadery', 'bez pvp'], icon: null, mc: '1.20.4', loader: 'fabric', pack: 'fabulously-optimized' },
+    { id: 'pvp', name: 'Arena PvP 1.8', address: 'pvp.example.pl', description: 'Klasyczne PvP: kity, duele i turnieje w każdą sobotę.', tags: ['pvp', 'turnieje'], icon: null, mc: '1.8.9', loader: 'vanilla', pack: null },
+  ];
+  const inviteOf = (fields) => {
+    const pack = fields.pack ? { title: 'Fabulously Optimized', author: 'robotkoer', iconUrl: null, version: '5.8.0', mc: fields.mc ?? '1.21.1', loader: fields.loader ?? 'fabric' } : null;
+    const mc = fields.mc ?? pack?.mc ?? null;
+    const loader = fields.loader ?? pack?.loader ?? null;
+    const fits = instances.filter((i) => (!mc || i.mcVersion === mc) && (!loader || i.loader === loader)).map((i) => ({ id: i.id, name: i.name, mcVersion: i.mcVersion, loader: i.loader, icon: i.icon, modpack: i.modpack ?? null, hasPack: Boolean(pack && i.modpack), hasServer: i.id === 'hammershop' && servers.some((x) => x.address === fields.server) }));
+    return { token: `i${Date.now()}`, invite: { server: fields.server, name: fields.name ?? null, mc: fields.mc ?? null, loader: fields.loader ?? null, pack: fields.pack ?? null, icon: null }, pack, fits, create: pack ? { mc: pack.mc, loader: pack.loader, name: pack.title } : { mc: mc ?? '1.21.1', loader: loader ?? 'fabric', name: fields.name ?? fields.server } };
+  };
+  let lastInvite = null;
+
   // Zestawy: which parts of a set exist for the instance and which are already there.
   const BUNDLES = [
     { id: 'pvp', name: 'PvP', icon: 'shield', description: 'Czytelna gra na serwerach: ping w tabeli, głowy graczy na czacie i obsługa paczek tekstur jak w OptiFine.', note: 'Tylko dodatki dozwolone na większości serwerów – żadnych cheatów ani ułatwień w walce.', mods: [['3D Skin Layers', 'Druga warstwa skórki (czapki, kurtki) jest wypukła.', 2], ['Chat Heads', 'Głowa gracza przy każdej wiadomości na czacie.', 1], ['Better Ping Display', 'Ping w milisekundach na liście graczy (Tab).', 1], ['Entity Texture Features', 'Tekstury mobów i graczy z paczek do OptiFine.', 1], ['Entity Model Features', 'Własne modele z paczek tekstur do OptiFine.', 1], ['Continuity', 'Łączone tekstury (szkło bez ramek) z paczek tekstur.', 1], ['LambDynamicLights', 'Pochodnia w ręce naprawdę świeci.', 1], ['Shulker Box Tooltip', 'Podgląd zawartości shulkera po najechaniu myszką.', 1]] },
@@ -220,8 +284,8 @@ function mock() {
       listeners.get(ch).add(fn);
       return () => listeners.get(ch).delete(fn);
     },
-    pathForFile: () => null,
-    app: { info: async () => ({ plus: plusStatus(), version: '2.2.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.0', available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    pathForFile: (file) => (/\.hammerpack$/i.test(file?.name ?? '') ? `C:\\Users\\Gracz\\Downloads\\${file.name}` : null),
+    app: { info: async () => ({ plus: plusStatus(), version: '2.3.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: { get: async () => ({ ...settings }), set: async (p) => Object.assign(settings, p) && { ...settings } },
     system: { info: async () => ({}) },
@@ -236,7 +300,7 @@ function mock() {
       minecraft: async () => ['26.3', '26.2', '26.1.2', '26.1.1', '26.1', '1.21.11', '1.21.10', '1.21.8', '1.21.4', '1.21.3', '1.21.1', '1.21', '1.20.6', '1.20.4', '1.20.1', '1.19.4', '1.18.2', '1.16.5', '1.12.2', '1.8.9'].map((id) => ({ id, type: 'release' })),
       loaders: async (l) => (l === 'vanilla' ? [] : [{ version: '0.16.10', stable: true }, { version: '0.16.9', stable: true }, { version: '0.16.8', stable: true }]),
     },
-    instances: { list: async () => instances.map((i) => ({ ...i })), ensureDefault: async () => null, create: async (d) => ({ id: 'x', ...d }), update: async (id, p) => Object.assign(instances.find((i) => i.id === id), p), remove: async () => true, duplicate: async () => ({}), repair: async () => ({}), select: async () => true },
+    instances: { list: async () => instances.map((i) => ({ ...i })), ensureDefault: async () => null, create: async (d) => (instances.push({ id: `nowa-${instances.length}`, playTimeMs: 0, lastPlayed: null, createdAt: Date.now(), ...d }), { ...instances.at(-1) }), update: async (id, p) => Object.assign(instances.find((i) => i.id === id), p), remove: async () => true, duplicate: async () => ({}), repair: async () => ({}), select: async () => true },
     game: { launch: async () => new Promise(() => {}), stop: async () => true, logs: async () => LOG.map((line) => ({ line })), running: async () => [] },
     content: {
       list: async (id, type) => (type === 'mod' ? installed.map((x) => ({ ...x })) : []),
@@ -341,6 +405,92 @@ function mock() {
       restore: async (id, file) => ({ folder: `${backups.find((b) => b.file === file).world} (2)` }),
       removeBackup: async (id, file) => (backups.splice(backups.findIndex((b) => b.file === file), 1), true),
     },
+    official: {
+      info: async () => ({ available: true, servers: true, worlds: true, options: true }),
+      worlds: async () => (await wait(120), officialWorlds.map((w) => ({ ...w }))),
+      importWorlds: async (id, folders) => {
+        const copied = [];
+        for (const [n, folder] of folders.entries()) {
+          const w = officialWorlds.find((x) => x.folder === folder);
+          const label = `Kopiowanie świata: ${folder}${folders.length > 1 ? ` (${n + 1}/${folders.length})` : ''}`;
+          window.__emit('task:progress', { scope: 'official-worlds', label, done: w.size * 0.37, total: w.size });
+          await gate();
+          window.__emit('task:progress', { scope: 'official-worlds', label, done: 1, total: 1 });
+          const taken = worlds.some((x) => x.folder === folder);
+          worlds.unshift({ ...w, folder: taken ? `${folder} (2)` : folder, lastPlayed: w.lastPlayed });
+          copied.push({ source: folder, folder: taken ? `${folder} (2)` : folder, files: 412, size: w.size });
+        }
+        return { copied, failed: [] };
+      },
+      importOptions: async () => (await wait(150), { backup: 'options.txt.przed-importem', lines: 142 }),
+    },
+    share: {
+      export: async (id, opts) => (await wait(200), recipeOf(id, opts?.options)),
+      save: async (id) => (await wait(100), { file: recipeOf(id).fileName }),
+      readCode: async (code) => {
+        await wait(120);
+        if (!/^HL1\./.test(String(code).trim())) throw new Error('To nie wygląda na kod instancji. Kod zaczyna się od „HL1.” – skopiuj go w całości.');
+        return recipePreview('Survival z ekipą');
+      },
+      readFile: async (file) => (await wait(120), recipePreview(String(file).split(/[\\/]/).pop().replace(/\.hammerpack$/i, ''), ['Fabric 0.15.2 nie ma już na liście – launcher użyje najnowszej zalecanej wersji.'])),
+      pick: async () => (await wait(120), recipePreview('Budowanie u Oli')),
+      install: async () => {
+        window.__emit('task:progress', { scope: 'recipe', label: 'Sprawdzanie dodatków na Modrinth', done: 0, total: 0 });
+        await wait(120);
+        window.__emit('task:progress', { scope: 'recipe', label: 'Pobieranie dodatków (17/41)', done: 17, total: 41 });
+        await gate();
+        window.__emit('task:progress', { scope: 'recipe', label: 'Pobieranie dodatków (41/41)', done: 41, total: 41 });
+        instances.push({ id: `przepis-${instances.length}`, name: 'Survival z ekipą', mcVersion: '1.21.1', loader: 'fabric', icon: 'rocket', optimized: false, hammerClient: true, playTimeMs: 0, lastPlayed: null, createdAt: Date.now() });
+        settings.selectedInstance = instances.at(-1).id;
+        return { instance: { ...instances.at(-1) }, installed: 39, missing: window.__allFound ? [] : [{ type: 'mod', file: 'stary-mod-od-kolegi-1.2.0.jar', reason: 'gone' }, { type: 'resourcepack', file: 'Paczka świąteczna 2023.zip', reason: 'failed' }], notes: [] };
+      },
+    },
+    invite: {
+      pending: async () => window.__pendingInvite ?? null,
+      read: async (input) => {
+        await wait(150);
+        if (input && typeof input === 'object') {
+          const s = FEATURED.find((x) => x.id === input.featured);
+          return (lastInvite = inviteOf({ server: s.address, name: s.name, mc: s.mc, loader: s.loader, pack: s.pack }));
+        }
+        const text = String(input ?? '').trim();
+        if (!text) throw new Error('Wklej link z zaproszeniem.');
+        if (!/^(hammer:\/\/join|https:\/\/[^/]+\/join)\?/.test(text)) throw new Error(NOT_INVITE);
+        const q = new URL(text).searchParams;
+        if (!q.get('server')) throw new Error('W tym zaproszeniu brakuje adresu serwera.');
+        return (lastInvite = inviteOf({ server: q.get('server'), name: q.get('name'), mc: q.get('mc'), loader: q.get('loader'), pack: q.get('pack') }));
+      },
+      accept: async (token, choice) => {
+        const { invite, pack, create } = lastInvite;
+        let instance = instances.find((i) => i.id === choice?.instanceId);
+        const created = !instance;
+        if (created) {
+          if (pack) {
+            window.__emit('task:progress', { scope: 'modpack', label: `Pobieranie paczki ${pack.title}`, done: 0, total: 0 });
+            await wait(150);
+            window.__emit('task:progress', { scope: 'modpack', label: 'Pobieranie plików paczki (61/148)', done: 61, total: 148 });
+            await gate();
+            window.__emit('task:progress', { scope: 'modpack', label: 'Pobieranie plików paczki (148/148)', done: 148, total: 148 });
+          }
+          instance = { id: `zaproszenie-${instances.length}`, name: create.name, mcVersion: create.mc, loader: create.loader, icon: pack ? 'star' : 'hammer', optimized: true, hammerClient: true, playTimeMs: 0, lastPlayed: null, createdAt: Date.now(), ...(pack ? { modpack: { name: pack.title, version: pack.version, iconUrl: logo('FO', '#6dd3ff', '#2563eb') } } : {}) };
+          instances.push(instance);
+          settings.selectedInstance = instance.id;
+        } else await wait(150);
+        const has = instance.id === 'hammershop' && servers.some((x) => x.address === invite.server);
+        if (instance.id === 'hammershop' && !has) servers.push({ name: invite.name ?? invite.server, address: invite.server });
+        return { instance: { ...instance }, server: invite.server, name: invite.name ?? invite.server, added: !has, created };
+      },
+      link: async (id, address, opts) => {
+        await wait(80);
+        const i = instances.find((x) => x.id === id);
+        const server = servers.find((x) => x.address === address) ?? { name: address, address };
+        const pack = i.modpack ? { name: i.modpack.name, included: opts?.pack !== false } : null;
+        const q = new URLSearchParams({ server: server.address, ...(server.name !== server.address ? { name: server.name } : {}), mc: i.mcVersion, loader: i.loader, ...(pack?.included ? { pack: '1KVo5zza' } : {}) });
+        return { link: `https://hammershop.pl/join?${q}`, web: true, server: { name: server.name, address: server.address }, mc: i.mcVersion, loader: i.loader, pack };
+      },
+    },
+    featured: { list: async () => (await wait(100), (window.__featured ?? FEATURED).map((x) => ({ ...x, tags: [...x.tags] }))) },
+    clipboard: { read: async () => window.__clipboard ?? '', write: async (text) => ((window.__clipboard = String(text)), true) },
     cleanup: {
       usage: async () => (await wait(150), {
         total: 12.18 * GB,
@@ -1050,6 +1200,270 @@ async function main() {
   await confirm();
   await page.waitForTimeout(300);
   await count('button:has-text("Usuń kod")', 0);
+
+  /* ── bringing things over and passing them on: the official Minecraft, recipes, invitations, featured servers ── */
+  const modalBtn = (text) => page.locator('.modal button', { hasText: text }).last();
+  const menuItem = (text) => page.locator('.menu button', { hasText: text });
+  const release = () => page.evaluate(() => window.__release?.());
+  /** Nothing in the open dialog may stick out of it. */
+  const modalFits = async (where) => {
+    const bad = await page.evaluate(() => {
+      const box = document.querySelector('.overlay:last-child .modal');
+      if (!box) return ['nie ma okna'];
+      const out = [];
+      const b = box.getBoundingClientRect();
+      if (b.right > innerWidth - 8 || b.bottom > innerHeight - 8 || b.left < 8 || b.top < 8) out.push('okno nie mieści się w launcherze');
+      const body = box.querySelector('.modal-body');
+      if (body.scrollWidth > body.clientWidth + 1) out.push(`treść okna jest szersza niż okno o ${body.scrollWidth - body.clientWidth} px`);
+      for (const el of box.querySelectorAll('.modal-foot .btn, .modal-body .btn, .modal-body .chip, .modal-body .input')) {
+        const r = el.getBoundingClientRect();
+        if (r.width && (r.right > b.right - 4 || r.left < b.left + 4)) out.push(`element wystaje poza okno (${el.textContent.trim().slice(0, 30) || el.className})`);
+      }
+      return out;
+    });
+    for (const text of bad) errors.push(`${where}: ${text}`);
+  };
+  await noToasts();
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+
+  // Serwery: „Mam zaproszenie”, „Zaproś” on each server, and the card of featured servers under the list.
+  await nav('Serwery');
+  await page.waitForTimeout(600);
+  await count('.feat', 4);
+  await shot('70-serwery-zaproszenia');
+  await fits('Serwery');
+  await viewTop('h2', 'Polecane serwery');
+  await shot('71-polecane-serwery');
+  await small('70b-serwery-male-okno', async () => {
+    await top();
+    await fits('Serwery, małe okno');
+  });
+  await small('71b-polecane-serwery-male-okno', async () => {
+    await viewTop('h2', 'Polecane serwery');
+    await fits('Polecane serwery, małe okno');
+  });
+  await viewTop('h2', 'Polecane serwery');
+  await count('.feat button:has-text("Na liście")', 1); // Hammer SMP is on this instance's list already
+  await page.locator('.feat', { hasText: 'Hammer Skyblock' }).locator('button', { hasText: 'Dodaj' }).click();
+  await count('.feat button:has-text("Na liście")', 2);
+  await noToasts();
+  // „Graj” on a featured server asks the same question as an invitation.
+  await page.locator('.feat', { hasText: 'Hammer SMP' }).locator('.btn.primary').click();
+  await page.waitForTimeout(400);
+  await count('.modal .pick-row', 3); // Hammer, Fabulously Optimized (both Fabric 1.21.1) and "a new instance"
+  await shot('72-polecany-graj');
+  await closeModal();
+
+  // A clicked hammer://join link: the window comes to the front and asks.
+  await page.evaluate(() => window.__emit('invite:link', 'hammer://join?server=mc.kowalscy.pl:25566&name=Serwer%20Kowalskich&mc=1.21.1&loader=fabric'));
+  await page.waitForTimeout(500);
+  await count('.modal .pick-row input:checked', 1);
+  await shot('73-zaproszenie');
+  await modalFits('Zaproszenie');
+  await small('73b-zaproszenie-male-okno', () => modalFits('Zaproszenie, małe okno'));
+  await modalBtn('Dodaj serwer').click();
+  await page.waitForTimeout(500);
+  await count('.modal button:has-text("Graj")', 1);
+  await shot('74-zaproszenie-graj');
+  await modalBtn('Zamknij').click();
+  await count('.server-row', 7); // the invitation's server is on the list (and the featured one added before)
+  // No instance fits and the link asks for a modpack: its name and author first, then the usual modpack install.
+  await page.evaluate(() => window.__emit('invite:link', 'https://hammershop.pl/join?server=fo.example.pl:25570&name=Wsp%C3%B3lny%20%C5%9Bwiat&mc=1.20.4&loader=fabric&pack=fabulously-optimized'));
+  await page.waitForTimeout(500);
+  await count('.modal .pick-row', 1);
+  await shot('75-zaproszenie-z-paczka');
+  await modalFits('Zaproszenie z paczką');
+  await page.evaluate(() => (window.__hold = true));
+  await modalBtn('Zainstaluj paczkę').click();
+  await page.waitForTimeout(500);
+  await shot('76-zaproszenie-instalacja-paczki');
+  await release();
+  await page.waitForTimeout(500);
+  await shot('77-zaproszenie-z-paczka-gotowe');
+  await small('77b-zaproszenie-gotowe-male-okno', () => modalFits('Zaproszenie gotowe, małe okno'));
+  await modalBtn('Zamknij').click();
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+  await page.waitForTimeout(1700); // the task card in the sidebar goes away by itself
+  // „Mam zaproszenie”: something that is not an invitation gets a calm sentence; a real link opens the question.
+  await nav('Serwery');
+  await page.waitForTimeout(400);
+  await page.locator('.page-head button[aria-label="Mam zaproszenie"]').click();
+  await page.locator('.modal input').fill('https://discord.gg/hammershop');
+  await modalBtn('Dalej').click();
+  await page.waitForTimeout(300);
+  await count('.modal .warn', 1);
+  await shot('78-mam-zaproszenie-zly-link');
+  await page.evaluate(() => (window.__clipboard = 'https://hammershop.pl/join?server=sky.hammershop.pl&name=Hammer+Skyblock'));
+  await modalBtn('Wklej').click();
+  await modalBtn('Dalej').click();
+  await page.waitForTimeout(400);
+  await count('.modal .invite-head', 1);
+  await count('.modal .pick-row', 6); // any instance fits a link that names no game version
+  await shot('79-zaproszenie-dowolna-wersja');
+  await modalFits('Zaproszenie bez wersji');
+  await small('79b-zaproszenie-dowolna-wersja-male-okno', () => modalFits('Zaproszenie bez wersji, małe okno'));
+  await closeModal();
+  // „Zaproś”: the link for a server of this instance.
+  await page.locator('.server-row button[aria-label="Zaproś na: HammerShop"]').click();
+  await page.waitForTimeout(300);
+  await shot('80-zapros');
+  await modalFits('Zaproś');
+  if (!/^https:\/\/hammershop\.pl\/join\?/.test(await page.locator('.modal textarea').inputValue())) errors.push('Zaproś: w oknie nie widać linku');
+  await modalBtn('Kopiuj link').click();
+  await page.waitForTimeout(200);
+  const copied = await page.evaluate(() => window.__clipboard);
+  if (!/^https:\/\/hammershop\.pl\/join\?server=mc\.hammershop\.pl&name=HammerShop&mc=1\.21\.1&loader=fabric$/.test(copied)) errors.push(`Zaproś: w schowku jest „${copied}”`);
+  await closeModal();
+  await noToasts();
+  // The start screen: the compact strip.
+  await nav('Graj');
+  await page.waitForTimeout(600);
+  await count('.featured-strip .feat', 3);
+  await viewTop('h2', 'Polecane serwery');
+  await shot('81-graj-polecane');
+  await fits('Graj z polecanymi');
+  await small('81b-graj-polecane-male-okno', async () => {
+    await viewTop('h2', 'Polecane serwery');
+    await fits('Graj z polecanymi, małe okno');
+  });
+  // The shop has no list (or is not reachable): no card anywhere, and nothing complains.
+  await page.evaluate(() => (window.__featured = []));
+  await nav('Serwery');
+  await page.waitForTimeout(500);
+  await count('.featured', 0);
+  await nav('Graj');
+  await page.waitForTimeout(500);
+  await count('.featured-strip', 0);
+  await page.evaluate(() => (window.__featured = null));
+  await count('.toast', 0);
+
+  // Światy → „Z Minecrafta”: the worlds of the official Minecraft, copied into the instance.
+  await nav('Światy');
+  await page.waitForTimeout(400);
+  await shot('82-swiaty-z-minecrafta-przycisk');
+  const worldsBefore = await page.locator('.world-row').count();
+  await page.locator('.page-head button', { hasText: 'Z Minecrafta' }).click();
+  await page.waitForTimeout(400);
+  await count('.modal .pick-row', 5);
+  await page.locator('.modal .pick-row', { hasText: 'Survival 2024' }).click();
+  await page.locator('.modal .pick-row', { hasText: 'Testy nowej wersji' }).click();
+  await count('.modal .pick-row input:checked', 2);
+  await shot('83-swiaty-z-minecrafta');
+  await modalFits('Światy z Minecrafta');
+  await small('83b-swiaty-z-minecrafta-male-okno', () => modalFits('Światy z Minecrafta, małe okno'));
+  await page.evaluate(() => (window.__hold = true));
+  await modalBtn('Skopiuj zaznaczone').click();
+  await page.waitForTimeout(400);
+  await shot('84-swiaty-kopiowanie');
+  await release();
+  await page.waitForTimeout(700);
+  await count('.modal', 0);
+  await count('.world-row', worldsBefore + 2);
+  await shot('85-swiaty-skopiowane');
+  await noToasts();
+  await page.waitForTimeout(1700); // the task card in the sidebar goes away by itself
+
+  // Instancje: „Z kodu lub pliku”, and „Udostępnij” / „Przenieś ustawienia z Minecrafta” in the instance menu.
+  await nav('Instancje');
+  await page.waitForTimeout(300);
+  await shot('86-instancje');
+  await fits('Instancje');
+  await small('86b-instancje-male-okno', () => fits('Instancje, małe okno'));
+  await page.locator('.inst-card', { hasText: 'Hammer' }).first().locator('.more').click();
+  await shot('87-instancja-menu');
+  await menuItem('Przenieś ustawienia z Minecrafta').click();
+  await shot('88-ustawienia-z-minecrafta');
+  await modalFits('Ustawienia z Minecrafta');
+  await small('88b-ustawienia-z-minecrafta-male-okno', () => modalFits('Ustawienia z Minecrafta, małe okno'));
+  await modalBtn('Przenieś ustawienia').click();
+  await page.waitForTimeout(400);
+  await count('.modal', 0);
+  await shot('89-ustawienia-przeniesione');
+  await noToasts();
+  await page.locator('.inst-card', { hasText: 'Hammer' }).first().locator('.more').click();
+  await menuItem('Udostępnij').click();
+  await page.waitForTimeout(500);
+  await shot('90-udostepnij');
+  await modalFits('Udostępnij');
+  if (!/^HL1\./.test(await page.locator('.modal textarea').inputValue())) errors.push('Udostępnij: w oknie nie widać kodu');
+  await small('90b-udostepnij-male-okno', () => modalFits('Udostępnij, małe okno'));
+  await page.locator('.modal .switch').click();
+  await page.waitForTimeout(500);
+  await count('.modal .chip:has-text("ustawienia gry")', 1);
+  await modalBtn('Kopiuj kod').click();
+  await modalBtn('Zapisz plik').click();
+  await page.waitForTimeout(400);
+  if (!/^HL1\./.test(await page.evaluate(() => window.__clipboard))) errors.push('Udostępnij: kod nie trafił do schowka');
+  await page.locator('.modal .modal-body').evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await shot('91-udostepnij-kod-i-plik');
+  await noToasts();
+  await closeModal();
+  // A big modpack: the code would be too long – only the file is offered, and the window says why.
+  await page.locator('.inst-card', { hasText: 'Fabulously Optimized' }).first().locator('.more').click();
+  await menuItem('Udostępnij').click();
+  await page.waitForTimeout(500);
+  await count('.modal button:has-text("Kopiuj kod"):visible', 0);
+  await count('.modal .btn.primary:has-text("Zapisz plik")', 1);
+  await count('.modal .cloud-note', 1);
+  await shot('92-udostepnij-tylko-plik');
+  await closeModal();
+  // Import: a wrong code, then a real one → the preview → the install with its progress → what is missing.
+  await page.locator('.page-head button', { hasText: 'Z kodu lub pliku' }).click();
+  await shot('93-z-kodu-lub-pliku');
+  await modalFits('Z kodu lub pliku');
+  await page.locator('.modal textarea').fill('moj-kod-od-kolegi');
+  await modalBtn('Dalej').click();
+  await page.waitForTimeout(300);
+  await shot('94-z-kodu-zly-kod');
+  await noToasts();
+  await modalBtn('Wklej').click();
+  await modalBtn('Dalej').click();
+  await page.waitForTimeout(400);
+  await count('.modal .recipe-name', 1);
+  await shot('95-przepis-podglad');
+  await modalFits('Podgląd przepisu');
+  await small('95b-przepis-podglad-male-okno', () => modalFits('Podgląd przepisu, małe okno'));
+  const instancesBefore = await page.locator('.inst-card:not(.new-card)').count();
+  await page.evaluate(() => (window.__hold = true));
+  await modalBtn('Utwórz instancję').click();
+  await page.waitForTimeout(500);
+  await shot('96-przepis-instalacja');
+  await release();
+  await page.waitForTimeout(700);
+  await count('.inst-card:not(.new-card)', instancesBefore + 1);
+  await count('.modal .share-out .installed-row', 2);
+  await shot('97-przepis-czego-brakuje');
+  await modalFits('Przepis – czego brakuje');
+  await modalBtn('Zamknij').click();
+  await page.waitForTimeout(1700); // the task card in the sidebar goes away by itself
+  // A .hammerpack file dropped on the window opens the same preview (here with a note about the loader version).
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.items.add(new File(['{}'], 'Skyblock od Oli.hammerpack'));
+    document.getElementById('view').dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
+  });
+  await page.waitForTimeout(400);
+  await count('.modal .recipe-name', 1);
+  await count('.modal .cloud-note', 1);
+  await shot('98-przepis-z-upuszczonego-pliku');
+  await page.evaluate(() => (window.__allFound = true));
+  await modalBtn('Utwórz instancję').click();
+  await page.waitForTimeout(700);
+  await count('.modal', 0);
+  await noToasts();
+  await page.waitForTimeout(1700); // the task card in the sidebar goes away by itself
+  // A new instance: one quiet offer to bring the settings of the official Minecraft over.
+  await page.locator('.page-head .btn.primary').click();
+  await page.locator('.modal input').first().fill('Budowanie');
+  await page.waitForTimeout(300);
+  await confirm();
+  await page.waitForTimeout(600);
+  await count('.toast button', 1);
+  await shot('99-nowa-instancja-propozycja-ustawien');
+  await page.locator('.toast button').click();
+  await count('.modal .why-item', 2);
+  await closeModal();
+  await page.waitForTimeout(1700);
 
   await browser.close();
   if (errors.length) {

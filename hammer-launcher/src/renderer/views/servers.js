@@ -1,5 +1,6 @@
 'use strict';
-/* Serwery – the multiplayer server list of an instance (the game's own servers.dat) with live status and one-click join. */
+/* Serwery – the multiplayer server list of an instance (the game's own servers.dat) with live status and one-click join,
+   invitations in and out („Mam zaproszenie”, „Zaproś”) and the servers the shop recommends (views/invite.js). */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -88,6 +89,7 @@
         h(
           'div.row-acts',
           h('button.btn.sm.primary', { disabled: running, title: running ? 'Ta instancja już działa' : `Uruchom grę i wejdź na ${server.address}`, onclick: () => HS.play(instance.id, { server: server.address }) }, icon('play'), 'Graj'),
+          h('button.btn.ghost.sm.icon', { title: 'Zaproś – link dla znajomego', 'aria-label': `Zaproś na: ${server.name}`, onclick: () => HS.inviteUi.createDialog(instance, server) }, icon('send')),
           h('button.btn.ghost.sm.icon', { title: 'Przesuń wyżej', 'aria-label': `Przesuń wyżej: ${server.name}`, disabled: i === 0, onclick: act(() => api.servers.move(instance.id, i, i - 1)) }, icon('arrow-up')),
           h('button.btn.ghost.sm.icon', { title: 'Przesuń niżej', 'aria-label': `Przesuń niżej: ${server.name}`, disabled: i === servers.length - 1, onclick: act(() => api.servers.move(instance.id, i, i + 1)) }, icon('arrow-down')),
           h('button.btn.ghost.sm.icon', { title: 'Edytuj', 'aria-label': `Edytuj: ${server.name}`, onclick: () => editServer(instance, server, show) }, icon('pen')),
@@ -108,7 +110,9 @@
     }
 
     let official = false; // this computer has a "normal" Minecraft with a server list to bring over
-    const importBtn = h('button.btn', { hidden: true, title: 'Dodaj serwery, które masz w zwykłym Minecrafcie (z oficjalnego launchera)', onclick: () => importOfficial() }, icon('download'), 'Z Minecrafta');
+    const importBtn = h('button.btn', { hidden: true, title: 'Z Minecrafta – dodaj serwery, które masz w zwykłym Minecrafcie (z oficjalnego launchera)', 'aria-label': 'Z Minecrafta', onclick: () => importOfficial() }, icon('download'), h('span.wider', 'Z Minecrafta'));
+    // Polecane serwery (from the shop) – below the player's own list; nothing at all when the shop has none.
+    const featured = HS.inviteUi.featuredCard({ has: (address) => servers.some((s) => s.address.toLowerCase() === address.toLowerCase()), onAdded: (list) => show(list) });
 
     /** Brings over the servers of the official Minecraft that are not on this instance's list yet. */
     async function importOfficial() {
@@ -186,6 +190,7 @@
       servers = list;
       for (const address of [...status.keys()]) if (!servers.some((s) => s.address === address)) status.delete(address);
       draw();
+      featured.draw(); // „Dodaj” there depends on what is on this list
       pingMissing();
     }
 
@@ -214,11 +219,13 @@
             'div.actions',
             h('button.btn.icon', { title: 'Odśwież status', 'aria-label': 'Odśwież status serwerów', onclick: () => load({ fresh: true }) }, icon('refresh')),
             importBtn,
+            h('button.btn', { title: 'Mam zaproszenie – wklej link od znajomego albo właściciela serwera', 'aria-label': 'Mam zaproszenie', onclick: () => HS.inviteUi.pasteDialog() }, icon('invite'), h('span.wide', 'Mam zaproszenie')),
             h('button.btn.primary', { onclick: () => inst() && editServer(inst(), null, show) }, icon('plus'), 'Dodaj serwer'),
             picker.el,
           ),
         ),
         body,
+        featured.el,
       ),
     );
     load();
@@ -241,9 +248,12 @@
       }),
       bus.on('instances', () => picker.draw()),
       bus.on('game', () => servers.length && draw()),
+      // An invitation put a server on this instance's list.
+      bus.on('servers', (e) => e?.instanceId === inst()?.id && load()),
     ];
     return () => {
       run += 1;
+      featured.stop();
       offs.forEach((f) => f());
     };
   }

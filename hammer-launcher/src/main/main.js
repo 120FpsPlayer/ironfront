@@ -17,6 +17,7 @@ const { safeName } = require('./net');
 const { fromDataUrl } = require('./skins');
 const { useSystemProxy } = require('./proxy');
 const { officialMinecraftDir } = require('./official');
+const { inviteFromArgs } = require('./invite');
 
 useSystemProxy(); // networks that require a proxy (HTTPS_PROXY) – without it the launcher would look offline there
 
@@ -60,6 +61,45 @@ if (!app.requestSingleInstanceLock()) {
     if (win && !win.isDestroyed()) win.webContents.send('hs:event', { channel, payload });
   };
 
+  /* ── invitations: hammer://join?… ── */
+  // A link the launcher was started with (Windows and Linux pass it as an argument) waits here until the window asks.
+  let pendingInvite = inviteFromArgs(process.argv);
+  let windowAsked = false; // the window has started and takes links as they come
+
+  /**
+   * Makes this launcher the program that opens hammer:// links for the current user. (The macOS and Linux
+   * packages also declare it – "protocols" in package.json.) The "--" keeps anything in a link from being read
+   * as a switch of the program.
+   */
+  function registerProtocol() {
+    try {
+      if (process.defaultApp) {
+        // Started as "electron ." (development): a link has to start Electron with this app's folder.
+        if (process.argv[1]) app.setAsDefaultProtocolClient('hammer', process.execPath, [path.resolve(process.argv[1]), '--']);
+      } else if (process.env.PORTABLE_EXECUTABLE_FILE) {
+        // The portable build unpacks itself into a temporary folder – a link must start the file the player keeps.
+        app.setAsDefaultProtocolClient('hammer', process.env.PORTABLE_EXECUTABLE_FILE, ['--']);
+      } else app.setAsDefaultProtocolClient('hammer', process.execPath, ['--']);
+    } catch {
+      // not allowed on this system – an invitation can still be pasted in the Serwery tab
+    }
+  }
+
+  /**
+   * A clicked link arrives: the window comes to the front and gets the link. Nothing is done with it here –
+   * the window checks it through the services and asks the player before anything happens.
+   */
+  function openInvite(link) {
+    if (win && !win.isDestroyed()) {
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    }
+    if (!link) return;
+    if (windowAsked && win && !win.isDestroyed()) send('invite:link', link);
+    else pendingInvite = link;
+  }
+
   /** Only https links (and the configured Discord invite) leave the app – in the system browser. */
   const openExternal = (url) => {
     const u = new URL(String(url));
@@ -68,6 +108,7 @@ if (!app.requestSingleInstanceLock()) {
   };
 
   function createWindow() {
+    windowAsked = false;
     win = new BrowserWindow({
       width: 1240,
       height: 780,
@@ -130,6 +171,11 @@ if (!app.requestSingleInstanceLock()) {
       pickFile: async ({ title, filters }) => {
         const res = await dialog.showOpenDialog(win, { title, properties: ['openFile'], filters });
         return res.canceled ? null : res.filePaths[0] ?? null;
+      },
+      // "Save as" for an instance recipe (.hammerpack) – starts in the player's documents.
+      saveFile: async ({ title, defaultName, filters }) => {
+        const res = await dialog.showSaveDialog(win, { title, defaultPath: path.join(app.getPath('documents'), defaultName), filters });
+        return res.canceled ? null : res.filePath || null;
       },
       // Tło menu w grze: any picture → PNG that fits the given size, proportions kept (Hammer Client takes 1920×1080).
       convertImage: (data, { maxWidth, maxHeight }) => {
@@ -371,16 +417,50 @@ if (!app.requestSingleInstanceLock()) {
     handle('cloud:pull', () => s().cloud.pull());
     handle('cloud:startup', () => s().cloud.startup());
 
+    // The official Minecraft: worlds and settings to bring over (the server list has its own handlers above).
+    handle('official:info', () => s().official.info());
+    handle('official:worlds', (id) => s().official.worlds(id));
+    handle('official:import-worlds', (id, folders) => s().official.importWorlds(id, Array.isArray(folders) ? folders.filter((f) => typeof f === 'string') : []));
+    handle('official:import-options', (id) => s().official.importOptions(id));
+
+    // Udostępnianie: an instance as a code or a .hammerpack file. Codes and files are checked in the services.
+    handle('share:export', (id, opts) => s().share.export(id, { options: Boolean(opts?.options) }));
+    handle('share:save', (id, opts) => s().share.save(id, { options: Boolean(opts?.options) }));
+    handle('share:read-code', (code) => s().share.readCode(typeof code === 'string' ? code : ''));
+    handle('share:read-file', (file) => s().share.readFile(typeof file === 'string' ? file : ''));
+    handle('share:pick', () => s().share.pick());
+    handle('share:install', (token) => s().share.install(String(token)));
+
+    // Zaproszenia (hammer://join) and featured servers. A link only ever leads to a question in the window.
+    handle('invite:pending', () => {
+      const link = pendingInvite;
+      pendingInvite = null;
+      windowAsked = true;
+      return link;
+    });
+    handle('invite:read', (input) => s().invite.read(typeof input === 'string' ? input : typeof input?.featured === 'string' ? { featured: input.featured } : ''));
+    handle('invite:accept', (token, choice) => s().invite.accept(token, { instanceId: typeof choice?.instanceId === 'string' ? choice.instanceId : null }));
+    handle('invite:link', (id, address, opts) => s().invite.link(id, address, { pack: opts?.pack !== false }));
+    handle('featured:list', () => s().featured.list());
+
+    // The clipboard for codes and links (await: Electron's clipboard answers with promises).
+    handle('clipboard:read', async () => String((await clipboard.readText()) ?? '').trim().slice(0, 16384));
+    handle('clipboard:write', async (text) => {
+      await clipboard.writeText(String(text ?? '').slice(0, 16384));
+      return true;
+    });
+
     handle('optimizer:info', (id) => s().optimizerInfo(id));
     handle('optimizer:plan', (id, opts) => s().optimizer.plan(inst(id), opts));
     handle('optimizer:apply', (id, opts) => s().applyOptimization(id, opts));
   }
 
-  app.on('second-instance', () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
+  // A second start (a click on a hammer:// link while the launcher is open, or its icon): this window comes to the front.
+  app.on('second-instance', (_event, argv) => openInvite(inviteFromArgs(argv)));
+  // macOS hands a clicked link over this way – also before the window exists.
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    openInvite(inviteFromArgs([url]));
   });
 
   app.whenReady().then(async () => {
@@ -394,6 +474,7 @@ if (!app.requestSingleInstanceLock()) {
     } catch {
       gpu = null;
     }
+    registerProtocol();
     setupServices();
     registerIpc();
     createWindow();

@@ -20,6 +20,7 @@
       else if (k === 'dataset') Object.assign(el.dataset, v);
       else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
       else if (k === 'html') el.innerHTML = v;
+      else if (k === 'value' && name === 'textarea') el.value = v; // a textarea has no "value" attribute – its text is its value
       else if (k in el && typeof v !== 'string') el[k] = v;
       else el.setAttribute(k, v === true ? '' : v);
     }
@@ -360,9 +361,10 @@
 
   /* ── toasts ── */
   const TOAST_ICONS = { ok: 'check-circle', err: 'x-circle', warning: 'warning', info: 'info' };
-  function toast(kind, text, ms = 4200) {
+  /** `action` ({ label, onClick }) adds one button to the message – an offer the player may take or let pass. */
+  function toast(kind, text, ms = 4200, action = null) {
     const root = document.getElementById('toasts');
-    const el = h(`div.toast.${kind}`, icon(TOAST_ICONS[kind] ?? 'info'), h('div', text));
+    const el = h(`div.toast.${kind}`, icon(TOAST_ICONS[kind] ?? 'info'), h('div', text, action ? h('button.btn.sm', { type: 'button', onclick: () => action.onClick() }, action.label) : null));
     root.append(el);
     while (root.children.length > 4) root.firstChild.remove();
     const close = () => {
@@ -371,6 +373,32 @@
     };
     el.addEventListener('click', close);
     setTimeout(close, ms);
+  }
+
+  /** Puts text on the clipboard (through the launcher – it works without the window being asked for permission). */
+  async function copyText(text, okText = 'Skopiowano do schowka.') {
+    try {
+      await api.clipboard.write(text);
+      toast('ok', okText);
+      return true;
+    } catch {
+      toast('err', 'Nie udało się skopiować do schowka.');
+      return false;
+    }
+  }
+
+  /**
+   * A progress bar inside a dialog that follows one kind of long task (the `scope` of the launcher's
+   * 'task:progress' events) – empty until the task says something. Returns { el, stop }.
+   */
+  function taskBar(scope) {
+    const el = h('div.task-bar');
+    const stop = api.on('task:progress', (p) => {
+      if (p.scope !== scope || !el.isConnected) return;
+      const pct = p.total > 0 ? Math.min(100, Math.round((p.done / p.total) * 100)) : null;
+      clear(el, h('div.label', h('b.ellipsis', p.label ?? 'Pracuję…'), pct != null ? h('span', `${pct}%`) : null), h(`div.progress${pct == null ? '.indeterminate' : ''}`, h('i', { style: { '--w': `${pct ?? 0}%` } })));
+    });
+    return { el, stop };
   }
 
   /** Runs an async action and shows its error as a toast; returns undefined on failure. */
@@ -421,7 +449,7 @@
     overlay = h('div.overlay', { onmousedown: (e) => e.target === overlay && close() }, box);
     root.append(overlay);
     document.addEventListener('keydown', onKey);
-    setTimeout(() => box.querySelector('input,select,textarea,.btn.primary')?.focus(), 30);
+    setTimeout(() => box.querySelector('input:not([type=checkbox]):not([type=radio]),select,textarea,.btn.primary')?.focus(), 30);
     return { close, box };
   }
 
@@ -662,5 +690,5 @@
     return { el, draw };
   }
 
-  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme };
+  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, copyText, taskBar, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme };
 })();

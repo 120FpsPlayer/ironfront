@@ -198,10 +198,15 @@
         await state.refreshInstances();
         if (isNew) await state.selectInstance(res.id);
         m.close();
+        // A new instance starts with the launcher's own settings – one quiet offer to bring the player's over.
+        if (isNew) HS.officialUi.offerOptions(res);
       });
     loadVersions();
   }
   HS.editInstance = editInstance;
+
+  // Whether this computer has an official Minecraft with settings to bring over (asked when the tab opens).
+  let hasOfficialOptions = false;
 
   function actions(i, anchor) {
     HS.menu(anchor, [
@@ -210,6 +215,8 @@
       { icon: 'puzzle', label: 'Mody', onClick: () => state.selectInstance(i.id).then(() => HS.go('mods')) },
       { icon: 'folder', label: 'Otwórz folder', onClick: () => attempt(() => api.app.openFolder(i.id)) },
       { icon: 'copy', label: 'Duplikuj', onClick: () => attempt(() => api.instances.duplicate(i.id), 'Utworzono kopię instancji.').then(() => state.refreshInstances()) },
+      { icon: 'share', label: 'Udostępnij', hint: 'kod albo plik', onClick: () => HS.shareUi.exportDialog(i) },
+      ...(hasOfficialOptions ? [{ icon: 'sliders', label: 'Przenieś ustawienia z Minecrafta', onClick: () => HS.officialUi.importOptions(i) }] : []),
       {
         icon: 'wrench',
         label: 'Napraw instancję',
@@ -275,8 +282,9 @@
           h('div', h('h1', 'Instancje'), h('p', 'Każda instancja ma własne mody, światy i ustawienia – nic się nie miesza.')),
           h(
             'div.actions',
-            h('button.btn', { onclick: (e) => HS.importModpack(e.currentTarget) }, icon('import'), 'Importuj .mrpack'),
-            h('button.btn', { onclick: () => attempt(() => api.app.openFolder(null, 'instances')) }, icon('folder'), 'Folder'),
+            h('button.btn', { title: 'Z kodu lub pliku – instancja, którą ktoś Ci udostępnił', onclick: () => HS.shareUi.importDialog() }, icon('share'), 'Z kodu lub pliku'),
+            h('button.btn', { title: 'Importuj paczkę modów (.mrpack)', 'aria-label': 'Importuj .mrpack', onclick: (e) => HS.importModpack(e.currentTarget) }, icon('import'), h('span.wide', 'Importuj .mrpack')),
+            h('button.btn', { title: 'Otwórz folder instancji', 'aria-label': 'Folder', onclick: () => attempt(() => api.app.openFolder(null, 'instances')) }, icon('folder'), h('span.wide', 'Folder')),
             h('button.btn.primary', { onclick: () => editInstance() }, icon('plus'), 'Nowa instancja'),
           ),
         ),
@@ -284,6 +292,7 @@
       ),
     );
     draw();
+    HS.officialUi.info().then((o) => (hasOfficialOptions = Boolean(o.options)));
     const offs = [bus.on('instances', draw), bus.on('settings', draw), bus.on('game', draw)];
     return () => offs.forEach((f) => f());
   }

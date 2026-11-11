@@ -130,6 +130,8 @@
     }
     drawClient();
     const shopBox = h('div');
+    // Polecane serwery: a compact strip under the two columns – only when the shop has a list.
+    const featured = HS.inviteUi.featuredStrip();
     const hero = h(
       'section.hero',
       HS.fxLayer(), // the animated background picked in Ustawienia → Wygląd (Hammer+); empty for the classic look
@@ -161,6 +163,7 @@
             links.length ? h('div.links', { style: { gridTemplateColumns: `repeat(${links.length}, minmax(0,1fr))`, marginTop: 0 } }, links.map((l) => h('button.link-card', { onclick: () => open(l.url) }, icon(l.icon), h('b', l.title), h('small', l.sub)))) : null,
           ),
         ),
+        featured.el,
         shopBox,
       ),
     );
@@ -234,6 +237,7 @@
     const offs = [bus.on('instances', drawClient), bus.on('settings', drawClient), bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home'))];
     return () => {
       clearInterval(timer);
+      featured.stop();
       stopEmbers();
       offs.forEach((f) => f());
     };

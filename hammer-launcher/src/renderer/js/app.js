@@ -268,6 +268,7 @@
           state.settings = await api.settings.get();
           await state.refreshInstances();
           toast('ok', `Gotowa instancja „${created.name}” (Minecraft ${created.mcVersion}). Kliknij GRAJ!`, 6000);
+          HS.officialUi.offerOptions(created); // the player's keys and settings from the official Minecraft, if there is one
         }
       } catch (err) {
         toast('warning', `Nie udało się utworzyć instancji startowej: ${err.message}`, 7000);
@@ -278,7 +279,36 @@
       .startup()
       .then((res) => HS.plusUi.cloudResult(res, { auto: true }))
       .catch(() => {});
+    // An invitation the launcher was started with (a click on hammer://join?…) – asked for once the window is ready.
+    api.invite
+      .pending()
+      .then((link) => link && HS.inviteUi.fromLink(link))
+      .catch(() => {});
   })();
+
+  // An invitation clicked while the launcher is open: the window is in front already – ask the player.
+  api.on('invite:link', (link) => HS.inviteUi.fromLink(link));
+
+  /* ── a .hammerpack file dropped anywhere on the window opens its preview ── */
+  const droppedRecipe = (e) => [...(e.dataTransfer?.files ?? [])].find((f) => /\.hammerpack$/i.test(f.name));
+  const dragsFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  // (capture: the tabs with their own drop areas – Mody, Skórka – never see a recipe file)
+  window.addEventListener('dragover', (e) => dragsFiles(e) && e.preventDefault());
+  window.addEventListener(
+    'drop',
+    (e) => {
+      const file = droppedRecipe(e);
+      if (!file) return void (dragsFiles(e) && e.preventDefault()); // any other file: the tab's own handler, never a page load
+      e.preventDefault();
+      e.stopPropagation();
+      // The tab's own drop area never hears about this drop – tell it the drag is over, so its highlight goes away.
+      for (const el of document.querySelectorAll('.dragging')) for (let n = 0; n < 8; n += 1) el.dispatchEvent(new Event('dragleave'));
+      const filePath = api.pathForFile(file);
+      if (filePath) HS.shareUi.openFile(filePath);
+      else toast('err', 'Nie udało się odczytać upuszczonego pliku.');
+    },
+    true,
+  );
 
   // Ctrl+1…9 switches tabs, Ctrl+0 opens the tenth.
   document.addEventListener('keydown', (e) => {

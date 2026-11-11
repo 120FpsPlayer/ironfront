@@ -16,8 +16,9 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po pol
 - **Mody** (zakładka *Mody*): wyszukiwarka Modrinth z modami, paczkami tekstur, shaderami i paczkami modów. Ma kategorie i sortowanie, a zależności instalują się same. Do tego lista zainstalowanych z włączaniem i wyłączaniem, aktualizacje jednym kliknięciem, przeciąganie plików `.jar` / `.zip` i import paczek `.mrpack`.
 - **Zestawy modów** (*Mody → Zestawy*): gotowe zestawy na jedno kliknięcie – *PvP*, *Survival+*, *Budowanie*, *Shadery* oraz *Wygląd i klimat*. Przy każdym dodatku widać, czy istnieje dla wybranej instancji i czy już jest zainstalowany. W zestawach są tylko dodatki, które nie dają przewagi nad innymi graczami.
 - **Skórka** (zakładka *Skórka*): podgląd postaci z przodu i z tyłu, wgranie nowej skórki (PNG 64×64, model klasyczny albo smukły), powrót do domyślnej oraz peleryny konta – pokaż / ukryj. Każda skórka, którą nosisz, trafia do biblioteki w launcherze, więc wrócisz do niej jednym kliknięciem. Zmiany idą prosto na konto Microsoft – bez wchodzenia na minecraft.net.
-- **Serwery** (zakładka *Serwery*): lista serwerów instancji – ta sama, którą widzisz w grze (`servers.dat`). Przy każdym serwerze status na żywo: gracze, ping, wersja i opis. Dodawanie ze sprawdzeniem adresu, zmiana kolejności i przycisk **Graj**, który uruchamia grę od razu na wybranym serwerze. Lista serwerów nie jest częścią konta Microsoft, tylko plikiem w folderze gry, więc launcher **przenosi serwery ze zwykłego Minecrafta** (z oficjalnego launchera): raz automatycznie dla każdej instancji, a potem przyciskiem **Z Minecrafta** (dodaje tylko te, których jeszcze nie ma).
-- **Światy** (zakładka *Światy*): światy jednoosobowe instancji z trybem gry, wersją, datą ostatniej gry i rozmiarem. **Graj** otwiera wybrany świat od razu po starcie (Minecraft 1.20+). Kopie zapasowe do plików `.zip` w folderze `backups/` instancji (tam, gdzie zapisuje je też sama gra), przywracanie zawsze jako nowy świat, zmiana nazwy i usuwanie do kosza systemowego.
+- **Serwery** (zakładka *Serwery*): lista serwerów instancji – ta sama, którą widzisz w grze (`servers.dat`). Przy każdym serwerze status na żywo: gracze, ping, wersja i opis. Dodawanie ze sprawdzeniem adresu, zmiana kolejności i przycisk **Graj**, który uruchamia grę od razu na wybranym serwerze. Lista serwerów nie jest częścią konta Microsoft, tylko plikiem w folderze gry, więc launcher **przenosi serwery ze zwykłego Minecrafta** (z oficjalnego launchera): raz automatycznie dla każdej instancji, a potem przyciskiem **Z Minecrafta** (dodaje tylko te, których jeszcze nie ma). Do tego **zaproszenia** – link, który znajomy klika, a launcher sam przygotowuje mu instancję i serwer – oraz karta **Polecane serwery**. Szczegóły w sekcji [Zaproszenia](#zaproszenia-hammerjoin).
+- **Światy** (zakładka *Światy*): światy jednoosobowe instancji z trybem gry, wersją, datą ostatniej gry i rozmiarem. **Graj** otwiera wybrany świat od razu po starcie (Minecraft 1.20+). Kopie zapasowe do plików `.zip` w folderze `backups/` instancji (tam, gdzie zapisuje je też sama gra), przywracanie zawsze jako nowy świat, zmiana nazwy i usuwanie do kosza systemowego. Przycisk **Z Minecrafta** kopiuje światy ze zwykłego Minecrafta – patrz [Światy i ustawienia ze zwykłego Minecrafta](#światy-i-ustawienia-ze-zwykłego-minecrafta).
+- **Udostępnianie instancji** (menu instancji → *Udostępnij*, *Instancje → Z kodu lub pliku*): instancja jako kod do wklejenia albo plik `.hammerpack` – znajomy dostaje taką samą, bez wysyłania żadnych plików. Szczegóły w sekcji [Udostępnianie instancji](#udostępnianie-instancji).
 - **Konsola.** Logi gry na żywo. Gdy gra się wyłączy, launcher wyjaśnia po polsku, co się stało i co zrobić (brak RAM, zła Java, niezgodne lub zdublowane mody, sterowniki…). Przycisk **Wyślij logi** wrzuca log na [mclo.gs](https://mclo.gs) i daje link do wklejenia na Discordzie – token logowania jest wcześniej usuwany.
 - **Miejsce na dysku** (w *Ustawieniach*): ile zajmują instancje, pliki gry i Java oraz sprzątanie jednym kliknięciem – stare logi i raporty crashy, pamięć podręczna, wersje gry i Javy, z których nie korzysta żadna instancja.
 - **Napraw instancję** (menu instancji): przy następnym starcie launcher instaluje loader od nowa i sprawdza wszystkie pliki gry. Światy, mody i ustawienia zostają.
@@ -88,6 +89,78 @@ Dopóki strona nie odpowiada, launcher mówi po prostu „Chmura zadziała, gdy 
 - Plik dla moda `config/hammerclient-launcher.json` (pisany przed każdym startem) ma oprócz `discordUrl`, `shopUrl` i `brand` trzy pola: `plus: { active, until }` (`until` w sekundach uniksowych, 0 = bez końca albo nieaktywny), `cape` (id peleryny Hammer+ albo `""`; zawsze `""` bez Hammer+) i `api` (adres API sklepu jak wyżej).
 - Moduły: `plus.js` (kod i status), `shopapi.js` + `cloud.js` (chmura), `autobackup.js`, `background.js` (tła), `capes.js`, a w `skins.js` zestawy i limit biblioteki. Kolory własnego motywu liczy `src/renderer/js/theme.js` (ten sam plik ładują testy).
 
+## Światy i ustawienia ze zwykłego Minecrafta
+
+Światy i ustawienia – tak jak lista serwerów – nie są częścią konta Microsoft, tylko plikami w folderze gry. Gdy na komputerze jest zwykły Minecraft (z oficjalnego launchera: `%APPDATA%\.minecraft`, na macOS `~/Library/Application Support/minecraft`, na Linuksie `~/.minecraft`), launcher potrafi je przenieść do instancji. Wszystko to jest za darmo.
+
+- **Światy** (*Światy → Z Minecrafta*): lista światów ze zwykłego Minecrafta z ikoną, nazwą, datą ostatniej gry, rozmiarem i wersją gry (z `level.dat`). Zaznaczasz, które chcesz, a launcher **kopiuje** je do folderu `saves/` wybranej instancji – oryginałów nigdy nie przenosi ani nie usuwa. Gdy świat o takiej nazwie folderu już jest w instancji, kopia dostaje numer: `Nowy świat (2)`. Przy dużych światach widać pasek postępu (w oknie i w pasku bocznym). Świat otwierany ostatnio w **nowszej** wersji gry niż ma instancja jest oznaczony ostrzeżeniem *„Ten świat był otwierany w nowszej wersji gry – może się nie wczytać”* – ostrzeżenie niczego nie blokuje. Kopiowanie nie rusza, gdy gra tej instancji działa, a w jego trakcie nie da się tej instancji uruchomić.
+- **Ustawienia** (menu instancji → *Przenieś ustawienia z Minecrafta*): launcher zastępuje `options.txt` instancji plikiem ze zwykłego Minecrafta – klawisze, czułość myszy, grafika, dźwięk, język i lista włączonych paczek zasobów. Poprzedni plik instancji zostaje obok jako `options.txt.przed-importem` (zawsze ten sprzed ostatniego przeniesienia). Okno potwierdzenia mówi wprost, co zostanie nadpisane, a co zostaje. Same pliki paczek zasobów nie są kopiowane – dodaje się je w zakładce *Mody*.
+- **Przy nowej instancji** launcher raz, dyskretnie (komunikat w rogu z przyciskiem *Przenieś ustawienia*, który sam znika) proponuje przeniesienie ustawień – tylko wtedy, gdy na komputerze jest zwykły Minecraft z plikiem ustawień.
+
+## Udostępnianie instancji
+
+Instancję można przekazać znajomemu jako **przepis**: nazwa, wersja Minecrafta, loader i jego wersja, dodatki z Modrinth (mody, paczki zasobów, shadery – numer projektu, numer wersji i nazwa pliku), to, czy włączony jest Hammer Client, lista serwerów (tylko nazwa i adres) oraz – jeśli zechcesz – `options.txt`. **Żadne pliki nie są nigdzie wysyłane**: launcher znajomego pobiera dodatki z Modrinth po ich numerach.
+
+- **Eksport** (menu instancji → *Udostępnij*): okno pokazuje, co jest w przepisie, a czego w nim **nie** ma – pliki, które nie pochodzą z Modrinth, są wymienione z nazwy jako *„Nie da się udostępnić – dodaj ręcznie”*. (Mody dodane ręcznie, które Modrinth rozpoznaje po sumie kontrolnej, trafiają do przepisu.) Do wyboru są:
+  - **plik** `<nazwa>.hammerpack` (czytelny JSON),
+  - **kod** do skopiowania: `HL1.` + base64url z JSON-a spakowanego algorytmem deflate – tylko gdy kod ma najwyżej **6000 znaków**. Przy większej instancji okno proponuje sam plik i mówi dlaczego.
+- **Import** (*Instancje → Z kodu lub pliku*, albo upuszczenie pliku `.hammerpack` na okno launchera): wklejasz kod albo wybierasz plik → podgląd (nazwa, wersja gry, loader, liczba modów, serwery) → *Utwórz instancję*. Launcher tworzy **nową** instancję i pobiera dodatki zwykłą drogą z Modrinth, z paskiem postępu. Dodatki, których już nie ma na Modrinth, są wymienione na końcu – reszta instaluje się normalnie.
+
+Przepis w pliku wygląda tak:
+
+```json
+{
+  "format": "hammerpack",
+  "v": 1,
+  "name": "Survival z ekipą",
+  "mc": "1.21.1",
+  "loader": "fabric",
+  "loaderVersion": "0.16.10",
+  "hammerClient": true,
+  "content": [{ "type": "mod", "project": "AANobbMI", "version": "SMxNOGZ6", "file": "sodium-fabric-0.8.13+mc1.21.1.jar" }],
+  "servers": [{ "name": "HammerShop", "address": "mc.hammershop.pl" }],
+  "options": "…treść options.txt, tylko gdy ją dołączono…"
+}
+```
+
+`type` to `mod`, `resourcepack` albo `shader`; wyłączony dodatek ma dodatkowo `"off": true`; `loaderVersion` równe `null` oznacza „najnowsza zalecana”.
+
+**Kod i plik to dane z zewnątrz – launcher im nie ufa:**
+
+- wszystko przechodzi ścisłą kontrolę: nazwa do 48 znaków, najwyżej 500 dodatków i 100 serwerów, numery w formacie Modrinth, loader z listy znanych, adresy serwerów tylko w postaci `host` albo `host:port`, `options.txt` jako zwykły tekst do 64 KB; nieznane pola są pomijane,
+- wersja gry i wersja loadera muszą istnieć na prawdziwych listach wersji (wersja loadera, której już nie ma, jest zastępowana najnowszą zalecaną – podgląd o tym mówi),
+- kod dłuższy niż 6000 znaków jest odrzucany przed rozpakowaniem, a rozpakowywanie zatrzymuje się na 2 MB („bomba zip” nic nie zrobi); plik może mieć najwyżej 2 MB,
+- żadna ścieżka ani adres z przepisu nie służy do zapisu ani pobierania: pliki pochodzą wyłącznie z Modrinth, po numerze (nazwa pliku z przepisu jest tylko wyświetlana), a `options.txt` z przepisu trafia wyłącznie do `options.txt` nowej instancji.
+
+## Zaproszenia: `hammer://join`
+
+Właściciel serwera (albo zwykły gracz) wysyła link. Znajomy go klika, a launcher wychodzi na wierzch i pyta, co zrobić – **nic nie dzieje się bez potwierdzenia gracza**.
+
+Format linku:
+
+```
+hammer://join?server=<host[:port]>&name=<nazwa do pokazania>&mc=<wersja gry>&loader=<fabric|quilt|forge|neoforge|vanilla>&pack=<numer albo slug paczki modów na Modrinth>&icon=<adres https obrazka>
+```
+
+Wymagany jest tylko `server`. Ten sam zestaw parametrów przyjmuje strona sklepu `GET <website>/join?…` – otwiera launcher, a komuś, kto go nie ma, pokazuje, skąd go wziąć. Launcher czyta oba rodzaje linków.
+
+- **Po kliknięciu linku** (albo po wklejeniu go w *Serwery → Mam zaproszenie*) okno pokazuje nazwę i adres serwera, wersję gry i loader, o które prosi link, oraz wybór: jedna z Twoich instancji, która pasuje (ta sama wersja gry i loader), albo **Utwórz nową instancję** – z tymi ustawieniami. Gdy link ma `pack`, launcher najpierw pokazuje nazwę i autora paczki pobrane z Modrinth, a po zgodzie instaluje ją zwykłą instalacją paczek. Po potwierdzeniu serwer trafia na listę wybranej instancji, a okno kończy się przyciskiem **Graj**, który uruchamia grę od razu na tym serwerze.
+- **Tworzenie linku** (*Serwery →* ikona *Zaproś* przy serwerze): link z adresem i nazwą serwera oraz wersją gry i loaderem bieżącej instancji (gdy instancja powstała z paczki Modrinth – także z tą paczką, co można wyłączyć), przycisk *Kopiuj link* i informacja, że znajomy potrzebuje Hammer Launchera. Gdy w `launcher.config.json` jest `website` (https), link ma postać `<website>/join?…`, w przeciwnym razie `hammer://join?…`.
+- **Kontrola linku**: te same zasady co przy przepisach – adres tylko `host[:port]`, nazwa do 48 znaków, wersja gry z prawdziwej listy wersji, loader z listy znanych, `pack` jako numer albo slug Modrinth (i musi to być paczka modów). `icon` jest wyłącznie pokazywany w oknie, tylko gdy to adres `https` – proces główny launchera nigdy go nie pobiera. Nieznane parametry są pomijane. Zły link kończy się spokojnym komunikatem po polsku.
+- **Rejestracja protokołu**: launcher przy każdym starcie zgłasza się w systemie jako program do linków `hammer://` (`app.setAsDefaultProtocolClient`; w Windows wpis w rejestrze bieżącego użytkownika, z `--` przed adresem, żeby nic z linku nie zostało wzięte za przełącznik programu). Pakiety macOS i Linux deklarują protokół także przy budowie (`protocols` w `package.json`); instalator Windows (NSIS) sam takiego wpisu nie robi, więc linki zaczynają działać po pierwszym uruchomieniu launchera. Działa jedna kopia launchera naraz: link kliknięty przy otwartym launcherze trafia do niego (`second-instance`), link, którym launcher został uruchomiony, jest odczytywany z argumentów startu, a na macOS przychodzi zdarzeniem `open-url`.
+
+## Polecane serwery
+
+Karta **Polecane serwery** w zakładce *Serwery* (i wąski pasek na ekranie *Graj*) pokazuje serwery wybrane przez sklep: ikonę, nazwę, opis, tagi i liczbę graczy online (zwykły ping serwera). **Dodaj** dopisuje serwer do listy bieżącej instancji, a **Graj** prowadzi tą samą drogą co zaproszenie: pasująca instancja albo nowa.
+
+Lista pochodzi ze strony sklepu: `GET <shopApi albo website>/api/launcher/featured` → `{ "servers": [{ "id", "name", "address", "description", "tags": ["…"], "icon": "<https albo null>", "mc", "loader", "pack" }] }`. To trasa publiczna (bez kodu Hammer+), a launcher pyta o nią najwyżej raz na 5 minut. Gdy strona nie odpowiada albo lista jest pusta, karty po prostu nie ma – bez żadnego błędu. Teksty z API są traktowane jak dane z zewnątrz: pokazywane wyłącznie jako tekst i przycinane (nazwa 40 znaków, opis 200, najwyżej 6 tagów po 20 znaków, 25 serwerów).
+
+### Dla deweloperów: przenoszenie, przepisy, zaproszenia
+
+- Moduły (bez Electrona, z testami): `official.js` (światy i ustawienia zwykłego Minecrafta), `recipe.js` (przepisy: kontrola, kod, plik, eksport i import), `invite.js` (czytanie i budowanie linków), `featured.js` (lista polecanych); trasa `/featured` jest w `shopapi.js`. W `content.js` doszło `installVersion` (dokładna wersja z Modrinth, bez szukania zależności), a w `modrinth.js` zapytania zbiorcze `versionsByIds` / `projects` (po 100 numerów) i `author`.
+- W oknie: `views/official.js`, `views/share.js` i `views/invite.js` (okna dialogowe i karta polecanych); długie zadania zgłaszają postęp zdarzeniem `task:progress` z polem `scope` (`official-worlds`, `recipe`, `modpack`).
+- Kod i plik są czytane w procesie głównym; okno dostaje tylko podsumowanie i jednorazowy żeton, którym potwierdza instalację.
+
 ## Uruchomienie (deweloperskie)
 
 Wymagany Node.js 20+.
@@ -116,9 +189,9 @@ Pliki nie są podpisane certyfikatem, więc Windows SmartScreen pokaże ostrzeż
 | Pole | Co robi |
 |---|---|
 | `name`, `brand` | Nazwa launchera i marki (okno, Discord, instancja startowa). |
-| `website`, `shopUrl` | Przyciski *Strona* i *Sklep HammerShop* na ekranie głównym. |
+| `website`, `shopUrl` | Przyciski *Strona* i *Sklep HammerShop* na ekranie głównym. Gdy `website` jest adresem https, zaproszenia tworzone w launcherze mają postać `<website>/join?…` (bez niego: `hammer://join?…`). |
 | `discordInvite` | Link zaproszenia na Discorda, np. `https://discord.gg/abc`. **Puste = launcher bierze zaproszenie ze strony bota** (to, które bot utworzył przy `/zbuduj`). Najlepiej wpisać stałe zaproszenie (bez wygasania). |
-| `shopApi` | Adres strony bota HammerShop, jeśli jest inny niż `website` (np. `https://sklep.hammershop.pl`). Stąd launcher bierze produkty i zaproszenie, tu też trafia chmura Hammer+ (`/api/launcher`, tylko https). |
+| `shopApi` | Adres strony bota HammerShop, jeśli jest inny niż `website` (np. `https://sklep.hammershop.pl`). Stąd launcher bierze produkty, zaproszenie na Discorda i listę polecanych serwerów (`/api/launcher/featured`), tu też trafia chmura Hammer+ (`/api/launcher`, tylko https). |
 | `server.name`, `server.address` | Opcjonalnie: serwer Minecraft na ekranie głównym (status, liczba graczy, przycisk **Dołącz**). Puste = karta się nie pokazuje. |
 | `newsUrl` | Adres JSON z aktualnościami: `[{"title": "…", "body": "…", "tag": "Nowość", "date": "10.11.2026", "url": "https://…"}]`. Puste = wbudowane porady. |
 | `discordClientId` | ID aplikacji z Discord Developer Portal do statusu „Gra w…” (obraz `logo` w Rich Presence). |

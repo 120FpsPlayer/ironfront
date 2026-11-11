@@ -663,5 +663,66 @@ button.chip.plus-chip:hover{background:rgba(var(--gold-glow),.2);border-color:rg
 .skin-card{position:sticky;top:26px}
 @media (max-width:1150px){.plus-cols{grid-template-columns:minmax(0,1fr)}.plus-cols.on>:last-child{order:-1}.plus-acts .btn{min-width:150px}}
 
+/* ── bringing things over and passing them on: the official Minecraft, instance recipes, invitations, featured servers ── */
+[hidden]{display:none!important} /* a hidden button stays hidden (.btn sets its own display) */
+.toast .btn{display:flex;margin-top:8px}
+.modal-body>.form{grid-template-columns:minmax(0,1fr)}
+.done-note>svg.i{color:var(--ok)}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.task-bar:empty{display:none}
+.task-bar .label{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-bottom:6px}
+.task-bar .label b{min-width:0}
+.task-bar .label span{color:var(--dim);flex:none}
+.pick-list{display:flex;flex-direction:column;gap:8px}
+.pick-row{gap:12px}
+.pick-row .pic{width:40px;height:40px;border-radius:9px;background:var(--panel3);overflow:hidden;display:grid;place-items:center;color:var(--dim);flex:none}
+.pick-row .pic img{width:100%;height:100%;object-fit:cover}
+.pick-row .grow{min-width:0}
+.pick-row .title{gap:8px;min-width:0}
+.pick-row .title b{min-width:0}
+.pick-row .title .chip{flex:none}
+.pick-row small.warn{color:var(--warn)}
+.pick-row.off{opacity:.55;cursor:default}
+.pick-row input[type=radio]{accent-color:var(--accent)}
+.pick-row:has(input:checked){border-color:rgba(var(--glow),.5);background:rgba(var(--glow),.06)}
+.input.share-code{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.45;word-break:break-all;resize:none}
+.share-out{max-height:190px;overflow:auto}
+.share-out .installed-row{background:var(--bg2);padding:8px 12px}
+.share-out .installed-row .pic{width:32px;height:32px;border-radius:8px}
+.recipe-name{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:800;min-width:0}
+.recipe-name svg.i{color:var(--accent);flex:none}
+.invite-head{display:flex;align-items:center;gap:14px;padding:14px;border-radius:var(--r2);background:var(--bg2);border:1px solid var(--line)}
+.invite-head .pic{width:56px;height:56px;border-radius:12px;background:var(--panel3);overflow:hidden;display:grid;place-items:center;color:var(--dim);flex:none}
+.invite-head .pic img{width:100%;height:100%;object-fit:cover}
+.invite-head .pic svg.i{width:22px;height:22px}
+.invite-head .grow{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.invite-head b{font-size:16px;max-width:100%}
+.invite-head code{font:12.5px ui-monospace,Consolas,monospace;color:var(--accent2);overflow-wrap:anywhere}
+.featured{margin-top:16px}
+.feat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.feat{display:flex;gap:12px;padding:12px;border-radius:var(--r2);background:var(--bg2);border:1px solid var(--line);min-width:0}
+.feat .pic{width:48px;height:48px;border-radius:10px;background:var(--panel3);overflow:hidden;display:grid;place-items:center;color:var(--dim);flex:none}
+.feat .pic img{width:100%;height:100%;object-fit:cover}
+.feat .grow{min-width:0;display:flex;flex-direction:column;gap:6px;flex:1}
+.feat .title{gap:10px;min-width:0}
+.feat .title b{min-width:0;font-size:13.5px}
+.feat p{color:var(--muted);font-size:12.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.feat-status{display:inline-flex;align-items:center;gap:7px;flex:none;margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+.feat-status .dot{width:8px;height:8px;box-shadow:none}
+.feat-status .spinner{width:12px;height:12px}
+.feat-acts{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:2px}
+.feat-acts small{color:var(--dim);font-size:11.5px;margin-right:auto;min-width:0}
+.feat-acts .btn{flex:none}
+.featured-strip{margin-top:16px}
+.feat-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.feat.compact{align-items:center;padding:10px 12px}
+.feat.compact .pic{width:38px;height:38px;border-radius:9px}
+.feat.compact .grow{gap:1px}
+.feat.compact .feat-status{margin-left:0}
+/* in a narrow window the second-rank buttons of a page head keep only their icon (the title says what they do) */
+@media (max-width:1150px){.page-head .actions .wide{display:none}.feat-grid,.feat-strip{grid-template-columns:minmax(0,1fr)}}
+/* …and the least used one shows its text only in a wide window */
+@media (max-width:1400px){.page-head .actions .wider{display:none}}
+
 /* ten tabs still fit when the window is at its smallest */
 @media (max-height:720px){.nav-item{padding:8px 14px}.sidebar{padding-top:10px;padding-bottom:10px}.sidebar-foot{gap:8px}}

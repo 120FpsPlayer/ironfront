@@ -109,3 +109,26 @@ test('updates: Modrinth knows a newer version → it replaces the old file and k
   assert.deepEqual(done, ['Sodium']);
   assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'mods')), ['sodium-0.6.1.jar.disabled']);
 });
+
+test('installVersion: exactly the version given – no dependency lookup, nothing newer, another version of the project replaced', async () => {
+  const { content, instance, fetchFn, files } = setup();
+  // EntityCulling requires Fabric API – an exact install takes the one file and asks Modrinth for nothing.
+  assert.equal(await content.installVersion(instance, 'mod', CULL, PROJECTS.NNAgCjsB), 'entityculling-1.7.jar');
+  assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'mods')), ['entityculling-1.7.jar']);
+  assert.deepEqual(fetchFn.calls, ['https://cdn.modrinth.com/data/NNAgCjsB/versions/cull1/entityculling-1.7.jar']);
+  assert.deepEqual(content.list(instance, 'mod').map((m) => [m.title, m.projectId, m.versionId, m.versionNumber]), [['EntityCulling', 'NNAgCjsB', 'cull1', '1.7']]);
+  // Another version of a project that is already there takes its place.
+  const older = mrVersion({ id: 'cull0', projectId: 'NNAgCjsB', number: '1.6', file: { name: 'entityculling-1.6.jar', body: fabricJar({ id: 'entityculling', name: 'EntityCulling', version: '1.6' }) } });
+  files['entityculling-1.6.jar'] = fabricJar({ id: 'entityculling', name: 'EntityCulling', version: '1.6' });
+  older.files[0].hashes.sha1 = sha1(files['entityculling-1.6.jar']);
+  await content.installVersion(instance, 'mod', older, PROJECTS.NNAgCjsB);
+  assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'mods')), ['entityculling-1.6.jar']);
+  // The file has to be what its kind says, and the kind one the launcher knows; a wrong checksum is refused as always.
+  await assert.rejects(content.installVersion(instance, 'resourcepack', SODIUM, PROJECTS.AANobbMI), /nie pasuje do rodzaju dodatku/);
+  await assert.rejects(content.installVersion(instance, 'datapack', SODIUM, PROJECTS.AANobbMI), /Nieznany rodzaj dodatku/);
+  await assert.rejects(content.installVersion(instance, 'mod', { id: 'x', project_id: 'AANobbMI', files: [] }, PROJECTS.AANobbMI), /Brak pliku do pobrania/);
+  files['sodium-0.6.0.jar'] = Buffer.from('tampered');
+  await assert.rejects(content.installVersion(instance, 'mod', SODIUM, PROJECTS.AANobbMI), /suma kontrolna/);
+  assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'mods')), ['entityculling-1.6.jar']);
+  assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'resourcepacks')), []);
+});

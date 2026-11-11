@@ -100,6 +100,21 @@ function createContent({ modrinth, fetchFn }) {
     return name;
   }
 
+  /**
+   * Puts one exact Modrinth version into the instance – no dependency lookup, nothing replaced by a newer build.
+   * Used when an instance is rebuilt from a recipe (recipe.js): the list there is complete and exact.
+   * `version` and `project` are Modrinth's own objects; the file name and address come from them. Returns the file name.
+   */
+  async function installVersion(instance, type, version, project, { onProgress } = {}) {
+    if (!(type in DIRS)) throw new Error('Nieznany rodzaj dodatku.');
+    const file = primaryFile(version);
+    if (!file) throw new Error(`Brak pliku do pobrania: ${project?.title ?? version?.name ?? '?'}`);
+    if (!EXT[type].some((e) => String(file.filename).toLowerCase().endsWith(e))) throw new Error(`Plik ${safeName(file.filename)} nie pasuje do rodzaju dodatku.`);
+    const existing = installedProjects(instance).get(version.project_id);
+    if (existing && existing.versionId !== version.id) removeFile(instance, existing.type, existing.file);
+    return writeVersion(instance, type, version, project, onProgress);
+  }
+
   function removeFile(instance, type, name) {
     const dir = folder(instance, type);
     for (const f of [name, `${name}.disabled`]) fs.rmSync(path.join(dir, safeName(f)), { force: true });
@@ -189,7 +204,7 @@ function createContent({ modrinth, fetchFn }) {
     return done;
   }
 
-  return { list, identify, install, setEnabled, remove: (instance, type, name) => removeFile(instance, type, name), checkUpdates, update, installedProjects, folder };
+  return { list, identify, install, installVersion, setEnabled, remove: (instance, type, name) => removeFile(instance, type, name), checkUpdates, update, installedProjects, folder };
 }
 
 module.exports = { createContent, DIRS };

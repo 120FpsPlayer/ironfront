@@ -1,11 +1,15 @@
 'use strict';
 
 /**
- * The launcher's part of the HammerShop website API (Hammer+ only; the code is the Bearer token):
+ * The launcher's part of the HammerShop website API. Hammer+ only – the code is the Bearer token:
  *
  *   GET  <base>/cloud                      → { updatedAt, data }        404 = nothing stored yet
  *   PUT  <base>/cloud  { data, baseUpdatedAt? }  → { updatedAt }        409 → { error, updatedAt, data } (a newer copy)
  *   PUT  <base>/cape   { cape: "<id>" | null }   → { cape }
+ *
+ * and for everybody, without a code:
+ *
+ *   GET  <base>/featured                   → { servers: [{ id, name, address, description, tags, icon, mc, loader, pack }] }
  *
  * base = <shopApi or website from launcher.config.json>/api/launcher. Errors come as { error: "<Polish text>" }.
  * The shop may not be online (yet): no answer, a server error or a page that is not this API all end in one
@@ -16,6 +20,7 @@ const { USER_AGENT } = require('./net');
 
 const OFFLINE_NOTE = 'Chmura zadziała, gdy sklep HammerShop będzie online.';
 const MAX_BODY = 256 * 1024; // what PUT /cloud accepts
+const MAX_ANSWER = 1024 * 1024; // more than any answer of this API – a bigger one is not this API
 
 class ShopError extends Error {
   constructor(message, { offline = false, status = 0, conflict = null } = {}) {
@@ -41,20 +46,22 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
    * One request: { status, body } – body is the JSON object of the answer. A server error, a missing route and a
    * page that does not speak this API (a parked domain, a placeholder site) all count as "not online".
    * `missing` is what a 404 with a JSON body means for this call: true = "nothing there yet", a normal answer.
+   * `open` marks a public route: it is asked without a code (and no code is ever sent to it).
    */
-  async function call(method, pathname, code, json, { missing = false } = {}) {
+  async function call(method, pathname, code, json, { missing = false, open = false } = {}) {
     const root = base();
-    if (!root || !code) throw offline();
+    if (!root || (!code && !open)) throw offline();
     let res;
     let body = null;
     try {
       res = await fetchFn(root + pathname, {
         method,
-        headers: { authorization: `Bearer ${code}`, accept: 'application/json', 'user-agent': USER_AGENT, ...(json ? { 'content-type': 'application/json' } : {}) },
+        headers: { ...(open ? {} : { authorization: `Bearer ${code}` }), accept: 'application/json', 'user-agent': USER_AGENT, ...(json ? { 'content-type': 'application/json' } : {}) },
         body: json ? JSON.stringify(json) : undefined,
         signal: AbortSignal.timeout(timeoutMs),
       });
-      const parsed = JSON.parse(await res.text());
+      const text = await res.text();
+      const parsed = text.length <= MAX_ANSWER ? JSON.parse(text) : null;
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) body = parsed;
     } catch {
       if (!res) throw offline(); // no connection, no such host, no answer in time
@@ -103,7 +110,17 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     return { cape: typeof body.cape === 'string' ? body.cape : null };
   }
 
-  return { base, getCloud, putCloud, putCape };
+  /**
+   * The servers the shop recommends – the raw list of the answer (featured.js checks every field of it).
+   * Public: asked without a code. Throws the "not online" ShopError when the shop does not answer with a list.
+   */
+  async function getFeatured() {
+    const { status, body } = await call('GET', '/featured', null, null, { open: true });
+    if (status !== 200 || !Array.isArray(body.servers)) throw offline(status);
+    return body.servers;
+  }
+
+  return { base, getCloud, putCloud, putCape, getFeatured };
 }
 
 module.exports = { createShopApi, apiBase, ShopError, OFFLINE_NOTE, MAX_BODY };

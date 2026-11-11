@@ -10,6 +10,7 @@ const { USER_AGENT } = require('./net');
 const API = 'https://api.modrinth.com/v2';
 const SORTS = ['relevance', 'downloads', 'follows', 'newest', 'updated'];
 const TYPES = ['mod', 'resourcepack', 'shader', 'modpack'];
+const BATCH = 100; // ids per request of the "many at once" endpoints (they travel in the address)
 
 /** Which Modrinth loaders an instance can use: Quilt runs Fabric mods; resource packs are "minecraft". */
 function loadersFor(type, loader) {
@@ -63,11 +64,28 @@ function createModrinth({ fetchFn = (...a) => fetch(...a), userAgent = USER_AGEN
       return request('/search', { query: { query: String(query).slice(0, 200), facets, index: SORTS.includes(sort) ? sort : 'relevance', offset: Math.max(0, offset | 0), limit: Math.min(100, Math.max(1, limit | 0)) } });
     },
     project: (idOrSlug) => request(`/project/${encodeURIComponent(idOrSlug)}`),
-    projects: async (ids) => (ids.length ? request('/projects', { query: { ids } }) : []),
+    /** Many projects at once (ids or slugs), a hundred per request. */
+    async projects(ids) {
+      const out = [];
+      for (let i = 0; i < ids.length; i += BATCH) out.push(...((await request('/projects', { query: { ids: ids.slice(i, i + BATCH) } })) ?? []));
+      return out;
+    },
     /** Versions of a project, newest first, filtered by loaders and game versions. */
     versions: (idOrSlug, { loaders, gameVersions } = {}) =>
       request(`/project/${encodeURIComponent(idOrSlug)}/version`, { query: { ...(loaders?.length ? { loaders } : {}), ...(gameVersions?.length ? { game_versions: gameVersions } : {}) } }).then((v) => v ?? []),
     version: (id) => request(`/version/${encodeURIComponent(id)}`),
+    /** Many versions in few requests: [version] for the ids that exist – ids Modrinth does not know are simply missing. */
+    async versionsByIds(ids) {
+      const out = [];
+      for (let i = 0; i < ids.length; i += BATCH) out.push(...((await request('/versions', { query: { ids: ids.slice(i, i + BATCH) } })) ?? []));
+      return out;
+    },
+    /** Who a project is by – the name the search shows ("od …"); null when it cannot be told. */
+    async author(projectId) {
+      const res = await request('/search', { query: { facets: [[`project_id:${projectId}`]], limit: 1 } });
+      const hit = res?.hits?.find((h) => h.project_id === projectId);
+      return typeof hit?.author === 'string' && hit.author ? hit.author : null;
+    },
     /** sha1 → version, for files that are on Modrinth. */
     versionsByHashes: async (hashes) => (hashes.length ? (await request('/version_files', { body: { hashes, algorithm: 'sha1' } })) ?? {} : {}),
     /** sha1 → the newest version for these loaders / game versions (update check). */

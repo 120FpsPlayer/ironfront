@@ -8,6 +8,7 @@
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const { createPaths } = require('./paths');
 const { createSettings, sanitize, plusOnly } = require('./settings');
 const { createInstances } = require('./instances');
@@ -40,6 +41,10 @@ const cloudSync = require('./cloud');
 const { createBackgrounds, createMenuBackground, EXTENSIONS } = require('./background');
 const { loadCapes } = require('./capes');
 const autoBackup = require('./autobackup');
+const officialGame = require('./official');
+const recipes = require('./recipe');
+const invites = require('./invite');
+const { createFeatured } = require('./featured');
 
 /**
  * `trash(path)` moves a file or folder to the system trash (Electron's shell.trashItem in main.js). Without it –
@@ -47,10 +52,10 @@ const autoBackup = require('./autobackup');
  * `clientDir` is the bundled Hammer Client folder (versions.json + one jar per Minecraft version); `clientJar` is the
  * old single jar for 1.21 / 1.21.1. `versionsApi` replaces the version lists in the tests.
  * `pickFile({ title, filters })` opens the system's file dialog and resolves with a path or null (Electron's
- * dialog in main.js). `convertImage(data, { maxWidth, maxHeight })` makes PNG bytes that fit that size out of a
+ * dialog in main.js); `saveFile({ title, defaultName, filters })` is the "save as" dialog. `convertImage(data, { maxWidth, maxHeight })` makes PNG bytes that fit that size out of a
  * picture (Electron's nativeImage). `capes` is the list of Hammer+ capes (capes.json).
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now() }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now() }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const store = createSettings(paths.settings);
@@ -120,6 +125,19 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     take: (doc) => cloudSync.apply(doc, { settings, instances: instances.list(), skip: inGame }),
   });
   plusChanged(); // arms the timer for a code that ends while the launcher is open
+
+  const sharing = recipes.createSharing({ instances, content, modrinth, versionsApi, serverList });
+  const featured = createFeatured({ api: shop, now });
+  // What the player is looking at before saying yes: a recipe read from a code or file, an invitation from a link.
+  // The window gets a token and a description; the checked data itself stays here.
+  const pendingRecipes = new Map();
+  const pendingInvites = new Map();
+  const remember = (map, value) => {
+    const token = crypto.randomBytes(8).toString('hex');
+    map.set(token, value);
+    while (map.size > 8) map.delete(map.keys().next().value);
+    return token;
+  };
 
   games.on('log', (e) => emit('game:log', e));
   games.on('state', (e) => emit('game:state', e));
@@ -371,19 +389,168 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
    * Runs a long task with a progress bar in the sidebar ('task:progress', a few events per second at most).
    * A bar that was shown always ends at 100 % – also when the task fails – so it never hangs there.
    */
-  async function withProgress(label, fn) {
+  async function withProgress(label, fn, extra = {}) {
     let last = 0;
     const update = ({ done, total }) => {
       const now = Date.now();
       if (now - last < 150) return;
       last = now;
-      emit('task:progress', { label, done, total });
+      emit('task:progress', { ...extra, label, done, total });
     };
     try {
       return await fn(update);
     } finally {
-      if (last) emit('task:progress', { label, done: 1, total: 1 });
+      if (last) emit('task:progress', { ...extra, label, done: 1, total: 1 });
     }
+  }
+
+  /** A task that reports its own steps ({ label, done, total }) to the same bar; the bar always ends at 100 % too. */
+  async function withSteps(scope, fn) {
+    let label = null;
+    try {
+      return await fn((p) => {
+        label = p.label ?? label;
+        emit('task:progress', { scope, ...p });
+      });
+    } finally {
+      if (label != null) emit('task:progress', { scope, label, done: 1, total: 1 });
+    }
+  }
+
+  /* ── the official Minecraft, recipes, invitations ── */
+
+  /** The version manifest, newest first, as ids – null when it cannot be had quickly (the numbers decide then). */
+  function versionOrder() {
+    const wait = new Promise((resolve) => setTimeout(resolve, 2500, null).unref?.());
+    return Promise.race([versionsApi.minecraftVersions({ snapshots: true }).then((list) => list.map((v) => v.id), () => null), wait]);
+  }
+
+  /** A recipe that passed every check → what the window shows before „Utwórz instancję”. */
+  async function previewRecipe(recipe) {
+    const { loaderVersion, notes } = await sharing.check(recipe);
+    return { token: remember(pendingRecipes, recipe), summary: { ...recipes.summary(recipe), loaderVersion }, notes };
+  }
+
+  const loaderName = (loader) => recipes.LOADER_NAMES[loader] ?? loader;
+  const sameAddress = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  const short = (value, max) => String(value ?? '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+
+  /**
+   * The game a new instance for an invitation gets: the version and loader the link asks for; what it leaves
+   * open is filled in like for the first instance of the launcher (Fabric on the newest version Hammer Client
+   * supports, else the newest release). Throws InviteError when the loader has no build for that version.
+   */
+  async function gameFor({ mc = null, loader = null }) {
+    const offline = () => new invites.InviteError('Nie udało się sprawdzić wersji gry – sprawdź internet i spróbuj ponownie.');
+    const hasLoader = async (l, id) => (l === 'vanilla' ? true : (await versionsApi.loaderVersions(l, id).catch(() => [])).length > 0);
+    const wanted = loader ?? 'fabric';
+    if (mc) {
+      if (await hasLoader(wanted, mc)) return { mc, loader: wanted };
+      if (loader) throw new invites.InviteError(`${loaderName(loader)} nie ma wersji dla Minecrafta ${mc} – poproś o nowe zaproszenie.`);
+      return { mc, loader: 'vanilla' };
+    }
+    const releases = await versionsApi.minecraftVersions().catch(() => {
+      throw offline();
+    });
+    if (!releases.length) throw offline();
+    const client = hammerClient();
+    const preferred = client.available && ['fabric', 'quilt'].includes(wanted) ? [...client.versions].reverse().filter((id) => releases.some((v) => v.id === id)) : [];
+    for (const id of [...preferred, ...releases.slice(0, 8).map((v) => v.id)]) if (await hasLoader(wanted, id)) return { mc: id, loader: wanted };
+    if (loader) throw new invites.InviteError(`${loaderName(loader)} nie ma jeszcze wersji dla najnowszego Minecrafta – poproś o zaproszenie z wersją gry.`);
+    return { mc: releases[0].id, loader: 'vanilla' };
+  }
+
+  /**
+   * Everything the invitation window shows: the checked link, the modpack it asks for (name and author from
+   * Modrinth), the instances that fit and what a new one would be. Nothing is changed here.
+   */
+  async function describeInvite(invite) {
+    if (invite.mc) {
+      const versions = await versionsApi.minecraftVersions({ snapshots: true }).catch(() => {
+        throw new invites.InviteError('Nie udało się sprawdzić wersji gry z zaproszenia – sprawdź internet i spróbuj ponownie.');
+      });
+      if (!versions.some((v) => v.id === invite.mc)) throw new invites.InviteError(`To zaproszenie prosi o Minecrafta ${invite.mc}, a takiej wersji gry nie ma.`);
+    }
+    let pack = null;
+    if (invite.pack) {
+      const project = await modrinth.project(invite.pack);
+      if (!project || project.project_type !== 'modpack' || !recipes.MODRINTH_ID.test(String(project.id))) throw new invites.InviteError('Paczki modów z tego zaproszenia nie ma na Modrinth.');
+      const title = short(project.title, 80) || 'Paczka modów';
+      const loaders = invite.loader && invite.loader !== 'vanilla' ? [invite.loader] : undefined;
+      const version = (await modrinth.versions(project.id, { loaders, gameVersions: invite.mc ? [invite.mc] : undefined }))[0];
+      if (!version) throw new invites.InviteError(`Paczka „${title}” nie ma wersji${invite.mc ? ` dla Minecrafta ${invite.mc}` : ''}${loaders ? ` (${loaderName(invite.loader)})` : ''}.`);
+      const author = await modrinth.author(project.id).catch(() => null);
+      const gameVersions = Array.isArray(version.game_versions) ? version.game_versions.filter((v) => typeof v === 'string' && invites.MC_VERSION.test(v)) : [];
+      pack = {
+        id: project.id,
+        versionId: version.id,
+        title,
+        author: short(author, 40) || null,
+        iconUrl: invites.cleanIcon(project.icon_url),
+        version: short(version.version_number, 40) || null,
+        mc: invite.mc ?? gameVersions.at(-1) ?? null,
+        loader: invite.loader ?? (Array.isArray(version.loaders) ? version.loaders.find((l) => recipes.LOADER_NAMES[l]) : null) ?? null,
+      };
+    }
+    const mc = invite.mc ?? pack?.mc ?? null;
+    const loader = invite.loader ?? pack?.loader ?? null;
+    const fits = instances
+      .list()
+      .filter((i) => (!mc || i.mcVersion === mc) && (!loader || i.loader === loader))
+      .map((i) => ({
+        id: i.id,
+        name: i.name,
+        mcVersion: i.mcVersion,
+        loader: i.loader,
+        icon: i.icon,
+        modpack: i.modpack?.iconUrl ? { iconUrl: i.modpack.iconUrl } : null,
+        hasPack: Boolean(pack && i.modpack?.projectId === pack.id),
+        hasServer: serverList.list(i).some((s) => sameAddress(s.address, invite.server)),
+      }))
+      .sort((a, b) => b.hasPack - a.hasPack);
+    const create = pack ? { mc: pack.mc, loader: pack.loader, name: pack.title } : { ...(await gameFor({ mc: invite.mc, loader: invite.loader })), name: invite.name ?? invite.server };
+    const token = remember(pendingInvites, { invite, pack, fits: fits.map((f) => f.id), create });
+    return { token, invite, pack: pack && { title: pack.title, author: pack.author, iconUrl: pack.iconUrl, version: pack.version, mc: pack.mc, loader: pack.loader }, fits, create };
+  }
+
+  /**
+   * The player said yes: the server goes onto the list of the chosen instance – or of a new one, made the way the
+   * invitation asks (with `pack`, through the usual modpack install). Returns { instance, server, added, created }.
+   */
+  async function acceptInvite(token, { instanceId = null } = {}) {
+    const pending = pendingInvites.get(token);
+    if (!pending) throw new Error('To zaproszenie nie jest już otwarte – kliknij link jeszcze raz.');
+    const { invite, pack, create } = pending;
+    let instance;
+    if (instanceId) {
+      instance = need(instanceId);
+      if (!pending.fits.includes(instance.id)) throw new Error('Ta instancja nie pasuje do zaproszenia – wybierz inną albo utwórz nową.');
+    } else if (pack) {
+      instance = await withSteps('modpack', (onProgress) => modpacks.installFromModrinth({ projectId: pack.id, versionId: pack.versionId }, { onProgress }));
+    } else {
+      instance = instances.create({ name: sharing.freeInstanceName(short(create.name, 48) || 'Serwer'), mcVersion: create.mc, loader: create.loader, icon: 'hammer', optimized: create.loader !== 'vanilla', hammerClient: true });
+    }
+    const added = !serverList.list(instance).some((s) => sameAddress(s.address, invite.server));
+    if (added) serverList.add(instance, { name: invite.name ?? invite.server, address: invite.server });
+    if (!instanceId) settings.set({ selectedInstance: instance.id });
+    pendingInvites.delete(token);
+    return { instance: instances.get(instance.id), server: invite.server, name: invite.name ?? invite.server, added, created: !instanceId };
+  }
+
+  /** „Zaproś”: the link for one server of an instance, with the instance's game version and loader. */
+  function inviteLink(instanceId, address, { pack = true } = {}) {
+    const instance = need(instanceId);
+    const server = serverList.list(instance).find((s) => s.address === address);
+    if (!server) throw new Error('Nie ma już takiego serwera na liście – odśwież ją.');
+    const packId = recipes.MODRINTH_ID.test(String(instance.modpack?.projectId ?? '')) ? instance.modpack.projectId : null;
+    const name = short(String(server.name ?? '').replace(/§[0-9a-fk-or]/gi, ''), invites.MAX_NAME);
+    let link;
+    try {
+      link = invites.buildInvite({ server: server.address, name: name === server.address ? null : name, mc: instance.mcVersion, loader: instance.loader, pack: pack && packId ? packId : null }, { website: config.website });
+    } catch {
+      throw new Error('Dla tego adresu nie da się zrobić zaproszenia – zaproszenie przyjmuje tylko adres w postaci host albo host:port.');
+    }
+    return { link, web: link.startsWith('https://'), server: { name: name || server.address, address: server.address }, mc: instance.mcVersion, loader: instance.loader, pack: packId ? { name: short(instance.modpack.name, 80) || 'Paczka modów', included: Boolean(pack) } : null };
   }
 
   /* ── Hammer+: what the launcher does by itself after a game session ── */
@@ -611,6 +778,89 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       },
       removeBackup: async (id, file) => worldSaves.removeBackup(need(id), file, { trash }),
     },
+    /** The player's "normal" Minecraft (the official launcher's folder): what it has, and bringing it over. */
+    official: {
+      /** { available, servers, worlds, options } – what there is to bring over on this computer. */
+      info: () => {
+        const dir = officialDir && fs.existsSync(officialDir) ? officialDir : null;
+        return { available: Boolean(dir), servers: Boolean(dir) && fs.existsSync(path.join(dir, serverList.FILE)), worlds: Boolean(dir) && fs.existsSync(path.join(dir, 'saves')), options: officialGame.hasOptions(dir) };
+      },
+      /** Its worlds, newest first, like worlds.list – plus `newer`: last opened in a newer game than this instance has. */
+      worlds: async (id) => {
+        const instance = need(id);
+        const [list, order] = await Promise.all([officialGame.listWorlds(officialDir), versionOrder()]);
+        return list.map((w) => ({ ...w, newer: !w.broken && officialGame.isNewer(w.version, instance.mcVersion, order) }));
+      },
+      /** Copies the chosen worlds into the instance (the originals are only read): { copied, failed }. */
+      importWorlds: async (id, folders) => {
+        const instance = idle(id, 'świat skopiowany w trakcie gry mógłby się nie wczytać');
+        worldTasks.add(instance.id);
+        try {
+          return await officialGame.copyWorlds(folders, (folder, i, count) =>
+            withProgress(`Kopiowanie świata: ${folder}${count > 1 ? ` (${i + 1}/${count})` : ''}`, (onProgress) => officialGame.copyWorld(instance, officialDir, folder, { onProgress }), { scope: 'official-worlds' }),
+          );
+        } finally {
+          worldTasks.delete(instance.id);
+        }
+      },
+      /** Replaces the instance's options.txt with the official Minecraft's: { backup, lines }. */
+      importOptions: async (id) => officialGame.importOptions(idle(id, 'przy zamykaniu gra zapisałaby z powrotem swoje ustawienia'), officialDir),
+    },
+    /** Udostępnianie: an instance as a recipe – a code or a .hammerpack file. Nothing is uploaded. */
+    share: {
+      /** What „Udostępnij” shows: { summary, excluded, code, codeLength, maxCode, fileName, hasOptions, optionsLeftOut }. */
+      export: async (id, opts) => {
+        const instance = need(id);
+        const exp = await sharing.exportRecipe(instance, { options: Boolean(opts?.options) });
+        return { summary: exp.summary, excluded: exp.excluded, code: exp.code, codeLength: exp.codeLength, maxCode: recipes.MAX_CODE, fileName: exp.fileName, hasOptions: fs.existsSync(path.join(instance.dir, 'options.txt')), optionsLeftOut: exp.optionsLeftOut };
+      },
+      /** Asks where to save and writes <nazwa>.hammerpack: { file } – null when the dialog was closed. */
+      save: async (id, opts) => {
+        const exp = await sharing.exportRecipe(need(id), { options: Boolean(opts?.options), identify: false });
+        const picked = await saveFile?.({ title: 'Zapisz przepis instancji', defaultName: exp.fileName, filters: [{ name: 'Przepis instancji Hammer Launchera', extensions: [recipes.EXTENSION] }] });
+        if (!picked) return null;
+        const target = path.extname(picked).toLowerCase() === `.${recipes.EXTENSION}` ? picked : `${picked}.${recipes.EXTENSION}`;
+        try {
+          fs.writeFileSync(target, exp.json);
+        } catch (err) {
+          throw new Error(`Nie udało się zapisać pliku (${err.code ?? err.message}). Wybierz inny folder.`, { cause: err });
+        }
+        return { file: path.basename(target) };
+      },
+      /** A pasted code / a .hammerpack file → { token, summary, notes } for the preview. Throws what is wrong with it. */
+      readCode: async (code) => previewRecipe(recipes.decode(code)),
+      readFile: async (file) => previewRecipe(recipes.readFile(file)),
+      /** Opens the file dialog for a .hammerpack; null when it was closed. */
+      pick: async () => {
+        const file = await pickFile?.({ title: 'Wybierz przepis instancji', filters: [{ name: 'Przepis instancji Hammer Launchera', extensions: [recipes.EXTENSION] }] });
+        return file ? previewRecipe(recipes.readFile(file)) : null;
+      },
+      /** Builds the instance of a previewed recipe: { instance, installed, missing, notes }. */
+      install: async (token) => {
+        const recipe = pendingRecipes.get(token);
+        if (!recipe) throw new Error('Ten przepis nie jest już wczytany – wklej kod albo wybierz plik jeszcze raz.');
+        pendingRecipes.delete(token);
+        const result = await withSteps('recipe', (onProgress) => sharing.install(recipe, { onProgress }));
+        settings.set({ selectedInstance: result.instance.id });
+        return result;
+      },
+    },
+    /** Zaproszenia (hammer://join) and the same flow for a featured server. */
+    invite: {
+      /** A link, or { featured: "<id>" } → what the invitation window shows. Nothing is changed. */
+      read: async (input) => {
+        if (input && typeof input === 'object') {
+          const server = typeof input.featured === 'string' ? await featured.find(input.featured) : null;
+          if (!server) throw new invites.InviteError('Tego serwera nie ma już na liście polecanych – odśwież ją.');
+          return describeInvite(invites.cleanInvite({ server: server.address, name: server.name, mc: server.mc, loader: server.loader, pack: server.pack, icon: server.icon }));
+        }
+        return describeInvite(invites.parseInvite(input));
+      },
+      accept: (token, choice) => acceptInvite(String(token), { instanceId: choice?.instanceId ? String(choice.instanceId) : null }),
+      link: (id, address, opts) => inviteLink(id, String(address ?? ''), { pack: opts?.pack !== false }),
+    },
+    /** Polecane serwery: [{ id, name, address, description, tags, icon, mc, loader, pack }] – [] when there is nothing to show. */
+    featured: { list: () => featured.list() },
     cleanup: {
       usage: () => diskCleanup.usage(paths, instances.list()),
       plan: () => diskCleanup.plan(paths, instances.list(), cleanupOptions()),

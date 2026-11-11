@@ -222,6 +222,10 @@
       return drawBackups();
     }
 
+    // „Z Minecrafta”: copy worlds of the official Minecraft into this instance – shown when there is one on this computer.
+    const fromOfficial = h('button.btn', { hidden: true, title: 'Z Minecrafta – skopiuj światy ze zwykłego Minecrafta (z oficjalnego launchera) do tej instancji', 'aria-label': 'Z Minecrafta', onclick: () => inst() && HS.officialUi.worldsDialog(inst(), load) }, icon('download'), h('span.wide', 'Z Minecrafta'));
+    HS.officialUi.info().then((o) => (fromOfficial.hidden = !o.worlds));
+
     clear(
       root,
       h(
@@ -232,7 +236,8 @@
           h(
             'div.actions',
             h('button.btn.icon', { title: 'Odśwież', 'aria-label': 'Odśwież listę światów', onclick: () => load() }, icon('refresh')),
-            h('button.btn', { onclick: () => inst() && attempt(() => api.app.openFolder(inst().id, 'saves')) }, icon('folder'), 'Folder'),
+            fromOfficial,
+            h('button.btn', { title: 'Otwórz folder ze światami', 'aria-label': 'Folder', onclick: () => inst() && attempt(() => api.app.openFolder(inst().id, 'saves')) }, icon('folder'), h('span.wide', 'Folder')),
             picker.el,
           ),
         ),
