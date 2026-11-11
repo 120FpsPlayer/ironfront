@@ -24,7 +24,7 @@ jobs:
   test:
     name: Testy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
@@ -40,7 +40,7 @@ jobs:
         run: for f in src/renderer/js/*.js src/renderer/views/*.js src/preload.js; do node --check "$f"; done
       - name: Podgląd interfejsu (Chromium, bez błędów w konsoli)
         run: |
-          npx playwright install --with-deps chromium
+          for i in 1 2 3; do npx playwright install --with-deps chromium && break; echo "Instalacja Chromium nie powiodła się (próba $i) – ponawiam"; sleep 30; done
           node scripts/preview.js preview 1
       - uses: actions/upload-artifact@v4
         with:
@@ -136,7 +136,13 @@ jobs:
           cache: npm
           cache-dependency-path: hammer-launcher/package-lock.json
       - name: Xvfb i Mesa (OpenGL i Vulkan bez karty graficznej – Minecraft 26.3+ potrzebuje Vulkana)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+        # Serwery paczek Ubuntu bywają chwilowo niedostępne z maszyn GitHuba – kilka prób zamiast czerwonego testu.
+        run: |
+          for i in 1 2 3 4 5; do
+            sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null && break
+            echo "Instalacja paczek nie powiodła się (próba $i) – czekam i ponawiam"; sleep 30
+          done
+          command -v Xvfb
       - uses: actions/download-artifact@v4
         with:
           name: hammer-client
@@ -165,7 +171,13 @@ jobs:
           cache: npm
           cache-dependency-path: hammer-launcher/package-lock.json
       - name: Xvfb i Mesa (OpenGL i Vulkan bez karty graficznej – Minecraft 26.3+ potrzebuje Vulkana)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null
+        # Serwery paczek Ubuntu bywają chwilowo niedostępne z maszyn GitHuba – kilka prób zamiast czerwonego testu.
+        run: |
+          for i in 1 2 3 4 5; do
+            sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6 >/dev/null && break
+            echo "Instalacja paczek nie powiodła się (próba $i) – czekam i ponawiam"; sleep 30
+          done
+          command -v Xvfb
       - uses: actions/download-artifact@v4
         with:
           name: hammer-client
