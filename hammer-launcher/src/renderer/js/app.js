@@ -154,8 +154,11 @@
   HS.login = login;
 
   /* ── play / stop ── */
-  /** `server` ("host:port") joins that server, `world` (a folder in saves/) opens that world, `join` the launcher's own server. */
-  async function play(instanceId, { join = false, server = null, world = null, worldName = null } = {}) {
+  /**
+   * `server` ("host:port") joins that server, `world` (a folder in saves/) opens that world, `join` the launcher's own server.
+   * `benchmark` ({ seconds }) makes this start an FPS test in `world`: the game measures and closes by itself.
+   */
+  async function play(instanceId, { join = false, server = null, world = null, worldName = null, benchmark = null } = {}) {
     if (!state.account) {
       toast('warning', 'Najpierw zaloguj się kontem Microsoft.');
       return login();
@@ -170,16 +173,22 @@
     state.logs.set(instanceId, []);
     state.running.set(instanceId, 'preparing');
     state.progress.set(instanceId, { label: 'Przygotowanie…', percent: null });
+    if (benchmark) {
+      state.benchmarks.add(instanceId);
+      state.benchResults.delete(instanceId);
+    }
     bus.emit('game');
     drawNav();
     try {
-      const res = await api.game.launch(instanceId, { join, server, world });
+      const res = benchmark ? await api.benchmark.start(instanceId, { world, worldName, seconds: benchmark.seconds }) : await api.game.launch(instanceId, { join, server, world });
       if (state.running.get(instanceId) === 'preparing') state.running.set(instanceId, 'starting');
-      if (res?.memoryMb) toast('ok', `${server ? `Uruchamiam grę i łączę z ${server}` : 'Uruchamiam grę'} (${HS.fmt.mb(res.memoryMb)} RAM).`, 3000);
+      if (benchmark) toast('info', `Uruchamiam test FPS (${benchmark.seconds} s). Nie zamykaj gry – po pomiarze zamknie się sama.`, 7000);
+      else if (res?.memoryMb) toast('ok', `${server ? `Uruchamiam grę i łączę z ${server}` : 'Uruchamiam grę'} (${HS.fmt.mb(res.memoryMb)} RAM).`, 3000);
       // Minecraft older than 1.20 cannot open a world from the launcher.
       if (world && res && res.worldOpened === false) toast('info', `Ta wersja Minecrafta nie otwiera świata sama – wybierz „${worldName ?? world}” w grze: Tryb jednoosobowy.`, 9000);
     } catch (err) {
       state.running.delete(instanceId);
+      state.benchmarks.delete(instanceId);
       toast('err', err.message, 8000);
       if (/zaloguj/i.test(err.message)) state.refreshAccounts();
     } finally {
@@ -197,9 +206,12 @@
     bus.emit('game');
   });
   api.on('game:state', async (e) => {
-    if (e.state === 'starting' || e.state === 'running') state.running.set(e.instanceId, e.state);
-    else {
+    if (e.state === 'starting' || e.state === 'running') {
+      state.running.set(e.instanceId, e.state);
+      if (e.benchmark) state.benchmarks.add(e.instanceId); // an FPS test: the game closes by itself
+    } else {
       state.running.delete(e.instanceId);
+      state.benchmarks.delete(e.instanceId);
       if (e.state === 'crashed' && e.crash) {
         state.crashes.set(e.instanceId, e.crash);
         toast('err', `Gra się wyłączyła: ${e.crash.title}. Szczegóły w zakładce Konsola.`, 9000);
@@ -234,6 +246,39 @@
   });
   api.on('toast', (t) => toast(t.kind ?? 'info', t.text));
 
+  /* ── Test FPS: the game of a test closed – the result (or why there is none) goes to the card in Optymalizacja ── */
+  api.on('benchmark:done', (res) => {
+    state.benchmarks.delete(res.instanceId);
+    state.benchResults.set(res.instanceId, res);
+    bus.emit('benchmark', res);
+    bus.emit('game');
+    const look = current === 'optimize' && state.instance?.id === res.instanceId ? null : { label: 'Zobacz wynik', onClick: () => HS.openBenchmark(res.instanceId) };
+    if (res.ok) toast('ok', `Test FPS zakończony: średnio ${HS.fmt.fps(res.run.avg)} FPS${res.comparison ? ` (${res.comparison.text})` : ''}.`, 9000, look);
+    else toast('warning', 'Test FPS nie został ukończony.', 9000, look ? { ...look, label: 'Zobacz dlaczego' } : null);
+  });
+  /** Opens Optymalizacja for an instance with the „Test FPS” card in view. */
+  HS.openBenchmark = async (instanceId) => {
+    if (instanceId && state.instance?.id !== instanceId) await state.selectInstance(instanceId);
+    HS.benchUi.show();
+    go('optimize');
+  };
+
+  /* ── „Podsumowanie gry” after a session, and mod updates found in the background ── */
+  api.on('play:summary', (summary) => {
+    state.playSummary = summary ?? null;
+    bus.emit('summary', state.playSummary);
+  });
+  api.on('updates:status', (status) => {
+    state.updates = status ?? { checkedAt: null, total: 0, instances: [] };
+    bus.emit('updates', state.updates);
+  });
+  /** Opens the installed mods of an instance, where its updates are listed. */
+  HS.openUpdates = async (instanceId) => {
+    if (instanceId && state.instance?.id !== instanceId) await state.selectInstance(instanceId);
+    HS.modsUi.open('installed');
+    go('mods');
+  };
+
   api.on('cloud:conflict', (c) => HS.plusUi.cloudConflict(c));
   api.on('cloud:synced', () => bus.emit('cloud'));
 
@@ -252,6 +297,9 @@
       state.accounts = await api.accounts.list();
       await state.refreshInstances();
       for (const id of await api.game.running()) state.running.set(id, 'running');
+      for (const id of await api.benchmark.running()) state.benchmarks.add(id);
+      state.playSummary = await api.play.summary();
+      state.updates = await api.updates.status();
     } catch (err) {
       toast('err', err.message, 8000);
     }

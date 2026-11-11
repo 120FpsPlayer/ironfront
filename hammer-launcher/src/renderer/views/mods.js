@@ -1,5 +1,6 @@
 'use strict';
-/* Mody – browse Modrinth (mods, resource packs, shaders, modpacks), one-click sets and what is installed in an instance. */
+/* Mody – browse Modrinth (mods, resource packs, shaders, modpacks), one-click sets and what is installed in an instance –
+   with updates that first make a restore point, and „Cofnij ostatnią aktualizację” as the way back. */
 
 (() => {
   const { api, h, clear, icon, fmt, LOADERS, tile, bus, state, attempt } = HS;
@@ -53,9 +54,44 @@
   }
 
   let catCache = null;
+  let openTab = null; // HS.modsUi.open('installed'): the tab the next visit starts on
+
+  /** „Cofnąć ostatnią aktualizację?” – what exactly goes back. Resolves true when the player says yes. */
+  function undoDialog(point) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        m.close();
+        resolve(v);
+      };
+      const entries = point.entries.filter((e) => e.state !== 'failed');
+      const m = HS.modal({
+        title: 'Cofnąć ostatnią aktualizację?',
+        icon: 'undo',
+        body: h(
+          'div.form',
+          h('p.muted', `Aktualizacja z ${fmt.dateTime(point.createdAt)}. Launcher usunie nowe wersje i przywróci poprzednie pliki – będzie dokładnie tak, jak przed nią.`),
+          point.interrupted ? h('p.cloud-note', icon('info'), 'Ta aktualizacja została przerwana, zanim się skończyła. Cofnięcie przywróci wszystko, co zdążyła podmienić.') : null,
+          h(
+            'div.rows.share-out',
+            entries.map((e) =>
+              h('div.installed-row', h('div.pic', icon(e.type === 'mod' ? 'puzzle' : e.type === 'shader' ? 'sun' : 'image')), h('div.grow', { style: { minWidth: 0 } }, h('b.ellipsis', e.title), h('small.ellipsis', { style: { display: 'block' } }, `${e.new.versionNumber ?? e.new.file} → wraca ${e.old.versionNumber ?? e.old.file}`))),
+            ),
+          ),
+          h('div.hint', 'Stare pliki nie były usuwane – czekają w folderze instancji (.hammer/przywracanie). Launcher pamięta trzy ostatnie aktualizacje każdej instancji.'),
+        ),
+        foot: [h('button.btn.ghost', { type: 'button', onclick: () => finish(false) }, 'Anuluj'), h('button.btn.primary', { type: 'button', onclick: () => finish(true) }, icon('undo'), 'Cofnij aktualizację')],
+        onClose: () => finish(false),
+      });
+    });
+  }
 
   function render(root) {
-    const ui = { tab: 'browse', type: 'mod', query: '', sort: 'relevance', cats: new Set(), offset: 0, total: 0, installed: new Set(), updates: [] };
+    // `updates`: what has a newer version in this instance – mods, resource packs and shaders together.
+    const ui = { tab: openTab ?? 'browse', type: 'mod', query: '', sort: 'relevance', cats: new Set(), offset: 0, total: 0, installed: new Set(), updates: [] };
+    openTab = null;
     const inst = () => state.instance;
 
     const picker = HS.instancePicker();
@@ -403,12 +439,16 @@
       const summary = h('span.dim');
       const updBtn = h('button.btn', {}, icon('refresh'), 'Sprawdź aktualizacje');
       const updAll = h('button.btn.primary', { style: { display: 'none' } }, icon('arrow-up'), 'Aktualizuj wszystko');
+      const undoBtn = h('button.btn.sm', { style: { display: 'none' }, title: 'Przywraca pliki sprzed ostatniej aktualizacji i usuwa nowe' }, icon('undo'), 'Cofnij ostatnią aktualizację');
+      const note = h('div');
       let items = [];
+      let points = []; // the restore points of this instance, newest first
 
       async function load() {
         clear(list, [1, 2, 3].map(() => h('div.skeleton', { style: { height: '58px' } })));
         try {
-          items = await api.content.list(i.id, ui.type);
+          // What the last check found (also the quiet one in the background) and the way back, if there is one.
+          [items, ui.updates, points] = await Promise.all([api.content.list(i.id, ui.type), api.updates.list(i.id).catch(() => []), api.updates.points(i.id).catch(() => [])]);
           draw();
           // Files added by hand: look them up on Modrinth once (name, icon, updates).
           if (items.some((x) => !x.projectId)) {
@@ -428,9 +468,13 @@
         const t = TYPES[ui.type];
         const on = items.filter((x) => x.enabled).length;
         summary.textContent = items.length ? `${fmt.count(items.length, t.one, t.few, t.many)} · włączone: ${on}` : '';
-        const upd = new Map(ui.updates.map((u) => [u.file, u]));
+        const upd = new Map(ui.updates.filter((u) => u.type === ui.type).map((u) => [u.file, u]));
+        const elsewhere = ui.updates.length - upd.size;
         updAll.style.display = ui.updates.length ? '' : 'none';
         updAll.lastChild.textContent = `Aktualizuj wszystko (${ui.updates.length})`;
+        updAll.title = `Najpierw powstaje punkt przywracania – aktualizację da się cofnąć.${elsewhere ? ` W tym ${fmt.count(elsewhere, 'dodatek', 'dodatki', 'dodatków')} z pozostałych zakładek (mody, paczki tekstur, shadery).` : ''}`;
+        undoBtn.style.display = points.length ? '' : 'none';
+        clear(note, points[0]?.interrupted ? h('p.cloud-note', { style: { margin: '0 0 12px' } }, icon('warning'), 'Ostatnia aktualizacja została przerwana, zanim się skończyła. „Cofnij ostatnią aktualizację” przywróci pliki sprzed niej.') : null);
         if (!items.length) {
           return clear(list, HS.empty(t.icon, `Brak: ${t.label.toLowerCase()}`, 'Znajdź coś w zakładce Przeglądaj albo przeciągnij pliki tutaj.', h('button.btn.primary', { onclick: () => ((ui.tab = 'browse'), drawHead(), drawBody()) }, icon('search'), 'Przeglądaj')));
         }
@@ -444,7 +488,7 @@
                 `div.installed-row${x.enabled ? '' : '.off'}`,
                 h('div.pic', x.iconUrl ? h('img', { src: x.iconUrl, alt: '', loading: 'lazy' }) : icon(t.icon)),
                 h('div.grow', { style: { minWidth: 0 } }, h('b.ellipsis', x.title), h('small.ellipsis', { style: { display: 'block' } }, [x.versionNumber, x.file, fmt.size(x.size)].filter(Boolean).join(' · '))),
-                u ? h('button.chip.accent', { title: `Nowa wersja: ${u.latest.versionNumber}`, onclick: (e) => doUpdate([u], e.currentTarget) }, icon('arrow-up'), u.latest.versionNumber) : null,
+                u ? h('button.chip.accent', { title: `Nowa wersja: ${u.latest.versionNumber} – kliknij, żeby zaktualizować (da się cofnąć)`, onclick: (e) => doUpdate([u], e.currentTarget) }, icon('arrow-up'), u.latest.versionNumber) : null,
                 HS.toggle(x.enabled, (v) => attempt(() => api.content.toggle(i.id, ui.type, x.file, v)).then((r) => (r === undefined ? load() : ((x.enabled = v), draw())))),
                 h(
                   'button.btn.ghost.sm.icon.danger',
@@ -455,7 +499,7 @@
                       if (!(await HS.confirmDialog({ title: 'Usunąć?', text: `„${x.title}” zostanie usunięty z instancji.`, confirm: 'Usuń', danger: true }))) return;
                       if ((await attempt(() => api.content.remove(i.id, ui.type, x.file))) !== undefined) {
                         items = items.filter((y) => y !== x);
-                        ui.updates = ui.updates.filter((y) => y.file !== x.file);
+                        ui.updates = ui.updates.filter((y) => !(y.type === ui.type && y.file === x.file));
                         draw();
                       }
                     },
@@ -466,25 +510,30 @@
             }),
         );
       }
+      /** One update or all of them: the old files go into a restore point first, so it can be taken back. */
       async function doUpdate(updates, btn) {
-        await HS.busy(btn, async () => {
-          const done = await attempt(() => api.content.update(i.id, ui.type, updates));
-          if (!done) return;
-          HS.toast('ok', `Zaktualizowano: ${done.join(', ') || 'nic'}.`);
-          const files = new Set(updates.map((u) => u.file));
-          ui.updates = ui.updates.filter((u) => !files.has(u.file));
-          await load();
-        });
+        const res = await HS.busy(btn, () => attempt(() => api.updates.apply(i.id, updates)));
+        if (!res) return;
+        if (res.updated.length) HS.toast('ok', `Zaktualizowano: ${res.updated.map((u) => u.title).join(', ')}. Gdyby coś przestało działać, użyj „Cofnij ostatnią aktualizację”.`, 8000);
+        for (const f of res.failed.slice(0, 3)) HS.toast('warning', `${f.title} zostaje w starej wersji: ${f.error}`, 8000);
+        await load(); // (after the button is itself again: the list redraws its label)
       }
       updBtn.onclick = () =>
         HS.busy(updBtn, async () => {
-          const res = await attempt(() => api.content.updates(i.id, ui.type));
+          const res = await attempt(() => api.updates.check(i.id));
           if (!res) return;
           ui.updates = res;
           HS.toast(res.length ? 'info' : 'ok', res.length ? `Dostępne aktualizacje: ${res.length}.` : 'Wszystko jest aktualne.');
           draw();
         });
       updAll.onclick = () => doUpdate(ui.updates, updAll);
+      undoBtn.onclick = async () => {
+        if (!points[0] || !(await undoDialog(points[0]))) return;
+        const res = await HS.busy(undoBtn, () => attempt(() => api.updates.undo(i.id)));
+        if (!res) return load(); // (a half-done undo may have put some files back already)
+        HS.toast('ok', res.restored.length ? `Przywrócono poprzednie wersje: ${res.restored.map((r) => r.title).join(', ')}.` : 'Nie było czego przywracać – pliki są już na swoim miejscu.', 7000);
+        return load();
+      };
       filter.addEventListener('input', draw);
 
       const wrap = h(
@@ -498,7 +547,8 @@
           h('button.btn', { onclick: (e) => HS.busy(e.currentTarget, async () => ((await attempt(() => api.content.import(i.id, ui.type, []))) ?? []).length && load()) }, icon('plus'), 'Dodaj pliki'),
           h('button.btn.icon', { title: 'Otwórz folder', 'aria-label': 'Otwórz folder', onclick: () => attempt(() => api.app.openFolder(i.id, { mod: 'mods', resourcepack: 'resourcepacks', shader: 'shaderpacks' }[ui.type])) }, icon('folder')),
         ),
-        h('div', { style: { margin: '-4px 0 10px', fontSize: '12px' } }, summary),
+        h('div.installed-sum', h('span.grow', summary), undoBtn),
+        note,
         h('div.dropzone', icon('download'), ` Upuść pliki ${ui.type === 'mod' ? '.jar' : '.zip'}, aby dodać je do „${i.name}”`),
         list,
       );
@@ -546,5 +596,6 @@
     return () => ((bundleRun += 1), off(), off2());
   }
 
+  HS.modsUi = { open: (tab) => (openTab = tab) };
   HS.views.mods = { title: 'Mody', icon: 'puzzle', render };
 })();

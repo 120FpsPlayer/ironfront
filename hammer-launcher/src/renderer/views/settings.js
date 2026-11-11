@@ -1,6 +1,8 @@
 'use strict';
 /* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's look (colour; with Hammer+ any colour,
-   animated and own backgrounds), automatic world backups and the cloud (Hammer+), folders, disk space and clean-up, about. */
+   animated and own backgrounds), automatic world backups and the cloud (Hammer+), folders, disk space and clean-up, about.
+   Also the switches of the summary after a game, the background check for mod updates and the question before a
+   screenshot is uploaded for a link. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -281,6 +283,23 @@
     ram.addEventListener('change', () => set({ memoryMb: Number(ram.value) }).then(showRam));
 
     const javaInput = h('input.input', { value: s().javaPath ?? '', placeholder: 'Automatycznie (zalecane)', style: { width: '260px' }, onchange: (e) => set({ javaPath: e.target.value }) });
+
+    // „Pobieranie i pliki”: its last row only exists when a host for screenshot links is configured.
+    const filesCard = h(
+      'section.card',
+      h('div.card-head', icon('download'), h('h2', 'Pobieranie i pliki')),
+      row('Równoległe pobierania', 'Więcej = szybciej na dobrym łączu.', HS.select([4, 8, 16, 32, 48].map((n) => ({ value: n, label: `${n}` })), s().concurrentDownloads, (v) => set({ concurrentDownloads: Number(v) }))),
+      row('Sprawdzaj aktualizacje modów w tle', 'Przy starcie launchera i co 6 godzin. O nowych wersjach powie ekran Graj i znaczek przy instancji – nic nie instaluje się samo.', HS.toggle(s().modUpdateCheck !== false, (v) => set({ modUpdateCheck: v }))),
+      row('Folder launchera', state.info?.root ?? '', h('button.btn', { onclick: () => attempt(() => api.app.openFolder(null)) }, icon('folder'), 'Otwórz')),
+    );
+    let alive = true;
+    api.gallery
+      .shareInfo()
+      .then((info) => {
+        if (!alive || !info?.available) return;
+        filesCard.append(row('Pytaj przed udostępnieniem zrzutu ekranu', `„Udostępnij link” w Galerii wysyła zrzut do zewnętrznego serwisu (${info.service}). Launcher najpierw wyjaśnia, co to znaczy, i pyta o zgodę.`, HS.toggle(s().screenshotShareAsk !== false, (v) => set({ screenshotShareAsk: v }))));
+      })
+      .catch(() => {});
     const jvmArgs = h('textarea.input', { rows: 2, value: s().customJvmArgs ?? '', placeholder: 'np. -XX:+UseLargePages', onchange: (e) => set({ customJvmArgs: e.target.value }) });
 
     clear(
@@ -301,6 +320,7 @@
             row('Zamknij launcher po wyjściu z gry', null, HS.toggle(s().closeOnExit, (v) => set({ closeOnExit: v }))),
             row('Wersje snapshot', 'Pokazuj testowe wersje Minecrafta przy tworzeniu instancji.', HS.toggle(s().showSnapshots, (v) => set({ showSnapshots: v }))),
             row('Status w Discordzie', 'Pokaż znajomym, że grasz przez Hammer Launcher.', HS.toggle(s().discordRpc, (v) => set({ discordRpc: v }))),
+            row('Podsumowanie po grze', 'Po wyjściu z gry ekran Graj pokazuje, ile trwała sesja, łączny czas w instancji i zrobione zrzuty ekranu.', HS.toggle(s().playSummary !== false, (v) => set({ playSummary: v }))),
           ),
           h(
             'section.card',
@@ -320,12 +340,7 @@
             row('Własne argumenty Javy', 'Używane przy flagach „Własne”.', jvmArgs),
             row('Własna Java', 'Zostaw puste – launcher pobierze właściwą Javę dla każdej wersji.', javaInput),
           ),
-          h(
-            'section.card',
-            h('div.card-head', icon('download'), h('h2', 'Pobieranie i pliki')),
-            row('Równoległe pobierania', 'Więcej = szybciej na dobrym łączu.', HS.select([4, 8, 16, 32, 48].map((n) => ({ value: n, label: `${n}` })), s().concurrentDownloads, (v) => set({ concurrentDownloads: Number(v) }))),
-            row('Folder launchera', state.info?.root ?? '', h('button.btn', { onclick: () => attempt(() => api.app.openFolder(null)) }, icon('folder'), 'Otwórz')),
-          ),
+          filesCard,
           look.el,
           plusCard(),
           disk.el,
@@ -347,6 +362,7 @@
     showRam();
     const offs = [bus.on('accounts', acc.draw), bus.on('game', disk.draw)];
     return () => {
+      alive = false;
       disk.stop();
       offs.forEach((f) => f());
     };

@@ -244,10 +244,13 @@
     const grid = h('div.inst-grid');
     const draw = () => {
       const sel = state.instance?.id;
+      // Mod updates the background check found – a badge on the instance that leads to the list.
+      const updates = new Map((state.updates?.instances ?? []).map((u) => [u.id, u.count]));
       clear(
         grid,
         state.instances.map((i) => {
           const run = state.running.get(i.id);
+          const news = updates.get(i.id);
           return h(
             `div.inst-card${i.id === sel ? '.selected' : ''}`,
             { tabIndex: 0, onclick: () => state.selectInstance(i.id), ondblclick: () => editInstance(i), oncontextmenu: (e) => (e.preventDefault(), actions(i, e.currentTarget.querySelector('.more'))) },
@@ -259,6 +262,9 @@
               i.optimized && i.loader !== 'vanilla' ? HS.chip('Zoptymalizowana', 'ok', 'bolt') : null,
               HS.hammerClientOn(i) ? HS.chip('Hammer Client', 'accent', 'hammer') : null,
               i.modpack ? HS.chip(i.modpack.version ? `Paczka ${i.modpack.version}` : 'Paczka modów', null, 'box') : null,
+              news
+                ? h('button.chip.accent.update-badge', { type: 'button', title: 'Zobacz, co można zaktualizować', onclick: (e) => (e.stopPropagation(), HS.openUpdates(i.id)), ondblclick: (e) => e.stopPropagation() }, icon('arrow-up'), fmt.count(news, 'aktualizacja', 'aktualizacje', 'aktualizacji'))
+                : null,
             ),
             h(
               'div.foot',
@@ -293,7 +299,7 @@
     );
     draw();
     HS.officialUi.info().then((o) => (hasOfficialOptions = Boolean(o.options)));
-    const offs = [bus.on('instances', draw), bus.on('settings', draw), bus.on('game', draw)];
+    const offs = [bus.on('instances', draw), bus.on('settings', draw), bus.on('game', draw), bus.on('updates', draw)];
     return () => offs.forEach((f) => f());
   }
 

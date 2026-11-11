@@ -22,5 +22,9 @@
     "loader": "fabric",
     "optimized": true
   },
-  "plusPublicKey": "TLfA6SyBn+sRD2WZY5/uS6YodysdHopL5l2A2o93CtE="
+  "plusPublicKey": "TLfA6SyBn+sRD2WZY5/uS6YodysdHopL5l2A2o93CtE=",
+  "screenshotShare": {
+    "url": "https://litterbox.catbox.moe/resources/internals/api.php",
+    "time": "72h"
+  }
 }

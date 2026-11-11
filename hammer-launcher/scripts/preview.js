@@ -88,7 +88,7 @@ function mock() {
   }
 
   const now = Date.now();
-  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false };
+  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true };
   const instances = [
     { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
@@ -278,6 +278,70 @@ function mock() {
   const bundleMeta = (b) => ({ id: b.id, name: b.name, icon: b.icon, description: b.description, note: b.note, size: b.mods.length });
   // state of a part: 0 = no version for this game, 1 = available, 2 = installed
 
+  /* ── Test FPS, „Podsumowanie gry”, mod updates with restore points, screenshot links ── */
+  // Test FPS: the history of the main instance (newest first) – one test before „Zoptymalizuj”, one after.
+  const benchRun = (at, avg, low1, min, max, more = {}) => ({ at, seconds: 20, world: 'Nasz survival', worldName: 'Nasz survival', avg, low1, min, max, frames: Math.round(avg * 20), mc: '1.21.1', loader: 'fabric', mods: 14, optimization: ['Sodium', 'Lithium', 'FerriteCore'], memoryMb: 4096, client: '2.2.1', ...more });
+  const benchRuns = [
+    benchRun(now - 26 * 3600e3, 174.3, 88.1, 61, 300.2, { mods: 9, optimization: [] }),
+    benchRun(now - 4 * 864e5, 168.9, 84.6, 58.2, 291, { mods: 9, optimization: [], seconds: 10, memoryMb: 2560 }),
+    benchRun(now - 9 * 864e5, 152.4, 71, 44.9, 262.7, { mods: 8, optimization: [], world: 'New World', worldName: 'Miasto kreatywne', memoryMb: 2560 }),
+  ];
+  const benchCompare = (prev, run) => {
+    if (!prev || !run) return null;
+    const pct = (a, b) => Math.round(((a - b) / b) * 100);
+    const avg = pct(run.avg, prev.avg);
+    return { avg, low1: pct(run.low1, prev.low1), text: avg === 0 ? 'bez zmian średnio' : `${avg > 0 ? '+' : '−'}${Math.abs(avg)}% średnio`, sameWorld: prev.world === run.world };
+  };
+  const benchInfo = (id) => {
+    const i = instances.find((x) => x.id === id) ?? instances[0];
+    const base = { lengths: [10, 20, 30], seconds: 20, worlds: [], running: false, history: [], comparison: null };
+    if (!['fabric', 'quilt'].includes(i.loader)) return { ...base, available: false, reason: 'loader', note: 'Test FPS mierzy Hammer Client, a on działa tylko w instancjach Fabric i Quilt.' };
+    if (i.hammerClient === false) return { ...base, available: false, reason: 'off', note: 'W tej instancji Hammer Client jest wyłączony – włącz go w edycji instancji, żeby zmierzyć FPS.' };
+    const mine = id === 'hammershop';
+    const history = mine ? benchRuns.map((r) => ({ ...r })) : [];
+    return { ...base, available: true, reason: null, note: null, worlds: mine ? worlds.filter((w) => !w.broken).map((w) => ({ folder: w.folder, name: w.name, lastPlayed: w.lastPlayed, iconUrl: w.iconUrl })) : [], history, comparison: benchCompare(history[1], history[0]) };
+  };
+  let benchNow = null; // the test that "runs": { id, world, worldName, seconds }
+  /** The game of the running test closed: with a result (ok) or without one. */
+  window.__benchDone = (ok) => {
+    const t = benchNow;
+    benchNow = null;
+    window.__emit('game:state', { instanceId: t.id, state: 'exited', code: 0, playedMs: 41000, benchmark: true });
+    if (!ok) return window.__emit('benchmark:done', { instanceId: t.id, ok: false, reason: 'missing', reasons: ['Gra została zamknięta, zanim pomiar się skończył – po starcie nie zamykaj jej, zamknie się sama.', 'Świat się nie wczytał (albo wczytywał się bardzo długo) – otwórz go raz zwykłym „Graj” i spróbuj ponownie.'] });
+    const previous = benchRuns[0];
+    const run = benchRun(Date.now(), 240.6, 121.3, 88, 412.5, { seconds: t.seconds, world: t.world, worldName: t.worldName });
+    benchRuns.unshift(run);
+    return window.__emit('benchmark:done', { instanceId: t.id, ok: true, run, previous, comparison: benchCompare(previous, run) });
+  };
+
+  // „Podsumowanie gry”: what the launcher sends after a session; window.__session(shots, suggest) plays one.
+  let summary = null;
+  window.__session = (count = 3, suggestBenchmark = true) => {
+    const art = [['#7cc8ff', '#2f7a3f', 'Zamek'], ['#ffb36b', '#4a2b14', 'Nether'], ['#9be7ff', '#e7f7ff', 'Góry'], ['#b18cff', '#1c1036', 'End'], ['#ffd36b', '#2f7a3f', 'Wioska']];
+    summary = { instanceId: 'hammershop', name: 'Hammer', playedMs: 72 * 60e3, totalMs: 47 * 3600e3 + 37 * 60e3, endedAt: Date.now() - 20e3, screenshots: { count, shots: art.slice(0, Math.min(count, 5)).map(([c1, c2, label], n) => ({ file: `2026-11-11_18.2${n}.11.png`, url: scene(c1, c2, label), takenAt: Date.now() - n * 9 * 60e3 })) }, suggestBenchmark };
+    window.__emit('play:summary', summary);
+  };
+
+  // Mod updates: off until the preview switches the background check's answer on with window.__updates(true).
+  const upd = (type, file, title, current, to) => ({ type, file, title, current, latest: { id: `v-${title}`, versionNumber: to } });
+  const updSeed = () => [upd('mod', installed[3].file, "Xaero's Minimap", '25.0.0', '25.1.0'), upd('mod', installed[0].file, 'Sodium', 'mc1.21.4-0.6.5', 'mc1.21.4-0.6.6'), upd('shader', 'ComplementaryReimagined_r5.3.zip', 'Complementary Reimagined', 'r5.3', 'r5.4')];
+  const updFound = { hammershop: updSeed(), survival: [upd('mod', 'jei-1.20.1-forge-15.20.0.105.jar', 'Just Enough Items', '15.20.0.105', '15.20.0.112'), upd('mod', 'embeddium-0.3.30.jar', 'Embeddium', '0.3.30', '0.3.31')] };
+  let updOn = false;
+  let updMany = false;
+  const updPoints = []; // the restore points of the main instance, newest first
+  const updStatus = () => {
+    const rows = updOn ? instances.filter((i) => (i.id === 'hammershop' || updMany) && updFound[i.id]?.length).map((i) => ({ id: i.id, name: i.name, count: updFound[i.id].length })) : [];
+    return { checkedAt: updOn ? now : null, total: rows.reduce((sum, r) => sum + r.count, 0), instances: rows };
+  };
+  window.__updates = (on, many = false) => {
+    updOn = on;
+    updMany = many;
+    if (many) updFound.hammershop = updSeed(); // a later check found them again
+    window.__emit('updates:status', updStatus());
+  };
+  // An update that was cut off half-way (the launcher was closed in the middle).
+  window.__interrupted = () => updPoints.unshift({ id: '2026-11-11_20-41-07', createdAt: Date.now() - 5 * 60e3, interrupted: true, entries: [{ type: 'mod', title: 'Lithium', old: { file: 'lithium-fabric-0.14.3.jar', versionNumber: 'mc1.21.4-0.14.3' }, new: { file: 'lithium-fabric-0.14.4.jar', versionNumber: 'mc1.21.4-0.14.4' }, state: 'done' }, { type: 'mod', title: 'FerriteCore', old: { file: 'ferritecore-7.1.1-fabric.jar', versionNumber: '7.1.1' }, new: { file: 'ferritecore-7.1.2-fabric.jar', versionNumber: '7.1.2' }, state: 'planned' }] });
+
   window.hs = {
     on(ch, fn) {
       if (!listeners.has(ch)) listeners.set(ch, new Set());
@@ -285,9 +349,16 @@ function mock() {
       return () => listeners.get(ch).delete(fn);
     },
     pathForFile: (file) => (/\.hammerpack$/i.test(file?.name ?? '') ? `C:\\Users\\Gracz\\Downloads\\${file.name}` : null),
-    app: { info: async () => ({ plus: plusStatus(), version: '2.3.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ plus: plusStatus(), version: '2.4.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
-    settings: { get: async () => ({ ...settings }), set: async (p) => Object.assign(settings, p) && { ...settings } },
+    settings: {
+      get: async () => ({ ...settings }),
+      set: async (p) => {
+        Object.assign(settings, p);
+        if ('modUpdateCheck' in p) window.__updates(Boolean(p.modUpdateCheck) && updOn, updMany); // switched off: the badges go at once
+        return { ...settings };
+      },
+    },
     system: { info: async () => ({}) },
     news: { list: async () => [
       { title: 'Witaj w Hammer Launcherze!', body: 'Zaloguj się kontem Microsoft, wybierz instancję i kliknij GRAJ. Launcher sam pobierze grę, Javę i mody.', tag: 'Start' },
@@ -301,16 +372,57 @@ function mock() {
       loaders: async (l) => (l === 'vanilla' ? [] : [{ version: '0.16.10', stable: true }, { version: '0.16.9', stable: true }, { version: '0.16.8', stable: true }]),
     },
     instances: { list: async () => instances.map((i) => ({ ...i })), ensureDefault: async () => null, create: async (d) => (instances.push({ id: `nowa-${instances.length}`, playTimeMs: 0, lastPlayed: null, createdAt: Date.now(), ...d }), { ...instances.at(-1) }), update: async (id, p) => Object.assign(instances.find((i) => i.id === id), p), remove: async () => true, duplicate: async () => ({}), repair: async () => ({}), select: async () => true },
-    game: { launch: async () => new Promise(() => {}), stop: async () => true, logs: async () => LOG.map((line) => ({ line })), running: async () => [] },
+    game: { launch: async () => new Promise(() => {}), stop: async (id) => (benchNow?.id === id && window.__benchDone(false), true), logs: async () => LOG.map((line) => ({ line })), running: async () => [] },
     content: {
       list: async (id, type) => (type === 'mod' ? installed.map((x) => ({ ...x })) : []),
       identify: async () => 0,
       toggle: async () => true,
       remove: async () => true,
-      updates: async () => [{ file: installed[3].file, title: "Xaero's Minimap", current: '25.0.0', latest: { id: 'v', versionNumber: '25.1.0' } }],
-      update: async () => [],
       install: async () => ({ installed: ['x'], skipped: [], warnings: [] }),
       import: async () => [],
+    },
+    benchmark: {
+      info: async (id) => (await wait(120), { ...benchInfo(id), running: benchNow?.id === id }),
+      start: async (id, opts) => {
+        await wait(200);
+        benchNow = { id, world: opts.world, worldName: opts.worldName, seconds: opts.seconds };
+        window.__emit('game:state', { instanceId: id, state: 'starting', benchmark: true });
+        return { ok: true, memoryMb: 4096, benchmark: true };
+      },
+      running: async () => (benchNow ? [benchNow.id] : []),
+    },
+    play: { summary: async () => summary, dismiss: async () => ((summary = null), true) },
+    updates: {
+      status: async () => updStatus(),
+      list: async (id) => (updOn ? (updFound[id] ?? []).map((u) => ({ ...u, latest: { ...u.latest } })) : []),
+      check: async (id) => (await wait(200), (updFound[id] ?? []).map((u) => ({ ...u, latest: { ...u.latest } }))),
+      apply: async (id, items) => {
+        window.__emit('task:progress', { scope: 'updates', label: `Aktualizacja: ${items[0].title}`, done: 0, total: items.length });
+        await wait(350);
+        window.__emit('task:progress', { scope: 'updates', label: `Aktualizacja: ${items.at(-1).title}`, done: 1, total: 1 });
+        const entries = [];
+        for (const item of items) {
+          const mod = installed.find((x) => x.file === item.file);
+          const next = item.file.replace(item.current.replace(/^mc[\d.]+-/, ''), item.latest.versionNumber.replace(/^mc[\d.]+-/, ''));
+          entries.push({ type: item.type, title: item.title, old: { file: item.file, versionNumber: item.current }, new: { file: next, versionNumber: item.latest.versionNumber }, state: 'done' });
+          if (mod) Object.assign(mod, { file: next, versionNumber: item.latest.versionNumber });
+          updFound[id] = (updFound[id] ?? []).filter((u) => u.file !== item.file);
+        }
+        updPoints.unshift({ id: `2026-11-11_14-0${5 + updPoints.length}-33`, createdAt: Date.now(), interrupted: false, entries });
+        updPoints.splice(3);
+        window.__emit('updates:status', updStatus());
+        return { point: updPoints[0].id, updated: items.map((u) => ({ type: u.type, file: u.file, title: u.title, from: u.current, to: u.latest.versionNumber })), failed: [] };
+      },
+      undo: async (id) => {
+        await wait(250);
+        const point = updPoints.shift();
+        for (const e of point.entries) {
+          const mod = installed.find((x) => x.file === e.new.file);
+          if (mod) Object.assign(mod, { file: e.old.file, versionNumber: e.old.versionNumber });
+        }
+        return { point: point.id, restored: point.entries.filter((e) => e.state === 'done').map((e) => ({ type: e.type, title: e.title, from: e.new.versionNumber, to: e.old.versionNumber })) };
+      },
+      points: async (id) => (id === 'hammershop' ? updPoints.map((p) => ({ ...p, entries: p.entries.map((e) => ({ ...e })) })) : []),
     },
     modrinth: {
       search: async ({ type }) => (await wait(80), type === 'modpack' ? { hits: [hit(['Fabulously Optimized', 'robotkoer', 'Najlepsza paczka na FPS – wygląda jak vanilla, działa dużo szybciej.', 9.1e6, 3100, 'FO', '#6dd3ff', '#2563eb', ['optimization']], 0), hit(['Cobblemon Official', 'Cobblemon', 'Oficjalna paczka Cobblemon z kompletem modów.', 4.2e6, 2500, 'Co', '#ff9fb2', '#c2185b', ['adventure']], 1)], total_hits: 2 } : { hits: MODS.map(hit), total_hits: 18432 }),
@@ -333,11 +445,20 @@ function mock() {
       ] }),
     },
     gallery: {
-      list: async () => [
+      list: async (id) => [
         ['#7cc8ff', '#2f7a3f', 'Zachód słońca', 'hammershop'], ['#ffb36b', '#4a2b14', 'Nether', 'survival'], ['#9be7ff', '#e7f7ff', 'Góry', 'hammershop'], ['#b18cff', '#1c1036', 'End', 'fo'],
         ['#ffd36b', '#2f7a3f', 'Wioska', 'survival'], ['#7cc8ff', '#1d4ed8', 'Ocean', 'hammershop'], ['#ff8f8f', '#3b1010', 'Baza', 'survival'], ['#c3f07c', '#225c2a', 'Las', 'fo'],
-      ].map(([c1, c2, label, inst], i) => ({ instanceId: inst, instanceName: instances.find((x) => x.id === inst).name, file: `2026-11-0${(i % 9) + 1}_18.2${i}.11.png`, url: scene(c1, c2, label), size: 2.1e6, takenAt: now - i * 7.3 * 3600e3 })),
+      ].map(([c1, c2, label, inst], i) => ({ instanceId: inst, instanceName: instances.find((x) => x.id === inst).name, file: `2026-11-0${(i % 9) + 1}_18.2${i}.11.png`, url: scene(c1, c2, label), size: 2.1e6, takenAt: now - i * 7.3 * 3600e3 })).filter((x) => !id || x.instanceId === id),
       remove: async () => true, copy: async () => true, show: async () => true,
+      // „Udostępnij link”: window.__noShare = no host configured, window.__shareFails = the host does not answer.
+      shareInfo: async () => (window.__noShare ? { available: false, hours: null, service: null, ask: true } : { available: true, hours: 72, service: 'litterbox.catbox.moe', ask: settings.screenshotShareAsk !== false }),
+      share: async (id, file, opts) => {
+        if (settings.screenshotShareAsk !== false && opts?.agreed !== true) throw new Error('Najpierw potwierdź, że zrzut ekranu może zostać wysłany do zewnętrznego serwisu.');
+        if (opts?.remember) settings.screenshotShareAsk = false;
+        await gate(250);
+        if (window.__shareFails) throw new Error('Nie udało się wysłać zrzutu ekranu – serwis nie odpowiada. Sprawdź internet i spróbuj ponownie za chwilę.');
+        return { url: 'https://litter.catbox.moe/k3x9wq.png', hours: 72, expiresAt: Date.now() + 72 * 3600e3 };
+      },
     },
     optimizer: {
       info: async (id) => {
@@ -1464,6 +1585,327 @@ async function main() {
   await count('.modal .why-item', 2);
   await closeModal();
   await page.waitForTimeout(1700);
+
+  /* ── Test FPS, „Podsumowanie gry”, mod updates with a way back, a screenshot as a link ── */
+  await noToasts();
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+  const cardTop = (selector) =>
+    page.locator(selector).first().evaluate((el) => {
+      const view = document.getElementById('view');
+      view.style.scrollBehavior = 'auto';
+      view.scrollTop = el.offsetTop - 16;
+      view.style.scrollBehavior = '';
+    });
+
+  // Optymalizacja → Test FPS: the form, the last result next to the one before, the history.
+  await nav('Optymalizacja');
+  await page.waitForTimeout(500);
+  await count('.bench', 1);
+  await count('.bench-stat', 4);
+  // the broken world is not offered (how many worlds there are depends on the earlier "Z Minecrafta" steps)
+  await count('.bench .bench-form select', 1);
+  await count('.bench .bench-form select option:has-text("Stary swiat")', 0);
+  await cardTop('.bench');
+  await shot('100-test-fps');
+  await fits('Test FPS');
+  await page.locator('.bench-history summary').click();
+  await cardTop('.bench-result');
+  await shot('101-test-fps-historia');
+  await small('100b-test-fps-male-okno', async () => {
+    await cardTop('.bench');
+    await fits('Test FPS, małe okno');
+  });
+  await small('101b-test-fps-historia-male-okno', () => cardTop('.bench-result'));
+  // „Uruchom test”: the game starts as a test – the card and the start screen say that it closes by itself.
+  await page.locator('.bench .seg button', { hasText: '30 s' }).click();
+  await page.locator('.bench button', { hasText: 'Uruchom test' }).click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.__emit('game:state', { instanceId: 'hammershop', state: 'running', benchmark: true }));
+  await count('.bench-run', 1);
+  await count('.bench button:has-text("Uruchom test")', 0);
+  await cardTop('.bench');
+  await shot('102-test-fps-trwa');
+  await nav('Graj');
+  await page.waitForTimeout(300);
+  if (!(await page.locator('.play-progress').innerText()).includes('Trwa test FPS – gra zamknie się sama')) errors.push('Graj: nie widać, że trwa test FPS');
+  await shot('103-graj-test-fps');
+  // The game closed with a result: a message with „Zobacz wynik”, then the new result next to the previous one.
+  await noToasts();
+  await page.evaluate(() => window.__benchDone(true));
+  await page.waitForTimeout(300);
+  await count('.toast button', 1);
+  await shot('104-test-fps-koniec');
+  await page.locator('.toast button').click();
+  await page.waitForTimeout(600);
+  await count('.bench-run', 0);
+  await count('.bench .chip.ok', 1);
+  if (!(await page.locator('.bench .chip.ok').innerText()).includes('+38% średnio')) errors.push('Test FPS: nie widać różnicy „+38% średnio”');
+  await noToasts();
+  await shot('105-test-fps-wynik');
+  await fits('Test FPS – wynik');
+  await small('105b-test-fps-wynik-male-okno', async () => {
+    await cardTop('.bench');
+    await fits('Test FPS – wynik, małe okno');
+  });
+  // A test that left no result: „Test nie został ukończony” with the likely reasons; the last good result stays.
+  await page.locator('.bench button', { hasText: 'Uruchom test' }).click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.__emit('game:state', { instanceId: 'hammershop', state: 'running', benchmark: true }));
+  await page.locator('.bench-run button', { hasText: 'Przerwij' }).click();
+  await page.waitForTimeout(500);
+  await count('.bench-fail', 1);
+  await count('.bench-fail li', 2);
+  await noToasts();
+  await cardTop('.bench');
+  await shot('106-test-fps-nieukonczony');
+  await small('106b-test-fps-nieukonczony-male-okno', () => cardTop('.bench'));
+  await page.locator('.bench-fail button[title="Ukryj"]').click();
+  await count('.bench-fail', 0);
+  // Instances the test cannot run in get one line; one without a world is told to make one first.
+  await page.evaluate(() => HS.state.selectInstance('survival'));
+  await page.waitForTimeout(500);
+  await count('.bench .cloud-note', 1);
+  await count('.bench-form', 0);
+  await cardTop('.bench');
+  await shot('107-test-fps-forge');
+  await page.evaluate(() => HS.state.selectInstance('fo'));
+  await page.waitForTimeout(500);
+  await count('.bench .cloud-note', 1);
+  await count('.bench button:has-text("Uruchom test")', 0);
+  await cardTop('.bench');
+  await shot('108-test-fps-bez-swiata');
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+
+  // „Podsumowanie gry” on the start screen after a session: how long, the total, the screenshots, a pointer to the FPS test.
+  await nav('Graj');
+  await page.evaluate(() => window.__session(3, true));
+  await page.waitForTimeout(400);
+  await count('.summary-card', 1);
+  await count('.sum-shot', 3);
+  await count('.sum-hint', 1);
+  await shot('110-podsumowanie-gry');
+  await fits('Podsumowanie gry');
+  await small('110b-podsumowanie-gry-male-okno', () => fits('Podsumowanie gry, małe okno'));
+  await page.locator('.sum-shot').first().click(); // a thumbnail opens the gallery of that instance
+  await page.waitForTimeout(400);
+  await count('.shot', 3);
+  if ((await page.locator('.page-head select').inputValue()) !== 'hammershop') errors.push('Podsumowanie gry: Galeria nie pokazuje zrzutów tej instancji');
+  await shot('111-podsumowanie-galeria');
+  await nav('Graj');
+  await count('.summary-card', 1); // still there after a look elsewhere
+  await page.locator('.sum-hint button').click(); // the gentle link leads to the FPS test
+  await page.waitForTimeout(500);
+  await count('.bench', 1);
+  await nav('Graj');
+  await page.locator('.summary-card button[title="Zamknij"]').click();
+  await count('.summary-card', 0);
+  // Many screenshots and no pointer (the FPS test was run already).
+  await page.evaluate(() => window.__session(12, false));
+  await page.waitForTimeout(300);
+  await count('.sum-shot', 6);
+  await count('.sum-hint', 0);
+  await shot('112-podsumowanie-duzo-zrzutow');
+  await small('112b-podsumowanie-duzo-zrzutow-male-okno', () => fits('Podsumowanie gry (dużo zrzutów), małe okno'));
+  // The switch in Ustawienia → Gra.
+  await nav('Ustawienia');
+  await viewTop('h2', 'Gra');
+  await shot('113-ustawienia-podsumowanie');
+  await page.locator('.set-row', { hasText: 'Podsumowanie po grze' }).locator('.switch').click();
+  await nav('Graj');
+  await count('.summary-card', 0);
+  await nav('Ustawienia');
+  await page.locator('.set-row', { hasText: 'Podsumowanie po grze' }).locator('.switch').click();
+  await nav('Graj');
+  await count('.summary-card', 1);
+  await page.locator('.summary-card button[title="Zamknij"]').click();
+
+  // Mod updates found in the background: one card on the start screen, a badge on the instance, the list.
+  await page.evaluate(() => window.__updates(true));
+  await page.waitForTimeout(300);
+  await count('.update-line', 1);
+  if (!(await page.locator('.update-line').innerText()).includes('Aktualizacje modów: 3 w „Hammer”')) errors.push('Graj: zła treść karty aktualizacji');
+  await shot('120-graj-aktualizacje-modow');
+  await fits('Graj z aktualizacjami');
+  await small('120b-graj-aktualizacje-modow-male-okno', () => fits('Graj z aktualizacjami, małe okno'));
+  await nav('Instancje');
+  await count('.update-badge', 1);
+  await shot('121-instancje-znaczek-aktualizacji');
+  await small('121b-instancje-znaczek-male-okno', () => fits('Instancje ze znaczkiem, małe okno'));
+  await page.locator('.update-badge').click(); // → Mody → Zainstalowane, with what the check found
+  await page.waitForTimeout(500);
+  await count('.installed-row button.chip.accent', 2);
+  await count('button:has-text("Aktualizuj wszystko (3)")', 1);
+  await count('button:has-text("Cofnij ostatnią aktualizację"):visible', 0);
+  await shot('122-mody-aktualizacje');
+  // One update: a restore point appears, and with it „Cofnij ostatnią aktualizację”.
+  await page.locator('.installed-row', { hasText: 'Sodium' }).locator('button.chip.accent').click();
+  await page.waitForTimeout(800);
+  await count('.installed-row button.chip.accent', 1);
+  await count('button:has-text("Cofnij ostatnią aktualizację"):visible', 1);
+  await shot('123-mody-po-aktualizacji');
+  await noToasts();
+  await small('123b-mody-po-aktualizacji-male-okno', () => fits('Mody po aktualizacji, małe okno'));
+  await page.locator('button', { hasText: 'Aktualizuj wszystko (2)' }).click();
+  await page.waitForTimeout(800);
+  await count('.installed-row button.chip.accent', 0);
+  await count('button:has-text("Aktualizuj wszystko"):visible', 0);
+  await noToasts();
+  await nav('Graj');
+  await count('.update-line', 0); // nothing left to update
+  await nav('Mody');
+  await page.locator('.seg button', { hasText: 'Zainstalowane' }).click();
+  await page.waitForTimeout(400);
+  // The way back: what exactly is reversed, then the old versions are there again.
+  await page.locator('button', { hasText: 'Cofnij ostatnią aktualizację' }).click();
+  await page.waitForTimeout(300);
+  await count('.modal .installed-row', 2);
+  await shot('124-cofnij-aktualizacje');
+  await modalFits('Cofnij aktualizację');
+  await small('124b-cofnij-aktualizacje-male-okno', () => modalFits('Cofnij aktualizację, małe okno'));
+  await modalBtn('Cofnij aktualizację').click();
+  await page.waitForTimeout(700);
+  await count('.modal', 0);
+  if (!(await page.locator('.installed-row', { hasText: "Xaero's Minimap" }).innerText()).includes('25.0.0')) errors.push('Cofnij: stara wersja nie wróciła na listę');
+  await shot('125-mody-po-cofnieciu');
+  await noToasts();
+  // An update that was cut off half-way: the list says so, and the same button puts things back.
+  await page.evaluate(() => window.__interrupted());
+  await nav('Graj');
+  await nav('Mody');
+  await page.locator('.seg button', { hasText: 'Zainstalowane' }).click();
+  await page.waitForTimeout(400);
+  await count('.page .cloud-note', 1);
+  await shot('126-mody-przerwana-aktualizacja');
+  await page.locator('button', { hasText: 'Cofnij ostatnią aktualizację' }).click();
+  await page.waitForTimeout(300);
+  await count('.modal .cloud-note', 1);
+  await shot('127-cofnij-przerwana-aktualizacja');
+  await modalBtn('Cofnij aktualizację').click();
+  await page.waitForTimeout(700);
+  await count('.page .cloud-note', 0);
+  await noToasts();
+  // Several instances have updates: still one card, with a way into each.
+  await page.evaluate(() => window.__updates(true, true));
+  await nav('Graj');
+  await page.waitForTimeout(300);
+  await count('.update-line', 1);
+  await count('.update-line .chip', 2);
+  await shot('128-graj-aktualizacje-kilka-instancji');
+  await fits('Graj – aktualizacje w kilku instancjach');
+  await small('128b-graj-aktualizacje-kilka-instancji-male-okno', () => fits('Graj – aktualizacje w kilku instancjach, małe okno'));
+  await page.locator('.update-line .chip', { hasText: 'Survival z ekipą' }).click();
+  await page.waitForTimeout(500);
+  await count('button:has-text("Aktualizuj wszystko (2)")', 1);
+  await page.evaluate(() => HS.state.selectInstance('hammershop'));
+  // The switch in Ustawienia → Pobieranie i pliki: off – the card and the badges go.
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await viewTop('h2', 'Pobieranie i pliki');
+  await count('.set-row:has-text("Pytaj przed udostępnieniem zrzutu ekranu")', 1);
+  await shot('129-ustawienia-pobieranie-i-pliki');
+  await fits('Ustawienia – pobieranie i pliki');
+  await small('129b-ustawienia-pobieranie-i-pliki-male-okno', async () => {
+    await viewTop('h2', 'Pobieranie i pliki');
+    await fits('Ustawienia – pobieranie i pliki, małe okno');
+  });
+  await page.locator('.set-row', { hasText: 'Sprawdzaj aktualizacje modów w tle' }).locator('.switch').click();
+  await nav('Graj');
+  await count('.update-line', 0);
+  await nav('Instancje');
+  await count('.update-badge', 0);
+  await nav('Ustawienia');
+  await page.locator('.set-row', { hasText: 'Sprawdzaj aktualizacje modów w tle' }).locator('.switch').click();
+
+  // Galeria → a screenshot → „Udostępnij link”: the question first, then the link (on the clipboard).
+  await nav('Galeria');
+  await page.waitForTimeout(400);
+  await page.locator('.shot').first().click();
+  await count('.lightbox button:has-text("Udostępnij link")', 1);
+  await shot('130-galeria-udostepnij-link');
+  await small('130b-galeria-udostepnij-link-male-okno');
+  await page.locator('.lightbox button', { hasText: 'Udostępnij link' }).click();
+  await page.waitForTimeout(300);
+  await count('.modal .why-item', 4);
+  await shot('131-udostepnij-link-zgoda');
+  await modalFits('Udostępnij link – zgoda');
+  await small('131b-udostepnij-link-zgoda-male-okno', () => modalFits('Udostępnij link – zgoda, małe okno'));
+  // „Anuluj”: nothing is sent, the viewer stays open (Escape closes the dialog, not the picture).
+  await page.keyboard.press('Escape');
+  await count('.modal', 0);
+  await count('.lightbox', 1);
+  if (await page.evaluate(() => window.__clipboard === 'https://litter.catbox.moe/k3x9wq.png')) errors.push('Udostępnij link: link w schowku mimo anulowania');
+  await page.locator('.lightbox button', { hasText: 'Udostępnij link' }).click();
+  await page.locator('.modal label.check').click(); // „Nie pytaj ponownie”
+  await page.evaluate(() => (window.__hold = true));
+  await modalBtn('Wyślij i skopiuj link').click();
+  await page.waitForTimeout(300);
+  await shot('132-udostepnij-link-wysylanie');
+  await release();
+  await page.waitForTimeout(500);
+  await count('.modal input[readonly]', 1);
+  if ((await page.evaluate(() => window.__clipboard)) !== 'https://litter.catbox.moe/k3x9wq.png') errors.push('Udostępnij link: linku nie ma w schowku');
+  await shot('133-udostepnij-link-gotowe');
+  await modalFits('Udostępnij link – gotowe');
+  await small('133b-udostepnij-link-gotowe-male-okno', () => modalFits('Udostępnij link – gotowe, małe okno'));
+  await modalBtn('Gotowe').click();
+  await noToasts();
+  // „Nie pytaj ponownie” was ticked: the next one goes straight to the link.
+  await page.keyboard.press('ArrowRight');
+  await page.locator('.lightbox button', { hasText: 'Udostępnij link' }).click();
+  await page.waitForTimeout(600);
+  await count('.modal .why-item', 0);
+  await count('.modal input[readonly]', 1);
+  await modalBtn('Gotowe').click();
+  await noToasts();
+  // The host does not answer: a calm message, nothing on the clipboard changes.
+  await page.evaluate(() => ((window.__shareFails = true), (window.__clipboard = 'coś innego')));
+  await page.locator('.lightbox button', { hasText: 'Udostępnij link' }).click();
+  await page.waitForTimeout(600);
+  await count('.modal', 0);
+  await count('.toast.err', 1);
+  if ((await page.evaluate(() => window.__clipboard)) !== 'coś innego') errors.push('Udostępnij link: schowek zmieniony mimo błędu');
+  await shot('134-udostepnij-link-blad');
+  await noToasts();
+  await page.evaluate(() => (window.__shareFails = false));
+  // The delete question of the viewer is on top of the picture as well.
+  await page.locator('.lightbox button', { hasText: 'Usuń' }).click();
+  await page.waitForTimeout(300);
+  await modalFits('Usuń zrzut');
+  const onTop = await page.evaluate(() => {
+    const box = document.querySelector('.modal').getBoundingClientRect();
+    return Boolean(document.elementFromPoint(box.left + box.width / 2, box.top + 30)?.closest('.modal'));
+  });
+  if (!onTop) errors.push('Galeria: okno z pytaniem jest pod podglądem zrzutu');
+  await shot('135-galeria-pytanie-nad-podgladem');
+  await page.keyboard.press('Escape');
+  await count('.lightbox', 1);
+  await page.keyboard.press('Escape');
+  await count('.lightbox', 0);
+  // Ustawienia: the question can be switched back on.
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await count('.set-row:has-text("Pytaj przed udostępnieniem zrzutu ekranu") input:checked', 0);
+  await page.locator('.set-row', { hasText: 'Pytaj przed udostępnieniem zrzutu ekranu' }).locator('.switch').click();
+  await nav('Galeria');
+  await page.waitForTimeout(400);
+  await page.locator('.shot').first().click();
+  await page.locator('.lightbox button', { hasText: 'Udostępnij link' }).click();
+  await count('.modal .why-item', 4);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  // No host in launcher.config.json: the button is not there at all (and neither is the switch in Ustawienia).
+  await page.evaluate(() => (window.__noShare = true));
+  await nav('Graj');
+  await nav('Galeria');
+  await page.waitForTimeout(400);
+  await page.locator('.shot').first().click();
+  await count('.lightbox button:has-text("Udostępnij link")', 0);
+  await shot('136-galeria-bez-udostepniania');
+  await page.keyboard.press('Escape');
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await count('.set-row:has-text("Pytaj przed udostępnieniem zrzutu ekranu")', 0);
+  await page.evaluate(() => (window.__noShare = false));
 
   await browser.close();
   if (errors.length) {

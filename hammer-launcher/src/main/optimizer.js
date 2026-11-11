@@ -195,6 +195,23 @@ async function installPlanned({ content, instance, mods, onProgress }) {
   return result;
 }
 
+/**
+ * Which mods of the catalogue are among `items` (the installed mods of an instance, as content.list() gives
+ * them): their names, in the order of the list. Recognised by the Modrinth slug, the mod's own id or its name –
+ * so mods added by hand count too. Used to remember what an FPS test ran with.
+ */
+function performanceModsIn(items) {
+  const plain = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const known = new Map();
+  for (const m of PERFORMANCE_MODS) for (const k of [m.slug, m.name]) if (!known.has(plain(k))) known.set(plain(k), m.name);
+  const out = [];
+  for (const item of items ?? []) {
+    const name = [item.slug, item.modId, item.title].map((k) => known.get(plain(k))).find(Boolean);
+    if (name && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
 function createOptimizer({ modrinth, content }) {
   /**
    * What optimisation would do for an instance: { supported, mods: [{ slug, name, why, tier, available, installed,
@@ -290,4 +307,4 @@ function recommend({ totalMem, cpuCores = 4, javaMajor = 21, gpu = null }, insta
   return { memoryMb, jvmPreset: zgc ? 'zgc' : 'recommended', optionsPreset, turbo, gpuClass, reasons };
 }
 
-module.exports = { createOptimizer, resolveMods, visibleMods, installPlanned, mergeOptions, writeOptionsPreset, setGpuPreference, recommend, classifyGpu, PERFORMANCE_MODS, OPTION_PRESETS, TIERS };
+module.exports = { createOptimizer, resolveMods, visibleMods, installPlanned, performanceModsIn, mergeOptions, writeOptionsPreset, setGpuPreference, recommend, classifyGpu, PERFORMANCE_MODS, OPTION_PRESETS, TIERS };

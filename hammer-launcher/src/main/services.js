@@ -18,7 +18,7 @@ const { GameManager, buildLaunchOptions, countMods, memoryFor, priorityFor } = r
 const { createModrinth } = require('./modrinth');
 const { createContent } = require('./content');
 const { createModpacks } = require('./modpacks');
-const { createOptimizer, writeOptionsPreset, setGpuPreference, recommend, OPTION_PRESETS } = require('./optimizer');
+const { createOptimizer, writeOptionsPreset, setGpuPreference, recommend, performanceModsIn, OPTION_PRESETS } = require('./optimizer');
 const { createProgress } = require('./progress');
 const { ping } = require('./serverping');
 const { loadNews } = require('./news');
@@ -45,6 +45,10 @@ const officialGame = require('./official');
 const recipes = require('./recipe');
 const invites = require('./invite');
 const { createFeatured } = require('./featured');
+const fpsTest = require('./benchmark');
+const playSummary = require('./playsummary');
+const { createUpdates, createUpdateWatch } = require('./updates');
+const { createScreenshotShare } = require('./screenshare');
 
 /**
  * `trash(path)` moves a file or folder to the system trash (Electron's shell.trashItem in main.js). Without it –
@@ -53,9 +57,10 @@ const { createFeatured } = require('./featured');
  * old single jar for 1.21 / 1.21.1. `versionsApi` replaces the version lists in the tests.
  * `pickFile({ title, filters })` opens the system's file dialog and resolves with a path or null (Electron's
  * dialog in main.js); `saveFile({ title, defaultName, filters })` is the "save as" dialog. `convertImage(data, { maxWidth, maxHeight })` makes PNG bytes that fit that size out of a
- * picture (Electron's nativeImage). `capes` is the list of Hammer+ capes (capes.json).
+ * picture (Electron's nativeImage). `capes` is the list of Hammer+ capes (capes.json). `prepareFn` installs what an
+ * instance needs before a start (the tests replace it, so a start needs no downloads).
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now() }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const store = createSettings(paths.settings);
@@ -95,6 +100,9 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       if (locked.length) plus.need(locked[0]);
       const saved = store.set(patch);
       if (saved.selectedAccount !== before.selectedAccount) plusChanged();
+      // The background check for mod updates follows its switch at once.
+      if (saved.modUpdateCheck && !before.modUpdateCheck) updateWatch.run().catch(() => null);
+      if (!saved.modUpdateCheck && before.modUpdateCheck) updateWatch.clear();
       return saved;
     },
   };
@@ -114,6 +122,13 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   // Read again each time it is needed – the index is tiny, and a rebuilt mod is picked up without a restart.
   const hammerClient = () => loadHammerClient({ dir: clientDir, jar: clientJar });
   const worldTasks = new Set(); // instances with a world backup or restore in progress
+  const contentTasks = new Set(); // instances whose mods are being updated or put back
+  const benchRuns = new Map(); // instance id → the FPS test running there: { startedAt, seconds, world, worldName, snapshot }
+  let lastSummary = null; // „Podsumowanie gry” of the last session, until it is dismissed or a game starts
+  const updates = createUpdates({ content, modrinth });
+  const updateWatch = createUpdateWatch({ list: () => instances.list(), check: (instance) => updates.check(instance), enabled: () => Boolean(store.get().modUpdateCheck), onChange: (status) => emit('updates:status', status), now });
+  // „Udostępnij link”: the consent is the setting „Pytaj przed udostępnieniem zrzutu ekranu” switched off.
+  const screenShare = createScreenshotShare({ config, fetchFn, now, consent: { given: () => !store.get().screenshotShareAsk, remember: () => store.set({ screenshotShareAsk: false }) } });
   const sessionWork = new Set(); // what still runs after a game session: automatic backups, the cloud copy
   /** The cloud never reads or writes an instance whose game is running or being prepared. */
   const inGame = (instance) => games.isRunning(instance.id) || busy.has(instance.id);
@@ -141,10 +156,23 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
 
   games.on('log', (e) => emit('game:log', e));
   games.on('state', (e) => emit('game:state', e));
-  // After every game session – also one that crashed – the automatic world backups and the cloud copy (Hammer+).
+  // A game ended. An FPS test is not a game session: it leaves its result and nothing else. After every real
+  // session – also one that crashed – the play time is counted and the automatic world backups and the cloud
+  // copy (Hammer+) run; one that ended normally gets its summary on the start screen.
   games.on('state', (e) => {
-    const instance = e.state === 'exited' || e.state === 'crashed' ? instances.get(e.instanceId) : null;
-    if (instance) afterSession(instance, e.playedMs ?? 0);
+    if (e.state !== 'exited' && e.state !== 'crashed') return;
+    const bench = benchRuns.get(e.instanceId);
+    benchRuns.delete(e.instanceId);
+    const instance = instances.get(e.instanceId);
+    if (!instance) return;
+    if (e.benchmark || bench) {
+      if (bench) finishBenchmark(instance, bench, e);
+      return;
+    }
+    const playedMs = e.playedMs ?? 0;
+    const after = instances.patchInternal(instance.id, { playTimeMs: (instance.playTimeMs ?? 0) + playedMs }) ?? instance;
+    afterSession(after, playedMs);
+    summarizeSession(after, e.state, playedMs);
   });
 
   const need = (id) => {
@@ -207,12 +235,15 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
    * `server` ("host:port") joins that server, `world` (a folder in saves/) opens that world, `join` joins the
    * launcher's configured server. Returns { ok, memoryMb, versionId, worldOpened } – worldOpened is false when the
    * game version cannot open a world by itself and the player has to pick it in the game.
+   * `benchmark` ({ seconds, worldName }, only from startBenchmark below) makes this start an FPS test: the two
+   * arguments for Hammer Client are added to this one start – nothing of it is stored in the instance.
    */
-  async function launch(instanceId, { join, server, world } = {}) {
+  async function launch(instanceId, { join, server, world, benchmark = null } = {}) {
     let instance = need(instanceId);
     if (games.isRunning(instance.id)) throw new Error('Ta instancja już działa.');
     if (busy.has(instance.id)) throw new Error('Gra jest już przygotowywana.');
     if (worldTasks.has(instance.id)) throw new Error('Poczekaj, aż launcher skończy kopię zapasową świata – potem uruchom grę.');
+    if (contentTasks.has(instance.id)) throw new Error('Poczekaj, aż launcher skończy aktualizację modów – potem uruchom grę.');
     const joinAddress = server ? serverList.cleanAddress(server) : undefined;
     const openWorld = world && !joinAddress ? path.basename(worldSaves.worldDir(instance, world)) : undefined;
     busy.add(instance.id);
@@ -222,7 +253,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       const account = await accounts.launchAuth(s.selectedAccount);
       let prepared;
       try {
-        prepared = await prepareInstance({ paths, instance, settings: s, progress, instances });
+        prepared = await prepareFn({ paths, instance, settings: s, progress, instances });
       } catch (err) {
         throw new Error(`Nie udało się przygotować gry: ${describeError(err)}. Sprawdź internet i spróbuj ponownie.`, { cause: err });
       }
@@ -240,27 +271,46 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         }
       }
       // Hammer Client (custom menu, module panel, HUD) for supported Fabric versions.
+      let clientActive = false;
       try {
         shareCape().catch(() => null); // not awaited: the shop being slow or offline never holds the game back
         const res = await syncClient(instance);
+        clientActive = res.active;
         if (!res.active && res.reason === 'missing') emit('toast', { kind: 'warning', text: `Brak pliku Hammer Client dla Minecrafta ${instance.mcVersion} w launcherze – gra uruchomi się bez własnego menu.` });
       } catch (err) {
         emit('toast', { kind: 'warning', text: `Nie udało się przygotować Hammer Client: ${err.message}` });
       }
+      // The FPS test is measured by the mod – without it the game would start and never close by itself.
+      if (benchmark && !clientActive) throw new Error('Nie udało się przygotować Hammer Client w tej instancji, a to on mierzy FPS. Spróbuj ponownie.');
       if (s.gpuPreference) await setGpuPreference(prepared.javaPath);
       progress.stage('launch');
-      const options = buildLaunchOptions({ paths, instance, settings: s, account, versionId: prepared.versionId, javaPath: prepared.javaPath, javaMajor: prepared.javaMajor, totalMem: os.totalmem(), modCount: countMods(instance.dir), config, join: join ? true : undefined, server: joinAddress, world: openWorld });
-      instances.patchInternal(instance.id, { lastPlayed: Date.now() });
-      await games.start({
-        instance,
-        options,
-        priority: priorityFor(instance, s),
-        onExit: ({ playedMs }) => {
-          const current = instances.get(instance.id);
-          if (current) instances.patchInternal(instance.id, { playTimeMs: (current.playTimeMs ?? 0) + playedMs });
-          presence?.clear();
-        },
-      });
+      const modCount = countMods(instance.dir);
+      let options = buildLaunchOptions({ paths, instance, settings: s, account, versionId: prepared.versionId, javaPath: prepared.javaPath, javaMajor: prepared.javaMajor, totalMem: os.totalmem(), modCount, config, join: join ? true : undefined, server: joinAddress, world: openWorld });
+      if (benchmark) {
+        if (!options.quickPlaySingleplayer) throw new Error('Ta wersja Minecrafta nie otwiera świata sama, więc test FPS w niej nie zadziała.');
+        options = fpsTest.withBenchmark(options, benchmark.seconds);
+        fpsTest.clearResult(instance); // a result left by an earlier run must not be taken for this one
+        benchRuns.set(instance.id, {
+          startedAt: now(),
+          seconds: fpsTest.clampSeconds(benchmark.seconds),
+          world: openWorld,
+          worldName: benchmark.worldName ?? openWorld,
+          // What the test ran with – remembered next to its numbers.
+          snapshot: { mc: instance.mcVersion, loader: instance.loader, mods: modCount, optimization: performanceModsIn(content.list(instance, 'mod').filter((m) => m.enabled)), memoryMb: options.maxMemory },
+        });
+      } else instances.patchInternal(instance.id, { lastPlayed: Date.now() });
+      // A new game: the summary of the one before has had its time.
+      if (lastSummary) {
+        lastSummary = null;
+        emit('play:summary', null);
+      }
+      try {
+        await games.start({ instance, options, priority: priorityFor(instance, s), benchmark: Boolean(benchmark), onExit: () => presence?.clear() });
+      } catch (err) {
+        benchRuns.delete(instance.id);
+        throw err;
+      }
+      if (benchmark) return { ok: true, memoryMb: options.maxMemory, versionId: prepared.versionId, worldOpened: true, benchmark: true };
       const invite = await community.invite().catch(() => null);
       const buttons = [invite && { label: 'Dołącz do Discorda', url: `https://discord.gg/${invite}` }, config.shopUrl && { label: `Sklep ${config.brand ?? 'HammerShop'}`.slice(0, 32), url: config.shopUrl }].filter(Boolean);
       presence?.set({
@@ -292,6 +342,81 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       emit('toast', { kind: 'warning', text: `Nie udało się przygotować tła menu w grze (${err.code ?? err.message}). Gra uruchomi się bez niego.` });
     }
     return res;
+  }
+
+  /* ── Test FPS and „Podsumowanie gry” ── */
+
+  /** Everything the „Test FPS” card shows: whether the test can run here, the worlds to run it in, the history. */
+  async function benchmarkInfo(instanceId) {
+    const instance = need(instanceId);
+    const can = fpsTest.availability(instance, hammerClient());
+    const worlds = can.ok ? (await worldSaves.list(instance)).filter((w) => !w.broken).map((w) => ({ folder: w.folder, name: w.name, lastPlayed: w.lastPlayed, iconUrl: w.iconUrl })) : [];
+    const history = fpsTest.history(instance);
+    return { available: can.ok, reason: can.reason, note: can.note, lengths: [...fpsTest.LENGTHS], seconds: fpsTest.DEFAULT_SECONDS, worlds, running: benchRuns.has(instance.id), history, comparison: fpsTest.compare(history[1], history[0]) };
+  }
+
+  /** „Uruchom test”: starts the game straight into `world` with the test arguments for this one start. */
+  async function startBenchmark(instanceId, { world, worldName, seconds } = {}) {
+    const instance = need(instanceId);
+    const can = fpsTest.availability(instance, hammerClient());
+    if (!can.ok) throw new Error(can.note);
+    if (!world) throw new Error('Wybierz świat, w którym launcher ma zmierzyć FPS.');
+    const folder = path.basename(worldSaves.worldDir(instance, world)); // throws when there is no such world
+    return launch(instance.id, { world: folder, benchmark: { seconds: fpsTest.clampSeconds(seconds), worldName: short(worldName, 80) || folder } });
+  }
+
+  /**
+   * The game of an FPS test closed: the result is read (only one written after the test was started; the file
+   * is removed either way), goes into the history of the instance and to the window – 'benchmark:done' with
+   * { instanceId, ok: true, run, previous, comparison } or { instanceId, ok: false, reason, reasons }.
+   */
+  function finishBenchmark(instance, bench, e) {
+    const taken = fpsTest.takeResult(instance, { since: bench.startedAt });
+    let payload;
+    if (taken.ok) {
+      const r = taken.result;
+      const run = { at: r.finishedAt, seconds: r.seconds ?? bench.seconds, world: bench.world, worldName: bench.worldName, avg: r.avg, low1: r.low1, min: r.min, max: r.max, frames: r.frames, ...bench.snapshot, mc: r.mc ?? bench.snapshot.mc, client: r.version };
+      try {
+        const saved = fpsTest.record(instance, run);
+        payload = { instanceId: instance.id, ok: true, run: saved.run, previous: saved.previous, comparison: fpsTest.compare(saved.previous, saved.run) };
+      } catch {
+        payload = { instanceId: instance.id, ok: true, run: fpsTest.cleanRun(run), previous: null, comparison: null }; // the history could not be saved – the result still counts
+      }
+    } else {
+      const stopped = e.state === 'crashed' && e.code == null; // stopped from the launcher
+      payload = { instanceId: instance.id, ok: false, reason: taken.reason, reasons: fpsTest.failureReasons(taken.reason, { crashed: e.state === 'crashed' && !stopped, stopped }) };
+    }
+    emit('benchmark:done', payload);
+    return payload;
+  }
+
+  /** „Podsumowanie gry” for a session that just ended – kept until it is dismissed or the next game starts. */
+  function summarizeSession(instance, state, playedMs) {
+    if (!playSummary.worthShowing({ state, playedMs, enabled: settings.get().playSummary })) return null;
+    let summary = null;
+    try {
+      // The gentle pointer to the FPS test: only where it can run and never has.
+      const suggestBenchmark = fpsTest.availability(instance, hammerClient()).ok && !fpsTest.history(instance).length;
+      summary = playSummary.summarize({ instance, state, playedMs, endedAt: now(), suggestBenchmark });
+    } catch {
+      summary = null; // a summary is a nicety – it never gets in the way of what follows a session
+    }
+    if (!summary) return null;
+    lastSummary = summary;
+    emit('play:summary', summary);
+    return summary;
+  }
+
+  /** One update (or undo) of an instance's mods at a time – never under a running game, which holds those files. */
+  async function contentTask(instanceId, what, fn) {
+    const instance = idle(instanceId, what);
+    if (contentTasks.has(instance.id)) throw new Error('Poczekaj, aż skończy się poprzednia aktualizacja.');
+    contentTasks.add(instance.id);
+    try {
+      return await fn(instance);
+    } finally {
+      contentTasks.delete(instance.id);
+    }
   }
 
   /** The Java an instance starts with: its own Java, else what the game version asks for (a guess until installed). */
@@ -743,6 +868,55 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       list: (instanceId) => listScreenshots(instances, instanceId ? [need(instanceId)] : instances.list()),
       remove: (instanceId, file) => removeScreenshot(need(instanceId), file),
       file: (instanceId, file) => screenshotPath(need(instanceId), file),
+      /** „Udostępnij link”: { available, hours, service, ask } – without `available` the button is not shown. */
+      shareInfo: () => screenShare.info(),
+      /** Uploads one screenshot of an instance to the configured host: { url, hours, expiresAt }. Needs the player's yes. */
+      share: (instanceId, file, opts) => screenShare.share(screenshotPath(need(instanceId), file), { agreed: opts?.agreed === true, remember: opts?.remember === true }),
+    },
+    /** Test FPS (Optymalizacja): the card's data, the start, and which instances are being measured right now. */
+    benchmark: { info: benchmarkInfo, start: startBenchmark, running: () => [...benchRuns.keys()] },
+    /** „Podsumowanie gry”: the summary of the last session (null when there is none) and its dismissal. */
+    play: {
+      summary: () => lastSummary,
+      dismiss: () => {
+        lastSummary = null;
+        return true;
+      },
+    },
+    /** Aktualizacje modów: the background check, updating with a restore point, and the way back. */
+    updates: {
+      /** { checkedAt, total, instances: [{ id, name, count }] } – what the badges and the start screen show. */
+      status: () => updateWatch.status(),
+      /** What is known to have an update in one instance (from the last check): [{ type, file, title, current, latest }]. */
+      list: (id) => updateWatch.items(need(id).id),
+      /** Asks Modrinth now – every kind of content of the instance. */
+      check: async (id) => {
+        const instance = need(id);
+        const items = await updates.check(instance);
+        updateWatch.set(instance.id, items);
+        return items;
+      },
+      /** „Aktualizuj wszystko” and single updates: { point, updated, failed } – see updates.js. */
+      apply: (id, items) =>
+        contentTask(id, 'aktualizacja podmienia pliki, których gra właśnie używa', async (instance) => {
+          const res = await withSteps('updates', (onProgress) => updates.apply(instance, items, { onProgress, now: new Date(now()) }));
+          const gone = new Set(res.updated.map((u) => `${u.type}/${u.file}`));
+          updateWatch.set(instance.id, updateWatch.items(instance.id).filter((u) => !gone.has(`${u.type}/${u.file}`)));
+          return res;
+        }),
+      /** „Cofnij ostatnią aktualizację”: { point, restored }. */
+      undo: (id) => contentTask(id, 'cofnięcie aktualizacji podmienia pliki, których gra właśnie używa', async (instance) => updates.undo(instance)),
+      /** The restore points of an instance, newest first (at most three). */
+      points: (id) => updates.points(need(id)),
+      /** A file was removed from the instance: it no longer counts as something to update. */
+      forget: (id, type, file) => {
+        const left = updateWatch.items(id).filter((u) => !(u.type === type && u.file === file));
+        if (left.length !== updateWatch.items(id).length) updateWatch.set(id, left);
+      },
+      /** The background check: armed by main.js once the launcher is up; `run` is one round right now. */
+      start: () => updateWatch.start(),
+      stop: () => updateWatch.stop(),
+      run: () => updateWatch.run(),
     },
     repairInstance,
     servers: {

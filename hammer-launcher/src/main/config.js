@@ -24,6 +24,9 @@ const DEFAULTS = {
   // Hammer+: base64 of the raw 32-byte Ed25519 key the shop signs its codes with. Empty = codes cannot be activated.
   plusPublicKey: '',
   defaultInstance: { name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', optimized: true },
+  // „Udostępnij link” in the Galeria tab: where a screenshot is uploaded (a host that is not HammerShop's) and how
+  // long it stays there (1h, 12h, 24h or 72h). An empty url hides the button – nothing is uploaded then.
+  screenshotShare: { url: '', time: '72h' },
 };
 
 function loadConfig(file = path.join(__dirname, '..', '..', 'launcher.config.json')) {
@@ -39,6 +42,7 @@ function loadConfig(file = path.join(__dirname, '..', '..', 'launcher.config.jso
     server: { ...DEFAULTS.server, ...(raw.server ?? {}) },
     microsoft: { ...DEFAULTS.microsoft, ...(raw.microsoft ?? {}) },
     defaultInstance: { ...DEFAULTS.defaultInstance, ...(raw.defaultInstance ?? {}) },
+    screenshotShare: { ...DEFAULTS.screenshotShare, ...(raw.screenshotShare && typeof raw.screenshotShare === 'object' ? raw.screenshotShare : {}) },
   };
 }
 

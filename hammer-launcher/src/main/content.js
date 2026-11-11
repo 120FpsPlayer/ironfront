@@ -188,23 +188,22 @@ function createContent({ modrinth, fetchFn }) {
       .map((i) => ({ file: i.file, title: i.title, current: i.versionNumber, latest: { id: latest[i.sha1].id, versionNumber: latest[i.sha1].version_number } }));
   }
 
-  /** Replaces files with their newer versions (keeps them disabled if they were disabled). */
-  async function update(instance, type, updates, { onProgress } = {}) {
-    const done = [];
-    for (const u of updates) {
-      const version = await modrinth.version(u.latest.id);
-      if (!version) continue;
-      const wasEnabled = !fs.existsSync(path.join(folder(instance, type), `${u.file}.disabled`));
-      const project = await modrinth.project(version.project_id);
-      removeFile(instance, type, u.file);
-      const name = await writeVersion(instance, type, version, project, onProgress);
-      if (!wasEnabled) setEnabled(instance, type, name, false);
-      done.push(project?.title ?? u.title);
-    }
-    return done;
+  /** What the list remembers about one file (Modrinth project and version, name, icon) – null when nothing. */
+  function indexEntry(instance, type, name) {
+    return loadIndex(instance)[type]?.[name] ?? null;
   }
 
-  return { list, identify, install, installVersion, setEnabled, remove: (instance, type, name) => removeFile(instance, type, name), checkUpdates, update, installedProjects, folder };
+  /** Writes (or, with null, forgets) what the list remembers about one file – used when an update is undone. */
+  function setIndexEntry(instance, type, name, meta) {
+    if (!(type in DIRS)) return;
+    const idx = loadIndex(instance);
+    if (meta) idx[type][name] = meta;
+    else delete idx[type][name];
+    saveIndex(instance, idx);
+  }
+
+  // (Replacing files with their newer versions lives in updates.js – it keeps a restore point for the way back.)
+  return { list, identify, install, installVersion, setEnabled, remove: (instance, type, name) => removeFile(instance, type, name), checkUpdates, installedProjects, folder, indexEntry, setIndexEntry };
 }
 
 module.exports = { createContent, DIRS };

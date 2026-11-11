@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createModrinth } = require('../src/main/modrinth');
 const { createContent } = require('../src/main/content');
+const { createUpdates } = require('../src/main/updates');
 const { createInstances } = require('../src/main/instances');
 const { createPaths } = require('../src/main/paths');
 const { tmpDir, fabricJar, mrVersion, sha1 } = require('./helpers');
@@ -46,7 +47,7 @@ function setup(extra = []) {
   const instance = instances.create({ name: 'Test', mcVersion: '1.21.1', loader: 'fabric' });
   const modrinth = createModrinth({ fetchFn: fn, sleep: async () => {} });
   const content = createContent({ modrinth, fetchFn: fn });
-  return { content, instance, instances, fetchFn: fn, files };
+  return { content, instance, instances, fetchFn: fn, files, modrinth };
 }
 
 test('install: the newest fitting version plus required dependencies – optional ones are left out', async () => {
@@ -94,9 +95,10 @@ test('hand-copied jars are read (fabric.mod.json), can be disabled/enabled and r
 
 test('updates: Modrinth knows a newer version → it replaces the old file and keeps it disabled', async () => {
   const newer = mrVersion({ id: 'sod2', projectId: 'AANobbMI', number: '0.6.1', file: { name: 'sodium-0.6.1.jar', body: fabricJar({ id: 'sodium', name: 'Sodium', version: '0.6.1' }) } });
-  const { content, instance, files } = setup([
+  const { content, instance, files, modrinth } = setup([
     { match: (u, i) => /version_files\/update/.test(u) && i?.method === 'POST', json: (u, i) => Object.fromEntries(JSON.parse(i.body).hashes.map((h) => [h, newer])) },
-    { match: (u) => /\/version\/sod2$/.test(u), json: newer },
+    { match: (u) => /\/versions\?/.test(u), json: [newer] },
+    { match: (u) => /\/projects\?/.test(u), json: [PROJECTS.AANobbMI] },
   ]);
   files['sodium-0.6.1.jar'] = Buffer.from(Buffer.from(fabricJar({ id: 'sodium', name: 'Sodium', version: '0.6.1' })));
   newer.files[0].hashes.sha1 = sha1(files['sodium-0.6.1.jar']);
@@ -105,8 +107,9 @@ test('updates: Modrinth knows a newer version → it replaces the old file and k
   content.setEnabled(instance, 'mod', 'sodium-0.6.0.jar', false);
   const updates = await content.checkUpdates(instance, 'mod');
   assert.deepEqual(updates.map((u) => [u.file, u.current, u.latest.versionNumber]), [['sodium-0.6.0.jar', '0.6.0', '0.6.1']]);
-  const done = await content.update(instance, 'mod', updates);
-  assert.deepEqual(done, ['Sodium']);
+  // The update itself goes through updates.js, which keeps a restore point (see updates.test.js).
+  const done = await createUpdates({ content, modrinth }).apply(instance, updates.map((u) => ({ type: 'mod', ...u })));
+  assert.deepEqual(done.updated.map((u) => u.title), ['Sodium']);
   assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'mods')), ['sodium-0.6.1.jar.disabled']);
 });
 

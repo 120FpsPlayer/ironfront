@@ -112,9 +112,14 @@ async function explained(what, fn) {
     return await fn();
   } catch (err) {
     if (typeof err?.code !== 'string') throw err;
-    const reason = REASONS[err.code] ?? (err.code.startsWith('Z_') ? 'archiwum jest uszkodzone' : err.message);
-    throw new Error(`${what}: ${reason}.`, { cause: err });
+    throw new Error(`${what}: ${fileReason(err)}.`, { cause: err });
   }
 }
 
-module.exports = { walk, dirSize, mapLimit, isPlainName, cleanFolderName, freeName, stamp, explained };
+/** A system error of a file operation as a few Polish words ("plik jest używany przez inny program"). */
+function fileReason(err) {
+  const code = String(err?.code ?? '');
+  return REASONS[code] ?? (code.startsWith('Z_') ? 'archiwum jest uszkodzone' : String(err?.message ?? err));
+}
+
+module.exports = { walk, dirSize, mapLimit, isPlainName, cleanFolderName, freeName, stamp, explained, fileReason };

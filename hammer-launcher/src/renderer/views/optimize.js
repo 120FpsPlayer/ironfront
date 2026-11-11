@@ -1,5 +1,6 @@
 'use strict';
-/* Optymalizacja – one-click tuning: RAM, Java flags, performance mods (Podstawowe / Turbo), graphics presets, process priority. */
+/* Optymalizacja – one-click tuning: RAM, Java flags, performance mods (Podstawowe / Turbo), graphics presets, process priority –
+   and the FPS test (views/benchmark.js) that shows what it gave. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -117,6 +118,7 @@
     const modsCard = h('section.card');
     const gfxCard = h('section.card');
     const sysCard = h('section.card');
+    const bench = HS.benchUi.card(); // „Test FPS”
     let info = null;
     let gfx = null;
     let turbo = false;
@@ -125,6 +127,7 @@
     const inst = () => state.instance;
 
     async function load() {
+      bench.load();
       try {
         info = await api.optimizer.info(inst().id);
       } catch (err) {
@@ -373,6 +376,8 @@
         sysBox,
         h('div', { style: { height: '14px' } }),
         autoCard,
+        h('div', { style: { height: '14px' } }),
+        bench.el,
         h('div.grid.g2', { style: { marginTop: '14px', alignItems: 'start' } }, h('div.grid', ramCard, jvmCard, sysCard), h('div.grid', modsCard, gfxCard)),
       ),
     );
@@ -380,7 +385,7 @@
     // Another instance, or the same one with another game version, loader or Java → fresh advice and a fresh mod list.
     const key = () => {
       const i = inst();
-      return i ? [i.id, i.mcVersion, i.loader, i.javaPath ?? ''].join('|') : '';
+      return i ? [i.id, i.mcVersion, i.loader, i.javaPath ?? '', i.hammerClient === false ? 'bez-hc' : 'hc'].join('|') : '';
     };
     let shown = key();
     const refresh = () => {
@@ -394,6 +399,7 @@
     const offs = [bus.on('settings', refresh), bus.on('instances', refresh)];
     return () => {
       planRun += 1;
+      bench.stop();
       offs.forEach((f) => f());
     };
   }

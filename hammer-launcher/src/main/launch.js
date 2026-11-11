@@ -160,7 +160,7 @@ function newestCrashReport(dir, since) {
 /**
  * Keeps track of running games. Events:
  *   log    { instanceId, line, stream }
- *   state  { instanceId, state: 'starting' | 'running' | 'exited' | 'crashed', crash?, code? }
+ *   state  { instanceId, state: 'starting' | 'running' | 'exited' | 'crashed', crash?, code?, playedMs?, benchmark? }
  */
 class GameManager extends EventEmitter {
   constructor({ launchFn = launch, setPriority = os.setPriority } = {}) {
@@ -178,8 +178,10 @@ class GameManager extends EventEmitter {
     return this.running.get(instanceId)?.logs ?? this.lastLogs?.get(instanceId) ?? [];
   }
 
-  async start({ instance, options, priority = 'above_normal', onExit }) {
+  /** `benchmark: true` marks an FPS test – every state event of that run carries it (it is not a game session). */
+  async start({ instance, options, priority = 'above_normal', onExit, benchmark = false }) {
     if (this.running.has(instance.id)) throw new Error('Ta instancja już działa.');
+    const mark = benchmark ? { benchmark: true } : {};
     const startedAt = Date.now();
     const logs = [];
     const parsers = { stdout: createLogParser(), stderr: createLogParser() };
@@ -190,7 +192,7 @@ class GameManager extends EventEmitter {
         this.emit('log', { instanceId: instance.id, line, stream });
       }
     };
-    this.emit('state', { instanceId: instance.id, state: 'starting' });
+    this.emit('state', { instanceId: instance.id, state: 'starting', ...mark });
     const child = await this.launchFn(options);
     this.running.set(instance.id, { process: child, startedAt, logs });
     raisePriority(child.pid, priority, { setPriority: this.setPriority }); // not allowed on this system → the game still runs
@@ -204,7 +206,7 @@ class GameManager extends EventEmitter {
       });
     }
     const watcher = createMinecraftProcessWatcher(child);
-    watcher.on('minecraft-window-ready', () => this.emit('state', { instanceId: instance.id, state: 'running' }));
+    watcher.on('minecraft-window-ready', () => this.emit('state', { instanceId: instance.id, state: 'running', ...mark }));
     const finish = (code, signal, crashReport = '') => {
       if (!this.running.has(instance.id)) return;
       this.running.delete(instance.id);
@@ -213,7 +215,7 @@ class GameManager extends EventEmitter {
       const report = crashReport || (code !== 0 ? newestCrashReport(instance.dir, startedAt) : '');
       const crash = analyze({ code, signal, crashReport: report, log: logs.slice(-400).map((l) => l.line).join('\n') });
       const playedMs = Date.now() - startedAt;
-      this.emit('state', { instanceId: instance.id, state: crash && code !== 0 ? 'crashed' : 'exited', code, crash, playedMs });
+      this.emit('state', { instanceId: instance.id, state: crash && code !== 0 ? 'crashed' : 'exited', code, crash, playedMs, ...mark });
       onExit?.({ code, crash, playedMs });
     };
     watcher.on('minecraft-exit', ({ code, signal, crashReport }) => finish(code, signal, crashReport));

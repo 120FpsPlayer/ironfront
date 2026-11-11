@@ -20,6 +20,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   selectedAccount: null,
   closeOnExit: false,
   accent: 'orange', // the launcher's colour: orange | gold | red | blue | green | purple – or custom (Hammer+)
+  playSummary: true, // the „Podsumowanie gry” card on the start screen after a game session
+  modUpdateCheck: true, // look for mod updates in the background (when the launcher starts and every six hours)
+  screenshotShareAsk: true, // ask before a screenshot is uploaded for a link („Nie pytaj ponownie” switches it off)
   // Hammer+ (the values below only work while Hammer+ is active – see PLUS_ONLY)
   accentColor: '', // "#rrggbb" for accent: 'custom'
   background: '', // the player's own background picture: a file name in <launcher folder>/theme/
@@ -76,7 +79,7 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
   if (HERO_STYLES.includes(patch.heroStyle)) out.heroStyle = patch.heroStyle;
   if ('autoBackupKeep' in patch) out.autoBackupKeep = clampInt(patch.autoBackupKeep, 1, 20, base.autoBackupKeep);
   if (typeof patch.hammerCape === 'string' && /^[a-z0-9_-]{0,32}$/.test(patch.hammerCape)) out.hammerCape = patch.hammerCape;
-  for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto']) if (key in patch) out[key] = Boolean(patch[key]);
+  for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto', 'playSummary', 'modUpdateCheck', 'screenshotShareAsk']) if (key in patch) out[key] = Boolean(patch[key]);
   if ('concurrentDownloads' in patch) out.concurrentDownloads = clampInt(patch.concurrentDownloads, 1, 64, base.concurrentDownloads);
   for (const key of ['selectedInstance', 'selectedAccount']) if (key in patch) out[key] = patch[key] ? String(patch[key]) : null;
   return out;

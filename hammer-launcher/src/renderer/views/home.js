@@ -1,5 +1,6 @@
 'use strict';
-/* Graj – start screen: big PLAY button, instance picker, install progress, news, server status. */
+/* Graj – start screen: big PLAY button, instance picker, install progress, news, server status – and, when there is
+   something to say, the summary of the last game session and the mod updates found in the background. */
 
 (() => {
   const { api, h, clear, icon, fmt, LOADERS, tile, bus, state, open } = HS;
@@ -69,7 +70,9 @@
       } else if (run === 'starting') {
         clear(progressArea, h('div.play-progress', h('div.label', h('b', 'Uruchamianie gry…'), h('span', 'okno Minecrafta zaraz się pojawi')), h('div.progress.indeterminate', h('i'))));
       } else if (run === 'running') {
-        clear(progressArea, h('div.play-progress', h('div.label', h('b.ok', 'Gra działa'), h('span', 'miłej gry!'))));
+        // An FPS test (Optymalizacja → Test FPS): the game measures and closes by itself.
+        const test = state.benchmarks.has(i.id);
+        clear(progressArea, h('div.play-progress', h('div.label', h('b.ok', 'Gra działa'), h('span', test ? 'Trwa test FPS – gra zamknie się sama' : 'miłej gry!'))));
       } else clear(progressArea);
       drawStats();
     }
@@ -91,6 +94,65 @@
       );
     }
     const stat = (ic, label, value) => h('div.row', { style: { gap: '10px', padding: '10px', borderRadius: '10px', background: 'var(--bg2)', border: '1px solid var(--line)' } }, h('span', { style: { color: 'var(--accent)', display: 'grid' } }, icon(ic)), h('div', h('small.dim', { style: { display: 'block', fontSize: '11px' } }, label), h('b', { style: { fontSize: '13px' } }, value)));
+
+    /* ── „Podsumowanie gry”: the session that just ended – until it is dismissed or the next game starts ── */
+    const summaryBox = h('div');
+    function drawSummary() {
+      const s = state.settings.playSummary === false ? null : state.playSummary; // switched off in Ustawienia → no card
+      if (!s) return clear(summaryBox);
+      const i = state.instances.find((x) => x.id === s.instanceId);
+      const shots = s.screenshots ?? { count: 0, shots: [] };
+      const gallery = () => HS.openGallery(s.instanceId);
+      const part = (label, value) => h('div.sum-stat', h('small', label), h('b', value));
+      return clear(
+        summaryBox,
+        h(
+          'section.card.summary-card',
+          h(
+            'div.card-head',
+            icon('clock'),
+            h('h2.grow', 'Podsumowanie gry'),
+            h('button.btn.ghost.sm.icon', { type: 'button', title: 'Zamknij', 'aria-label': 'Zamknij podsumowanie gry', onclick: () => ((state.playSummary = null), drawSummary(), api.play.dismiss().catch(() => {})) }, icon('close')),
+          ),
+          h(
+            'div.sum-top',
+            i ? tile(i, 44) : null,
+            h('div.grow', h('h3.ellipsis', s.name), h('div.dim', `Sesja zakończona ${fmt.ago(s.endedAt)}`)),
+            h('div.sum-stats', part('Ta sesja', fmt.duration(s.playedMs)), part('Łącznie w tej instancji', fmt.duration(s.totalMs)), part('Zrzuty ekranu', shots.count ? fmt.num(shots.count) : 'brak')),
+          ),
+          shots.count
+            ? h(
+                'div.sum-shots',
+                shots.shots.map((x) => h('button.sum-shot', { type: 'button', title: 'Otwórz w Galerii', 'aria-label': `Zrzut ekranu ${x.file} – otwórz Galerię`, onclick: gallery }, h('img', { src: x.url, alt: '', loading: 'lazy', decoding: 'async' }))),
+                shots.count > shots.shots.length ? h('button.sum-shot.more', { type: 'button', title: 'Zobacz wszystkie w Galerii', onclick: gallery }, `+${shots.count - shots.shots.length}`) : null,
+                h('button.btn.ghost.sm', { type: 'button', onclick: gallery }, 'Galeria', icon('chevron-right')),
+              )
+            : null,
+          // Gentle: only where the FPS test can run and never has.
+          s.suggestBenchmark ? h('div.sum-hint', icon('heartbeat'), h('span.grow', 'Ciekawi Cię, ile masz FPS w tej instancji? Test trwa pół minuty.'), h('button.btn.sm', { type: 'button', onclick: () => HS.openBenchmark(s.instanceId) }, 'Test FPS', icon('chevron-right'))) : null,
+        ),
+      );
+    }
+
+    /* ── mod updates the background check found: one card that leads to the list ── */
+    const updatesBox = h('div');
+    function drawUpdates() {
+      const u = state.updates;
+      if (!u?.total || !u.instances?.length) return clear(updatesBox);
+      const [first] = u.instances;
+      const many = u.instances.length > 1;
+      return clear(
+        updatesBox,
+        h(
+          'section.card.update-line',
+          icon('arrow-up'),
+          h('b.grow.ellipsis', many ? `Aktualizacje modów: ${u.total} w ${u.instances.length} instancjach` : `Aktualizacje modów: ${first.count} w „${first.name}”`),
+          many
+            ? u.instances.slice(0, 3).map((x) => h('button.chip.accent', { type: 'button', title: `Zobacz aktualizacje w „${x.name}”`, onclick: () => HS.openUpdates(x.id) }, h('span.ellipsis', `${x.count} · ${x.name}`)))
+            : h('button.btn.sm', { type: 'button', onclick: () => HS.openUpdates(first.id) }, 'Zobacz listę', icon('chevron-right')),
+        ),
+      );
+    }
 
     const info = state.info?.config ?? {};
     const loginCta = state.accounts.length
@@ -151,6 +213,7 @@
         'div.page',
         loginCta,
         hero,
+        h('div.home-notes', summaryBox, updatesBox),
         h(
           'div.home-grid',
           h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, h('section.card', h('div.card-head', icon('book'), h('h2', 'Aktualności')), newsList), h('section.card', h('div.card-head', icon('cube'), h('h2', 'Wybrana instancja')), statsBody)),
@@ -193,6 +256,8 @@
     });
 
     drawPlay();
+    drawSummary();
+    drawUpdates();
 
     api.news
       .list()
@@ -234,7 +299,7 @@
     ping();
     const timer = setInterval(ping, 60000);
 
-    const offs = [bus.on('instances', drawClient), bus.on('settings', drawClient), bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home'))];
+    const offs = [bus.on('instances', drawClient), bus.on('settings', drawClient), bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home')), bus.on('summary', drawSummary), bus.on('instances', drawSummary), bus.on('updates', drawUpdates), bus.on('instances', drawUpdates)];
     return () => {
       clearInterval(timer);
       featured.stop();

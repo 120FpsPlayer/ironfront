@@ -189,7 +189,7 @@ if (!app.requestSingleInstanceLock()) {
     services.accounts = accounts;
 
     // The launcher window steps aside while the game runs and comes back when it closes.
-    services.games.on('state', ({ state }) => {
+    services.games.on('state', ({ state, benchmark }) => {
       const after = services.settings.get().afterLaunch;
       if (!win || win.isDestroyed()) return;
       if (state === 'running') {
@@ -203,7 +203,8 @@ if (!app.requestSingleInstanceLock()) {
         if (!win.isVisible()) win.show();
         if (win.isMinimized()) win.restore();
         // Automatic world backups and the cloud copy finish first – quitting would cut them off.
-        if (state === 'exited' && services.settings.get().closeOnExit && !services.games.running.size) services.afterSessions().finally(() => !services.games.running.size && app.quit());
+        // (Not after an FPS test: its result is what the player is waiting for.)
+        if (state === 'exited' && !benchmark && services.settings.get().closeOnExit && !services.games.running.size) services.afterSessions().finally(() => !services.games.running.size && app.quit());
       }
     });
   }
@@ -296,9 +297,11 @@ if (!app.requestSingleInstanceLock()) {
     handle('content:list', (id, type) => s().content.list(inst(id), type));
     handle('content:identify', (id, type) => s().content.identify(inst(id), type));
     handle('content:toggle', (id, type, file, enabled) => s().content.setEnabled(inst(id), type, file, enabled));
-    handle('content:remove', (id, type, file) => s().content.remove(inst(id), type, file));
-    handle('content:updates', (id, type) => s().content.checkUpdates(inst(id), type));
-    handle('content:update', (id, type, updates) => s().content.update(inst(id), type, updates));
+    handle('content:remove', (id, type, file) => {
+      const res = s().content.remove(inst(id), type, file);
+      s().updates.forget(id, type, file); // a removed file has nothing to update any more
+      return res;
+    });
     handle('content:install', (id, what) => s().content.install(inst(id), what));
     handle('content:import', async (id, type, filePaths) => {
       const instance = inst(id);
@@ -353,6 +356,22 @@ if (!app.requestSingleInstanceLock()) {
       return true;
     });
     handle('gallery:show', (id, file) => shell.showItemInFolder(s().gallery.file(id, file)));
+    // „Udostępnij link”: the upload to the configured host happens here, and only after the player's yes.
+    handle('gallery:share-info', () => s().gallery.shareInfo());
+    handle('gallery:share', (id, file, opts) => s().gallery.share(id, file, { agreed: opts?.agreed === true, remember: opts?.remember === true }));
+
+    // Test FPS, the summary after a game, and mod updates with their restore points.
+    handle('benchmark:info', (id) => s().benchmark.info(id));
+    handle('benchmark:start', (id, opts) => s().benchmark.start(id, { world: str(opts?.world), worldName: str(opts?.worldName), seconds: Number(opts?.seconds) }));
+    handle('benchmark:running', () => s().benchmark.running());
+    handle('play:summary', () => s().play.summary());
+    handle('play:dismiss', () => s().play.dismiss());
+    handle('updates:status', () => s().updates.status());
+    handle('updates:list', (id) => s().updates.list(id));
+    handle('updates:check', (id) => s().updates.check(id));
+    handle('updates:apply', (id, items) => s().updates.apply(id, Array.isArray(items) ? items.slice(0, 2000).map((u) => ({ type: u?.type, file: u?.file, title: u?.title, current: u?.current, latest: { id: u?.latest?.id, versionNumber: u?.latest?.versionNumber } })) : []));
+    handle('updates:undo', (id) => s().updates.undo(id));
+    handle('updates:points', (id) => s().updates.points(id));
 
     handle('servers:list', (id) => s().servers.list(id));
     handle('servers:official', () => s().servers.official());
@@ -478,6 +497,7 @@ if (!app.requestSingleInstanceLock()) {
     setupServices();
     registerIpc();
     createWindow();
+    services.updates.start(); // mod updates: a quiet look shortly after the start, then every six hours
   });
 
   app.on('window-all-closed', () => {

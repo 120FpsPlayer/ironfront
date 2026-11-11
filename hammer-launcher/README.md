@@ -12,8 +12,9 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po pol
   - podpowiedź dobrana do RAM-u, procesora i karty graficznej – przycisk **Dlaczego?** wyjaśnia każdy wybór,
   - wyższy priorytet procesu gry (dla wszystkich instancji albo osobno dla jednej),
   - wymuszenie wydajnej karty graficznej na laptopach (Windows),
-  - przycisk **Zoptymalizuj wszystko**, który robi to naraz i na koniec pokazuje, co dokładnie zrobił.
-- **Mody** (zakładka *Mody*): wyszukiwarka Modrinth z modami, paczkami tekstur, shaderami i paczkami modów. Ma kategorie i sortowanie, a zależności instalują się same. Do tego lista zainstalowanych z włączaniem i wyłączaniem, aktualizacje jednym kliknięciem, przeciąganie plików `.jar` / `.zip` i import paczek `.mrpack`.
+  - przycisk **Zoptymalizuj wszystko**, który robi to naraz i na koniec pokazuje, co dokładnie zrobił,
+  - **Test FPS**: launcher uruchamia grę w Twoim świecie, Hammer Client mierzy klatki i gra zamyka się sama – wynik widać obok poprzedniego („+38% średnio”). Szczegóły w sekcji [Test FPS](#test-fps).
+- **Mody** (zakładka *Mody*): wyszukiwarka Modrinth z modami, paczkami tekstur, shaderami i paczkami modów. Ma kategorie i sortowanie, a zależności instalują się same. Do tego lista zainstalowanych z włączaniem i wyłączaniem, przeciąganie plików `.jar` / `.zip` i import paczek `.mrpack`. **Aktualizacje** launcher sprawdza sam w tle, a każdą da się cofnąć – patrz [Aktualizacje modów i droga powrotna](#aktualizacje-modów-i-droga-powrotna).
 - **Zestawy modów** (*Mody → Zestawy*): gotowe zestawy na jedno kliknięcie – *PvP*, *Survival+*, *Budowanie*, *Shadery* oraz *Wygląd i klimat*. Przy każdym dodatku widać, czy istnieje dla wybranej instancji i czy już jest zainstalowany. W zestawach są tylko dodatki, które nie dają przewagi nad innymi graczami.
 - **Skórka** (zakładka *Skórka*): podgląd postaci z przodu i z tyłu, wgranie nowej skórki (PNG 64×64, model klasyczny albo smukły), powrót do domyślnej oraz peleryny konta – pokaż / ukryj. Każda skórka, którą nosisz, trafia do biblioteki w launcherze, więc wrócisz do niej jednym kliknięciem. Zmiany idą prosto na konto Microsoft – bez wchodzenia na minecraft.net.
 - **Serwery** (zakładka *Serwery*): lista serwerów instancji – ta sama, którą widzisz w grze (`servers.dat`). Przy każdym serwerze status na żywo: gracze, ping, wersja i opis. Dodawanie ze sprawdzeniem adresu, zmiana kolejności i przycisk **Graj**, który uruchamia grę od razu na wybranym serwerze. Lista serwerów nie jest częścią konta Microsoft, tylko plikiem w folderze gry, więc launcher **przenosi serwery ze zwykłego Minecrafta** (z oficjalnego launchera): raz automatycznie dla każdej instancji, a potem przyciskiem **Z Minecrafta** (dodaje tylko te, których jeszcze nie ma). Do tego **zaproszenia** – link, który znajomy klika, a launcher sam przygotowuje mu instancję i serwer – oraz karta **Polecane serwery**. Szczegóły w sekcji [Zaproszenia](#zaproszenia-hammerjoin).
@@ -34,7 +35,8 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po pol
   Włączasz i wyłączasz go w edytorze instancji. Kod moda jest w folderze `hammer-client/`. Launcher bierze go z folderu `resources/hammer-client/` (plik `versions.json` i po jednym `.jar` na wersję gry) – tworzy go `./gradlew dist` w `hammer-client/` (wynik w `hammer-client/build/dist/`). Lista obsługiwanych wersji pochodzi z `versions.json`, więc nowa wersja moda nie wymaga zmian w launcherze.
 - **Nasz Discord.** Karta na ekranie głównym i przycisk w menu: nazwa i ikona serwera, ile osób jest online i ilu jest członków, przycisk **Dołącz do Discorda**. Dane pochodzą z publicznego API zaproszeń Discorda (bez tokenu bota).
 - **Nowości ze sklepu HammerShop.** Produkty, ceny i obrazki prosto ze strony bota (`/api/shop/store`) – zmienisz coś w bocie, launcher pokaże to sam.
-- **Galeria.** Zrzuty ekranu (F2) ze wszystkich instancji: podgląd na pełnym ekranie, kopiowanie do schowka (np. żeby wkleić na Discorda), pokazanie w folderze, usuwanie.
+- **Galeria.** Zrzuty ekranu (F2) ze wszystkich instancji: podgląd na pełnym ekranie, kopiowanie do schowka (np. żeby wkleić na Discorda), pokazanie w folderze, usuwanie – oraz **Udostępnij link**, czyli zrzut jako link do wklejenia (po Twojej zgodzie, patrz [Zrzut ekranu jako link](#zrzut-ekranu-jako-link)).
+- **Podsumowanie gry.** Po wyjściu z gry ekran *Graj* pokazuje, ile trwała sesja, ile łącznie grasz w tej instancji i jakie zrzuty ekranu zrobiłeś – patrz [Podsumowanie gry](#podsumowanie-gry).
 - **Zasobnik.** Podczas gry launcher chowa się do zasobnika obok zegara. Stamtąd możesz go przywrócić albo zatrzymać grę.
 - **Kolor launchera** (w *Ustawieniach*): pomarańczowy, złoty, czerwony, niebieski, zielony albo fioletowy.
 - **Hammer+** (złoty przycisk na górnym pasku): płatny dodatek – własne kolory i tła, automatyczne kopie światów, zestawy skórek, peleryny i chmura. Sam wygląd i wygoda, nic, co zmienia rozgrywkę. Szczegóły w sekcji [Hammer+](#hammer).
@@ -161,6 +163,63 @@ Lista pochodzi ze strony sklepu: `GET <shopApi albo website>/api/launcher/featur
 - W oknie: `views/official.js`, `views/share.js` i `views/invite.js` (okna dialogowe i karta polecanych); długie zadania zgłaszają postęp zdarzeniem `task:progress` z polem `scope` (`official-worlds`, `recipe`, `modpack`).
 - Kod i plik są czytane w procesie głównym; okno dostaje tylko podsumowanie i jednorazowy żeton, którym potwierdza instalację.
 
+## Test FPS
+
+Karta **Test FPS** w zakładce *Optymalizacja* odpowiada na pytanie „ile mam klatek i czy optymalizacja coś dała?”. Jest za darmo.
+
+1. Wybierasz instancję (u góry strony), **świat** – domyślnie ten, w który grałeś ostatnio – i **długość testu**: 10, 20 albo 30 sekund.
+2. **Uruchom test** startuje grę od razu w tym świecie. Hammer Client czeka kilka sekund, aż świat się wczyta, mierzy każdą klatkę (powoli obracając kamerę) i **sam zamyka grę**. W tym czasie launcher pokazuje zwykły stan „Gra działa” z dopiskiem *„Trwa test FPS – gra zamknie się sama”*.
+3. Po zamknięciu gry karta pokazuje wynik: **średnio**, **1% low** (średnia z 1% najwolniejszych klatek, czyli przycięcia), **najniższe** i **najwyższe** FPS – a obok poprzedni wynik i różnicę, np. *„+38% średnio”*. Zrób test, kliknij *Zoptymalizuj wszystko*, zrób test jeszcze raz – i widać, co się zmieniło.
+
+Dobrze wiedzieć:
+
+- **Wynik zależy od miejsca w świecie** i od tego, na co patrzy postać. Porównuj testy zrobione w tym samym świecie, w tym samym miejscu – gdy poprzedni test był w innym świecie, karta to mówi.
+- Test działa tylko w instancjach z **włączonym Hammer Client** (Fabric albo Quilt, wersja gry obsługiwana przez mod, Hammer Client 2.2.0 lub nowszy). Pozostałe instancje dostają jedno zdanie wyjaśnienia. Instancja bez świata – prośbę, żeby najpierw utworzyć świat w grze.
+- Launcher pamięta **20 ostatnich testów każdej instancji** (*Historia testów*): datę, liczby, wersję gry, liczbę modów, zainstalowane mody wydajnościowe i ustawioną pamięć RAM.
+- Gdy gra zamknie się bez wyniku, karta pisze **„Test nie został ukończony”** i podaje prawdopodobne przyczyny (gra zamknięta przed końcem pomiaru, świat się nie wczytał).
+- Test to nie granie: nie liczy się do czasu gry, nie zmienia „ostatnio grane”, nie robi automatycznych kopii światów (Hammer+) ani podsumowania gry. Argumenty testu launcher dodaje tylko do tego jednego startu – w ustawieniach instancji nic nie zostaje.
+
+## Podsumowanie gry
+
+Gdy zwykła sesja gry się kończy, na ekranie *Graj* pojawia się karta **Podsumowanie gry**: nazwa instancji, ile trwała ta sesja, ile łącznie grasz w tej instancji i ile zrzutów ekranu zrobiłeś w jej trakcie – z miniaturami, które prowadzą do *Galerii* tej instancji. Jeśli w tej instancji działa Hammer Client, a test FPS nie był jeszcze robiony, karta delikatnie do niego zaprasza.
+
+- Sesje krótsze niż minuta niczego nie pokazują. Sesja zakończona crashem też nie – tam launcher i tak wyjaśnia w *Konsoli*, co się stało.
+- Kartę zamykasz krzyżykiem; znika też sama, gdy uruchomisz następną grę.
+- Łączny czas gry każdej instancji widać również na jej karcie w zakładce *Instancje* i w „Wybranej instancji” na ekranie *Graj*.
+- Wyłączysz ją w *Ustawienia → Gra → Podsumowanie po grze*.
+
+## Aktualizacje modów i droga powrotna
+
+Launcher pilnuje, czy mody, paczki tekstur i shadery z Modrinth mają nowsze wersje dla wersji gry i loadera danej instancji.
+
+- **Sprawdzanie w tle**: chwilę po starcie launchera i potem co 6 godzin. Gdy coś jest, instancja dostaje znaczek (*„3 aktualizacje”*), a ekran *Graj* jedną kartę: *„Aktualizacje modów: 3 w „Hammer””* – kliknięcie otwiera listę (*Mody → Zainstalowane*). Nic nie instaluje się samo, a gdy nie ma internetu albo Modrinth nie odpowiada, launcher po prostu nic nie mówi. Instancji z paczek modów sprawdzanie w tle nie rusza (paczkę aktualizuje się w całości) – ręczne *Sprawdź aktualizacje* działa w nich jak zawsze. Wyłączysz to w *Ustawienia → Pobieranie i pliki → Sprawdzaj aktualizacje modów w tle*.
+- **Aktualizuj wszystko** i aktualizacja pojedynczego dodatku (strzałka przy nim) najpierw robią **punkt przywracania**: pliki, które mają zostać podmienione, launcher **przenosi** (nie usuwa) do `<instancja>/.hammer/przywracanie/<data_godzina>/` razem z małym plikiem `manifest.json` – co zostało zastąpione czym. Dopiero potem pobiera nowe wersje. Gdy pobranie któregoś dodatku się nie uda, jego stara wersja od razu wraca na miejsce. Dodatek, który był wyłączony, po aktualizacji zostaje wyłączony.
+- **Cofnij ostatnią aktualizację** (pod przyciskami na liście zainstalowanych) pokazuje, co dokładnie wróci, a potem odwraca manifest: usuwa nowe pliki i przenosi stare z powrotem. Można cofać po kolei do trzech aktualizacji wstecz – launcher trzyma **trzy ostatnie punkty przywracania** każdej instancji, starsze usuwa.
+- Aktualizacja i cofanie **nie ruszają, gdy gra tej instancji działa** (gra trzyma te pliki), a w ich trakcie nie da się tej instancji uruchomić.
+- **Przerwana aktualizacja** (zamknięty launcher, brak prądu) niczego nie psuje na stałe: manifest powstaje przed przeniesieniem pierwszego pliku, więc lista zainstalowanych mówi, że aktualizacja została przerwana, a *Cofnij ostatnią aktualizację* przywraca pliki sprzed niej. Cofanie można bezpiecznie powtórzyć – plik, który już wrócił, nie jest ruszany drugi raz.
+
+## Zrzut ekranu jako link
+
+W *Galerii*, w podglądzie zrzutu, jest przycisk **Udostępnij link**: launcher wysyła ten jeden obraz do serwisu z tymczasowymi plikami i kopiuje link do schowka – wygodne, gdy chcesz pokazać zrzut komuś, kto nie ma Discorda pod ręką.
+
+To jedyne miejsce (obok *Wyślij logi*), w którym launcher wysyła coś od Ciebie na zewnątrz, dlatego przed pierwszym użyciem pyta o zgodę i mówi wprost:
+
+- obraz **opuszcza Twój komputer** i trafia do **zewnętrznego serwisu, którego nie prowadzi HammerShop** – domyślnie [Litterbox](https://litterbox.catbox.moe) (tymczasowe pliki catbox.moe),
+- **zobaczy go każdy, kto ma link**,
+- obraz **znika po 72 godzinach** i **nie da się go usunąć wcześniej**.
+
+W oknie jest pole **Nie pytaj ponownie**; pytanie włączysz z powrotem w *Ustawienia → Pobieranie i pliki → Pytaj przed udostępnieniem zrzutu ekranu*. Bez Twojego „tak” nic nie jest wysyłane – pilnuje tego proces główny launchera, nie samo okno.
+
+Wysyłane są tylko pliki PNG i JPG z folderu `screenshots/` instancji, najwyżej 20 MB, pod neutralną nazwą (bez daty z nazwy pliku). Odpowiedź serwisu launcher przyjmuje tylko wtedy, gdy jest adresem `https` w domenie serwisu (`catbox.moe`); błąd albo brak odpowiedzi kończy się spokojnym komunikatem. Adres serwisu i czas przechowywania są w `launcher.config.json` (`screenshotShare`) – **pusty `url` usuwa przycisk** i nic nigdzie nie jest wysyłane.
+
+### Dla deweloperów: test FPS, podsumowanie, aktualizacje, link do zrzutu
+
+- Moduły (bez Electrona, z testami): `benchmark.js` (argumenty, odczyt wyniku, historia i porównanie), `playsummary.js`, `restorepoints.js` (punkty przywracania), `updates.js` (aktualizowanie przez punkt przywracania i sprawdzanie w tle), `screenshare.js` (wysyłka zrzutu, zgoda, kontrola odpowiedzi). W oknie: `views/benchmark.js` oraz dopiski w `home.js`, `mods.js`, `instances.js`, `gallery.js` i `settings.js`.
+- **Test FPS – umowa z modem** (Hammer Client 2.2.0+, opis także w `hammer-client/README.md`): start z `-Dhammerclient.benchmark=<sekundy>` (5–180) i `-Dhammerclient.benchmark.quit=true`, prosto do świata (`--quickPlaySingleplayer`). Mod zapisuje `<instancja>/config/hammerclient/benchmark.json`: `{"version":"2.2.1","mc":"1.21.4","seconds":20.0,"frames":4812,"avg":240.6,"low1":121.3,"min":88.0,"max":412.5,"finishedAt":<ms od 1970>}` i zamyka grę. Launcher usuwa stary plik przed startem, po zamknięciu gry przyjmuje wynik tylko z `finishedAt` późniejszym niż start testu i usuwa plik w każdym przypadku. Historia leży w `<instancja>/.hammer/benchmarks.json`. Zdarzenia dla okna: `game:state` z `benchmark: true` oraz `benchmark:done`.
+- **Podsumowanie**: zdarzenie `play:summary` (`{ instanceId, name, playedMs, totalMs, endedAt, screenshots: { count, shots }, suggestBenchmark }` albo `null`); łączny czas gry to `playTimeMs` w `instance.json`.
+- **Manifest punktu przywracania**: `{ "v": 1, "id": "2026-11-11_14-05-33", "createdAt": …, "state": "pending" | "done", "entries": [{ "type": "mod" | "resourcepack" | "shader", "title", "old": { "file", "disabled", "versionNumber", "index" }, "new": { "file", "versionId", "versionNumber" }, "state": "planned" | "done" | "failed" }] }`. Cofanie patrzy na folder, nie na `state`: stary plik, który leży w punkcie, wraca (po usunięciu nowego); którego tam nie ma – już wrócił albo nigdy nie został ruszony. Manifest leży w folderze gry, więc jest czytany nieufnie: tylko zwykłe nazwy plików `.jar` / `.zip` w `mods/`, `resourcepacks/` i `shaderpacks/`.
+- **Link do zrzutu**: `POST <screenshotShare.url>`, formularz multipart `reqtype=fileupload`, `time=<screenshotShare.time>`, `fileToUpload=<plik>`; odpowiedzią jest sam adres. `time` to `1h`, `12h`, `24h` albo `72h` (inna wartość = `72h`). Zgoda „Nie pytaj ponownie” to ustawienie `screenshotShareAsk: false`.
+
 ## Uruchomienie (deweloperskie)
 
 Wymagany Node.js 20+.
@@ -198,6 +257,7 @@ Pliki nie są podpisane certyfikatem, więc Windows SmartScreen pokaże ostrzeż
 | `plusPublicKey` | Klucz publiczny sklepu do sprawdzania kodów Hammer+: base64 z 32 bajtów klucza Ed25519. Puste = Hammer+ nie da się aktywować. Klucz prywatny ma tylko bot. |
 | `microsoft.clientId` | Własna aplikacja Azure do logowania (patrz niżej). Puste = domyślne okno logowania. |
 | `defaultInstance` | Instancja tworzona przy pierwszym uruchomieniu (Fabric, optymalizacja włączona). Launcher wybiera najnowszą wersję Minecrafta, którą obsługuje dołączony Hammer Client; `mcVersion` jest używane, gdy moda nie ma w launcherze. |
+| `screenshotShare.url`, `screenshotShare.time` | *Udostępnij link* w Galerii: adres, pod który launcher wysyła zrzut ekranu (zewnętrzny serwis – domyślnie Litterbox: `https://litterbox.catbox.moe/resources/internals/api.php`), i czas przechowywania (`1h`, `12h`, `24h`, `72h`). **Pusty `url` = przycisku nie ma** i launcher niczego nie wysyła. Tylko adres `https`. |
 
 ### Logowanie Microsoft przy publicznej dystrybucji
 
@@ -214,6 +274,8 @@ Do testów launcher używa standardowego okna logowania Microsoft. Jeśli chcesz
 - Linux: `~/.hammer-launcher`
 
 W środku są `instances/` (każda instancja osobno), `versions/`, `libraries/` i `assets/` (gra i jej pliki – wspólne dla wszystkich instancji, pobierane raz), `runtime/` (Java), `skins/` (biblioteka skórek i zestawy), `settings.json` i `accounts.json` (zaszyfrowane tokeny). Hammer+ dodaje `plus.json` (kody), `cloud.json` (ostatnia kopia uzgodniona z chmurą) i `theme/` (własne tła).
+
+W folderze każdej instancji launcher ma swój podfolder `.hammer/`: `content.json` (skąd pochodzą dodatki), `benchmarks.json` (historia testów FPS) i `przywracanie/` (do trzech punktów przywracania po aktualizacjach modów – można je usunąć ręcznie, żeby zwolnić miejsce; wtedy tych aktualizacji nie da się już cofnąć).
 
 ## Testy
 

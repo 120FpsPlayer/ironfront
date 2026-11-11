@@ -90,6 +90,10 @@
       return new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
     },
     date: (ts) => new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }),
+    /** "11 lis, 14:05" – for lists (test history, restore points). */
+    dateTime: (ts) => new Date(ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    /** Frames per second: whole numbers from 100 up, one decimal below ("240", "58,4"). */
+    fps: (n) => (n >= 100 ? nf.format(Math.round(n)) : String(Math.round((n ?? 0) * 10) / 10).replace('.', ',')),
   };
 
   const LOADERS = {
@@ -329,6 +333,10 @@
     progress: new Map(), // instanceId → { stage, label, done, total, percent }
     logs: new Map(), // instanceId → [{ line, stream }]
     crashes: new Map(), // instanceId → crash analysis
+    benchmarks: new Set(), // instances whose game runs as an FPS test right now
+    benchResults: new Map(), // instanceId → how the last FPS test of this launcher run ended ('benchmark:done')
+    playSummary: null, // „Podsumowanie gry” of the last session – shown on the start screen until dismissed
+    updates: { checkedAt: null, total: 0, instances: [] }, // mod updates found by the background check: [{ id, name, count }]
     plus: null, // Hammer+: { active, until, account, reason, text, … } from the launcher
     backgroundUrl: null, // the player's own launcher background (Hammer+)
     get account() {
