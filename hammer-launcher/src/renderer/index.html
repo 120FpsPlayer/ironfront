@@ -12,6 +12,7 @@
     <header class="titlebar">
       <div class="tb-brand"><img src="assets/hammer-mark.png" alt=""><span>Hammer <b>Launcher</b></span><em>by HammerShop</em><i class="tb-slash" aria-hidden="true"></i><span class="tb-dev">developed by <strong>120FpsPlayer</strong></span></div>
       <div class="tb-drag"></div>
+      <div class="tb-extra"><button class="tb-plus" id="tb-plus" type="button" aria-label="Hammer+"></button></div>
       <div class="tb-buttons">
         <button class="tb-btn" data-win="minimize" title="Minimalizuj" aria-label="Minimalizuj"></button>
         <button class="tb-btn" data-win="maximize" title="Maksymalizuj" aria-label="Maksymalizuj"></button>
@@ -19,6 +20,7 @@
       </div>
     </header>
     <div class="shell">
+      <div class="backdrop" id="backdrop" aria-hidden="true"><div class="fx live"></div></div>
       <nav class="sidebar" aria-label="Menu">
         <div class="nav" id="nav"></div>
         <div class="sidebar-foot" id="sidebar-foot"></div>
@@ -29,7 +31,9 @@
     <div id="modal-root"></div>
   </div>
   <script src="js/icons.js"></script>
+  <script src="js/theme.js"></script>
   <script src="js/core.js"></script>
+  <script src="views/plus.js"></script>
   <script src="views/home.js"></script>
   <script src="views/instances.js"></script>
   <script src="views/mods.js"></script>

@@ -85,11 +85,32 @@ function supports(instance, client = NONE) {
 }
 
 /**
- * Puts the mod in place (or removes it). Returns { active, reason? }.
- * client: the result of loadHammerClient(). links: { discordUrl, shopUrl, brand } for
- * config/hammerclient-launcher.json (the mod's Discord / shop buttons).
+ * What the launcher tells the mod in config/hammerclient-launcher.json: the links for its Discord / shop buttons
+ * and where Hammer+ stands for the account that is about to play –
+ *   plus: { active, until (unix seconds, 0 = never or not active) },
+ *   cape: the Hammer+ cape the player picked ("" = none; always "" without Hammer+),
+ *   api:  the shop API the mod asks about other players' capes ("" = none).
  */
-async function syncHammerClient({ instance, client = NONE, content, links = {} }) {
+function launcherFile({ links = {}, plus = null, cape = '', api = '' } = {}) {
+  const https = (u) => (typeof u === 'string' && u.startsWith('https://') ? u : '');
+  const active = Boolean(plus?.active);
+  const until = active && Number.isInteger(plus.until) && plus.until > 0 ? plus.until : 0;
+  return {
+    discordUrl: https(links.discordUrl),
+    shopUrl: https(links.shopUrl),
+    brand: links.brand || 'HammerShop',
+    plus: { active, until },
+    cape: active && typeof cape === 'string' && /^[a-z0-9_-]{1,32}$/.test(cape) ? cape : '',
+    api: typeof api === 'string' && /^https?:\/\//.test(api) ? api : '',
+  };
+}
+
+/**
+ * Puts the mod in place (or removes it). Returns { active, reason? }.
+ * client: the result of loadHammerClient(). links, plus, cape and api go into config/hammerclient-launcher.json
+ * (see launcherFile above).
+ */
+async function syncHammerClient({ instance, client = NONE, content, links = {}, plus = null, cape = '', api = '' }) {
   const mods = path.join(instance.dir, 'mods');
   const target = path.join(mods, FILE);
   const supported = supports(instance, client);
@@ -113,9 +134,8 @@ async function syncHammerClient({ instance, client = NONE, content, links = {} }
 
   const configDir = path.join(instance.dir, 'config');
   fs.mkdirSync(configDir, { recursive: true });
-  const https = (u) => (typeof u === 'string' && u.startsWith('https://') ? u : '');
-  fs.writeFileSync(path.join(configDir, 'hammerclient-launcher.json'), JSON.stringify({ discordUrl: https(links.discordUrl), shopUrl: https(links.shopUrl), brand: links.brand || 'HammerShop' }, null, 2));
+  fs.writeFileSync(path.join(configDir, 'hammerclient-launcher.json'), JSON.stringify(launcherFile({ links, plus, cape, api }), null, 2));
   return { active: true };
 }
 
-module.exports = { loadHammerClient, syncHammerClient, supports, compareVersions, FILE, INDEX, LEGACY_VERSIONS };
+module.exports = { loadHammerClient, syncHammerClient, launcherFile, supports, compareVersions, FILE, INDEX, LEGACY_VERSIONS };

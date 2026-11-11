@@ -144,6 +144,38 @@ function move(instance, from, to) {
 }
 
 /**
+ * Makes the shown list equal to `entries` ([{ name, address }], in that order) – used when a copy from the cloud
+ * is taken. A server that stays (same address) keeps its icon and resource-pack choice; entries with a bad
+ * address are left out. Returns true when the list changed – an equal list is not written again.
+ */
+function replace(instance, entries) {
+  const data = load(instance);
+  const shown = shownOf(data.list);
+  const key = (list) => JSON.stringify(list.map((e) => [text(get(e, 'name')), text(get(e, 'ip'))]));
+  const before = key(shown);
+  const have = shown.map((entry) => ({ entry, address: text(get(entry, 'ip')) ?? '', used: false }));
+  const next = [];
+  for (const item of Array.isArray(entries) ? entries.slice(0, 500) : []) {
+    let ip;
+    try {
+      ip = cleanAddress(item?.address);
+    } catch {
+      continue;
+    }
+    const name = String(item?.name ?? '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, MAX_NAME) || ip;
+    const old = have.find((x) => !x.used && x.address === ip);
+    if (old) {
+      old.used = true;
+      old.entry.value.set('name', tag.string(name));
+      next.push(old.entry);
+    } else next.push(tag.compound({ name: tag.string(name), ip: tag.string(ip) }));
+  }
+  if (key(next) === before) return false;
+  save(instance, data, next);
+  return true;
+}
+
+/**
  * Adds the servers of another game folder (the official Minecraft's) that this instance does not have yet.
  * A server is "already here" when its address matches. Names, icons and resource-pack choices come along;
  * hidden entries (the game's history of direct connections) do not.
@@ -179,4 +211,4 @@ function importFrom(instance, sourceDir) {
   return { found: true, added, skipped };
 }
 
-module.exports = { list, add, update, remove, move, importFrom, cleanAddress, FILE };
+module.exports = { list, add, update, remove, move, replace, importFrom, cleanAddress, FILE };

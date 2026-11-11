@@ -209,11 +209,14 @@
     return canvas;
   }
 
-  /** A cape as the player sees it from behind (the 10×16 outer side of the cape texture). */
+  /**
+   * A cape as the player sees it from behind (the 10×16 outer side of the cape texture). `src` is a cape of the
+   * account (https or data URL) or one of the launcher's own Hammer+ capes (assets/capes/<id>.png).
+   */
   function capeView(src, height = 64) {
     const unit = Math.max(1, Math.round(height / 16));
     const canvas = h('canvas.cape-view', { width: 10 * unit, height: 16 * unit, role: 'img', 'aria-label': 'Peleryna' });
-    if (!src || !/^(https:\/\/|data:image\/png)/.test(src)) return canvas;
+    if (!src || !/^(https:\/\/|data:image\/png|assets\/capes\/[a-z0-9_-]+\.png$)/.test(src)) return canvas;
     const img = new Image();
     img.onload = () => {
       const g = canvas.getContext('2d');
@@ -256,6 +259,47 @@
     else document.documentElement.dataset.accent = accent;
   }
 
+  /* ── Hammer+ looks: any accent colour, an animated background, the player's own picture behind the pages ── */
+  const FX = [
+    { value: 'classic', label: 'Klasyczne', hint: 'iskry jak dotąd' },
+    { value: 'aurora', label: 'Zorza', hint: 'powoli falujące światła' },
+    { value: 'forge', label: 'Kuźnia', hint: 'żar i iskry z dołu' },
+    { value: 'stars', label: 'Gwiazdy', hint: 'nocne niebo' },
+  ];
+  const ACCENT_VARS = { accent: '--accent', accent2: '--accent2', accent3: '--accent3', accentHi: '--accent-hi', ink: '--accent-ink', glow: '--glow' };
+  const plusOn = () => Boolean(state.plus?.active);
+  /** The animated background that is on right now – null for the classic one (always without Hammer+). */
+  const fxNow = () => (plusOn() && FX.some((f) => f.value === state.settings.heroStyle && f.value !== 'classic') ? state.settings.heroStyle : null);
+  /** The layer the animated backgrounds are drawn in (pure CSS). `style` fixes one for a preview; without it the layer follows the settings. */
+  function fxLayer(style) {
+    return h('div', { class: `fx${style ? ` ${style}` : ` live${fxNow() ? ` ${fxNow()}` : ''}`}`, 'aria-hidden': 'true' });
+  }
+  /**
+   * Puts the look from the settings on the page. `previewColor` ("#rrggbb") shows a colour before it is saved
+   * (while the player drags in the colour picker). Without Hammer+ everything falls back to the free look.
+   */
+  function applyTheme(previewColor) {
+    const root = document.documentElement;
+    const s = state.settings ?? {};
+    const custom = plusOn() ? previewColor ?? (s.accent === 'custom' ? s.accentColor : null) : null;
+    const colours = custom ? window.HS_THEME.palette(custom) : null;
+    for (const name of Object.values(ACCENT_VARS)) root.style.removeProperty(name);
+    if (colours) {
+      root.dataset.accent = 'custom';
+      for (const [key, name] of Object.entries(ACCENT_VARS)) root.style.setProperty(name, colours[key]);
+    } else applyAccent(s.accent);
+    const fx = fxNow();
+    if (fx) root.dataset.fx = fx;
+    else delete root.dataset.fx;
+    for (const layer of document.querySelectorAll('.fx.live')) layer.className = `fx live${fx ? ` ${fx}` : ''}`;
+    const backdrop = document.getElementById('backdrop');
+    const picture = plusOn() ? state.backgroundUrl : null;
+    if (backdrop) {
+      backdrop.style.backgroundImage = picture ? `url("${picture}")` : '';
+      backdrop.classList.toggle('on', Boolean(picture));
+    }
+  }
+
   /* ── tiny event bus + app state ── */
   const listeners = new Map();
   const bus = {
@@ -284,6 +328,8 @@
     progress: new Map(), // instanceId → { stage, label, done, total, percent }
     logs: new Map(), // instanceId → [{ line, stream }]
     crashes: new Map(), // instanceId → crash analysis
+    plus: null, // Hammer+: { active, until, account, reason, text, … } from the launcher
+    backgroundUrl: null, // the player's own launcher background (Hammer+)
     get account() {
       return this.accounts.find((a) => a.id === this.settings.selectedAccount) ?? this.accounts[0] ?? null;
     },
@@ -616,5 +662,5 @@
     return { el, draw };
   }
 
-  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent };
+  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme };
 })();

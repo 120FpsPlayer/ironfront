@@ -52,4 +52,18 @@ function mrVersion({ id, projectId, name = id, number = '1.0.0', mc = ['1.21.1']
   };
 }
 
-module.exports = { tmpDir, sha1, mockFetch, fabricJar, mrVersion };
+/**
+ * A stand-in for the shop's signing key (Hammer+): `publicKey` is what launcher.config.json would hold,
+ * `code({ mc, exp, … })` signs a code the way the bot does – HP1.<payload>.<signature>.
+ */
+function plusKeys() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  const raw = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32);
+  const code = ({ id = 'a1b2c3d4e5f60718', mc, exp = 0, iat = 1762000000, ...more }) => {
+    const payload = Buffer.from(JSON.stringify({ id, mc, exp, iat, ...more })).toString('base64url');
+    return `HP1.${payload}.${crypto.sign(null, Buffer.from(`HP1.${payload}`), privateKey).toString('base64url')}`;
+  };
+  return { publicKey: raw.toString('base64'), code };
+}
+
+module.exports = { tmpDir, sha1, mockFetch, fabricJar, mrVersion, plusKeys };

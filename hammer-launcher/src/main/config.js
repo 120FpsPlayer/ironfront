@@ -21,6 +21,8 @@ const DEFAULTS = {
   discordClientId: '',
   microsoft: { clientId: '', redirect: '' },
   updateUrl: '',
+  // Hammer+: base64 of the raw 32-byte Ed25519 key the shop signs its codes with. Empty = codes cannot be activated.
+  plusPublicKey: '',
   defaultInstance: { name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', optimized: true },
 };
 

@@ -5,10 +5,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const { createSkins, checkSkin, pngSize, fromDataUrl, MAX_LIBRARY } = require('../src/main/skins');
+const { createSkins, checkSkin, pngSize, fromDataUrl, MAX_LIBRARY, PLUS_LIBRARY, MAX_OUTFITS } = require('../src/main/skins');
 const { createServices } = require('../src/main/services');
 const { createAccounts, createCrypt } = require('../src/main/accounts');
-const { tmpDir, sha1 } = require('./helpers');
+const { tmpDir, sha1, plusKeys } = require('./helpers');
 
 function crc32(data) {
   let crc = ~0;
@@ -291,4 +291,138 @@ test('services: the Skórka tab uses the selected account, refreshes a refused t
   assert.equal(services.skins.forget(changed.library[0].id).length, 1);
   assert.ok(fs.existsSync(path.join(root, 'skins', 'library.json')), 'the library lives in the launcher folder');
   assert.ok(!fs.readFileSync(path.join(root, 'accounts.json'), 'utf8').includes('token-fresh'), 'tokens stay encrypted');
+});
+
+test('the library limit: 24 skins, 200 with Hammer+ – and a big library is not cut down when Hammer+ ends', async () => {
+  const fetchFn = fakeMojang({ skinUrl: null });
+  let clock = 0;
+  let plus = true;
+  const dir = path.join(tmpDir(), 'skins');
+  const skins = createSkins({ dir, fetchFn, now: () => (clock += 1), limit: () => (plus ? PLUS_LIBRARY : MAX_LIBRARY) });
+  assert.deepEqual([MAX_LIBRARY, PLUS_LIBRARY], [24, 200]);
+  for (let i = 0; i < 30; i += 1) await skins.upload(auth(), { png: png(64, 64, 10 + i), name: `Skórka ${i}` });
+  assert.equal(skins.library().length, 30, 'more than the free limit');
+  assert.equal((await skins.state(auth())).limit, 200);
+  // Hammer+ ends: nothing is thrown away at once; a new skin pushes out exactly one old one.
+  plus = false;
+  const after = await skins.upload(auth(), { png: png(64, 64, 99), name: 'Nowa' });
+  assert.deepEqual([after.library.length, after.limit, after.library[0].name], [30, 24, 'Nowa']);
+  assert.ok(!after.library.some((x) => x.name === 'Skórka 0'));
+  assert.ok(after.library.some((x) => x.name === 'Skórka 1'));
+  assert.equal(fs.readdirSync(dir).filter((f) => f.endsWith('.png')).length, 30);
+});
+
+test('Zestawy: a named look = skin + model + cape, put on with one click through the usual calls', async () => {
+  const fetchFn = fakeMojang();
+  let clock = 1_000;
+  const dir = path.join(tmpDir(), 'skins');
+  const skins = createSkins({ dir, fetchFn, now: () => (clock += 1000) });
+  const start = await skins.state(auth());
+  assert.deepEqual(start.outfits, []);
+  const knight = (await skins.upload(auth(), { png: png(64, 64, 7), variant: 'slim', name: 'Rycerz' })).library[0];
+  const account = start.library[0];
+
+  const saved = skins.saveOutfit({ name: '  Na PvP ', skin: knight.id, variant: 'slim', cape: 'cape-vanilla', capeName: 'Vanilla' });
+  assert.deepEqual(saved.map((o) => [o.name, o.skin, o.skinName, o.variant, o.cape, o.capeName, o.dataUrl === knight.dataUrl]), [['Na PvP', knight.id, 'Rycerz', 'slim', 'cape-vanilla', 'Vanilla', true]]);
+  assert.match(saved[0].id, /^[0-9a-f]{12}$/);
+  skins.saveOutfit({ name: 'Na co dzień', skin: account.id, variant: 'classic', cape: null });
+  assert.deepEqual(skins.outfits().map((o) => [o.name, o.cape, o.capeName]), [['Na co dzień', null, null], ['Na PvP', 'cape-vanilla', 'Vanilla']], 'the newest first');
+  assert.throws(() => skins.saveOutfit({ name: '', skin: knight.id }), /Podaj nazwę zestawu/);
+  assert.throws(() => skins.saveOutfit({ name: 'na pvp', skin: knight.id }), /Masz już zestaw „na pvp”/);
+  assert.throws(() => skins.saveOutfit({ name: 'X', skin: 'f'.repeat(40) }), /Nie ma już tej skórki w bibliotece/);
+  assert.throws(() => skins.saveOutfit({ name: 'X', skin: knight.id, cape: '../x' }), /Nieznana peleryna/);
+  assert.equal(skins.saveOutfit({ name: 'Domyślny model', skin: knight.id }).find((o) => o.name === 'Domyślny model').variant, 'slim', 'the model the skin has in the library');
+
+  // The account wears the knight with the Migrator cape. "Na co dzień" = the account skin, classic, no cape.
+  const [daily, pvp] = [skins.outfits().find((o) => o.name === 'Na co dzień'), skins.outfits().find((o) => o.name === 'Na PvP')];
+  let n = fetchFn.calls.length;
+  const worn = await skins.applyOutfit(auth(), daily.id);
+  const sent = () => fetchFn.calls.slice(n).filter((c) => c.url.includes('minecraftservices')).map((c) => `${c.method} ${c.url.split('/profile')[1]}`);
+  assert.deepEqual(sent(), ['GET ', 'POST /skins', 'DELETE /capes/active'], 'the profile is looked at, then the skin and the cape are changed');
+  assert.deepEqual([worn.skin.libraryId, worn.skin.variant, worn.capes.map((c) => c.active), worn.warning], [account.id, 'classic', [false, false], undefined]);
+  assert.equal(fetchFn.calls.filter((c) => c.method === 'POST').at(-1).body.get('variant'), 'classic');
+  // The same outfit again: nothing differs, so nothing is sent (Mojang limits how often a skin may change).
+  n = fetchFn.calls.length;
+  await skins.applyOutfit(auth(), daily.id);
+  assert.deepEqual(sent(), ['GET ']);
+  // The other one: skin, model and cape.
+  n = fetchFn.calls.length;
+  const fight = await skins.applyOutfit(auth(), pvp.id);
+  assert.deepEqual(sent(), ['GET ', 'POST /skins', 'PUT /capes/active']);
+  assert.deepEqual([fight.skin.libraryId, fight.skin.variant, fight.capes.map((c) => [c.id, c.active])], [knight.id, 'slim', [['cape-migrator', false], ['cape-vanilla', true]]]);
+  assert.equal(fight.outfits.length, 3, 'the state carries the outfits');
+  // Only the cape differs → only the cape call.
+  skins.saveOutfit({ name: 'PvP z Migratorem', skin: knight.id, variant: 'slim', cape: 'cape-migrator' });
+  n = fetchFn.calls.length;
+  await skins.applyOutfit(auth(), skins.outfits().find((o) => o.name === 'PvP z Migratorem').id);
+  assert.deepEqual(sent(), ['GET ', 'PUT /capes/active']);
+
+  // The account lost a cape: the skin still goes on and the player is told about the cape.
+  skins.saveOutfit({ name: 'Ze starą peleryną', skin: account.id, cape: 'cape-oddana' });
+  const partly = await skins.applyOutfit(auth(), skins.outfits().find((o) => o.name === 'Ze starą peleryną').id);
+  assert.equal(partly.skin.libraryId, account.id);
+  assert.match(partly.warning, /Skórka z zestawu jest założona, ale peleryny nie udało się zmienić: Serwer Minecrafta odrzucił tę zmianę/);
+  await assert.rejects(skins.applyOutfit(auth(), 'nie-ma'), /Nie ma już takiego zestawu/);
+
+  // Removing an outfit keeps the skin; removing a skin takes its outfits with it.
+  assert.equal(skins.removeOutfit(pvp.id).length, 4);
+  assert.equal(skins.removeOutfit('nie-ma').length, 4);
+  assert.equal(skins.library().length, 2);
+  skins.forget(knight.id);
+  assert.deepEqual(skins.outfits().map((o) => o.name).sort(), ['Na co dzień', 'Ze starą peleryną']);
+  fs.writeFileSync(path.join(dir, 'outfits.json'), '{ broken');
+  assert.deepEqual(skins.outfits(), []);
+  assert.equal(MAX_OUTFITS, 50);
+});
+
+test('Zestawy: a skin that belongs to an outfit is never the one pushed out of a full library', async () => {
+  const fetchFn = fakeMojang({ skinUrl: null });
+  let clock = 0;
+  const skins = createSkins({ dir: path.join(tmpDir(), 'skins'), fetchFn, now: () => (clock += 1), limit: () => 3 });
+  const oldest = (await skins.upload(auth(), { png: png(64, 64, 1), name: 'W zestawie' })).library[0];
+  skins.saveOutfit({ name: 'Ulubiony', skin: oldest.id });
+  for (let i = 2; i <= 5; i += 1) await skins.upload(auth(), { png: png(64, 64, i), name: `Skórka ${i}` });
+  assert.deepEqual(skins.library().map((x) => x.name), ['Skórka 5', 'Skórka 4', 'W zestawie']);
+  assert.equal(skins.outfits().length, 1);
+});
+
+test('services: Zestawy and the bigger library need Hammer+ – removing an outfit does not', async () => {
+  const mc = 'ab'.repeat(16); // a code is tied to a real Minecraft UUID
+  class FakeAuth {
+    async launch() {
+      return FakeAuth.xbox();
+    }
+    async refresh() {
+      return FakeAuth.xbox();
+    }
+    static xbox() {
+      return { save: () => 'refresh', getMinecraft: async () => ({ mcToken: 'token-1', exp: Date.now() + 3600e3, profile: { id: mc, name: 'Gracz', skins: [] } }) };
+    }
+  }
+  let key = null;
+  const root = tmpDir();
+  const keys = plusKeys();
+  const accounts = createAccounts({ file: path.join(root, 'accounts.json'), crypt: createCrypt({ keyFile: 'k', readKey: () => key, writeKey: (f, k) => (key = k) }), AuthClass: FakeAuth });
+  const fetchFn = fakeMojang();
+  fetchFn.profile.id = mc;
+  const services = createServices({ root, config: { plusPublicKey: keys.publicKey }, accounts, fetchFn });
+  const account = await accounts.login();
+  services.settings.set({ selectedAccount: account.id });
+  const state = await services.skins.get();
+  assert.deepEqual([state.limit, state.outfits], [24, []]);
+  assert.throws(() => services.skins.saveOutfit({ name: 'Na PvP', skin: state.library[0].id }), /Zestawy skórek to funkcja Hammer\+/);
+
+  services.plus.activate(keys.code({ mc }));
+  assert.equal((await services.skins.get()).limit, 200);
+  const [outfit] = services.skins.saveOutfit({ name: 'Na PvP', skin: state.library[0].id, variant: 'slim', cape: 'cape-vanilla', capeName: 'Vanilla' });
+  const worn = await services.skins.applyOutfit(outfit.id);
+  assert.deepEqual([worn.skin.variant, worn.capes.map((c) => c.active), worn.outfits.length], ['slim', [false, true], 1]);
+  assert.equal(accounts.list()[0].skinVariant, 'SLIM', 'the head in the launcher follows the outfit');
+  assert.ok(fs.existsSync(path.join(root, 'skins', 'outfits.json')));
+
+  // Hammer+ ends: the outfits stay listed, putting one on is locked, removing still works.
+  services.plus.remove();
+  assert.equal((await services.skins.get()).outfits.length, 1);
+  assert.throws(() => services.skins.applyOutfit(outfit.id), /Zestawy skórek to funkcja Hammer\+/);
+  assert.deepEqual(services.skins.removeOutfit(outfit.id), []);
 });

@@ -20,6 +20,17 @@
     btn.title = maximized ? 'Przywróć' : 'Maksymalizuj';
   });
 
+  /* ── Hammer+ in the title bar: a gold pill that leads to the Hammer+ page and shows when it is on ── */
+  const pill = document.getElementById('tb-plus');
+  pill.addEventListener('click', () => go('plus'));
+  function drawPill() {
+    const st = state.plus;
+    const on = HS.plusOn();
+    pill.classList.toggle('on', on);
+    pill.title = on ? `Hammer+ jest aktywny ${HS.plusUi.until(st)}` : 'Hammer+ – zobacz, co daje';
+    clear(pill, icon('crown'), h('span', 'Hammer+'), on ? icon('check') : null);
+  }
+
   /* ── sidebar ── */
   const nav = document.getElementById('nav');
   const foot = document.getElementById('sidebar-foot');
@@ -64,7 +75,11 @@
         'button.account-chip',
         { onclick: (e) => accountMenu(e.currentTarget), title: 'Konta' },
         a ? HS.head(a, 36) : h('div.head', { style: { '--s': '36px' } }, icon('user')),
-        h('div.meta', h('b', a?.name ?? 'Zaloguj się'), h('small', a ? (a.needsLogin ? 'Sesja wygasła' : 'Konto Microsoft') : 'Konto Microsoft')),
+        h(
+          'div.meta',
+          h('div.name', h('b', a?.name ?? 'Zaloguj się'), a && HS.plusOn() ? h('span.plus-badge', { title: 'Hammer+ jest aktywny na tym koncie', 'aria-label': 'Hammer+' }, '+') : null),
+          h('small', a ? (a.needsLogin ? 'Sesja wygasła' : 'Konto Microsoft') : 'Konto Microsoft'),
+        ),
         icon('chevron-down'),
       ),
       h('div.version-tag', `Hammer Launcher v${state.info?.version ?? ''}`),
@@ -97,6 +112,28 @@
     drawNav();
   }
   HS.go = go;
+  /** Draws the open tab again where it is (after Hammer+ went on or off, or a copy from the cloud changed things). */
+  HS.refreshView = () => {
+    const view = document.getElementById('view');
+    const top = view.scrollTop;
+    go(current);
+    view.scrollTop = top;
+  };
+
+  /* ── Hammer+ status: from the launcher at the start, and whenever it changes (a code, another account, the code ran out) ── */
+  async function setPlus(st) {
+    const was = HS.plusOn();
+    state.plus = st;
+    // The player's own background is only handed out while Hammer+ is active.
+    state.backgroundUrl = st?.active ? ((await api.theme.background().catch(() => null))?.url ?? null) : null;
+    HS.applyTheme();
+    drawPill();
+    drawFoot();
+    bus.emit('plus', st);
+    if (current && (was !== HS.plusOn() || current === 'plus')) HS.refreshView();
+  }
+  HS.setPlus = setPlus;
+  api.on('plus:status', setPlus);
 
   /* ── login ── */
   let loggingIn = false;
@@ -197,22 +234,28 @@
   });
   api.on('toast', (t) => toast(t.kind ?? 'info', t.text));
 
+  api.on('cloud:conflict', (c) => HS.plusUi.cloudConflict(c));
+  api.on('cloud:synced', () => bus.emit('cloud'));
+
   bus.on('accounts', drawFoot);
   bus.on('settings', drawFoot);
-  bus.on('settings', (s) => HS.applyAccent(s?.accent));
+  bus.on('settings', () => HS.applyTheme());
 
   /* ── start ── */
   (async () => {
     try {
       state.info = await api.app.info();
       state.settings = await api.settings.get();
-      HS.applyAccent(state.settings.accent);
+      state.plus = state.info.plus ?? null;
+      state.backgroundUrl = HS.plusOn() ? ((await api.theme.background().catch(() => null))?.url ?? null) : null;
+      HS.applyTheme();
       state.accounts = await api.accounts.list();
       await state.refreshInstances();
       for (const id of await api.game.running()) state.running.set(id, 'running');
     } catch (err) {
       toast('err', err.message, 8000);
     }
+    drawPill();
     drawFoot();
     HS.community.discord().then(drawDiscordMini);
     setInterval(() => HS.community.discord().then(drawDiscordMini), 5 * 60_000);
@@ -230,6 +273,11 @@
         toast('warning', `Nie udało się utworzyć instancji startowej: ${err.message}`, 7000);
       }
     }
+    // Chmura (Hammer+, when switched on): fetch what another computer sent. Quiet when there is nothing to say.
+    api.cloud
+      .startup()
+      .then((res) => HS.plusUi.cloudResult(res, { auto: true }))
+      .catch(() => {});
   })();
 
   // Ctrl+1…9 switches tabs, Ctrl+0 opens the tenth.

@@ -1,5 +1,6 @@
 'use strict';
-/* Światy – the singleplayer worlds of an instance: play, back up, rename, remove – and the backups themselves. */
+/* Światy – the singleplayer worlds of an instance: play, back up, rename, remove – and the backups themselves,
+   also the ones the launcher makes by itself after each game session (Hammer+). */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -128,7 +129,11 @@
       return h(
         'div.installed-row',
         h('div.pic', icon('zip')),
-        h('div.grow', h('b.ellipsis', b.world), h('small.ellipsis', { style: { display: 'block' }, title: b.file }, `${when(b.createdAt)} · ${fmt.size(b.size)} · ${b.file}`)),
+        h(
+          'div.grow',
+          h('div.row.title', { style: { gap: '8px' } }, h('b.ellipsis', b.world), b.auto ? HS.chip('automatyczna', null, 'history') : null),
+          h('small.ellipsis', { style: { display: 'block' }, title: b.file }, `${when(b.createdAt)} · ${fmt.size(b.size)} · ${b.file}`),
+        ),
         h(
           'button.btn.sm',
           {
@@ -174,9 +179,10 @@
             backups.length ? h('span.dim', { style: { fontSize: '12px' } }, `${fmt.count(backups.length, 'kopia', 'kopie', 'kopii')} · ${fmt.size(backups.reduce((sum, b) => sum + b.size, 0))}`) : null,
             h('button.btn.sm', { onclick: () => attempt(() => api.app.openFolder(instance.id, 'backups')) }, icon('folder'), 'Otwórz folder'),
           ),
+          h('div.auto-backup', HS.plusUi.autoBackupRow()),
           backups.length
             ? h('div.rows', backups.map(backupRow))
-            : h('p.muted', { style: { fontSize: '13px' } }, 'Nie masz jeszcze żadnej kopii. Kliknij „Kopia zapasowa” przy świecie, a launcher spakuje go do pliku .zip. Przywrócona kopia zawsze staje się nowym światem – niczego nie nadpisuje.'),
+            : h('p.muted', { style: { fontSize: '13px', marginTop: '12px' } }, 'Nie masz jeszcze żadnej kopii. Kliknij „Kopia zapasowa” przy świecie, a launcher spakuje go do pliku .zip. Przywrócona kopia zawsze staje się nowym światem – niczego nie nadpisuje.'),
         ),
       );
     }
@@ -249,6 +255,8 @@
         load();
       }),
       bus.on('instances', () => picker.draw()),
+      // An automatic backup (Hammer+) finished after a game session → it shows up on the list by itself.
+      api.on('worlds:backups', (e) => e?.instanceId === inst()?.id && loadBackups()),
       bus.on('game', () => {
         const running = Boolean(inst() && state.running.has(inst().id));
         // After a game the list has new worlds, play dates and sizes.

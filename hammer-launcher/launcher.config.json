@@ -6,9 +6,21 @@
   "shopApi": "",
   "discordInvite": "https://discord.gg/gRqFb6MmWX",
   "newsUrl": "",
-  "server": { "name": "Serwer HammerShop", "address": "" },
+  "server": {
+    "name": "Serwer HammerShop",
+    "address": ""
+  },
   "discordClientId": "",
-  "microsoft": { "clientId": "", "redirect": "" },
+  "microsoft": {
+    "clientId": "",
+    "redirect": ""
+  },
   "updateUrl": "",
-  "defaultInstance": { "name": "Hammer", "mcVersion": "1.21.1", "loader": "fabric", "optimized": true }
+  "defaultInstance": {
+    "name": "Hammer",
+    "mcVersion": "1.21.1",
+    "loader": "fabric",
+    "optimized": true
+  },
+  "plusPublicKey": "TLfA6SyBn+sRD2WZY5/uS6YodysdHopL5l2A2o93CtE="
 }

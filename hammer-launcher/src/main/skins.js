@@ -6,6 +6,8 @@
  *
  *   skins/<sha1>.png      the skin files
  *   skins/library.json    [{ id, name, variant, addedAt, usedAt, texture }] – texture = its address at Mojang
+ *   skins/outfits.json    [{ id, name, skin, variant, cape, capeName, createdAt }] – Zestawy (Hammer+): a named
+ *                         look = a skin of the library + the arm model + a cape of the account (or none)
  *
  * No Electron here: the network goes through `fetchFn`, the account through `auth(force)`, which resolves with
  * { id, name, accessToken } – with force = true after the server refused the token, to get a fresh one.
@@ -21,7 +23,9 @@ const API = 'https://api.minecraftservices.com/minecraft/profile';
 const TEXTURE_URL = /^https:\/\/textures\.minecraft\.net\/texture\/[0-9a-f]{16,80}$/;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const MAX_BYTES = 512 * 1024; // a 64×64 picture is a few kB – anything big is not a skin
-const MAX_LIBRARY = 24;
+const MAX_LIBRARY = 24; // skins kept without Hammer+
+const PLUS_LIBRARY = 200; // … and with it
+const MAX_OUTFITS = 50;
 const VARIANTS = ['classic', 'slim'];
 
 const LOGIN_AGAIN = 'Sesja konta Microsoft wygasła – zaloguj się ponownie (Ustawienia → Konta Microsoft) i spróbuj jeszcze raz.';
@@ -67,8 +71,10 @@ function apiError(status, what) {
   return `Nie udało się – serwer Minecrafta odpowiedział błędem ${status}.`;
 }
 
-function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.now() }) {
+/** `limit()` says how many skins the library may hold right now (more with Hammer+). */
+function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.now(), limit = () => MAX_LIBRARY }) {
   const indexFile = path.join(dir, 'library.json');
+  const outfitsFile = path.join(dir, 'outfits.json');
   const fileOf = (id) => path.join(dir, `${id}.png`);
   const validId = (id) => /^[0-9a-f]{40}$/.test(String(id));
   const load = () => {
@@ -76,9 +82,18 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
     return Array.isArray(list) ? list.filter((e) => e && validId(e.id) && fs.existsSync(fileOf(e.id))) : [];
   };
   const save = (list) => writeJson(indexFile, list);
+  const loadOutfits = () => {
+    const list = readJson(outfitsFile, []);
+    return Array.isArray(list) ? list.filter((o) => o && /^[0-9a-f]{12}$/.test(String(o.id)) && validId(o.skin)).slice(0, MAX_OUTFITS) : [];
+  };
 
-  /** Adds a skin file to the library (or finds it there); newest first, the oldest ones make room. */
+  /**
+   * Adds a skin file to the library (or finds it there); newest first, the oldest ones make room. A library
+   * that grew with Hammer+ is not cut down when Hammer+ ends – a new skin then only pushes out one old one –
+   * and a skin that belongs to an outfit is never the one to go.
+   */
   function remember(list, data, { name, variant, texture = null }) {
+    const room = Math.max(limit(), list.length);
     const id = crypto.createHash('sha1').update(data).digest('hex');
     let entry = list.find((e) => e.id === id);
     if (entry) {
@@ -94,7 +109,12 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
     // One address at Mojang belongs to one skin.
     if (texture) for (const other of list) if (other !== entry && other.texture === texture) other.texture = null;
     list.sort((a, b) => b.usedAt - a.usedAt);
-    for (const old of list.splice(MAX_LIBRARY)) fs.rmSync(fileOf(old.id), { force: true });
+    const kept = new Set(loadOutfits().map((o) => o.skin));
+    for (let i = list.length - 1; i >= 0 && list.length > room; i -= 1) {
+      if (list[i] === entry || kept.has(list[i].id)) continue;
+      fs.rmSync(fileOf(list[i].id), { force: true });
+      list.splice(i, 1);
+    }
     return entry;
   }
 
@@ -157,7 +177,7 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
       skin = { url, variant: variantOf(worn.variant), dataUrl: entry ? dataUrl(fs.readFileSync(fileOf(entry.id))) : null, libraryId: entry?.id ?? null };
     }
     const capes = (profile.capes ?? []).filter((c) => c && typeof c.id === 'string').map((c) => ({ id: c.id, name: String(c.alias ?? 'Peleryna').slice(0, 40), url: TEXTURE_URL.test(httpsUrl(c.url) ?? '') ? httpsUrl(c.url) : null, active: c.state === 'ACTIVE' }));
-    return { account: { id: profile.id ?? account.id, name: profile.name ?? account.name }, skin, capes, library: load().map((e) => publicEntry(e, url)) };
+    return { account: { id: profile.id ?? account.id, name: profile.name ?? account.name }, skin, capes, library: load().map((e) => publicEntry(e, url)), limit: limit(), outfits: outfits() };
   }
 
   /** After a change the API answers with the new profile; if it does not, the profile is asked for again. */
@@ -208,15 +228,74 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
     return settle(auth, capeId == null ? await call(auth, 'DELETE', '/capes/active') : await call(auth, 'PUT', '/capes/active', { json: { capeId: String(capeId) } }));
   }
 
-  /** Removes a skin from the library (not from the account). Returns the library. */
+  /** Removes a skin from the library (not from the account), and the outfits made of it. Returns the library. */
   function forget(id) {
     const list = load();
     const entry = list.find((e) => e.id === id);
     if (entry) {
       fs.rmSync(fileOf(entry.id), { force: true });
       save(list.filter((e) => e !== entry));
+      const left = loadOutfits().filter((o) => o.skin !== entry.id);
+      if (fs.existsSync(outfitsFile)) writeJson(outfitsFile, left);
     }
     return library();
+  }
+
+  /**
+   * Zestawy: [{ id, name, skin, skinName, variant, cape, capeName, createdAt, dataUrl }] – the newest first.
+   * An outfit whose skin left the library is not listed (forget() removes it together with the skin).
+   */
+  function outfits() {
+    const list = load();
+    return loadOutfits()
+      .map((o) => ({ outfit: o, entry: list.find((e) => e.id === o.skin) }))
+      .filter((x) => x.entry)
+      .map(({ outfit: o, entry }) => ({ id: o.id, name: o.name, skin: o.skin, skinName: entry.name, variant: variantOf(o.variant), cape: o.cape ?? null, capeName: o.cape ? o.capeName || 'Peleryna' : null, createdAt: o.createdAt, dataUrl: dataUrl(fs.readFileSync(fileOf(entry.id))) }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /** Saves a look under a name: a skin of the library, the arm model and a cape of the account (null = none). */
+  function saveOutfit({ name, skin, variant, cape = null, capeName = '' } = {}) {
+    const title = cleanName(name);
+    if (!title) throw new Error('Podaj nazwę zestawu, np. „Na PvP”.');
+    const entry = load().find((e) => e.id === skin);
+    if (!entry) throw new Error('Nie ma już tej skórki w bibliotece.');
+    if (cape != null && !/^[\w-]{1,64}$/.test(String(cape))) throw new Error('Nieznana peleryna.');
+    const list = loadOutfits();
+    if (list.length >= MAX_OUTFITS) throw new Error(`Masz już ${MAX_OUTFITS} zestawów – usuń któryś, żeby zapisać nowy.`);
+    if (list.some((o) => o.name.toLowerCase() === title.toLowerCase())) throw new Error(`Masz już zestaw „${title}”. Wybierz inną nazwę.`);
+    list.push({ id: crypto.randomBytes(6).toString('hex'), name: title, skin: entry.id, variant: VARIANTS.includes(variant) ? variant : variantOf(entry.variant), cape: cape == null ? null : String(cape), capeName: cape == null ? '' : cleanName(capeName), createdAt: now() });
+    fs.mkdirSync(dir, { recursive: true });
+    writeJson(outfitsFile, list);
+    return outfits();
+  }
+
+  function removeOutfit(id) {
+    const list = loadOutfits();
+    if (list.some((o) => o.id === id)) writeJson(outfitsFile, list.filter((o) => o.id !== id));
+    return outfits();
+  }
+
+  /**
+   * Puts a whole outfit on with the usual skin and cape calls – only the parts that differ from what the account
+   * wears now are sent. Answers with the new state; when the skin went on but the cape did not (the account no
+   * longer has it), the state carries `warning` with the reason.
+   */
+  async function applyOutfit(auth, id) {
+    const outfit = loadOutfits().find((o) => o.id === id);
+    if (!outfit) throw new Error('Nie ma już takiego zestawu – odśwież zakładkę.');
+    const entry = load().find((e) => e.id === outfit.skin);
+    if (!entry) throw new Error('Skórki z tego zestawu nie ma już w bibliotece.');
+    let current = await state(auth);
+    const model = variantOf(outfit.variant);
+    if (current.skin?.libraryId !== entry.id || current.skin.variant !== model) current = await use(auth, entry.id, model);
+    const worn = current.capes.find((c) => c.active)?.id ?? null;
+    if ((outfit.cape ?? null) === worn) return current;
+    try {
+      return await setCape(auth, outfit.cape ?? null);
+    } catch (err) {
+      return { ...current, warning: `Skórka z zestawu jest założona, ale peleryny nie udało się zmienić: ${err.message}` };
+    }
   }
 
   const library = () => load().map((e) => publicEntry(e, null));
@@ -224,7 +303,7 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
   /** A file the player picked, checked before anything is sent: { name, dataUrl, legacy }. */
   const inspect = (png, name = '') => ({ name: cleanName(name) || 'Moja skórka', dataUrl: dataUrl(png), legacy: checkSkin(png).legacy });
 
-  return { state, upload, use, reset, setCape, forget, library, inspect };
+  return { state, upload, use, reset, setCape, forget, library, inspect, outfits, saveOutfit, removeOutfit, applyOutfit };
 }
 
-module.exports = { createSkins, checkSkin, pngSize, fromDataUrl, apiError, API, MAX_LIBRARY };
+module.exports = { createSkins, checkSkin, pngSize, fromDataUrl, apiError, API, MAX_LIBRARY, PLUS_LIBRARY, MAX_OUTFITS };

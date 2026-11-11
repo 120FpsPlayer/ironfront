@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 const { createPaths } = require('./paths');
-const { createSettings } = require('./settings');
+const { createSettings, sanitize, plusOnly } = require('./settings');
 const { createInstances } = require('./instances');
 const versions = require('./versions');
 const { prepareInstance, describeError } = require('./installer');
@@ -33,34 +33,101 @@ const worldSaves = require('./worlds');
 const diskCleanup = require('./cleanup');
 const { shareLog } = require('./logshare');
 const { createBundles } = require('./bundles');
-const { createSkins } = require('./skins');
+const { createSkins, MAX_LIBRARY, PLUS_LIBRARY } = require('./skins');
+const { createPlus, cleanUuid } = require('./plus');
+const { createShopApi } = require('./shopapi');
+const cloudSync = require('./cloud');
+const { createBackgrounds, createMenuBackground, EXTENSIONS } = require('./background');
+const { loadCapes } = require('./capes');
+const autoBackup = require('./autobackup');
 
 /**
  * `trash(path)` moves a file or folder to the system trash (Electron's shell.trashItem in main.js). Without it –
  * in the tests – worlds and backups are simply deleted.
  * `clientDir` is the bundled Hammer Client folder (versions.json + one jar per Minecraft version); `clientJar` is the
  * old single jar for 1.21 / 1.21.1. `versionsApi` replaces the version lists in the tests.
+ * `pickFile({ title, filters })` opens the system's file dialog and resolves with a path or null (Electron's
+ * dialog in main.js). `convertImage(data, { maxWidth, maxHeight })` makes PNG bytes that fit that size out of a
+ * picture (Electron's nativeImage). `capes` is the list of Hammer+ capes (capes.json).
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now() }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
-  const settings = createSettings(paths.settings);
+  const store = createSettings(paths.settings);
   const instances = createInstances(paths);
+
+  /* ── Hammer+ ── */
+  const allAccounts = () => accounts.list?.() ?? [];
+  /** The account the launcher plays with: the selected one, else the first (like the PLAY button). */
+  const selectedAccount = () => allAccounts().find((a) => a.id === store.get().selectedAccount) ?? allAccounts()[0] ?? null;
+  const plus = createPlus({ file: path.join(root, 'plus.json'), publicKey: config.plusPublicKey, selected: selectedAccount, accounts: allAccounts, now });
+  const plusKey = (st) => JSON.stringify([st.active, st.until, st.reason, st.account?.id ?? null, st.selected?.id ?? null]);
+  let plusSeen = plusKey(plus.status());
+  let plusTimer = null;
+  /**
+   * Called whenever Hammer+ may have changed (a code pasted or removed, another account picked): tells the window
+   * when it did, and wakes up again at the moment the code runs out – so Hammer+ ends while the launcher is open.
+   */
+  function plusChanged() {
+    const st = plus.status();
+    clearTimeout(plusTimer);
+    if (st.active && st.until) {
+      plusTimer = setTimeout(plusChanged, Math.min(Math.max(st.until * 1000 - now(), 0) + 500, 2 ** 31 - 1));
+      plusTimer.unref?.();
+    }
+    if (plusKey(st) !== plusSeen) {
+      plusSeen = plusKey(st);
+      emit('plus:status', st);
+    }
+    return st;
+  }
+  /** The settings with the Hammer+ gate in front: a change that switches a paid feature on needs Hammer+. */
+  const settings = {
+    get: store.get,
+    set(patch) {
+      const before = store.get();
+      const locked = plusOnly(before, sanitize(patch ?? {}, before));
+      if (locked.length) plus.need(locked[0]);
+      const saved = store.set(patch);
+      if (saved.selectedAccount !== before.selectedAccount) plusChanged();
+      return saved;
+    },
+  };
+  const shop = createShopApi({ config, fetchFn });
+  const backgrounds = createBackgrounds({ dir: path.join(root, 'theme') });
+  const menuBackground = createMenuBackground({ dir: path.join(root, 'theme'), convert: convertImage });
+
   const modrinth = createModrinth({ fetchFn });
   const content = createContent({ modrinth, fetchFn });
   const modpacks = createModpacks({ modrinth, instances, fetchFn });
   const optimizer = createOptimizer({ modrinth, content });
   const bundles = createBundles({ modrinth, content });
-  const skinStore = createSkins({ dir: path.join(root, 'skins'), fetchFn });
+  const skinStore = createSkins({ dir: path.join(root, 'skins'), fetchFn, limit: () => (plus.status().active ? PLUS_LIBRARY : MAX_LIBRARY) });
   const games = new GameManager(launchFn ? { launchFn } : {});
   const community = createCommunity({ config, fetchFn });
   const busy = new Set(); // instances being prepared
   // Read again each time it is needed – the index is tiny, and a rebuilt mod is picked up without a restart.
   const hammerClient = () => loadHammerClient({ dir: clientDir, jar: clientJar });
   const worldTasks = new Set(); // instances with a world backup or restore in progress
+  const sessionWork = new Set(); // what still runs after a game session: automatic backups, the cloud copy
+  /** The cloud never reads or writes an instance whose game is running or being prepared. */
+  const inGame = (instance) => games.isRunning(instance.id) || busy.has(instance.id);
+  const cloud = cloudSync.createCloud({
+    file: path.join(root, 'cloud.json'),
+    api: shop,
+    now,
+    local: (previous) => cloudSync.collect({ settings: settings.get(), instances: instances.list(), skip: inGame, previous }),
+    take: (doc) => cloudSync.apply(doc, { settings, instances: instances.list(), skip: inGame }),
+  });
+  plusChanged(); // arms the timer for a code that ends while the launcher is open
 
   games.on('log', (e) => emit('game:log', e));
   games.on('state', (e) => emit('game:state', e));
+  // After every game session – also one that crashed – the automatic world backups and the cloud copy (Hammer+).
+  games.on('state', (e) => {
+    const instance = e.state === 'exited' || e.state === 'crashed' ? instances.get(e.instanceId) : null;
+    if (instance) afterSession(instance, e.playedMs ?? 0);
+  });
 
   const need = (id) => {
     const instance = instances.get(id);
@@ -156,8 +223,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       }
       // Hammer Client (custom menu, module panel, HUD) for supported Fabric versions.
       try {
-        const invite = await community.invite().catch(() => null);
-        const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand } });
+        shareCape().catch(() => null); // not awaited: the shop being slow or offline never holds the game back
+        const res = await syncClient(instance);
         if (!res.active && res.reason === 'missing') emit('toast', { kind: 'warning', text: `Brak pliku Hammer Client dla Minecrafta ${instance.mcVersion} w launcherze – gra uruchomi się bez własnego menu.` });
       } catch (err) {
         emit('toast', { kind: 'warning', text: `Nie udało się przygotować Hammer Client: ${err.message}` });
@@ -189,6 +256,24 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     } finally {
       busy.delete(instance.id);
     }
+  }
+
+  /**
+   * Puts Hammer Client into the instance (or takes it out) and writes what the mod needs to know from the
+   * launcher: the Discord / shop links and Hammer+ of the account that plays – active until when, the cape, the
+   * shop API. With Hammer+ the player's own menu picture goes along (config/hammerclient/menu.png); without it
+   * the launcher takes its picture back.
+   */
+  async function syncClient(instance) {
+    const invite = await community.invite().catch(() => null);
+    const st = plus.status();
+    const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand }, plus: { active: st.active, until: st.until }, cape: settings.get().hammerCape, api: shop.base() });
+    try {
+      menuBackground.deliver(instance, { active: st.active && res.active });
+    } catch (err) {
+      emit('toast', { kind: 'warning', text: `Nie udało się przygotować tła menu w grze (${err.code ?? err.message}). Gra uruchomi się bez niego.` });
+    }
+    return res;
   }
 
   /** The Java an instance starts with: its own Java, else what the game version asks for (a guess until installed). */
@@ -301,6 +386,119 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     }
   }
 
+  /* ── Hammer+: what the launcher does by itself after a game session ── */
+
+  /**
+   * Automatyczne kopie światów: packs the worlds played since `since` and keeps the newest few automatic backups
+   * of each. The instance is held like during a manual backup, so the game cannot be started in the middle –
+   * and nothing happens when it already runs again.
+   */
+  async function autoBackupWorlds(instance, since) {
+    const s = settings.get();
+    if (!s.autoBackup || !plus.status().active) return null;
+    if (inGame(instance) || worldTasks.has(instance.id)) return null;
+    worldTasks.add(instance.id);
+    try {
+      const result = await autoBackup.run(instance, {
+        since,
+        keep: s.autoBackupKeep,
+        stop: () => inGame(instance),
+        backup: (world) => withProgress(`Automatyczna kopia: ${world}`, (onProgress) => worldSaves.backup(instance, world, { auto: true, onProgress })),
+      });
+      const names = result.made.map((b) => `„${b.world}”`);
+      if (names.length) emit('toast', { kind: 'ok', text: names.length === 1 ? `Automatyczna kopia świata ${names[0]} jest gotowa.` : `Automatyczne kopie światów są gotowe: ${names.join(', ')}.` });
+      for (const f of result.failed) emit('toast', { kind: 'warning', text: `Nie udało się zrobić automatycznej kopii świata „${f.world}”. ${f.error}` });
+      if (result.made.length) emit('worlds:backups', { instanceId: instance.id });
+      return result;
+    } finally {
+      worldTasks.delete(instance.id);
+    }
+  }
+
+  /** The account the cloud copy belongs to – its code and Minecraft UUID. Throws without Hammer+. */
+  function cloudAccount() {
+    const st = plus.need('Chmura');
+    return { code: plus.token(), mc: cleanUuid(st.account.id) };
+  }
+  let cloudNote = null; // why the last try did not reach the shop (shown in the Chmura card)
+  /** Runs one cloud call. A shop that is not online is an answer – { offline, note } – not an error. */
+  async function cloudCall(fn) {
+    const { code, mc } = cloudAccount();
+    try {
+      const res = await fn(code, mc);
+      cloudNote = null;
+      return res;
+    } catch (err) {
+      if (!err?.offline) throw err;
+      cloudNote = err.message;
+      return { offline: true, note: err.message };
+    }
+  }
+
+  /** Automatic cloud copy after a game session; a newer copy in the cloud is a question for the player. */
+  async function autoCloudPush() {
+    if (!settings.get().cloudAuto || !plus.status().active) return null;
+    try {
+      const res = await cloudCall((code, mc) => cloud.afterSession(code, mc));
+      if (res.conflict) emit('cloud:conflict', res);
+      else if (res.ok) emit('cloud:synced', { at: res.at, direction: 'push' });
+      return res;
+    } catch (err) {
+      emit('toast', { kind: 'warning', text: `Nie udało się wysłać kopii do chmury. ${err.message}` });
+      return null;
+    }
+  }
+
+  /**
+   * A game session ended: first the automatic backups of the worlds played (the instance is held from this very
+   * moment), then the cloud copy. Runs in the background – `sessionWork` keeps track of it.
+   */
+  function afterSession(instance, playedMs) {
+    const work = (async () => {
+      await autoBackupWorlds(instance, now() - playedMs).catch(() => null);
+      await autoCloudPush();
+    })();
+    sessionWork.add(work);
+    work.finally(() => sessionWork.delete(work));
+  }
+
+  /** Resolves when everything started by the last game sessions is done (main.js waits for it before quitting). */
+  async function afterSessions() {
+    await new Promise((resolve) => setImmediate(resolve)); // a session that ended this very moment has registered by then
+    await Promise.allSettled([...sessionWork]);
+  }
+
+  /**
+   * Best effort: tells the shop which Hammer+ cape the player wears, so the games of other players can show it.
+   * { shared, note } – note says why not (the shop is not online yet). Never throws.
+   */
+  async function shareCape() {
+    const st = plus.status();
+    const code = st.active ? plus.token() : null;
+    if (!code) return { shared: false, note: null };
+    const mc = cleanUuid(st.account.id);
+    const cape = settings.get().hammerCape;
+    if (cloud.state(mc).capeSent === cape) return { shared: true, note: null };
+    try {
+      await shop.putCape(code, cape || null);
+      cloud.remember(mc, { capeSent: cape });
+      return { shared: true, note: null };
+    } catch (err) {
+      return { shared: false, note: err?.offline ? 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' : String(err?.message ?? err) };
+    }
+  }
+
+  /** Peleryny Hammer+: picks a cape from capes.json ('' or null = none). Taking it off is always allowed. */
+  async function setHammerCape(id) {
+    const cape = id == null ? '' : String(id);
+    if (cape) {
+      plus.need('Peleryny Hammer+');
+      if (!capes.some((c) => c.id === cape)) throw new Error('Nie ma takiej peleryny – odśwież zakładkę.');
+    }
+    settings.set({ hammerCape: cape });
+    return { selected: cape, ...(await shareCape()) };
+  }
+
   /**
    * "Napraw instancję": the next start installs the mod loader again and checks every game file against Mojang's
    * checksums. Worlds, mods and settings are not touched.
@@ -345,6 +543,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     return res;
   }
 
+  const stamp = (v) => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 64) ? v : undefined;
+
   return {
     paths,
     settings,
@@ -369,6 +569,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         const { versions: list, version, available } = hammerClient();
         return { versions: [...list], version, available };
       },
+      /** What every start does for the mod (see syncClient) – { active, reason? }. */
+      sync: (id) => syncClient(need(id)),
     },
     gallery: {
       list: (instanceId) => listScreenshots(instances, instanceId ? [need(instanceId)] : instances.list()),
@@ -432,6 +634,67 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       cape: (capeId) => withSkins((auth) => skinStore.setCape(auth, capeId ?? null)),
       forget: (id) => skinStore.forget(id),
       inspect: (png, name) => skinStore.inspect(png, name),
+      /** Zestawy (Hammer+). Removing one is always allowed. */
+      saveOutfit: (data) => (plus.need('Zestawy skórek'), skinStore.saveOutfit(data ?? {})),
+      applyOutfit: (id) => (plus.need('Zestawy skórek'), withSkins((auth) => skinStore.applyOutfit(auth, id))),
+      removeOutfit: (id) => skinStore.removeOutfit(id),
+    },
+    afterSessions,
+    plus: {
+      /** { active, until, account, reason, text, … } – see plus.js. */
+      status: () => plus.status(),
+      activate: (code) => (plus.activate(code), plusChanged()),
+      remove: () => (plus.remove(), plusChanged()),
+      /** Looks again (an account was added or removed) and tells the window when something changed. */
+      refresh: () => plusChanged(),
+      /** Peleryny Hammer+: { capes: [{ id, name }], selected } – selected is '' without Hammer+. */
+      capes: () => ({ capes: capes.map((c) => ({ ...c })), selected: plus.status().active ? settings.get().hammerCape : '' }),
+      setCape: (id) => setHammerCape(id),
+    },
+    theme: {
+      /** The player's own background picture as a file:// address – null without one (or without Hammer+). */
+      background: () => ({ url: plus.status().active ? backgrounds.url(settings.get().background) : null }),
+      /** Opens the file dialog and copies the picked picture into the launcher folder. null = cancelled. */
+      pickBackground: async () => {
+        plus.need('Własne tło launchera');
+        const file = await pickFile?.({ title: 'Wybierz obraz na tło launchera', filters: [{ name: 'Obrazy (PNG, JPG, WebP)', extensions: EXTENSIONS }] });
+        if (!file) return null;
+        const name = backgrounds.store(file);
+        return { settings: settings.set({ background: name }), url: backgrounds.url(name) };
+      },
+      clearBackground: () => {
+        const saved = settings.set({ background: '' });
+        backgrounds.clear();
+        return { settings: saved, url: null };
+      },
+      /** Tło menu w grze: the stored picture as a file:// address – null without one (or without Hammer+). */
+      menuBackground: () => ({ url: plus.status().active ? menuBackground.url() : null }),
+      /** Opens the file dialog and stores the picked picture as a PNG of at most 1920×1080. null = cancelled. */
+      pickMenuBackground: async () => {
+        plus.need('Własne tło menu w grze');
+        const file = await pickFile?.({ title: 'Wybierz obraz na tło menu w grze', filters: [{ name: 'Obrazy (PNG, JPG)', extensions: ['png', 'jpg', 'jpeg'] }] });
+        if (!file) return null;
+        await menuBackground.store(file);
+        return { url: menuBackground.url() };
+      },
+      /** Removing is always allowed; the copies in the instances go at their next start. */
+      clearMenuBackground: () => {
+        menuBackground.clear();
+        return { url: null };
+      },
+    },
+    cloud: {
+      /** { active, auto, last: { at, direction, updatedAt } | null, note } for the Chmura card. */
+      status: () => {
+        const st = plus.status();
+        return { active: st.active, auto: st.active && Boolean(settings.get().cloudAuto), last: st.active ? cloud.last(cleanUuid(st.account.id)) : null, note: cloudNote };
+      },
+      /** "Wyślij do chmury" – { ok, at } | { conflict, updatedAt, at, cloud, local } | { offline, note }. */
+      push: (opts) => cloudCall((code, mc) => cloud.push(code, mc, { force: Boolean(opts?.force), baseUpdatedAt: stamp(opts?.baseUpdatedAt) })),
+      /** "Pobierz z chmury" – { ok, at, look, changed, skipped, missing } | { empty } | { offline, note }. */
+      pull: () => cloudCall((code, mc) => cloud.pull(code, mc)),
+      /** Automatic sync when the launcher starts; { skipped } unless it is switched on. */
+      startup: async () => (settings.get().cloudAuto && plus.status().active ? cloudCall((code, mc) => cloud.startup(code, mc)) : { skipped: true }),
     },
   };
 }

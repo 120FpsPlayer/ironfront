@@ -7,7 +7,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow, ipcMain, shell, safeStorage, dialog, Menu, Tray, nativeImage, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, dialog, Menu, Tray, nativeImage, clipboard, ClipboardItem } = require('electron');
 const { loadConfig } = require('./config');
 const { defaultRoot } = require('./paths');
 const { createAccounts, createCrypt } = require('./accounts');
@@ -126,6 +126,19 @@ if (!app.requestSingleInstanceLock()) {
       gpuInfo: () => gpu,
       // Worlds and backups the player removes go to the system trash, never straight off the disk.
       trash: (target) => shell.trashItem(target).catch(() => Promise.reject(new Error('Nie udało się przenieść do kosza. Zamknij programy, które mogą używać tych plików, i spróbuj ponownie.'))),
+      // The system's file dialog (the backgrounds of Hammer+).
+      pickFile: async ({ title, filters }) => {
+        const res = await dialog.showOpenDialog(win, { title, properties: ['openFile'], filters });
+        return res.canceled ? null : res.filePaths[0] ?? null;
+      },
+      // Tło menu w grze: any picture → PNG that fits the given size, proportions kept (Hammer Client takes 1920×1080).
+      convertImage: (data, { maxWidth, maxHeight }) => {
+        const image = nativeImage.createFromBuffer(data);
+        if (image.isEmpty()) throw new Error('Nie udało się wczytać tego obrazu. Wybierz plik PNG albo JPG.');
+        const { width, height } = image.getSize();
+        const scale = Math.min(1, maxWidth / width, maxHeight / height);
+        return (scale < 1 ? image.resize({ width: Math.max(1, Math.floor(width * scale)), height: Math.max(1, Math.floor(height * scale)), quality: 'best' }) : image).toPNG();
+      },
     });
     services.accounts = accounts;
 
@@ -143,7 +156,8 @@ if (!app.requestSingleInstanceLock()) {
         if (!services.games.running.size) hideTray();
         if (!win.isVisible()) win.show();
         if (win.isMinimized()) win.restore();
-        if (state === 'exited' && services.settings.get().closeOnExit && !services.games.running.size) app.quit();
+        // Automatic world backups and the cloud copy finish first – quitting would cut them off.
+        if (state === 'exited' && services.settings.get().closeOnExit && !services.games.running.size) services.afterSessions().finally(() => !services.games.running.size && app.quit());
       }
     });
   }
@@ -169,6 +183,7 @@ if (!app.requestSingleInstanceLock()) {
       root: s().paths.root,
       secureStorage: safeStorage.isEncryptionAvailable(),
       hammerClient: s().hammerClient.info(),
+      plus: s().plus.status(),
     }));
     handle('app:open-external', (url) => openExternal(url));
     handle('app:open-folder', (instanceId, sub) => {
@@ -191,11 +206,13 @@ if (!app.requestSingleInstanceLock()) {
     handle('accounts:login', async () => {
       const account = await s().accounts.login();
       s().settings.set({ selectedAccount: account.id });
+      s().plus.refresh(); // Hammer+ follows the account
       return account;
     });
     handle('accounts:remove', (id) => {
       s().accounts.remove(id);
       if (s().settings.get().selectedAccount === id) s().settings.set({ selectedAccount: s().accounts.list()[0]?.id ?? null });
+      s().plus.refresh();
       return true;
     });
     handle('accounts:select', (id) => s().settings.set({ selectedAccount: id }));
@@ -281,10 +298,12 @@ if (!app.requestSingleInstanceLock()) {
 
     handle('gallery:list', (id) => s().gallery.list(id || null));
     handle('gallery:remove', (id, file) => s().gallery.remove(id, file));
-    handle('gallery:copy', (id, file) => {
+    handle('gallery:copy', async (id, file) => {
       const image = nativeImage.createFromPath(s().gallery.file(id, file));
       if (image.isEmpty()) throw new Error('Nie udało się wczytać obrazu.');
-      clipboard.writeImage(image);
+      // Newer Electron has the promise-based clipboard (write + ClipboardItem), older ones writeImage.
+      if (typeof clipboard.writeImage === 'function') clipboard.writeImage(image);
+      else await clipboard.write([new ClipboardItem({ 'image/png': new Blob([image.toPNG()], { type: 'image/png' }) })]);
       return true;
     });
     handle('gallery:show', (id, file) => shell.showItemInFolder(s().gallery.file(id, file)));
@@ -329,6 +348,28 @@ if (!app.requestSingleInstanceLock()) {
     handle('skins:reset', () => s().skins.reset());
     handle('skins:cape', (capeId) => s().skins.cape(capeId));
     handle('skins:forget', (id) => s().skins.forget(id));
+    handle('skins:outfit-save', (data) => s().skins.saveOutfit({ name: data?.name, skin: data?.skin, variant: data?.variant, cape: data?.cape ?? null, capeName: data?.capeName }));
+    handle('skins:outfit-apply', (id) => s().skins.applyOutfit(id));
+    handle('skins:outfit-remove', (id) => s().skins.removeOutfit(id));
+
+    // Hammer+: the code is checked here, in the main process – and so is every feature it unlocks.
+    handle('plus:status', () => s().plus.status());
+    handle('plus:activate', (code) => s().plus.activate(code));
+    handle('plus:remove', () => s().plus.remove());
+    // (await: readText answers at once in older Electron and with a promise in newer ones)
+    handle('plus:paste', async () => String((await clipboard.readText()) ?? '').trim().slice(0, 2000));
+    handle('plus:capes', () => s().plus.capes());
+    handle('plus:cape', (id) => s().plus.setCape(typeof id === 'string' ? id : null));
+    handle('theme:background', () => s().theme.background());
+    handle('theme:pick-background', () => s().theme.pickBackground());
+    handle('theme:clear-background', () => s().theme.clearBackground());
+    handle('theme:menu-background', () => s().theme.menuBackground());
+    handle('theme:pick-menu-background', () => s().theme.pickMenuBackground());
+    handle('theme:clear-menu-background', () => s().theme.clearMenuBackground());
+    handle('cloud:status', () => s().cloud.status());
+    handle('cloud:push', (opts) => s().cloud.push({ force: Boolean(opts?.force), baseUpdatedAt: opts?.baseUpdatedAt }));
+    handle('cloud:pull', () => s().cloud.pull());
+    handle('cloud:startup', () => s().cloud.startup());
 
     handle('optimizer:info', (id) => s().optimizerInfo(id));
     handle('optimizer:plan', (id, opts) => s().optimizer.plan(inst(id), opts));
@@ -361,8 +402,12 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {
     // A running game keeps the launcher alive (play time, logs); it quits when the game ends.
     if (services?.games.running.size) return;
-    presence?.close();
-    app.quit();
+    // An automatic world backup that is still being packed is finished first – half a zip helps nobody.
+    (services ? services.afterSessions() : Promise.resolve()).finally(() => {
+      if (services?.games.running.size) return;
+      presence?.close();
+      app.quit();
+    });
   });
 
   app.on('activate', () => {

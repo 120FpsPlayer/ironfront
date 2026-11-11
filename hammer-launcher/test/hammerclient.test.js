@@ -4,11 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadHammerClient, syncHammerClient, supports, compareVersions } = require('../src/main/hammerclient');
+const { loadHammerClient, syncHammerClient, launcherFile, supports, compareVersions } = require('../src/main/hammerclient');
 const { createInstances } = require('../src/main/instances');
 const { createPaths } = require('../src/main/paths');
 const { createServices } = require('../src/main/services');
-const { tmpDir } = require('./helpers');
+const { tmpDir, plusKeys } = require('./helpers');
 
 const JARS = [
   { file: 'hammer-client-26.3-2.0.0.jar', minecraft: ['26.3'] },
@@ -130,7 +130,7 @@ test('sync puts the jar for the instance version and Fabric API in place and wri
   assert.equal(fs.readFileSync(modJar(i), 'utf8'), 'jar for 1.21,1.21.1');
   assert.deepEqual(fs.readdirSync(path.join(i.dir, 'mods')).sort(), ['fabric-api-0.116.0+1.21.1.jar', 'hammer-client.jar'], 'always under the same name');
   assert.deepEqual(installs, ['fabric-api']);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(i.dir, 'config', 'hammerclient-launcher.json'), 'utf8')), { discordUrl: 'https://discord.gg/x', shopUrl: '', brand: 'HammerShop' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(i.dir, 'config', 'hammerclient-launcher.json'), 'utf8')), { discordUrl: 'https://discord.gg/x', shopUrl: '', brand: 'HammerShop', plus: { active: false, until: 0 }, cape: '', api: '' });
 
   // A newer launcher ships a newer mod → replaced; Fabric API is not installed twice.
   fs.writeFileSync(path.join(dir, 'hammer-client-1.21.1-2.0.0.jar'), 'jar-v2');
@@ -143,6 +143,25 @@ test('sync puts the jar for the instance version and Fabric API in place and wri
   await new Promise((r) => setTimeout(r, 15));
   await syncHammerClient({ instance: i, client, content });
   assert.equal(fs.statSync(modJar(i)).mtimeMs, before);
+});
+
+test('the launcher file tells the mod about Hammer+: active until when, the cape and the shop API', async () => {
+  const { instances, client, content } = setup();
+  const i = instances.create({ name: 'A', mcVersion: '1.21.1', loader: 'fabric' });
+  const read = () => JSON.parse(fs.readFileSync(path.join(i.dir, 'config', 'hammerclient-launcher.json'), 'utf8'));
+  const links = { discordUrl: 'https://discord.gg/x', shopUrl: 'https://hammershop.pl', brand: 'HammerShop' };
+  await syncHammerClient({ instance: i, client, content, links, plus: { active: true, until: 1765000000 }, cape: 'gold', api: 'https://hammershop.pl/api/launcher' });
+  assert.deepEqual(read(), { discordUrl: 'https://discord.gg/x', shopUrl: 'https://hammershop.pl', brand: 'HammerShop', plus: { active: true, until: 1765000000 }, cape: 'gold', api: 'https://hammershop.pl/api/launcher' });
+  assert.deepEqual(Object.keys(read()), ['discordUrl', 'shopUrl', 'brand', 'plus', 'cape', 'api'], 'the old fields first, as before');
+  // A code that never ends: until 0. No cape picked: "".
+  await syncHammerClient({ instance: i, client, content, links, plus: { active: true, until: 0 }, cape: '', api: 'https://hammershop.pl/api/launcher' });
+  assert.deepEqual([read().plus, read().cape], [{ active: true, until: 0 }, '']);
+  // Without Hammer+ the cape the player once picked is not passed on, and `until` says nothing.
+  await syncHammerClient({ instance: i, client, content, links, plus: { active: false, until: 1765000000 }, cape: 'gold', api: 'https://hammershop.pl/api/launcher' });
+  assert.deepEqual([read().plus, read().cape, read().api], [{ active: false, until: 0 }, '', 'https://hammershop.pl/api/launcher']);
+  // Whatever arrives is checked: only a plain cape id, a whole number, a web address.
+  assert.deepEqual(launcherFile({ plus: { active: 'yes', until: '2030' }, cape: '../../x', api: 'file:///etc/passwd' }), { discordUrl: '', shopUrl: '', brand: 'HammerShop', plus: { active: true, until: 0 }, cape: '', api: '' });
+  assert.deepEqual(launcherFile(), { discordUrl: '', shopUrl: '', brand: 'HammerShop', plus: { active: false, until: 0 }, cape: '', api: '' });
 });
 
 test('changing the game version of an instance swaps the jar; a version without a jar removes it', async () => {
@@ -233,4 +252,33 @@ test('the first instance uses the newest release that Hammer Client and Fabric b
   // A Forge default instance never follows the mod.
   const forge = await services({ clientDir: bundle(), releases: RELEASES, config: { defaultInstance: { name: 'F', mcVersion: '1.20.1', loader: 'forge' } } }).ensureDefaultInstance();
   assert.deepEqual([forge.mcVersion, forge.loader], ['1.20.1', 'vanilla']);
+});
+
+test('services: every start writes Hammer+ of the playing account into the mod\'s launcher file', async () => {
+  const keys = plusKeys();
+  const gracz = { id: '0123456789abcdef0123456789abcdef', name: 'HammerGracz' };
+  const kowal = { id: 'fedcba9876543210fedcba9876543210', name: 'Kowal' };
+  const s = createServices({ root: tmpDir(), config: { brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl/sklep', discordInvite: 'https://discord.gg/hammer', plusPublicKey: keys.publicKey }, accounts: { list: () => [gracz, kowal] }, clientDir: bundle(), fetchFn: async () => Promise.reject(new TypeError('offline')) });
+  s.settings.set({ selectedAccount: gracz.id });
+  const i = s.instances.create({ name: 'A', mcVersion: '1.21.1', loader: 'fabric' });
+  fs.writeFileSync(path.join(i.dir, 'mods', 'fabric-api-0.116.0+1.21.1.jar'), 'api');
+  const read = () => JSON.parse(fs.readFileSync(path.join(i.dir, 'config', 'hammerclient-launcher.json'), 'utf8'));
+
+  assert.deepEqual(await s.hammerClient.sync(i.id), { active: true });
+  assert.deepEqual(read(), { discordUrl: 'https://discord.gg/hammer', shopUrl: 'https://hammershop.pl/sklep', brand: 'HammerShop', plus: { active: false, until: 0 }, cape: '', api: 'https://hammershop.pl/api/launcher' });
+
+  const until = Math.floor(Date.now() / 1000) + 30 * 86400;
+  s.plus.activate(keys.code({ mc: gracz.id, exp: until }));
+  await s.plus.setCape('royal'); // the shop is offline – the cape is still the player's choice
+  await s.hammerClient.sync(i.id);
+  assert.deepEqual([read().plus, read().cape, read().api], [{ active: true, until }, 'royal', 'https://hammershop.pl/api/launcher']);
+
+  // Another account plays: no Hammer+ for it, so no cape either.
+  s.settings.set({ selectedAccount: kowal.id });
+  await s.hammerClient.sync(i.id);
+  assert.deepEqual([read().plus, read().cape], [{ active: false, until: 0 }, '']);
+  // A code without an end.
+  s.plus.activate(keys.code({ mc: kowal.id, exp: 0 }));
+  await s.hammerClient.sync(i.id);
+  assert.deepEqual([read().plus, read().cape], [{ active: true, until: 0 }, 'royal']);
 });

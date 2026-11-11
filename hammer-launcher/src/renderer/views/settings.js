@@ -1,5 +1,6 @@
 'use strict';
-/* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's colour, folders, disk space and clean-up, about. */
+/* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's look (colour; with Hammer+ any colour,
+   animated and own backgrounds), automatic world backups and the cloud (Hammer+), folders, disk space and clean-up, about. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -47,29 +48,79 @@
     return { el: card, draw };
   }
 
-  /** Wygląd: the accent colour of the whole launcher (buttons, highlights, progress bars). */
+  /**
+   * Wygląd: the accent colour of the whole launcher (buttons, highlights, progress bars) – six free colours, and
+   * with Hammer+ any colour, an animated background, the player's own picture behind the pages and in the game's menus.
+   */
   function lookCard() {
     const card = h('section.card');
+    let note = null; // why the colour on the screen is not exactly the one that was picked
     const draw = () => {
-      const current = HS.ACCENTS.find((a) => a.value === state.settings.accent) ?? HS.ACCENTS[0];
+      const on = HS.plusOn();
+      const s = state.settings;
+      const custom = on && s.accent === 'custom' ? window.HS_THEME.palette(s.accentColor) : null;
+      const current = custom ? { value: 'custom', label: 'Własny' } : (HS.ACCENTS.find((a) => a.value === s.accent) ?? HS.ACCENTS[0]);
+      const setAccent = (patch) => attempt(() => state.setSettings(patch)).then(draw);
+      let own;
+      if (on) {
+        const picker = h('input', { type: 'color', value: custom ? s.accentColor : '#3de0b4', 'aria-label': 'Własny kolor launchera' });
+        picker.addEventListener('input', () => HS.applyTheme(picker.value)); // shown at once, saved when the picker closes
+        picker.addEventListener('change', () => {
+          note = window.HS_THEME.palette(picker.value)?.adjusted ? 'Ten kolor był za ciemny na ciemne tło launchera – jest trochę rozjaśniony, żeby napisy i przyciski zostały czytelne.' : null;
+          setAccent({ accent: 'custom', accentColor: picker.value });
+        });
+        own = h(`label.swatch.custom${custom ? '.on' : ''}`, { title: 'Własny kolor', style: custom ? { '--c': custom.accent } : null }, icon(custom ? 'check' : 'plus'), picker);
+      } else {
+        own = h('button.swatch.custom.locked', { type: 'button', title: 'Własny kolor – w Hammer+', 'aria-label': 'Własny kolor – funkcja Hammer+', onclick: () => HS.go('plus') }, icon('lock'));
+      }
+      const style = on ? s.heroStyle : 'classic';
+      const fxPick = h(
+        'div.fx-pick',
+        HS.FX.map((f) =>
+          h(
+            `button.fx-tile${f.value === style ? '.on' : ''}`,
+            { type: 'button', title: `${f.label} – ${f.hint}`, 'aria-pressed': String(f.value === style), onclick: () => setAccent({ heroStyle: f.value }) },
+            h('div.pic', HS.fxLayer(f.value)),
+            h('span', f.label),
+          ),
+        ),
+      );
       clear(
         card,
         h('div.card-head', icon('palette'), h('h2', 'Wygląd')),
         row(
           'Kolor launchera',
-          'Przyciski, podświetlenia i paski postępu w Twoim kolorze.',
+          on ? 'Przyciski, podświetlenia i paski postępu w Twoim kolorze. Ostatnie kółko to dowolny kolor.' : 'Przyciski, podświetlenia i paski postępu w Twoim kolorze.',
           h(
             'div.swatches',
             h('span.dim', current.label),
             HS.ACCENTS.map((a) =>
-              h(`button.swatch${a.value === current.value ? '.on' : ''}`, { type: 'button', title: a.label, 'aria-label': `Kolor: ${a.label}`, 'aria-pressed': String(a.value === current.value), style: { '--c': a.color }, onclick: () => attempt(() => state.setSettings({ accent: a.value })).then(draw) }, a.value === current.value ? icon('check') : null),
+              h(`button.swatch${a.value === current.value ? '.on' : ''}`, { type: 'button', title: a.label, 'aria-label': `Kolor: ${a.label}`, 'aria-pressed': String(a.value === current.value), style: { '--c': a.color }, onclick: () => ((note = null), setAccent({ accent: a.value })) }, a.value === current.value ? icon('check') : null),
             ),
+            own,
           ),
         ),
+        custom && note ? h('p.hint.look-note', note) : null,
+        HS.plusUi.row('Animowane tło', 'Ruchome tło ekranu Graj i delikatnie za pozostałymi stronami. Wyłącza się samo, gdy system ma ograniczone animacje.', fxPick),
+        HS.plusUi.backgroundRows(),
       );
     };
     draw();
     return { el: card, draw };
+  }
+
+  /** Kopie światów i chmura (Hammer+): automatic backups after each game session and the cloud copy. */
+  function plusCard() {
+    const on = HS.plusOn();
+    const sample = (ic, text) => h('button.btn.sm', { type: 'button' }, icon(ic), text);
+    return h(
+      'section.card',
+      h('div.card-head', icon('archive'), h('h2.grow', 'Kopie światów i chmura'), on ? HS.chip('Hammer+', 'gold', 'check') : null),
+      HS.plusUi.autoBackupRow(),
+      on
+        ? [h('div.sub-head', icon('cloud'), h('div.grow', h('h3', 'Chmura'), h('p.muted', 'Twoje ustawienia na każdym komputerze, na którym masz Hammer Launcher.'))), HS.plusUi.cloudBox()]
+        : HS.plusUi.row('Chmura', 'Wygląd launchera, listy serwerów i układ HUD na każdym Twoim komputerze.', h('div.row', sample('upload', 'Wyślij do chmury'), sample('cloud-down', 'Pobierz z chmury'))),
+    );
   }
 
   /* What the launcher's folder is made of, and what can be freed safely. */
@@ -276,6 +327,7 @@
             row('Folder launchera', state.info?.root ?? '', h('button.btn', { onclick: () => attempt(() => api.app.openFolder(null)) }, icon('folder'), 'Otwórz')),
           ),
           look.el,
+          plusCard(),
           disk.el,
           h(
             'section.card',

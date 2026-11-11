@@ -145,17 +145,24 @@ async function remove(instance, folder, { trash } = {}) {
   return true;
 }
 
-/** Which world a backup file is of: "<folder>-2026-11-10_18-05.zip" (ours) or "2026-11-10_18-05-33_<folder>.zip" (the game's). */
+/**
+ * Which world a backup file is of: "<folder>-2026-11-10_18-05.zip" (ours), "<folder>-2026-11-10_18-05-auto.zip"
+ * (made by the launcher after a game session) or "2026-11-10_18-05-33_<folder>.zip" (the game's).
+ */
 function backupWorldName(file) {
   const base = String(file).replace(/\.zip$/i, '');
-  return base.replace(/-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}( \(\d+\))?$/, '').replace(/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_/, '') || base;
+  return base.replace(/-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(-auto)?( \(\d+\))?$/, '').replace(/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_/, '') || base;
 }
+
+/** A backup the launcher made by itself after a game session – only those are ever removed automatically. */
+const isAutoBackup = (file) => /-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-auto( \(\d+\))?\.zip$/i.test(String(file));
 
 /**
  * Packs a world into backups/<folder>-YYYY-MM-DD_HH-mm.zip (streamed, so big worlds neither fill the memory nor
- * freeze the launcher). onProgress({ done, total }) in bytes. Returns { file, size, createdAt, world }.
+ * freeze the launcher). onProgress({ done, total }) in bytes. `auto` marks a backup the launcher makes by itself
+ * ("…-auto.zip"). Returns { file, size, createdAt, world, auto }.
  */
-async function backup(instance, folder, { onProgress, now = new Date() } = {}) {
+async function backup(instance, folder, { onProgress, now = new Date(), auto = false } = {}) {
   const dir = worldDir(instance, folder);
   const files = [];
   let total = 0;
@@ -168,15 +175,15 @@ async function backup(instance, folder, { onProgress, now = new Date() } = {}) {
   const outDir = backupsDir(instance);
   return explained('Nie udało się zrobić kopii zapasowej', async () => {
     await fsp.mkdir(outDir, { recursive: true });
-    const file = freeName(outDir, `${folder}-${stamp(now)}`, '.zip');
+    const file = freeName(outDir, `${folder}-${stamp(now)}${auto ? '-auto' : ''}`, '.zip');
     const dest = path.join(outDir, file);
     await createZip(dest, files, { onProgress: (done) => onProgress?.({ done: Math.min(done, total), total }) });
     const stat = await fsp.stat(dest);
-    return { file, size: stat.size, createdAt: stat.mtimeMs, world: folder };
+    return { file, size: stat.size, createdAt: stat.mtimeMs, world: folder, auto: Boolean(auto) };
   });
 }
 
-/** Newest first: [{ file, size, createdAt, world }] – every .zip in backups/, also the ones made by the game. */
+/** Newest first: [{ file, size, createdAt, world, auto }] – every .zip in backups/, also the ones made by the game. */
 async function listBackups(instance) {
   let names = [];
   try {
@@ -188,7 +195,7 @@ async function listBackups(instance) {
   for (const file of names) {
     if (!isPlainName(file) || !/\.zip$/i.test(file)) continue;
     const stat = await fsp.lstat(path.join(backupsDir(instance), file)).catch(() => null);
-    if (stat?.isFile()) out.push({ file, size: stat.size, createdAt: stat.mtimeMs, world: backupWorldName(file) });
+    if (stat?.isFile()) out.push({ file, size: stat.size, createdAt: stat.mtimeMs, world: backupWorldName(file), auto: isAutoBackup(file) });
   }
   return out.sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -260,4 +267,4 @@ async function unpackWorld(instance, file, source, { onProgress } = {}) {
   }
 }
 
-module.exports = { list, rename, remove, backup, listBackups, restoreBackup, removeBackup, worldDir, backupPath, backupWorldName, GAME_MODES };
+module.exports = { list, rename, remove, backup, listBackups, restoreBackup, removeBackup, worldDir, backupPath, backupWorldName, isAutoBackup, savesDir, backupsDir, GAME_MODES };

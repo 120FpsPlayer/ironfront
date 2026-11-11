@@ -71,7 +71,7 @@ function mock() {
   }
 
   const now = Date.now();
-  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, accent: 'orange' };
+  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false };
   const instances = [
     { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
@@ -141,9 +141,11 @@ function mock() {
     { folder: 'Stary swiat', name: 'Stary swiat', gameType: null, gameMode: null, hardcore: false, version: null, lastPlayed: now - 200 * 864e5, size: 4.2e6, sizePartial: false, iconUrl: null, broken: true },
   ];
   const backups = [
-    { file: 'Nasz survival-2026-11-09_21-14.zip', size: 688e6, createdAt: now - 20 * 3600e3, world: 'Nasz survival' },
-    { file: '2026-10-28_18-02-51_New World.zip', size: 121e6, createdAt: now - 13 * 864e5, world: 'New World' },
+    { file: 'Nasz survival-2026-11-09_21-14.zip', size: 688e6, createdAt: now - 20 * 3600e3, world: 'Nasz survival', auto: false },
+    { file: '2026-10-28_18-02-51_New World.zip', size: 121e6, createdAt: now - 13 * 864e5, world: 'New World', auto: false },
   ];
+  // What the launcher makes by itself after game sessions (Hammer+) – added by window.__autoBackups().
+  window.__autoBackups = () => backups.unshift({ file: 'Nasz survival-2026-11-11_19-42-auto.zip', size: 702e6, createdAt: now - 2 * 3600e3, world: 'Nasz survival', auto: true }, { file: 'Nasz survival-2026-11-10_22-07-auto.zip', size: 695e6, createdAt: now - 23 * 3600e3, world: 'Nasz survival', auto: true });
 
   // Skórka: the account's skin and capes, and the library of skins used before.
   const hex = (ch) => ch.repeat(40);
@@ -163,9 +165,42 @@ function mock() {
     { id: hex('e'), name: 'Stara skórka z 2013 (64×32)', variant: 'classic', dataUrl: SKINS.stara, addedAt: now - 300 * 864e5, usedAt: now - 200 * 864e5 },
   ];
   const wardrobe = { worn: hex('a'), capes: [{ id: 'migrator', name: 'Migrator', url: capeArt('#b3261e', '#ffd166'), active: true }, { id: 'vanilla', name: 'Vanilla', url: capeArt('#2f7a3f', '#e7f7ff'), active: false }, { id: 'mcc15', name: '15th Anniversary', url: capeArt('#3a2a6b', '#b08cff'), active: false }] };
+  // Zestawy (Hammer+): looks saved under a name.
+  const outfits = [
+    { id: 'aaaaaaaaaaa1', name: 'Na PvP', skin: hex('b'), variant: 'classic', cape: 'migrator', capeName: 'Migrator', createdAt: now - 2 * 864e5 },
+    { id: 'aaaaaaaaaaa2', name: 'Na budowanie', skin: hex('c'), variant: 'slim', cape: null, capeName: null, createdAt: now - 5 * 864e5 },
+    { id: 'aaaaaaaaaaa3', name: 'Zimowe wieczory na serwerze', skin: hex('d'), variant: 'classic', cape: 'vanilla', capeName: 'Vanilla', createdAt: now - 9 * 864e5 },
+  ];
+  const outfitList = () => outfits.filter((o) => skinLib.some((x) => x.id === o.skin)).map((o) => ({ ...o, skinName: skinLib.find((x) => x.id === o.skin).name, dataUrl: skinLib.find((x) => x.id === o.skin).dataUrl }));
   const skinState = () => {
     const worn = skinLib.find((x) => x.id === wardrobe.worn);
-    return { account: { id: 'acc1', name: 'HammerGracz' }, skin: worn ? { url: `https://textures.minecraft.net/texture/${worn.id}`, variant: worn.variant, dataUrl: worn.dataUrl, libraryId: worn.id } : null, capes: wardrobe.capes.map((c) => ({ ...c })), library: skinLib.map((x) => ({ ...x, active: x.id === wardrobe.worn })) };
+    return { account: { id: 'acc1', name: 'HammerGracz' }, skin: worn ? { url: `https://textures.minecraft.net/texture/${worn.id}`, variant: worn.variant, dataUrl: worn.dataUrl, libraryId: worn.id } : null, capes: wardrobe.capes.map((c) => ({ ...c })), library: skinLib.map((x) => ({ ...x, active: x.id === wardrobe.worn })), limit: plus.active ? 200 : 24, outfits: outfitList() };
+  };
+
+  // Hammer+: off until the preview switches it on with window.__plus(true); `why` sets another reason for "off".
+  const plus = { active: false, why: null, cape: 'gold', menuUrl: null, bgUrl: null, cloud: 'offline', last: null };
+  const UNTIL = Math.floor(new Date(2026, 11, 11, 12).getTime() / 1000);
+  const WHY = {
+    none: 'Nie masz jeszcze Hammer+. Kod dostaniesz od bota HammerShop na Discordzie po zakupie w sklepie.',
+    expired: 'Twój Hammer+ wygasł 3 listopada 2026. Przedłuż go w sklepie – bot wyśle Ci nowy kod.',
+    'wrong-account': 'Twój kod Hammer+ jest dla konta Kowal, a teraz wybrane jest konto HammerGracz. Przełącz konto (lewy dolny róg), żeby korzystać z Hammer+.',
+  };
+  const plusStatus = () =>
+    plus.active
+      ? { active: true, until: UNTIL, account: { id: 'acc1', name: 'HammerGracz' }, reason: 'ok', text: 'Hammer+ jest aktywny do 11 grudnia 2026 na koncie HammerGracz.', configured: true, hasCode: true, codeId: 'a1b2c3d4e5f60718', selected: { id: 'acc1', name: 'HammerGracz' } }
+      : { active: false, until: plus.why === 'expired' ? UNTIL - 38 * 86400 : 0, account: plus.why === 'wrong-account' ? { id: 'acc2', name: 'Kowal' } : plus.why === 'expired' ? { id: 'acc1', name: 'HammerGracz' } : null, reason: plus.why ?? 'none', text: WHY[plus.why ?? 'none'], configured: true, hasCode: Boolean(plus.why), codeId: plus.why ? 'a1b2c3d4e5f60718' : null, selected: { id: 'acc1', name: 'HammerGracz' } };
+  window.__plus = (active, why = null) => {
+    Object.assign(plus, { active, why });
+    window.__emit('plus:status', plusStatus());
+  };
+  window.__cloud = (mode) => (plus.cloud = mode);
+  const CAPES = [['hammer', 'Hammer'], ['gold', 'Złota'], ['ember', 'Żar'], ['royal', 'Królewska'], ['frost', 'Mróz'], ['crimson', 'Karmazyn']].map(([id, name]) => ({ id, name }));
+  const NOTE = 'Chmura zadziała, gdy sklep HammerShop będzie online.';
+  const cloudAnswer = (direction) => {
+    if (plus.cloud === 'offline') return { offline: true, note: NOTE };
+    if (plus.cloud === 'conflict') return { conflict: true, updatedAt: 1794300000, at: now - 26 * 3600e3, cloud: { instances: 3, servers: 9 }, local: { instances: 4, servers: 5 } };
+    plus.last = { at: Date.now(), direction, updatedAt: 1794400000 };
+    return direction === 'pull' ? { ok: true, at: plus.last.at, updatedAt: 1794400000, look: true, changed: ['Hammer'], skipped: [], missing: [] } : { ok: true, at: plus.last.at, updatedAt: 1794400000 };
   };
 
   // Zestawy: which parts of a set exist for the instance and which are already there.
@@ -186,7 +221,7 @@ function mock() {
       return () => listeners.get(ch).delete(fn);
     },
     pathForFile: () => null,
-    app: { info: async () => ({ version: '2.1.1', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.0.0', available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ plus: plusStatus(), version: '2.2.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.0', available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: { get: async () => ({ ...settings }), set: async (p) => Object.assign(settings, p) && { ...settings } },
     system: { info: async () => ({}) },
@@ -339,7 +374,43 @@ function mock() {
         return { installed: [...added, 'Fabric API'], skipped: [], warnings: [], missing: b.mods.filter((m) => m[2] === 0).map((m) => m[0]) };
       },
     },
+    plus: {
+      status: async () => plusStatus(),
+      activate: async (code) => {
+        if (!/^HP1\./.test(String(code).trim())) throw new Error('To nie wygląda na kod Hammer+. Kod zaczyna się od „HP1.” – skopiuj go w całości z wiadomości bota.');
+        Object.assign(plus, { active: true, why: null });
+        return plusStatus();
+      },
+      remove: async () => (Object.assign(plus, { active: false, why: null }), plusStatus()),
+      paste: async () => 'HP1.eyJpZCI6ImExYjJjM2Q0ZTVmNjA3MTgiLCJtYyI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwiZXhwIjoxNzk3MDczMjAwLCJpYXQiOjE3OTQ0ODEyMDB9.pX9mK2vQ7LwT4zRb8NcY1sHd6EfJ3uGa0oIhVtWqBnMxCkDlSyUjZeFrPgAi5T-_w8Q2',
+      capes: async () => ({ capes: CAPES.map((c) => ({ ...c })), selected: plus.active ? plus.cape : '' }),
+      setCape: async (id) => (await wait(150), (plus.cape = id ?? ''), { selected: plus.cape, shared: false, note: 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' }),
+    },
+    theme: {
+      background: async () => ({ url: plus.active ? plus.bgUrl : null }),
+      pickBackground: async () => ((plus.bgUrl = scene('#3a6fd8', '#1f4d2c', '')), (settings.background = 'background-0a1b2c3d.png'), { settings: { ...settings }, url: plus.bgUrl }),
+      clearBackground: async () => ((plus.bgUrl = null), (settings.background = ''), { settings: { ...settings }, url: null }),
+      menuBackground: async () => ({ url: plus.active ? plus.menuUrl : null }),
+      pickMenuBackground: async () => ((plus.menuUrl = scene('#b18cff', '#1c1036', '')), { url: plus.menuUrl }),
+      clearMenuBackground: async () => ((plus.menuUrl = null), { url: null }),
+    },
+    cloud: {
+      status: async () => ({ active: plus.active, auto: plus.active && Boolean(settings.cloudAuto), last: plus.last, note: plus.cloud === 'offline' && plus.asked ? NOTE : null }),
+      push: async () => (await wait(200), (plus.asked = true), cloudAnswer('push')),
+      pull: async () => (await wait(200), (plus.asked = true), cloudAnswer('pull')),
+      startup: async () => ({ skipped: true }),
+    },
     skins: {
+      saveOutfit: async (d) => (outfits.unshift({ id: `bbbbbbbbbbb${outfits.length}`, name: d.name || 'Zestaw', skin: d.skin, variant: d.variant, cape: d.cape, capeName: d.capeName || null, createdAt: Date.now() }), outfitList()),
+      applyOutfit: async (id) => {
+        await wait(250);
+        const o = outfits.find((x) => x.id === id);
+        wardrobe.worn = o.skin;
+        skinLib.find((x) => x.id === o.skin).variant = o.variant;
+        wardrobe.capes.forEach((c) => (c.active = c.id === o.cape));
+        return skinState();
+      },
+      removeOutfit: async (id) => (outfits.splice(outfits.findIndex((x) => x.id === id), 1), outfitList()),
       get: async () => (await wait(150), skinState()),
       pick: async () => ({ name: 'Nocny łowca', dataUrl: SKINS.nowa, legacy: false }),
       upload: async ({ png, variant, name }) => {
@@ -534,7 +605,14 @@ async function main() {
   await page.waitForTimeout(400);
 
   /* ── optimisation: explanations, exact flags, Turbo, the summary of "Zoptymalizuj wszystko" ── */
-  const viewTop = (selector, text) => page.locator(selector, { hasText: text }).first().evaluate((el) => (document.getElementById('view').scrollTop = (el.closest('.card') ?? el).offsetTop - 16));
+  // (scrolls at once: the page's smooth scrolling would still be on its way when the screenshot is taken)
+  const viewTop = (selector, text) =>
+    page.locator(selector, { hasText: text }).first().evaluate((el) => {
+      const view = document.getElementById('view');
+      view.style.scrollBehavior = 'auto';
+      view.scrollTop = (el.closest('.card') ?? el).offsetTop - 16;
+      view.style.scrollBehavior = '';
+    });
   // Messages of the steps before must not cover the new screens.
   const noToasts = () => page.evaluate(() => document.getElementById('toasts').replaceChildren());
   await noToasts();
@@ -671,6 +749,307 @@ async function main() {
   const overflow = await page.locator('.sidebar').evaluate((el) => el.scrollHeight - el.clientHeight);
   if (overflow > 0) errors.push(`Pasek boczny nie mieści się w najmniejszym oknie (o ${overflow} px).`);
   await page.setViewportSize({ width: 1240, height: 780 });
+
+  /* ── Hammer+ ── */
+  const small = async (name, prepare) => {
+    await page.setViewportSize({ width: 1040, height: 660 });
+    await prepare?.();
+    await shot(name);
+    await page.setViewportSize({ width: 1240, height: 780 });
+  };
+  const jump = (to) => page.locator('.view').evaluate((v, where) => ((v.style.scrollBehavior = 'auto'), (v.scrollTop = where === 'top' ? 0 : v.scrollHeight), (v.style.scrollBehavior = '')), to);
+  const top = () => jump('top');
+  const bottom = () => jump('bottom');
+  /** Nothing may stick out of the window: the title bar keeps its credit, and no page scrolls sideways. */
+  const fits = async (where) => {
+    const bad = await page.evaluate(() => {
+      const out = [];
+      const view = document.getElementById('view');
+      if (view.scrollWidth > view.clientWidth + 1) out.push(`strona jest szersza niż okno o ${view.scrollWidth - view.clientWidth} px`);
+      const bar = document.querySelector('.titlebar');
+      if (bar.scrollWidth > bar.clientWidth + 1) out.push('pasek tytułu się nie mieści');
+      const dev = document.querySelector('.tb-dev').getBoundingClientRect();
+      const pill = document.getElementById('tb-plus').getBoundingClientRect();
+      if (!dev.width || dev.right > pill.left - 8) out.push('„developed by 120FpsPlayer” nachodzi na przycisk Hammer+');
+      for (const el of document.querySelectorAll('#view .card, #view .plus-hero')) {
+        const r = el.getBoundingClientRect();
+        const v = view.getBoundingClientRect();
+        if (r.right > v.right + 1 || r.left < v.left - 1) out.push(`karta wystaje poza stronę (${el.querySelector('h2,h1')?.textContent ?? '?'})`);
+      }
+      for (const el of document.querySelectorAll('#view .set-row .ctl, #view .cloud-acts, #view .code-row, #view .plus-acts')) {
+        const card = el.closest('.card, .plus-hero').getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        if (r.right > card.right - 4 || r.left < card.left + 4) out.push(`kontrolka wystaje poza kartę (${el.closest('.set-row')?.querySelector('b')?.firstChild?.textContent ?? el.className})`);
+      }
+      return out;
+    });
+    for (const text of bad) errors.push(`${where}: ${text}`);
+  };
+  const plusPill = () => page.locator('#tb-plus').click();
+
+  // Off: the page behind the pill – what it gives, where the code goes.
+  await page.evaluate(() => window.__emit('task:progress', { label: 'Instalacja: Sodium', done: 8, total: 8 })); // the task card from before goes away
+  await page.waitForTimeout(1700);
+  await noToasts();
+  await plusPill();
+  await count('.tb-plus.on', 0);
+  await count('.perk', 7);
+  await shot('40-hammerplus-wylaczony');
+  await fits('Hammer+ wyłączony');
+  await small('40b-hammerplus-wylaczony-male-okno', () => fits('Hammer+ wyłączony, małe okno'));
+  // A code that is not a code.
+  await page.locator('.input.code').fill('moj-kod-123');
+  await page.locator('button', { hasText: 'Aktywuj' }).click();
+  await shot('41-hammerplus-zly-kod');
+  await noToasts();
+  // A code for another account, and one that ran out.
+  await page.evaluate(() => window.__plus(false, 'wrong-account'));
+  await shot('42-hammerplus-inne-konto');
+  await page.evaluate(() => window.__plus(false, 'expired'));
+  await shot('43-hammerplus-wygasl');
+  await page.evaluate(() => window.__plus(false));
+
+  // The locked features, each with its gold marker.
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await shot('44-wyglad-bez-hammerplus');
+  await fits('Wygląd bez Hammer+');
+  await small('44b-wyglad-bez-hammerplus-male-okno', async () => {
+    await viewTop('h2', 'Wygląd');
+    await fits('Wygląd bez Hammer+, małe okno');
+  });
+  await viewTop('h2', 'Kopie światów i chmura');
+  await shot('45-kopie-chmura-bez-hammerplus');
+  await page.locator('.plus-locked').first().click(); // a locked control leads to the Hammer+ page
+  await count('.plus-page', 1);
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await page.locator('.swatch.custom.locked').click();
+  await count('.plus-page', 1);
+  await nav('Światy');
+  await page.waitForTimeout(300);
+  await viewTop('h2', 'Kopie zapasowe');
+  await shot('46-swiaty-kopie-bez-hammerplus');
+  await nav('Skórka');
+  await page.waitForTimeout(600);
+  await count('.outfit-tile', 3);
+  await count('.outfit-tile .plus-locked', 3);
+  await viewTop('h2', 'Zestawy');
+  await shot('47-skorka-zestawy-bez-hammerplus');
+  await bottom();
+  await shot('48-skorka-peleryny-bez-hammerplus');
+  await page.locator('.hcape').first().click();
+  await count('.plus-page', 1);
+
+  // Paste + activate: everything unlocks, the pill turns gold, the account gets its "+".
+  await page.locator('button', { hasText: 'Wklej' }).click();
+  await shot('49-hammerplus-wklejony-kod');
+  await page.locator('button', { hasText: 'Aktywuj' }).click();
+  await page.waitForTimeout(400);
+  await count('.tb-plus.on', 1);
+  await count('.plus-badge', 1);
+  await count('.plus-hero.on', 1);
+  await shot('50-hammerplus-aktywny');
+  await fits('Hammer+ aktywny');
+  await noToasts();
+  // Backgrounds and the cloud on the Hammer+ page.
+  await page.locator('.picture-ctl button', { hasText: 'Wybierz obraz' }).last().click(); // the in-game menu picture
+  await page.waitForTimeout(200);
+  await bottom();
+  await page.locator('button', { hasText: 'Wyślij do chmury' }).click(); // the shop is not online yet
+  await page.waitForTimeout(500);
+  await count('.cloud-note', 1);
+  await shot('51-hammerplus-chmura-offline');
+  await noToasts();
+  await small('50b-hammerplus-aktywny-male-okno', async () => {
+    await top();
+    await fits('Hammer+ aktywny, małe okno');
+  });
+  await small('51b-hammerplus-chmura-male-okno', async () => {
+    await bottom();
+    await fits('Hammer+ chmura, małe okno');
+  });
+  // The shop is online: a copy is sent; then another computer sent a newer one.
+  await page.evaluate(() => window.__cloud('ok'));
+  await bottom();
+  await page.locator('button', { hasText: 'Wyślij do chmury' }).click();
+  await page.waitForTimeout(500);
+  await count('.cloud-note', 0);
+  await shot('52-hammerplus-chmura-wyslana');
+  await noToasts();
+  await page.evaluate(() => window.__cloud('conflict'));
+  await page.locator('button', { hasText: 'Wyślij do chmury' }).click();
+  await page.waitForTimeout(500);
+  await shot('53-chmura-ktora-kopie');
+  await small('53b-chmura-ktora-kopie-male-okno');
+  await page.evaluate(() => window.__cloud('ok'));
+  await page.locator('.modal button', { hasText: 'Zostaw tę z chmury' }).click();
+  await page.waitForTimeout(600);
+  await count('.modal', 0);
+  await noToasts();
+  await bottom();
+  await page.locator('button', { hasText: 'Pobierz z chmury' }).click();
+  await shot('54-chmura-pobierz-pytanie');
+  await confirm();
+  await page.waitForTimeout(600);
+  await noToasts();
+  // The same question when the launcher finds a newer copy by itself after a game.
+  await page.evaluate(() => window.__emit('cloud:conflict', { conflict: true, updatedAt: 1, at: Date.now() - 3600e3, cloud: { instances: 1, servers: 1 }, local: { instances: 2, servers: 22 } }));
+  await count('.modal', 1);
+  await closeModal();
+
+  // Ustawienia → Wygląd with Hammer+: an own colour, an animated background, own pictures.
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await page.locator('.swatch.custom input').evaluate((el) => {
+    el.value = '#00007f'; // far too dark for a dark launcher → lightened, and the card says so
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
+  await count('.look-note', 1);
+  await shot('55-wyglad-kolor-za-ciemny');
+  await page.locator('.swatch.custom input').evaluate((el) => {
+    el.value = '#3de0b4';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(300);
+  await count('.look-note', 0);
+  await count('.swatch.custom.on', 1);
+  await page.locator('.picture-ctl button', { hasText: 'Wybierz obraz' }).first().click(); // the launcher background
+  await page.waitForTimeout(300);
+  await count('.backdrop.on', 1);
+  await viewTop('h2', 'Wygląd');
+  await shot('56-wyglad-hammerplus');
+  await fits('Wygląd z Hammer+');
+  await small('56b-wyglad-hammerplus-male-okno', async () => {
+    await viewTop('h2', 'Wygląd');
+    await fits('Wygląd z Hammer+, małe okno');
+  });
+  await nav('Graj');
+  await page.waitForTimeout(500);
+  await shot('57-graj-wlasny-kolor-i-tlo');
+  await nav('Instancje');
+  await shot('57b-instancje-wlasne-tlo');
+  await nav('Mody');
+  await page.waitForTimeout(400);
+  await shot('57c-mody-wlasne-tlo');
+  // The three animated backgrounds (without the own picture, so they also show behind the other pages).
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await page.locator('.picture-ctl button[title="Usuń tło launchera"]').click();
+  await count('.backdrop.on', 0);
+  for (const [label, file] of [['Zorza', '58-graj-zorza'], ['Kuźnia', '59-graj-kuznia'], ['Gwiazdy', '60-graj-gwiazdy']]) {
+    await nav('Ustawienia');
+    await viewTop('h2', 'Wygląd');
+    await page.locator('.fx-tile', { hasText: label }).click();
+    await count('.fx-tile.on', 1);
+    if (label === 'Zorza') {
+      await viewTop('h2', 'Wygląd');
+      await shot('58a-wyglad-animowane-tla');
+    }
+    await nav('Graj');
+    await page.waitForTimeout(900);
+    await shot(file);
+  }
+  await nav('Serwery');
+  await page.waitForTimeout(400);
+  await shot('60b-serwery-gwiazdy-w-tle');
+  await small('60c-graj-gwiazdy-male-okno', () => nav('Graj'));
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await page.locator('.fx-tile', { hasText: 'Klasyczne' }).click();
+  await page.locator('.swatch[title="Pomarańczowy"]').click();
+  await count('.swatch.on[title="Pomarańczowy"]', 1);
+
+  // Automatic world backups and the cloud in Ustawienia and Światy.
+  await viewTop('h2', 'Kopie światów i chmura');
+  await page.locator('.set-row', { hasText: 'Automatyczne kopie światów' }).locator('.switch').click();
+  await page.locator('.set-row', { hasText: 'Automatyczne kopie światów' }).locator('select').selectOption('8');
+  await page.waitForTimeout(300);
+  await viewTop('h2', 'Kopie światów i chmura');
+  await shot('61-kopie-chmura-hammerplus');
+  await fits('Kopie światów i chmura');
+  await small('61b-kopie-chmura-male-okno', async () => {
+    await viewTop('h2', 'Kopie światów i chmura');
+    await fits('Kopie światów i chmura, małe okno');
+  });
+  await page.evaluate(() => window.__autoBackups());
+  await nav('Światy');
+  await page.waitForTimeout(400);
+  await viewTop('h2', 'Kopie zapasowe');
+  await count('.auto-backup input:checked', 1);
+  await shot('62-swiaty-kopie-automatyczne');
+  await fits('Światy z Hammer+');
+  await small('62b-swiaty-kopie-automatyczne-male-okno', async () => {
+    await viewTop('h2', 'Kopie zapasowe');
+    await fits('Światy z Hammer+, małe okno');
+  });
+  // A backup the launcher finished by itself shows up without a click.
+  await page.evaluate(() => window.__emit('worlds:backups', { instanceId: 'hammershop' }));
+  await page.evaluate(() => window.__emit('toast', { kind: 'ok', text: 'Automatyczna kopia świata „Nasz survival” jest gotowa.' }));
+  await top();
+  await shot('62c-swiaty-kopia-gotowa');
+  await noToasts();
+
+  // Skórka: the bigger library, Zestawy and Peleryny Hammer+.
+  await nav('Skórka');
+  await page.waitForTimeout(700);
+  await count('.outfit-tile .plus-locked', 0);
+  await shot('63-skorka-hammerplus');
+  await viewTop('h2', 'Zestawy');
+  await shot('64-skorka-zestawy');
+  await page.locator('button', { hasText: 'Nowy zestaw' }).click();
+  await page.locator('.modal input').fill('Na budowanie w nocy');
+  await page.locator('.modal select').first().selectOption({ label: 'Alex z lasu' });
+  await page.locator('.modal select').last().selectOption({ label: 'Vanilla' });
+  await shot('65-nowy-zestaw');
+  await small('65b-nowy-zestaw-male-okno');
+  await confirm();
+  await count('.outfit-tile', 4);
+  await noToasts();
+  await page.locator('.outfit-tile', { hasText: 'Na PvP' }).locator('.btn.primary').click();
+  await page.waitForTimeout(600);
+  await count('.outfit-tile.on', 1);
+  await viewTop('h2', 'Zestawy');
+  await shot('66-zestaw-zalozony');
+  await noToasts();
+  await page.locator('.outfit-tile button[title="Usuń zestaw"]').last().click();
+  await confirm();
+  await count('.outfit-tile', 3);
+  await bottom();
+  await count('.hcape.on', 1);
+  await shot('67-peleryny-hammerplus');
+  await page.locator('.hcape', { hasText: 'Mróz' }).click();
+  await page.waitForTimeout(400);
+  await count('.hcape.on', 1);
+  await noToasts();
+  await bottom();
+  await shot('68-peleryna-hammerplus-wybrana');
+  await fits('Skórka z Hammer+');
+  await small('68b-peleryny-hammerplus-male-okno', async () => {
+    await bottom();
+    await fits('Skórka z Hammer+, małe okno');
+  });
+  await small('64b-skorka-zestawy-male-okno', () => viewTop('h2', 'Zestawy'));
+  await page.locator('.hcape', { hasText: 'Bez peleryny' }).click();
+  await page.waitForTimeout(400);
+  await count('.hcape.on', 1);
+
+  // Hammer+ runs out while the launcher is open: the look and the locks follow at once.
+  await nav('Graj');
+  await page.evaluate(() => window.__plus(false, 'expired'));
+  await page.waitForTimeout(400);
+  await count('.tb-plus.on', 0);
+  await count('.plus-badge', 0);
+  await plusPill();
+  await count('.plus-hero.on', 0);
+  await page.locator('button', { hasText: 'Usuń kod' }).click();
+  await shot('69-hammerplus-usun-kod');
+  await confirm();
+  await page.waitForTimeout(300);
+  await count('button:has-text("Usuń kod")', 0);
 
   await browser.close();
   if (errors.length) {

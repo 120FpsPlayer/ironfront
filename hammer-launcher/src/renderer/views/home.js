@@ -132,6 +132,7 @@
     const shopBox = h('div');
     const hero = h(
       'section.hero',
+      HS.fxLayer(), // the animated background picked in Ustawienia → Wygląd (Hammer+); empty for the classic look
       h('canvas.embers', { 'aria-hidden': 'true' }),
       h('div.grid-bg'),
       h('img.mark', { src: 'assets/hammer-mark.png', alt: '' }),

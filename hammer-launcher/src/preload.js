@@ -95,7 +95,27 @@ const api = {
     reset: () => call('skins:reset'),
     cape: (capeId) => call('skins:cape', capeId),
     forget: (id) => call('skins:forget', id),
+    saveOutfit: (data) => call('skins:outfit-save', data),
+    applyOutfit: (id) => call('skins:outfit-apply', id),
+    removeOutfit: (id) => call('skins:outfit-remove', id),
   },
+  plus: {
+    status: () => call('plus:status'),
+    activate: (code) => call('plus:activate', code),
+    remove: () => call('plus:remove'),
+    paste: () => call('plus:paste'),
+    capes: () => call('plus:capes'),
+    setCape: (id) => call('plus:cape', id),
+  },
+  theme: {
+    background: () => call('theme:background'),
+    pickBackground: () => call('theme:pick-background'),
+    clearBackground: () => call('theme:clear-background'),
+    menuBackground: () => call('theme:menu-background'),
+    pickMenuBackground: () => call('theme:pick-menu-background'),
+    clearMenuBackground: () => call('theme:clear-menu-background'),
+  },
+  cloud: { status: () => call('cloud:status'), push: (opts) => call('cloud:push', opts), pull: () => call('cloud:pull'), startup: () => call('cloud:startup') },
 };
 
 contextBridge.exposeInMainWorld('hs', api);
