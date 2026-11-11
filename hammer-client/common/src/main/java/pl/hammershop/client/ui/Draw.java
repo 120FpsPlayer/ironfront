@@ -181,6 +181,15 @@ public final class Draw {
         }
     }
 
+    /** A thin outline (the corners stay open by `r`, which reads as rounded at HUD sizes) – works over see-through plates. */
+    public void frame(float x, float y, float w, float h, float r, float t, int argb) {
+        if (w <= 0 || h <= 0 || (argb >>> 24) == 0) return;
+        fill(x + r, y, w - 2 * r, t, argb);
+        fill(x + r, y + h - t, w - 2 * r, t, argb);
+        fill(x, y + r, t, h - 2 * r, argb);
+        fill(x + w - t, y + r, t, h - 2 * r, argb);
+    }
+
     /** Rounded panel with a 1-unit border (fill should be nearly opaque). */
     public void panel(float x, float y, float w, float h, float r, int fill, int border) {
         if ((border >>> 24) != 0) {

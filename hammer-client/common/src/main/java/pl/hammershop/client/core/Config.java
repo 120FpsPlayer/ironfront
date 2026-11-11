@@ -41,11 +41,27 @@ public final class Config {
     public String hudFont = "minecraft";
     public String profile = "default";
     public Map<String, Profile> profiles = new LinkedHashMap<>();
+    /** Size of the whole HUD: every module is drawn this much bigger or smaller (on top of its own size). */
+    public float hudScale = 1f;
+    public static final float HUD_SCALE_MIN = 0.5f;
+    public static final float HUD_SCALE_MAX = 1.5f;
+    /** Look of the HUD plates: "classic", or with Hammer+ "glass", "neon", "outline". */
+    public String hudStyle = "classic";
+    /** Picture behind the Hammer menus: "default", or with Hammer+ "night", "aurora", "lava", "gold", "custom" (own picture). */
+    public String menuBackground = "default";
+    /** Show the Hammer+ capes of other players (their UUIDs are looked up at the shop's server). */
+    public boolean otherCapes = true;
 
     // From the launcher – read on start, never saved here.
     public transient String discordUrl = "";
     public transient String shopUrl = "";
     public transient String brand = "HammerShop";
+    /** Hammer+ (the launcher checked the player's code): active, until when (unix seconds, 0 = no end), chosen cape. */
+    public transient boolean plusActive;
+    public transient long plusUntil;
+    public transient String cape = "";
+    /** Base of the shop's launcher API ("https://…/api/launcher") – capes of other players come from there; "" = none. */
+    public transient String api = "";
     private transient Path dir;
     private transient boolean dirty;
 
@@ -64,6 +80,8 @@ public final class Config {
         if (c.profiles == null) c.profiles = new LinkedHashMap<>();
         if (c.accent == null) c.accent = "orange";
         if (c.hudFont == null) c.hudFont = "minecraft";
+        if (c.hudStyle == null) c.hudStyle = "classic";
+        if (c.menuBackground == null) c.menuBackground = "default";
         if (c.profile == null || !c.profiles.containsKey(c.profile)) {
             if (c.profiles.isEmpty()) {
                 Profile p = new Profile();
@@ -89,6 +107,15 @@ public final class Config {
             shopUrl = httpsOrEmpty(o.get("shopUrl"));
             JsonElement b = o.get("brand");
             if (b != null && b.isJsonPrimitive() && !b.getAsString().isBlank()) brand = b.getAsString().trim();
+            JsonElement plus = o.get("plus");
+            if (plus != null && plus.isJsonObject()) {
+                JsonObject po = plus.getAsJsonObject();
+                plusActive = po.has("active") && po.get("active").isJsonPrimitive() && po.get("active").getAsBoolean();
+                plusUntil = po.has("until") && po.get("until").isJsonPrimitive() ? Math.max(0, po.get("until").getAsLong()) : 0;
+            }
+            JsonElement c = o.get("cape");
+            if (c != null && c.isJsonPrimitive() && c.getAsString().matches("[a-z0-9_-]{1,32}")) cape = c.getAsString();
+            api = httpsOrEmpty(o.get("api")).replaceAll("/+$", "");
         } catch (Exception e) {
             Log.warn("Nieprawidłowy plik od launchera", e);
         }
@@ -98,6 +125,34 @@ public final class Config {
         if (e == null || !e.isJsonPrimitive()) return "";
         String s = e.getAsString().trim();
         return s.startsWith("https://") ? s : "";
+    }
+
+    public static final String[] HUD_STYLES = {"classic", "glass", "neon", "outline"};
+    public static final String[] MENU_BACKGROUNDS = {"default", "night", "aurora", "lava", "gold", "custom"};
+
+    /** The player's own menu picture, put there by the launcher (Hammer+): config/hammerclient/menu.png. */
+    public java.nio.file.Path customMenuImage() {
+        return dir == null ? null : dir.resolve("hammerclient").resolve("menu.png");
+    }
+
+    public float hudScaleInUse() {
+        return Float.isNaN(hudScale) ? 1f : Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, hudScale));
+    }
+
+    public void setHudScale(float value) {
+        float v = Math.round(Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, value)) * 20f) / 20f;
+        if (v == hudScale) return;
+        hudScale = v;
+        markDirty();
+    }
+
+    /** The HUD style in use – a Hammer+ style falls back to the classic one when Hammer+ is not active. */
+    public String hudStyleInUse() {
+        return pl.hammershop.client.Hammer.plus() && java.util.Arrays.asList(HUD_STYLES).contains(hudStyle) ? hudStyle : "classic";
+    }
+
+    public String menuBackgroundInUse() {
+        return pl.hammershop.client.Hammer.plus() && java.util.Arrays.asList(MENU_BACKGROUNDS).contains(menuBackground) ? menuBackground : "default";
     }
 
     public Profile active() {

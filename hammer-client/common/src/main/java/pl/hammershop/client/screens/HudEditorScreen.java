@@ -50,7 +50,7 @@ public class HudEditorScreen extends UiScreen {
 
         // The centre panel (drawn last) – its place is needed first, so it can take clicks before the modules.
         float pw = 300;
-        float ph = 96;
+        float ph = 124;
         float px = (ui.w - pw) / 2f;
         float py = Math.max(60, ui.h * 0.5f - ph / 2f); // the middle of the screen: no default HUD stack reaches it
         boolean overPanel = dragging == null && ui.hover(px, py, pw, ph);
@@ -137,6 +137,13 @@ public class HudEditorScreen extends UiScreen {
             d.text(Hammer.t("editor.title"), px + 46, py + 12, 12, Draw.alpha(Theme.TEXT, show), Font.BOLD);
             d.text(Hammer.t("editor.hint"), px + 46, py + 28, 7.5f, Draw.alpha(Theme.MUTED, show), Font.MEDIUM);
             d.text(Hammer.t("editor.hint2"), px + 14, py + 46, 7.5f, Draw.alpha(Theme.DIM, show), Font.MEDIUM);
+            // size of the whole HUD
+            float sy = py + 62;
+            pl.hammershop.client.core.Config cfg = Hammer.config();
+            d.rrect(px + 12, sy, pw - 24, 22, 7, Draw.alpha(0xFFFFFFFF, 0.04f * show));
+            d.textIn(Hammer.t("settings.hud_scale"), px + 21, sy, 22, 8, Draw.alpha(Theme.TEXT, show), Font.MEDIUM);
+            d.textRight(Math.round(cfg.hudScaleInUse() * 100) + "%", px + pw - 21, sy + (22 - d.lineHeight(8, Font.BOLD)) / 2f, 8, Draw.alpha(Theme.accentLight(), show), Font.BOLD);
+            if (dragging == null) cfg.setHudScale(ui.slider("hudscale", cfg.hudScaleInUse(), pl.hammershop.client.core.Config.HUD_SCALE_MIN, pl.hammershop.client.core.Config.HUD_SCALE_MAX, 0.05f, px + pw - 21 - 34 - 100, sy + 4, 100));
             if (dragging == null) {
                 float bw = (pw - 28 - 16) / 3f;
                 float by = py + ph - 34;
@@ -154,6 +161,7 @@ public class HudEditorScreen extends UiScreen {
                         m.resetPosition();
                         m.scale.reset();
                     }
+                    Hammer.config().setHudScale(1f);
                 }
                 if (ui.button("done", Hammer.t("menu.done"), "check", px + 14 + (bw + 8) * 2, by, bw, 24, Ui.Style.PRIMARY)) Hammer.back(this);
             }

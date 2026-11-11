@@ -89,6 +89,12 @@ public abstract class Module {
         for (Setting<?> s : settings) s.reset();
     }
 
+    /** Marks an option as Hammer+ only. */
+    protected <S extends Setting<?>> S plus(S setting) {
+        setting.premium = true;
+        return setting;
+    }
+
     protected Setting.Bool bool(String id, boolean def) {
         Setting.Bool s = new Setting.Bool(this, id, def);
         settings.add(s);

@@ -69,6 +69,25 @@ public interface Game {
     /** Localised name of the block under the crosshair, or "". */
     String block();
 
+    /** Where the camera is and where it looks this frame (third person included). */
+    double cameraX();
+
+    double cameraY();
+
+    double cameraZ();
+
+    float cameraYaw();
+
+    float cameraPitch();
+
+    /** "minecraft:overworld", "minecraft:the_nether" … or "" outside a world. */
+    String dimension();
+
+    /** What waypoints are kept under: the server address, or "sp:" + the world's name in singleplayer; "" outside a world. */
+    String worldKey();
+
+    boolean singleplayer();
+
     record Target(String name, float health, float maxHealth, double distance, boolean player) {
     }
 

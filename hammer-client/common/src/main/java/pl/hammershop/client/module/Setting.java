@@ -11,6 +11,8 @@ public abstract class Setting<T> {
     public final Module module;
     public final String id;
     protected final T def;
+    /** A Hammer+ option: without Hammer+ it is shown locked and behaves like its default. */
+    public boolean premium;
 
     protected Setting(Module module, String id, T def) {
         this.module = module;
@@ -26,6 +28,11 @@ public abstract class Setting<T> {
 
     protected Map<String, Object> values() {
         return module.data().values;
+    }
+
+    /** Whether the stored value may be used right now. */
+    protected boolean unlocked() {
+        return !premium || Hammer.plus();
     }
 
     protected void store(Object value) {
@@ -49,7 +56,7 @@ public abstract class Setting<T> {
         }
 
         public Boolean get() {
-            return values().get(id) instanceof Boolean b ? b : def;
+            return unlocked() && values().get(id) instanceof Boolean b ? b : def;
         }
 
         public void set(Boolean value) {
@@ -77,7 +84,7 @@ public abstract class Setting<T> {
         }
 
         public Float get() {
-            return values().get(id) instanceof Number n ? Math.max(min, Math.min(max, n.floatValue())) : def;
+            return unlocked() && values().get(id) instanceof Number n ? Math.max(min, Math.min(max, n.floatValue())) : def;
         }
 
         public void set(Float value) {
@@ -98,6 +105,8 @@ public abstract class Setting<T> {
     public static final class Choice extends Setting<Integer> {
         /** Option ids; their labels are "option.&lt;id&gt;". */
         public final String[] options;
+        /** Options from this index on need Hammer+ (the earlier ones are free). */
+        public int premiumFrom = Integer.MAX_VALUE;
 
         public Choice(Module m, String id, int def, String... options) {
             super(m, id, def);
@@ -106,8 +115,15 @@ public abstract class Setting<T> {
 
         public Integer get() {
             Object v = values().get(id);
-            if (v instanceof String s) for (int i = 0; i < options.length; i++) if (options[i].equals(s)) return i;
+            if (unlocked() && v instanceof String s) {
+                for (int i = 0; i < options.length; i++) if (options[i].equals(s)) return i < premiumFrom || Hammer.plus() ? i : def;
+            }
             return def;
+        }
+
+        /** Whether option `index` needs Hammer+ that the player does not have. */
+        public boolean locked(int index) {
+            return index >= premiumFrom && !Hammer.plus();
         }
 
         public void set(Integer value) {
@@ -124,7 +140,7 @@ public abstract class Setting<T> {
 
         public String[] labels() {
             String[] l = new String[options.length];
-            for (int i = 0; i < options.length; i++) l[i] = Lang.t("option." + options[i]);
+            for (int i = 0; i < options.length; i++) l[i] = Lang.t("option." + options[i]) + (i >= premiumFrom ? "  +" : "");
             return l;
         }
     }
@@ -138,7 +154,7 @@ public abstract class Setting<T> {
         }
 
         public Integer get() {
-            return values().get(id) instanceof Number n ? (int) n.longValue() : def;
+            return unlocked() && values().get(id) instanceof Number n ? (int) n.longValue() : def;
         }
 
         public void set(Integer value) {

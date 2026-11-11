@@ -114,6 +114,7 @@ public class MainMenuScreen extends UiScreen {
             d.circle(ux + 12, 25, 6.5f, Theme.accent());
             d.textCentered(user.substring(0, 1).toUpperCase(), ux + 12, 19.7f, 8.5f, Theme.INK, Font.BOLD);
             d.textIn(user, ux + 24, 14, 22, 8.5f, Theme.TEXT, Font.BOLD);
+            if (Hammer.plus()) PlusBadge.draw(d, ux - PlusBadge.width(d, 16) - 8, 17, 16, in);
         }
         d.text("Hammer Client " + Hammer.version() + "  ·  Minecraft " + p.minecraftVersion(), 12, ui.h - 15, 7.5f, Theme.DIM, Font.MEDIUM);
         d.textRight("Copyright Mojang AB. Do not distribute!", ui.w - 12, ui.h - 15, 7.5f, Theme.DIM, Font.MEDIUM);

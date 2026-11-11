@@ -6,7 +6,8 @@ public enum Keys {
     ZOOM("zoom", 67),        // C
     FREELOOK("freelook", 342), // left Alt
     STOPWATCH("stopwatch", -1),
-    HUD("hud", -1);
+    HUD("hud", -1),
+    WAYPOINTS("waypoints", 66); // B
 
     public final String id;
     public final int defaultKey;

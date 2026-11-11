@@ -2,9 +2,13 @@ package pl.hammershop.client.module;
 
 import pl.hammershop.client.api.Platform;
 import pl.hammershop.client.api.Platform.Feature;
+import pl.hammershop.client.module.feature.ChatTweaks;
 import pl.hammershop.client.module.feature.Crosshair;
 import pl.hammershop.client.module.feature.Freelook;
+import pl.hammershop.client.module.feature.Overlays;
+import pl.hammershop.client.module.feature.TabPing;
 import pl.hammershop.client.module.feature.Tweaks;
+import pl.hammershop.client.module.feature.WaypointsModule;
 import pl.hammershop.client.module.feature.Zoom;
 import pl.hammershop.client.module.hud.Armor;
 import pl.hammershop.client.module.hud.Compass;
@@ -31,6 +35,10 @@ public final class Modules {
     public static Crosshair crosshair;
     public static Tweaks.TimeChanger timeChanger;
     public static Tweaks.ClearWeather weather;
+    public static WaypointsModule waypoints;
+    public static TabPing tabPing;
+    public static ChatTweaks chat;
+    public static Overlays overlays;
 
     private Modules() {
     }
@@ -39,6 +47,15 @@ public final class Modules {
     public static void init(Platform p) {
         ALL.clear();
         HUD.clear();
+        zoom = null;
+        freelook = null;
+        crosshair = null;
+        timeChanger = null;
+        weather = null;
+        waypoints = null;
+        tabPing = null;
+        chat = null;
+        overlays = null;
         // HUD
         add(new InfoHuds.Fps());
         add(new InfoHuds.Cps());
@@ -67,10 +84,13 @@ public final class Modules {
         add(new InfoHuds.Light());
         add(new InfoHuds.Session());
         add(new InfoHuds.Stopwatch());
+        if (p.supports(Feature.COMBO)) add(new InfoHuds.Kills());
         add(new Watermark());
         // gameplay
         if (p.supports(Feature.ZOOM)) add(zoom = new Zoom());
         if (p.supports(Feature.FREELOOK)) add(freelook = new Freelook());
+        if (p.supports(Feature.WAYPOINTS)) add(waypoints = new WaypointsModule());
+        if (p.supports(Feature.CHAT)) add(chat = new ChatTweaks());
         add(new Tweaks.ToggleSprint());
         add(new Tweaks.ToggleSneak());
         add(new DurabilityWarning());
@@ -80,6 +100,8 @@ public final class Modules {
         if (p.supports(Feature.FULLBRIGHT)) add(new Tweaks.Fullbright());
         if (p.supports(Feature.TIME_CHANGER)) add(timeChanger = new Tweaks.TimeChanger());
         if (p.supports(Feature.WEATHER)) add(weather = new Tweaks.ClearWeather());
+        if (p.supports(Feature.TAB_PING)) add(tabPing = new TabPing());
+        if (p.supports(Feature.OVERLAYS)) add(overlays = new Overlays());
         add(new Tweaks.NoHurtCam());
         add(new Tweaks.StaticFov());
     }

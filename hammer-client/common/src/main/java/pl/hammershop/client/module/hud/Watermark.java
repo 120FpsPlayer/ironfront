@@ -17,7 +17,11 @@ public final class Watermark extends HudModule {
     protected void draw(HudCanvas c) {
         c.d.image("logo", 256, 256, 1, 1, 14, 14, 0xFFFFFFFF);
         float w = 16;
-        if (name.on()) w = c.text("Hammer Client", 18, 4, text.argb(), true) + 3;
+        if (name.on()) {
+            w = c.text("Hammer Client", 18, 4, text.argb(), true);
+            if (pl.hammershop.client.Hammer.plus()) w = c.text("+", w, 4, 0xFFFFC83D, true);
+            w += 3;
+        }
         c.size(w, 16);
     }
 }

@@ -9,12 +9,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import pl.hammershop.client.Hammer;
 
-/** Notes every hit of the player (combo counter, reach display). */
+/** Notes every hit of the player (combo counter, reach display, kill counter). */
 @Mixin(MultiPlayerGameMode.class)
 public abstract class GameModeMixin {
     @Inject(method = "attack", at = @At("HEAD"))
     private void hammer$attack(Player player, Entity target, CallbackInfo ci) {
         if (player == null || target == null) return;
-        Hammer.attacked(Math.sqrt(target.getBoundingBox().distanceToSqr(player.getEyePosition())));
+        Hammer.attacked(Math.sqrt(target.getBoundingBox().distanceToSqr(player.getEyePosition())), target.getId());
     }
 }

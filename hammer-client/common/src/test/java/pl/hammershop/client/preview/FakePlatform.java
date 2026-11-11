@@ -37,7 +37,7 @@ public final class FakePlatform implements Platform, Game {
     public void setClipboard(String text) { }
     public boolean keyHeld(String id) { return false; }
     public boolean keyPressed(String id) { return false; }
-    public String keyName(String id) { return switch (id) { case "menu" -> "Prawy Shift"; case "zoom" -> "C"; case "freelook" -> "Lewy Alt"; default -> "—"; }; }
+    public String keyName(String id) { return switch (id) { case "menu" -> "Prawy Shift"; case "zoom" -> "C"; case "freelook" -> "Lewy Alt"; case "waypoints" -> "B"; default -> "—"; }; }
     public boolean moveKey(Move key) { return key == Move.FORWARD || key == Move.ATTACK; }
     public String moveKeyName(Move key) { return switch (key) { case FORWARD -> "W"; case BACK -> "S"; case LEFT -> "A"; case RIGHT -> "D"; default -> "?"; }; }
     public boolean mouseHeld(int button) { return false; }
@@ -56,6 +56,13 @@ public final class FakePlatform implements Platform, Game {
     public int cameraMode() { return camera; }
     public void setCameraMode(int mode) { camera = mode; }
     public boolean inGameFocus() { return shown == null; }
+    public boolean entityDead(int entityId) { return dead.contains(entityId); }
+    public void turnPlayer(float yawDelta) { turned += yawDelta; }
+    public int[] loadImage(String name, Path file) { return null; }
+    public final java.util.Set<Integer> dead = new java.util.HashSet<>();
+    public float turned;
+    public float health = 18;
+    public String worldKey = "mc.hammershop.pl";
 
     // Game
     public boolean inWorld() { return inWorld; }
@@ -70,7 +77,7 @@ public final class FakePlatform implements Platform, Game {
     public int ping() { return 23; }
     public String server() { return "mc.hammershop.pl"; }
     public long dayTime() { return 24000L * 41 + 6000; }
-    public float health() { return 18; }
+    public float health() { return health; }
     public float maxHealth() { return 20; }
     public int food() { return 17; }
     public float saturation() { return 5.2f; }
@@ -93,4 +100,12 @@ public final class FakePlatform implements Platform, Game {
     public float absorption() { return 0; }
     public Target target() { return new Target("Steve", 13f, 20f, 2.7, true); }
     public String block() { return "Ruda diamentu"; }
+    public double cameraX() { return x(); }
+    public double cameraY() { return y() + 1.62; }
+    public double cameraZ() { return z(); }
+    public float cameraYaw() { return yaw(); }
+    public float cameraPitch() { return pitch(); }
+    public String dimension() { return "minecraft:overworld"; }
+    public String worldKey() { return worldKey; }
+    public boolean singleplayer() { return false; }
 }

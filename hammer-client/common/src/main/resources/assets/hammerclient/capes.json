@@ -1,0 +1,32 @@
+[
+  {
+    "id": "hammer",
+    "name": "Hammer",
+    "nameEn": "Hammer"
+  },
+  {
+    "id": "gold",
+    "name": "Złota",
+    "nameEn": "Gold"
+  },
+  {
+    "id": "ember",
+    "name": "Żar",
+    "nameEn": "Ember"
+  },
+  {
+    "id": "royal",
+    "name": "Królewska",
+    "nameEn": "Royal"
+  },
+  {
+    "id": "frost",
+    "name": "Mróz",
+    "nameEn": "Frost"
+  },
+  {
+    "id": "crimson",
+    "name": "Karmazyn",
+    "nameEn": "Crimson"
+  }
+]

@@ -29,6 +29,9 @@ public class ModMenuScreen extends UiScreen {
     private String tab = "all";
     private String search = "";
     private Module editing;
+    /** When the "this needs Hammer+" note was last asked for (screen time). */
+    private float plusHintAt = -10f;
+    private float clientHeight = 620;
 
     public ModMenuScreen() {
     }
@@ -76,6 +79,25 @@ public class ModMenuScreen extends UiScreen {
         if ("settings".equals(tab)) clientSettings(ui, cx, py, cw, ph);
         else if (editing != null) moduleSettings(ui, cx, py, cw, ph);
         else grid(ui, cx, py, cw, ph);
+
+        // "this needs Hammer+" – shown for a moment after a locked option was clicked
+        float age = ui.time - plusHintAt;
+        if (age < 3.4f) {
+            float a = Math.min(1f, age / 0.18f) * Math.min(1f, (3.4f - age) / 0.4f);
+            String text = Hammer.t("plus.locked");
+            float tw = d.textWidth(text, 8.5f, Font.BOLD) + 44;
+            float tx = px + side + (pw - side - tw) / 2f;
+            float ty = py + ph - 46 - (1 - a) * 6;
+            d.shadow(tx, ty, tw, 26, 10, Draw.alpha(0xFF000000, 0.5f * a));
+            d.panel(tx, ty, tw, 26, 13, Draw.alpha(0xFF241A08, 0.97f * a), Draw.alpha(PlusBadge.GOLD, 0.75f * a));
+            d.icon("crown", tx + 12, ty + 7.5f, 11, Draw.alpha(PlusBadge.GOLD, a));
+            d.textIn(text, tx + 30, ty, 26, 8.5f, Draw.alpha(PlusBadge.GOLD_LIGHT, a), Font.BOLD);
+        }
+    }
+
+    private void plusHint(Ui ui) {
+        plusHintAt = ui.time;
+        Hammer.platform().clickSound();
     }
 
     // ───────────── sidebar ─────────────
@@ -85,7 +107,9 @@ public class ModMenuScreen extends UiScreen {
         Config cfg = Hammer.config();
         d.image("logo", 256, 256, px + 14, py + 14, 28, 28, 0xFFFFFFFF);
         d.text("Hammer Client", px + 48, py + 15, 10.5f, Theme.TEXT, Font.BOLD);
-        d.text("v" + Hammer.version() + "  ·  MC " + Hammer.platform().minecraftVersion(), px + 48, py + 29, 7f, Theme.DIM, Font.MEDIUM);
+        float vx = px + 48;
+        if (Hammer.plus()) vx += PlusBadge.draw(d, vx, py + 28.5f, 10, 1f) + 5;
+        d.text(d.ellipsis("v" + Hammer.version() + "  ·  MC " + Hammer.platform().minecraftVersion(), px + side - 8 - vx, 7f, Font.MEDIUM), vx, py + 29, 7f, Theme.DIM, Font.MEDIUM);
 
         float y = py + 58;
         for (int i = 0; i < TABS.length; i++) {
@@ -280,7 +304,10 @@ public class ModMenuScreen extends UiScreen {
         d.textIn(s.label(), x + 12, y, h, 8.5f, Theme.TEXT, Font.MEDIUM);
         String id = "set." + s.module.id + "." + s.id;
         float right = x + w - 12;
-        if (s instanceof Setting.Bool b) {
+        if (s.premium && !Hammer.plus()) {
+            PlusBadge.lock(d, right, y + (h - 16) / 2f, 16);
+            if (ui.click(x, y, w, h)) plusHint(ui);
+        } else if (s instanceof Setting.Bool b) {
             boolean v = ui.toggle(id, b.on(), right - Ui.TOGGLE_W, y + (h - Ui.TOGGLE_H) / 2f);
             if (v != b.on()) b.set(v);
         } else if (s instanceof Setting.Slider sl) {
@@ -289,7 +316,10 @@ public class ModMenuScreen extends UiScreen {
             if (Math.abs(v - sl.value()) > 0.0001f) sl.set(v);
         } else if (s instanceof Setting.Choice c) {
             int v = ui.choice(id, c.labels(), c.get(), right - 160, y + 3, 160, h - 6);
-            if (v != c.get()) c.set(v);
+            if (v != c.get()) {
+                if (c.locked(v)) plusHint(ui);
+                else c.set(v);
+            }
         } else if (s instanceof Setting.Color c) {
             int[] v = ui.color(id, c.get(), c.chroma(), c.allowChroma, right - 30, y + (h - 16) / 2f);
             if (v[0] != c.get()) c.set(v[0]);
@@ -308,7 +338,7 @@ public class ModMenuScreen extends UiScreen {
         float top = py + 56;
         float height = ph - 56 - 14;
         float rowH = 32;
-        ui.beginScroll("client", x - 4, top, w + 8, height, 13 * rowH + 86);
+        ui.beginScroll("client", x - 4, top, w + 8, height, clientHeight);
         float y = top + 2;
 
         y = section(d, Hammer.t("settings.look"), x, y);
@@ -334,9 +364,19 @@ public class ModMenuScreen extends UiScreen {
         y = toggleRow(ui, "anim", Hammer.t("settings.animations"), cfg.animations, x, y, w, rowH, v -> cfg.animations = v);
         y = toggleRow(ui, "menu", Hammer.t("settings.custom_menu"), cfg.customMenu, x, y, w, rowH, v -> cfg.customMenu = v);
         y = toggleRow(ui, "pause", Hammer.t("settings.pause_buttons"), cfg.pauseButtons, x, y, w, rowH, v -> cfg.pauseButtons = v);
+        String bg = plusChoice(ui, "menubg", Hammer.t("settings.menu_background"), Config.MENU_BACKGROUNDS, "bg_", cfg.menuBackgroundInUse(), x, y, w, rowH);
+        if (bg != null) cfg.menuBackground = bg;
+        if ("custom".equals(cfg.menuBackgroundInUse()) && Backdrop.custom() == null) {
+            d.textRight(Hammer.t("plus.custom_missing"), x + w - 180, y + (rowH - 4 - d.lineHeight(7.5f, Font.MEDIUM)) / 2f, 7.5f, Theme.WARN, Font.MEDIUM);
+        }
+        y += rowH;
 
         y = section(d, "HUD", x, y + 6);
         y = toggleRow(ui, "hud", Hammer.t("settings.hud_visible"), cfg.hudVisible, x, y, w, rowH, v -> cfg.hudVisible = v);
+        row(ui, Hammer.t("settings.hud_scale"), x, y, w, rowH - 4);
+        d.textRight(Math.round(cfg.hudScaleInUse() * 100) + "%", x + w - 12, y + (rowH - 4 - d.lineHeight(8.5f, Font.BOLD)) / 2f, 8.5f, Theme.accentLight(), Font.BOLD);
+        cfg.setHudScale(ui.slider("cs.hudscale", cfg.hudScaleInUse(), Config.HUD_SCALE_MIN, Config.HUD_SCALE_MAX, 0.05f, x + w - 12 - 46 - 150, y + (rowH - 4 - 14) / 2f, 150));
+        y += rowH;
         row(ui, Hammer.t("settings.hud_font"), x, y, w, rowH - 4);
         int font = "hammer".equals(cfg.hudFont) ? 1 : 0;
         int nf = ui.choice("hudfont", new String[] {Hammer.t("option.font_minecraft"), Hammer.t("option.font_hammer")}, font, x + w - 172, y + 3, 160, rowH - 10);
@@ -345,6 +385,24 @@ public class ModMenuScreen extends UiScreen {
             cfg.markDirty();
         }
         y += rowH;
+        String style = plusChoice(ui, "hudstyle", Hammer.t("settings.hud_style"), Config.HUD_STYLES, "hud_", cfg.hudStyleInUse(), x, y, w, rowH);
+        if (style != null) cfg.hudStyle = style;
+        y += rowH;
+
+        // Hammer+
+        y = section(d, "Hammer+", x, y + 6);
+        boolean plus = Hammer.plus();
+        row(ui, plus ? plusUntil(cfg) : Hammer.t("plus.inactive"), x, y, w, rowH - 4);
+        if (plus) PlusBadge.draw(d, x + w - 12 - PlusBadge.width(d, 14), y + (rowH - 4 - 14) / 2f, 14, 1f);
+        else if (!cfg.shopUrl.isEmpty() && ui.button("plus.shop", Hammer.t("plus.get"), "crown", x + w - 12 - 118, y + 3, 118, rowH - 10, Ui.Style.SECONDARY)) p.openUrl(cfg.shopUrl);
+        y += rowH;
+        if (p.supports(Platform.Feature.CAPES)) {
+            String cape = plus && !cfg.cape.isEmpty() ? Hammer.t("cape." + cfg.cape) : Hammer.t("plus.cape_none");
+            row(ui, Hammer.t("plus.cape", cape), x, y, w, rowH - 4);
+            d.textRight(Hammer.t("plus.in_launcher"), x + w - 12, y + (rowH - 4 - d.lineHeight(7.5f, Font.MEDIUM)) / 2f, 7.5f, Theme.DIM, Font.MEDIUM);
+            y += rowH;
+            y = toggleRow(ui, "capes", Hammer.t("settings.other_capes"), cfg.otherCapes, x, y, w, rowH, v -> cfg.otherCapes = v);
+        }
 
         y = section(d, Hammer.t("settings.profiles"), x, y + 6);
         row(ui, Hammer.t("settings.profile_current", cfg.active().name), x, y, w, rowH - 4);
@@ -364,6 +422,7 @@ public class ModMenuScreen extends UiScreen {
         for (Keys k : Keys.values()) {
             if (k == Keys.FREELOOK && Modules.freelook == null) continue;
             if (k == Keys.ZOOM && Modules.zoom == null) continue;
+            if (k == Keys.WAYPOINTS && Modules.waypoints == null) continue;
             row(ui, Hammer.t("key." + k.id), x, y, w, rowH - 4);
             String name = p.keyName(k.id);
             float kw = Math.max(34, d.textWidth(name, 8, Font.BOLD) + 16);
@@ -373,7 +432,37 @@ public class ModMenuScreen extends UiScreen {
         }
         if (ui.button("controls", Hammer.t("settings.change_keys"), "keystrokes", x, y + 2, 200, 26, Ui.Style.SECONDARY)) p.showVanilla(Platform.Vanilla.CONTROLS, this);
         if (!cfg.discordUrl.isEmpty() && ui.button("s.discord", Hammer.t("pause.discord"), "discord", x + w - 150, y + 2, 150, 26, Ui.Style.DISCORD)) p.openUrl(cfg.discordUrl);
+        clientHeight = y + 36 - top;
         ui.endScroll();
+    }
+
+    /** "Aktywny do 12.12.2026" / "Aktywny bezterminowo". */
+    private static String plusUntil(Config cfg) {
+        if (cfg.plusUntil <= 0) return Hammer.t("plus.active_forever");
+        java.time.LocalDate day = java.time.Instant.ofEpochSecond(cfg.plusUntil).atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        return Hammer.t("plus.active_until", day.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")));
+    }
+
+    /**
+     * A dropdown whose first option is free and the others need Hammer+. Returns the newly chosen id, or null when
+     * nothing changed (a locked choice only shows the Hammer+ note).
+     */
+    private String plusChoice(Ui ui, String id, String label, String[] ids, String langPrefix, String current, float x, float y, float w, float rowH) {
+        row(ui, label, x, y, w, rowH - 4);
+        String[] labels = new String[ids.length];
+        int cur = 0;
+        for (int i = 0; i < ids.length; i++) {
+            labels[i] = Hammer.t("option." + langPrefix + ids[i]) + (i > 0 ? "  +" : "");
+            if (ids[i].equals(current)) cur = i;
+        }
+        int chosen = ui.choice("cs." + id, labels, cur, x + w - 172, y + 3, 160, rowH - 10);
+        if (chosen == cur) return null;
+        if (chosen > 0 && !Hammer.plus()) {
+            plusHint(ui);
+            return null;
+        }
+        Hammer.config().markDirty();
+        return ids[chosen];
     }
 
     private static float section(Draw d, String title, float x, float y) {

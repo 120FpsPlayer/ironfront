@@ -4,7 +4,10 @@
   "compatibilityLevel": "JAVA_${java}",
   "client": [
     "CameraMixin",
+    "CapeMixin",
+    "ChatMixin",
     "EntityMixin",
+    "FireMixin",
     "FovMixin",
     "GameModeMixin",
     "HudMixin",
@@ -15,6 +18,7 @@
     "PacketMixin",
     "PauseMixin",
     "ScreenSwapMixin",
+    "TabMixin",
     "TimeMixin",
     "WeatherMixin"
   ],

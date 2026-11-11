@@ -49,6 +49,22 @@ public final class HudCanvas {
 
     /** The module's background plate. */
     public void plate(float w, float h, int argb) {
-        d.rrect(0, 0, w, h, 2.5f, argb);
+        float alpha = ((argb >>> 24) & 0xFF) / 255f;
+        switch (pl.hammershop.client.Hammer.config().hudStyleInUse()) {
+            case "glass" -> {
+                d.rrect(0, 0, w, h, 3.5f, Draw.alpha(argb, alpha * 0.8f));
+                d.rrect(0, 0, w, h, 3.5f, 0x16FFFFFF);
+                d.fill(2, 1, w - 4, 1, 0x38FFFFFF);
+                d.frame(0, 0, w, h, 2, 1, 0x26FFFFFF);
+            }
+            case "neon" -> {
+                int accent = pl.hammershop.client.ui.Theme.accent();
+                d.shadow(0, 0, w, h, 5, Draw.alpha(accent, 0.42f));
+                d.rrect(0, 0, w, h, 2.5f, Draw.alpha(0xFF050403, Math.max(0.55f, alpha)));
+                d.frame(0, 0, w, h, 1.5f, 1, Draw.alpha(accent, 0.95f));
+            }
+            case "outline" -> d.frame(0, 0, w, h, 1.5f, 1, 0x9CFFFFFF);
+            default -> d.rrect(0, 0, w, h, 2.5f, argb);
+        }
     }
 }

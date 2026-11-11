@@ -52,12 +52,17 @@ public abstract class HudModule extends Module {
         return data().x >= 0 && data().y >= 0;
     }
 
+    /** How big the module is drawn: its own size × the size of the whole HUD. */
+    public float size() {
+        return scale.value() * Hammer.config().hudScaleInUse();
+    }
+
     public float scaledW() {
-        return w * scale.value();
+        return w * size();
     }
 
     public float scaledH() {
-        return h * scale.value();
+        return h * size();
     }
 
     /** Top-left corner on a HUD of sw × sh GUI pixels. */

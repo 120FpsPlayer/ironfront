@@ -102,6 +102,7 @@ public final class FabricPlatform implements Platform, Game {
             case MENU -> InputConstants.KEY_RSHIFT;
             case ZOOM -> InputConstants.KEY_C;
             case FREELOOK -> InputConstants.KEY_LALT;
+            case WAYPOINTS -> InputConstants.KEY_B;
             default -> InputConstants.UNKNOWN.getValue();
         };
     }
@@ -133,6 +134,8 @@ public final class FabricPlatform implements Platform, Game {
         Class<?>[] hooked = {
             PauseScreen.class, net.minecraft.client.multiplayer.MultiPlayerGameMode.class, net.minecraft.client.multiplayer.ClientPacketListener.class,
             ClientLevel.class, net.minecraft.world.level.Level.class, LocalPlayer.class, net.minecraft.client.Camera.class,
+            net.minecraft.client.player.AbstractClientPlayer.class, net.minecraft.client.gui.components.PlayerTabOverlay.class,
+            net.minecraft.client.gui.components.ChatComponent.class, net.minecraft.client.renderer.ScreenEffectRenderer.class,
             //#if MC >= 26.3
             net.minecraft.client.ClientClockManager.ClientClockInstance.class,
             //#elif MC >= 26.1
@@ -200,6 +203,95 @@ public final class FabricPlatform implements Platform, Game {
             Hammer.renderHud(GFX);
         } finally {
             GFX.end();
+        }
+    }
+
+    /** The player list draws a ping: true = we drew the number, the vanilla bars are skipped. */
+    public static boolean tabPing(GuiGraphicsExtractor g, int width, int x, int y, int latency) {
+        if (!ready || !Hammer.tabPing()) return false;
+        GFX.begin(g);
+        try {
+            return Hammer.renderTabPing(GFX, x, y, width, latency);
+        } finally {
+            GFX.end();
+        }
+    }
+
+    /** A chat message is about to be added: the time goes in front of it (clicking it copies the message). */
+    public static Component chat(Component message) {
+        if (!ready || message == null) return message;
+        try {
+            String prefix = Hammer.chatPrefix();
+            if (prefix == null) return message;
+            net.minecraft.network.chat.Style style = net.minecraft.network.chat.Style.EMPTY.withColor(net.minecraft.ChatFormatting.GRAY);
+            if (Hammer.chatCopy()) {
+                String plain = message.getString();
+                Component hint = Component.literal(Hammer.t("chat.copy_hint"));
+                //#if MC >= 1.21.5
+                style = style.withClickEvent(new net.minecraft.network.chat.ClickEvent.CopyToClipboard(plain)).withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(hint));
+                //#else
+                style = style.withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.COPY_TO_CLIPBOARD, plain))
+                        .withHoverEvent(new net.minecraft.network.chat.HoverEvent(net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT, hint));
+                //#endif
+            }
+            // An empty parent, so the message keeps its own colours and is not clickable itself.
+            return Component.empty().append(Component.literal(prefix).withStyle(style)).append(message);
+        } catch (RuntimeException e) {
+            return message;
+        }
+    }
+
+    // ───────────── capes ─────────────
+
+    private static final class CapeEntry {
+        final String uuid;
+        Object skin;
+        String cape;
+        Object result;
+
+        CapeEntry(String uuid) {
+            this.uuid = uuid;
+        }
+    }
+
+    private static final Map<Object, CapeEntry> CAPES = new java.util.WeakHashMap<>();
+
+    /**
+     * The skin a player is drawn with: the same one with a Hammer cape, or null to leave it alone. Asked many times
+     * per frame, so the answer is kept until the player's skin or cape changes.
+     */
+    //#if MC >= 1.21.9
+    public static net.minecraft.world.entity.player.PlayerSkin cape(net.minecraft.client.player.AbstractClientPlayer player, net.minecraft.world.entity.player.PlayerSkin skin) {
+    //#else
+    public static net.minecraft.client.resources.PlayerSkin cape(net.minecraft.client.player.AbstractClientPlayer player, net.minecraft.client.resources.PlayerSkin skin) {
+    //#endif
+        if (!ready || skin == null || player == null) return null;
+        try {
+            CapeEntry e = CAPES.get(player);
+            if (e == null) {
+                e = new CapeEntry(player.getUUID().toString().replace("-", ""));
+                CAPES.put(player, e);
+            }
+            String id = Hammer.cape(e.uuid, player == mc().player);
+            if (id == null) return null;
+            if (e.skin != skin || !id.equals(e.cape)) {
+                e.skin = skin;
+                e.cape = id;
+                Identifier texture = Identifier.fromNamespaceAndPath("hammerclient", "textures/capes/" + id + ".png");
+                //#if MC >= 1.21.9
+                net.minecraft.core.ClientAsset.Texture asset = new net.minecraft.core.ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath("hammerclient", "capes/" + id), texture);
+                e.result = new net.minecraft.world.entity.player.PlayerSkin(skin.body(), asset, skin.elytra(), skin.model(), skin.secure());
+                //#else
+                e.result = new net.minecraft.client.resources.PlayerSkin(skin.texture(), skin.textureUrl(), texture, skin.elytraTexture(), skin.model(), skin.secure());
+                //#endif
+            }
+            //#if MC >= 1.21.9
+            return (net.minecraft.world.entity.player.PlayerSkin) e.result;
+            //#else
+            return (net.minecraft.client.resources.PlayerSkin) e.result;
+            //#endif
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 
@@ -375,7 +467,9 @@ public final class FabricPlatform implements Platform, Game {
         boolean[] state = KEY_STATE.get(id);
         boolean typed = state != null && state[1];
         if (state != null) state[1] = false;
-        return onKeyboard(m) ? typed : clicked; // a mouse button bound to it comes through the game's own clicks
+        // Both ways count as one press: the keyboard itself (a key shared with another binding reaches only one of them
+        // through the game) and the game's own click (a tap shorter than a frame is never seen held down).
+        return onKeyboard(m) ? typed || clicked : clicked;
     }
 
     @Override
@@ -511,7 +605,140 @@ public final class FabricPlatform implements Platform, Game {
         return screen() == null && mc().mouseHandler.isMouseGrabbed();
     }
 
+    @Override
+    public boolean entityDead(int entityId) {
+        ClientLevel level = mc().level;
+        return level != null && level.getEntity(entityId) instanceof LivingEntity e && e.isDeadOrDying();
+    }
+
+    @Override
+    public void turnPlayer(float yawDelta) {
+        LocalPlayer p = player();
+        if (p != null) p.setYRot(p.getYRot() + yawDelta);
+    }
+
+    @Override
+    public int[] loadImage(String name, Path file) {
+        try {
+            if (java.nio.file.Files.size(file) > 24L * 1024 * 1024) return null;
+            com.mojang.blaze3d.platform.NativeImage image;
+            try (java.io.InputStream in = java.nio.file.Files.newInputStream(file)) {
+                image = com.mojang.blaze3d.platform.NativeImage.read(in);
+            }
+            int w = image.getWidth();
+            int h = image.getHeight();
+            if (w < 1 || h < 1 || w > 8192 || h > 8192) {
+                image.close();
+                return null;
+            }
+            //#if MC >= 1.21.5
+            net.minecraft.client.renderer.texture.DynamicTexture texture = new net.minecraft.client.renderer.texture.DynamicTexture(() -> "hammerclient " + name, image);
+            //#else
+            net.minecraft.client.renderer.texture.DynamicTexture texture = new net.minecraft.client.renderer.texture.DynamicTexture(image);
+            //#endif
+            mc().getTextureManager().register(Identifier.fromNamespaceAndPath("hammerclient", "textures/" + name + ".png"), texture);
+            return new int[] {w, h};
+        } catch (Exception e) {
+            Log.warn("Nie udało się wczytać obrazu " + file.getFileName(), e);
+            return null;
+        }
+    }
+
     // ───────────── Game ─────────────
+
+    private static net.minecraft.client.Camera camera() {
+        //#if MC >= 26.2
+        return mc().gameRenderer.mainCamera();
+        //#else
+        return mc().gameRenderer.getMainCamera();
+        //#endif
+    }
+
+    private static net.minecraft.world.phys.Vec3 cameraPosition() {
+        //#if MC >= 1.21.11
+        return camera().position();
+        //#else
+        return camera().getPosition();
+        //#endif
+    }
+
+    @Override
+    public double cameraX() {
+        return cameraPosition().x;
+    }
+
+    @Override
+    public double cameraY() {
+        return cameraPosition().y;
+    }
+
+    @Override
+    public double cameraZ() {
+        return cameraPosition().z;
+    }
+
+    @Override
+    public float cameraYaw() {
+        //#if MC >= 1.21.11
+        return camera().yRot();
+        //#else
+        return camera().getYRot();
+        //#endif
+    }
+
+    @Override
+    public float cameraPitch() {
+        //#if MC >= 1.21.11
+        return camera().xRot();
+        //#else
+        return camera().getXRot();
+        //#endif
+    }
+
+    @Override
+    public String dimension() {
+        ClientLevel level = mc().level;
+        if (level == null) return "";
+        //#if MC >= 1.21.11
+        return level.dimension().identifier().toString();
+        //#else
+        return level.dimension().location().toString();
+        //#endif
+    }
+
+    private String worldKey = "";
+    private Object worldKeyOf;
+
+    @Override
+    public String worldKey() {
+        Minecraft mc = mc();
+        ClientLevel level = mc.level;
+        if (level == null) return "";
+        // Asked every frame; the answer only changes when the player joins another world or server.
+        Object now = mc.getCurrentServer() != null ? mc.getCurrentServer() : mc.getSingleplayerServer();
+        if (now == null) return "";
+        if (now == worldKeyOf) return worldKey;
+        String key = "";
+        try {
+            if (mc.getCurrentServer() != null) {
+                String ip = mc.getCurrentServer().ip;
+                key = ip == null ? "" : ip.trim().toLowerCase(java.util.Locale.ROOT);
+            } else {
+                Path root = mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().normalize();
+                key = "sp:" + (root.getFileName() != null ? root.getFileName().toString() : mc.getSingleplayerServer().getWorldData().getLevelName());
+            }
+        } catch (RuntimeException e) {
+            key = "";
+        }
+        worldKeyOf = now;
+        worldKey = key;
+        return key;
+    }
+
+    @Override
+    public boolean singleplayer() {
+        return mc().getSingleplayerServer() != null;
+    }
 
     private static LocalPlayer player() {
         Minecraft mc = mc();

@@ -23,6 +23,10 @@ public final class Stats {
     private int lastHurt;
     private double reach = -1;
     private long reachAt;
+    private int targetId = -1;
+    private int kills;
+    private int deaths;
+    private boolean alive = true;
 
     private long lastTimePacket;
     private double tps = 20;
@@ -46,12 +50,29 @@ public final class Stats {
     }
 
     /** 20 times per second. */
-    public void tick(Game g) {
+    public void tick(Platform p) {
+        Game g = p.game();
         if (!g.inWorld()) {
             hasPos = false;
             combo = 0;
+            targetId = -1;
+            alive = true;
             return;
         }
+        // A kill = something you hit died within a few seconds of your last hit (counted on your side).
+        if (targetId != -1) {
+            if (System.currentTimeMillis() - lastHit > 4000) targetId = -1;
+            else if (p.entityDead(targetId)) {
+                kills++;
+                targetId = -1;
+            }
+        }
+        boolean nowAlive = g.health() > 0;
+        if (alive && !nowAlive) {
+            deaths++;
+            Waypoints.died(g);
+        }
+        alive = nowAlive;
         double dx = g.x() - lastX;
         double dz = g.z() - lastZ;
         lastX = g.x();
@@ -85,12 +106,26 @@ public final class Stats {
         return speed;
     }
 
-    /** The player hit an entity `distance` blocks away. */
-    public void attacked(double distance) {
+    /** The player hit the entity with this id, `distance` blocks away. */
+    public void attacked(double distance, int entityId) {
         combo++;
         lastHit = System.currentTimeMillis();
         reach = distance;
         reachAt = lastHit;
+        targetId = entityId;
+    }
+
+    /** Milliseconds since the player's last hit. */
+    public long sinceHit() {
+        return System.currentTimeMillis() - lastHit;
+    }
+
+    public int kills() {
+        return kills;
+    }
+
+    public int deaths() {
+        return deaths;
     }
 
     public int combo() {

@@ -289,6 +289,30 @@ public final class InfoHuds {
         }
     }
 
+    /** Kills and deaths of this game session (counted on your side). */
+    public static final class Kills extends TextHud {
+        private final Setting.Bool deaths = bool("show_deaths", true);
+        private final Setting.Bool ratio = bool("show_ratio", false);
+
+        public Kills() {
+            super("kills", "skull", false, Anchor.TOP_RIGHT);
+            order = 6;
+        }
+
+        @Override
+        protected void lines(Game g, boolean editor, List<String[]> out) {
+            int k = Hammer.stats().kills();
+            int d = Hammer.stats().deaths();
+            if (editor && k == 0 && d == 0) {
+                k = 7;
+                d = 2;
+            }
+            out.add(line(hud("kills"), String.valueOf(k)));
+            if (deaths.on()) out.add(line(hud("deaths"), String.valueOf(d)));
+            if (ratio.on()) out.add(line("K/D", Fmt.num(d == 0 ? k : k / (double) d, 2)));
+        }
+    }
+
     /** The block you are looking at. */
     public static final class BlockInfo extends TextHud {
         public BlockInfo() {

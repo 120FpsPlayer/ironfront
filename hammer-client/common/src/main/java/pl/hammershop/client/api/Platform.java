@@ -82,13 +82,25 @@ public interface Platform {
     /** No screen is open and the mouse controls the player. */
     boolean inGameFocus();
 
+    /** True when the entity with this id (from the attack hook) is dying or dead; false when alive or unknown. */
+    boolean entityDead(int entityId);
+
+    /** Turns the player by this many degrees (the FPS test pans the camera in singleplayer). */
+    void turnPlayer(float yawDelta);
+
+    /**
+     * Loads a PNG from disk as the texture `name` (usable with {@link Gfx#image}); returns {width, height}, or null
+     * when the file is missing, too big or not a picture. Call it from the render thread.
+     */
+    int[] loadImage(String name, Path file);
+
     /** Features that need hooks a game version may lack; modules for unsupported ones are hidden. */
     default boolean supports(Feature feature) {
         return true;
     }
 
     enum Feature {
-        ZOOM, FREELOOK, CROSSHAIR, TIME_CHANGER, WEATHER, COMBO, TPS, FULLBRIGHT
+        ZOOM, FREELOOK, CROSSHAIR, TIME_CHANGER, WEATHER, COMBO, TPS, FULLBRIGHT, WAYPOINTS, CHAT, TAB_PING, OVERLAYS, CAPES
     }
 
     enum Vanilla {

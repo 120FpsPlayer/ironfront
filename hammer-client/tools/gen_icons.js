@@ -29,7 +29,7 @@ const ICONS = {
   puzzle: 'puzzle-piece', users: 'users', quit: 'right-from-bracket', back: 'arrow-left', image: 'image', save: 'floppy-disk',
   copy: 'copy', sky: 'cloud-sun', target: 'bullseye', maximize: 'maximize', video: 'video', list: 'list', hud: 'border-all',
   drop: 'droplet', contrast: 'circle-half-stroke', font: 'font', refresh: 'arrows-rotate', ok: 'circle-check', error: 'circle-xmark',
-  heart: 'heart',
+  heart: 'heart', pin: 'location-pin', crown: 'crown', skull: 'skull', chat: 'comment-dots', tab: 'table-list',
   discord: 'brands/discord',
 };
 

@@ -4,11 +4,14 @@ import pl.hammershop.client.api.Game;
 import pl.hammershop.client.api.Gfx;
 import pl.hammershop.client.api.Keys;
 import pl.hammershop.client.api.Platform;
+import pl.hammershop.client.core.Benchmark;
+import pl.hammershop.client.core.Capes;
 import pl.hammershop.client.core.Config;
 import pl.hammershop.client.core.Fmt;
 import pl.hammershop.client.core.Lang;
 import pl.hammershop.client.core.Log;
 import pl.hammershop.client.core.Stats;
+import pl.hammershop.client.core.Waypoints;
 import pl.hammershop.client.module.HudCanvas;
 import pl.hammershop.client.module.HudLayout;
 import pl.hammershop.client.module.HudModule;
@@ -16,6 +19,7 @@ import pl.hammershop.client.module.Modules;
 import pl.hammershop.client.screens.MainMenuScreen;
 import pl.hammershop.client.screens.ModMenuScreen;
 import pl.hammershop.client.screens.PauseOverlay;
+import pl.hammershop.client.screens.WaypointsScreen;
 import pl.hammershop.client.screens.WelcomeHint;
 import pl.hammershop.client.ui.Draw;
 import pl.hammershop.client.ui.Input;
@@ -56,6 +60,7 @@ public final class Hammer {
         config = Config.load(p.configDir());
         Lang.load(p.language());
         Fmt.comma = p.language() != null && p.language().toLowerCase().startsWith("pl");
+        Waypoints.load(p.configDir());
         Modules.init(p);
         Modules.apply(true);
         Log.info("Gotowe – wersja " + version + " dla Minecrafta " + p.minecraftVersion() + ", " + Modules.ALL.size() + " modułów, panel: " + p.keyName(Keys.MENU.id));
@@ -85,6 +90,11 @@ public final class Hammer {
         return version;
     }
 
+    /** Hammer+ is active (the launcher verified the player's code; it may run out while the game is open). */
+    public static boolean plus() {
+        return config != null && config.plusActive && (config.plusUntil == 0 || config.plusUntil * 1000L > System.currentTimeMillis());
+    }
+
     public static boolean animations() {
         return config == null || config.animations;
     }
@@ -111,7 +121,9 @@ public final class Hammer {
         if (wasInWorld && !inWorld) STATS.leftWorld();
         wasInWorld = inWorld;
         Lang.load(platform.language());
-        STATS.tick(g);
+        STATS.tick(platform);
+        Capes.tick();
+        if (platform.keyPressed(Keys.WAYPOINTS.id) && inWorld && platform.inGameFocus() && Modules.waypoints != null && Modules.waypoints.enabled()) open(new WaypointsScreen());
         if (platform.keyPressed(Keys.MENU.id) && inWorld && platform.inGameFocus()) open(new ModMenuScreen());
         if (platform.keyPressed(Keys.HUD.id)) {
             config.hudVisible = !config.hudVisible;
@@ -119,7 +131,10 @@ public final class Hammer {
         }
         if (platform.keyPressed(Keys.STOPWATCH.id)) STATS.stopwatchPress();
         Modules.tick();
-        if (++ticks % 100 == 0) config.saveIfDirty();
+        if (++ticks % 100 == 0) {
+            config.saveIfDirty();
+            Waypoints.save();
+        }
     }
 
     /** Draws the HUD modules (and the custom crosshair) over the game. A failure never reaches the game. */
@@ -129,11 +144,14 @@ public final class Hammer {
         try {
             STATS.frame(platform);
             WelcomeHint.render(d);
-            if (!config.hudVisible) return;
-            if (Modules.crosshair != null && Modules.crosshair.enabled() && !(Modules.crosshair.hiddenInThirdPerson() && platform.cameraMode() != 0)) {
-                Modules.crosshair.render(d, g.width() / 2f, g.height() / 2f);
+            if (config.hudVisible) {
+                if (Modules.waypoints != null && Modules.waypoints.enabled()) Waypoints.render(d, platform.game());
+                if (Modules.crosshair != null && Modules.crosshair.enabled() && !(Modules.crosshair.hiddenInThirdPerson() && platform.cameraMode() != 0)) {
+                    Modules.crosshair.render(d, g.width() / 2f, g.height() / 2f);
+                }
+                drawHud(d, false);
             }
-            drawHud(d, false);
+            Benchmark.frame(d, platform); // on top of the HUD, and also when the HUD is hidden
         } catch (RuntimeException e) {
             d.unwind();
             problem("HUD nie narysował się", e);
@@ -172,7 +190,7 @@ public final class Hammer {
             int[] mark = d.mark();
             d.push();
             d.translate(m.left(sw), m.top(sh));
-            d.scale(m.scale.value());
+            d.scale(m.size());
             try {
                 m.render(new HudCanvas(d, game, platform, editor, smooth));
                 d.pop();
@@ -211,6 +229,7 @@ public final class Hammer {
     /** Leaves a screen: to its parent, or back to the game / main menu. */
     public static void back(UiScreen screen) {
         config.saveIfDirty();
+        Waypoints.save();
         INPUT.reset();
         platform.show(screen.parent);
     }
@@ -254,15 +273,74 @@ public final class Hammer {
     // ───────────── hooks called from the game (mixins) ─────────────
 
     public static double fov(double fov) {
-        return Modules.zoom != null ? Modules.zoom.apply(fov) : fov;
+        double out = Modules.zoom != null ? Modules.zoom.apply(fov) : fov;
+        lastFov = out;
+        return out;
     }
 
     public static boolean zoomScroll(double amount) {
         return Modules.zoom != null && Modules.zoom.scroll(amount);
     }
 
-    public static void attacked(double distance) {
-        STATS.attacked(distance);
+    public static void attacked(double distance, int entityId) {
+        STATS.attacked(distance, entityId);
+    }
+
+    private static double lastFov = 70;
+
+    /** The vertical field of view the world was last drawn with (zoom included) – waypoints are projected with it. */
+    public static double lastFov() {
+        return lastFov;
+    }
+
+    /** Cape of a player (UUID without dashes): the own Hammer+ cape, or another player's from the shop's server; null = none. */
+    public static String cape(String uuid, boolean self) {
+        return Capes.of(uuid, self);
+    }
+
+    public static boolean tabPing() {
+        return Modules.tabPing != null && Modules.tabPing.enabled();
+    }
+
+    /** Draws a player's ping as a number in the tab list (x, y, width = the player's row, like the vanilla icon); false = it failed. */
+    public static boolean renderTabPing(Gfx g, int x, int y, int width, int latency) {
+        Draw d = new Draw(g);
+        try {
+            Modules.tabPing.render(g, x, y, width, latency);
+            return true;
+        } catch (RuntimeException e) {
+            d.unwind();
+            problem("Ping w Tab nie narysował się", e);
+            return false;
+        }
+    }
+
+    /** "[12:34] " to put in front of a chat message, or null. */
+    public static String chatPrefix() {
+        return Modules.chat != null && Modules.chat.enabled() ? Modules.chat.prefix() : null;
+    }
+
+    /** The time in front of a chat message can be clicked to copy the message. */
+    public static boolean chatCopy() {
+        return Modules.chat != null && Modules.chat.enabled() && Modules.chat.clickToCopy();
+    }
+
+    /** How many chat messages the game keeps (vanilla: 100). */
+    public static int chatHistory(int vanilla) {
+        return Modules.chat != null && Modules.chat.enabled() && Modules.chat.longHistory() ? 16384 : vanilla;
+    }
+
+    /** How far the fire on your screen is pushed down (0 = vanilla), in the game's overlay units. */
+    public static float lowFire() {
+        return Modules.overlays != null && Modules.overlays.enabled() ? Modules.overlays.fireOffset() : 0f;
+    }
+
+    public static boolean hidePumpkin() {
+        return Modules.overlays != null && Modules.overlays.enabled() && Modules.overlays.noPumpkin();
+    }
+
+    public static boolean hideVignette() {
+        return Modules.overlays != null && Modules.overlays.enabled() && Modules.overlays.noVignette();
     }
 
     public static void timePacket() {
@@ -300,5 +378,6 @@ public final class Hammer {
 
     public static void shutdown() {
         if (config != null) config.save();
+        Waypoints.save();
     }
 }

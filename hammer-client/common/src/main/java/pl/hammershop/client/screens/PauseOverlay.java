@@ -32,7 +32,8 @@ public final class PauseOverlay {
             } else discord = null;
             ui.button("mods", Hammer.t("pause.mods"), "puzzle", x, y, w, 28, Ui.Style.PRIMARY);
             mods = new float[] {x * s, y * s, w * s, 28 * s};
-            ui.d.text("Hammer Client " + Hammer.version(), x + 2, y - 14, 7.5f, Theme.MUTED, Font.MEDIUM);
+            float end = ui.d.text("Hammer Client " + Hammer.version(), x + 2, y - 14, 7.5f, Theme.MUTED, Font.MEDIUM);
+            if (Hammer.plus()) PlusBadge.draw(ui.d, end + 6, y - 15.5f, 10, 1f);
             ui.end();
         } catch (RuntimeException e) {
             ui.d.unwind();
