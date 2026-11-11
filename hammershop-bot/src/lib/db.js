@@ -105,6 +105,8 @@ function guild(guildId) {
   g.disabledMethods ??= {}; // payment methods switched off with /disable: { [name]: { by, at, reason } } – src/lib/paymentState.js
   g.deals ??= {}; // the deal of the week: { week, days: [dayKeys], current: { productId, percent, endsAt } } – src/features/deals.js
   g.abandoned ??= {}; // abandoned-order codes sent: { [ticketChannelId]: { userId, sentAt, code } } – src/features/abandoned.js
+  g.plusCodes ??= []; // Hammer+ codes issued with /hammerplus: [{ id, mc, nick, exp, by, at }] – never the code itself – src/features/hammerplus.js
+  g.featuredServers ??= []; // servers featured in Hammer Launcher: [{ id, name, address, description, tags, icon, mc, loader, pack, addedBy, addedAt }] – src/features/featured.js
   return g;
 }
 

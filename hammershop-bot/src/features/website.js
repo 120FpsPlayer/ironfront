@@ -15,6 +15,8 @@
  *                exactly like a paid Discord order. Buyers who aren't on the server yet get it as soon as they join.
  *                Every payment is logged in the log channel.
  *   - invite     the Support / community buttons use DISCORD_INVITE_URL, or a permanent invite the bot makes itself.
+ *   - launcher   Hammer Launcher reads the featured servers of the same server (/featured, src/features/featured.js) from
+ *                /api/launcher/featured; Hammer+ cloud sync and capes are the website's own (src/web/launcher.js).
  *
  * Bot side: ticket.order.paidWith = 'website', order.web = { orderId, stripe }.
  * Website side (data/web.json): order.handedOver, ticketChannelId, ticketNumber, ticketUrl, waitingForMember, delivered,
@@ -127,6 +129,12 @@ function plain(text) {
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/ +\n/g, '\n')
     .trim();
+}
+
+/** The servers Hammer Launcher recommends – the /featured list of the server the website belongs to. */
+function featuredServers() {
+  const guild = guildOf();
+  return guild ? require('./featured').publicList(guild.id) : [];
 }
 
 const inviteOf = () => env.web.invite || (guildOf() && db.guild(guildOf().id).webInvite?.url) || null;
@@ -334,7 +342,7 @@ function start(c) {
   webStore.load();
   process.once('exit', () => webStore.flush());
   webAuth.setClientId(c.application?.id ?? c.user?.id);
-  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, onLogin, isMember, currency });
+  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, onLogin, isMember, currency, featured: featuredServers });
   server.on('error', (err) => {
     console.warn(`🌐 Strona: nie można użyć portu ${env.web.port} (${err.code ?? err.message}) – bot działa dalej bez niej.`);
     server = null;
@@ -360,4 +368,4 @@ hooks.on('inviteDelete', (invite) => {
   }
 });
 
-module.exports = { catalog, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c) };
+module.exports = { catalog, featuredServers, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c) };

@@ -8,6 +8,7 @@
     "start": "node index.js",
     "test": "node scripts/test.js",
     "check": "node scripts/check.js",
+    "plus-key": "node scripts/plus-key.js",
     "render-assets": "node tools/render-assets.js"
   },
   "engines": {

@@ -74,6 +74,8 @@ const env = {
   paypalClientId: (process.env.PAYPAL_CLIENT_ID || '').trim(),
   paypalSecret: (process.env.PAYPAL_CLIENT_SECRET || '').trim(),
   paypalSandbox: bool('PAYPAL_SANDBOX', false),
+  /** Hammer+ (Hammer Launcher): the Ed25519 key that signs the codes – base64 of the PKCS#8 DER private key (src/lib/plus.js). */
+  plusPrivateKey: (process.env.HAMMER_PLUS_PRIVATE_KEY || '').trim(),
   /** The store website (src/web, src/features/website.js) – served by the bot itself on this port. */
   web: webSettings(),
   ids,

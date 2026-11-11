@@ -80,6 +80,20 @@ const MAP = {
     reason: C('powod', 'Widoczny dla klientów, np. „przerwa techniczna – wracamy wieczorem”'),
   }),
   enable: C('wlacz-platnosc', 'Włącz z powrotem metodę płatności (admini i sprzedawcy)', { method: C('metoda', 'Metoda płatności') }),
+  featured: C('polecane', 'Polecane serwery w Hammer Launcherze (admini i sprzedawcy)', {
+    add: C('dodaj', 'Dodaj serwer do polecanych w launcherze', {
+      name: C('nazwa', 'Nazwa serwera'),
+      address: C('adres', 'Adres serwera: host albo host:port, np. mc.hammershop.pl'),
+      description: C('opis', 'Krótki opis (do 200 znaków)'),
+      tags: C('tagi', 'Tagi oddzielone przecinkami, np. survival, pvp (do 6)'),
+      icon: C('ikona', 'Adres ikony serwera – musi zaczynać się od https://'),
+      mc: C('wersja', 'Wersja Minecrafta, np. 1.21.4'),
+      loader: C('loader', 'Loader modów'),
+      pack: C('paczka', 'Paczka modów, którą launcher ma zainstalować dla tego serwera (opcjonalnie)'),
+    }),
+    remove: C('usun', 'Usuń serwer z polecanych', { server: C('serwer', 'Serwer') }),
+    list: C('lista', 'Lista polecanych serwerów'),
+  }),
   giveaway: C('giveaway', 'Giveawaye (moderatorzy)', {
     start: C('start', 'Rozpocznij giveaway', {
       prize: C('nagroda', 'Co można wygrać?'),
@@ -95,6 +109,15 @@ const MAP = {
     end: C('zakoncz', 'Zakończ giveaway teraz', { giveaway: C('giveaway', 'Który giveaway') }),
     reroll: C('losuj-ponownie', 'Wylosuj nowych zwycięzców zakończonego giveawayu', { giveaway: C('giveaway', 'Który giveaway'), winners: C('zwyciezcy', 'Ilu nowych zwycięzców (domyślnie 1)') }),
     list: C('lista', 'Aktywne i ostatnie giveawaye'),
+  }),
+  hammerplus: C('hammerplus', 'Hammer+ w Hammer Launcherze – kody przypisane do konta Minecraft (admini i sprzedawcy)', {
+    grant: C('nadaj', 'Wystaw kod Hammer+ dla konta Minecraft klienta', {
+      nick: C('nick', 'Nick Minecraft klienta (konto premium)'),
+      days: C('dni', 'Na ile dni (0 = na zawsze)'),
+    }),
+    check: C('sprawdz', 'Sprawdź kod: czyj jest i do kiedy działa', { code: C('kod', 'Kod Hammer+ (HP1.…)') }),
+    list: C('lista', 'Ostatnio wystawione kody – nick, ważność i kto je wystawił (bez samych kodów)'),
+    key: C('klucz', 'Czy klucz podpisu jest ustawiony – i klucz publiczny do wpisania w launcherze'),
   }),
   help: C('pomoc', 'Wszystkie komendy bota HammerShop, których możesz użyć'),
   invites: C('zaproszenia', 'Zaproszenia: Twoje zaproszenia, następna nagroda i ranking zapraszających', {

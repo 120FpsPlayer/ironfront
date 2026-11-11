@@ -18,6 +18,9 @@
  * Prices always come from the bot's catalog – never from the browser. A paid order is handed to the bot
  * (onPaid): an order ticket opens on Discord and the product is delivered like any other paid order. The order then
  * carries its ticket (number + link) and whether it was delivered – the page's receipt and My orders show them.
+ *
+ * Hammer Launcher has its own corner here: /api/launcher/* (featured servers, Hammer+ cloud sync and capes) and the
+ * /join page – see src/web/launcher.js.
  */
 
 const http = require('node:http');
@@ -28,6 +31,7 @@ const { env } = require('../env');
 const store = require('./store');
 const stripe = require('./stripe');
 const discord = require('./discord');
+const launcher = require('./launcher');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'web', 'public');
 const STRIPE_MIN = 50; // Stripe's smallest charge in EUR cents
@@ -38,8 +42,8 @@ const authReady = () => Boolean(discord.clientId() && web().clientSecret && web(
 const paymentsReady = () => Boolean(env.stripeKey && web().publicUrl);
 
 // ───────────── Products ─────────────
-/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency }. */
-let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, onLogin: async () => null, isMember: () => null, currency: () => 'eur' };
+/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency, featured }. */
+let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, onLogin: async () => null, isMember: () => null, currency: () => 'eur', featured: () => [] };
 const products = () => hooks.catalog();
 const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, eta: p.eta ?? null, instant: Boolean(p.instant), published: true });
 
@@ -293,8 +297,11 @@ function serveStatic(req, res, pathname) {
 async function handle(req, res) {
   const url = new URL(req.url, 'http://local');
   const p = url.pathname;
+  // Hammer Launcher: featured servers, Hammer+ cloud sync and capes (src/web/launcher.js).
+  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured() });
   if (!p.startsWith('/api/shop/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'Niedozwolona metoda');
+    if (p === '/join' || p === '/join/') return launcher.join(req, res, url, { send }); // "join this server" links → the launcher
     return serveStatic(req, res, p);
   }
   const route = p.slice('/api/shop/'.length);
@@ -350,7 +357,8 @@ async function handle(req, res) {
 
 /**
  * The website server. h: { catalog() → products, info() → { invite }, onPaid(order, user),
- * onLogin(user, accessToken) → { added, member }, isMember(userId) → true | false | null, currency() → 'eur' }.
+ * onLogin(user, accessToken) → { added, member }, isMember(userId) → true | false | null, currency() → 'eur',
+ * featured() → the servers Hammer Launcher recommends }.
  */
 function createWebServer(h = {}) {
   hooks = { ...hooks, ...h };

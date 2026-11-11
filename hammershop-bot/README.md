@@ -202,6 +202,9 @@ Wpisz **`/zbuduj`**, kliknij **Zbuduj**, poczekaj około dwóch minut – gotowe
    Credentials** → **Live** → **Create App** → skopiuj Client ID i Secret; `PAYPAL_SANDBOX=true` z kluczami Sandbox, żeby
    najpierw wypróbować płatności na kontach testowych).
 
+   *Opcjonalnie – Hammer+ (Hammer Launcher):* `HAMMER_PLUS_PRIVATE_KEY=…` – klucz, którym bot podpisuje kody Hammer+.
+   Wygenerujesz go komendą `npm run plus-key` (zob. [Hammer+ i launcher](#-hammer-i-launcher)).
+
 ### 3. Uruchomienie
 Potrzebujesz **Node.js 18.17 lub nowszego** (<https://nodejs.org>).
 ```bash
@@ -253,6 +256,40 @@ Bot prowadzi też stronę internetową Twojego sklepu HammerShop – w tym samym
 3. Port to `WEB_PORT`. Na panelu hostingowym (Pterodactyl i podobne) zostaw go pustym: bot użyje portu, który przydzieli mu panel.
 
 Dopóki logowanie przez Discorda i Stripe nie są skonfigurowane, strona pokazuje wyraźnie oznaczony podgląd offline. Wygląd HammerShop (jasny pomarańcz, logo z młotkiem, nazwa i obrazki) pochodzi z `scripts/website-theme.js` – `node scripts/build-website.js design.html` sam nakłada go na nowy eksport z ChatGPT, a `npm run render-assets -- web` rysuje obrazki od nowa. Konta i zamówienia ze strony są zapisywane w `data/web.json`.
+
+## 🔨 Hammer+ i launcher
+
+**Hammer Launcher** (launcher Minecrafta od HammerShop) ma płatny pakiet **Hammer+**. Bot wystawia do niego **podpisane kody
+przypisane do konta Minecraft**: gracz wkleja kod w launcherze, a launcher sprawdza podpis bez internetu, kluczem publicznym.
+
+**Klucz (ustawiasz raz):**
+1. W folderze bota uruchom `npm run plus-key` – wypisze gotową linię `HAMMER_PLUS_PRIVATE_KEY=…`. Wklej ją do `.env` i uruchom
+   bota ponownie. To klucz prywatny: nikomu go nie podawaj – kto go ma, może wystawiać kody.
+2. `/hammerplus klucz` pokaże **klucz publiczny** – wpisz go w Hammer Launcherze. Zmiana klucza unieważnia wszystkie wystawione kody.
+
+**Wystawianie kodu:** `/hammerplus nadaj nick:Notch dni:30` (`dni:0` = na zawsze). Bot sprawdza nick w Mojang i odpowiada –
+tylko Tobie – kodem oraz gotową wiadomością dla klienta: kod wpisuje się w **Hammer Launcher → Hammer+ → „Mam kod”** i działa
+tylko na tym koncie Minecraft. `/hammerplus lista` pokazuje, komu, na jak długo i kto wystawił kody (samych kodów bot nie
+zapisuje – zgubiony kod wystawiasz od nowa), a `/hammerplus sprawdz kod:…` mówi, czyj jest kod i do kiedy działa. Wystawionego
+kodu nie da się cofnąć (launcher sprawdza go offline) – przestaje działać, gdy wygaśnie.
+
+**Polecane serwery:** `/polecane dodaj nazwa: adres: opis:` (opcjonalnie `tagi:`, `ikona:`, `wersja:`, `loader:`, `paczka:`),
+`/polecane usun` i `/polecane lista`. Adres to `host` albo `host:port`, a ikona musi być adresem `https://`. Launcher pobiera
+tę listę ze strony bota – zmiany widać w nim najpóźniej po 5 minutach.
+
+**API dla launchera** – część [strony sklepu](#-strona-sklepu-prowadzona-przez-bota) (`WEB_PORT`, `PUBLIC_URL`), pod adresem `<PUBLIC_URL>/api/launcher/`:
+
+| Adres | Do czego służy |
+|---|---|
+| `GET health` | Czy API działa i czy klucz Hammer+ jest ustawiony |
+| `GET featured` | Polecane serwery z `/polecane` |
+| `GET cloud` · `PUT cloud` | Synchronizacja danych launchera w chmurze dla konta Hammer+ (do 256 KB; starszy zapis nie nadpisze nowszego) |
+| `GET capes?uuids=…` · `PUT cape` | Peleryny Hammer+ (`hammer`, `gold`, `ember`, `royal`, `frost`, `crimson`) – widoczne u innych graczy, dopóki Hammer+ konta jest ważny |
+
+Chmura i wybór peleryny wymagają kodu Hammer+ (nagłówek `Authorization: Bearer <kod>`) – kontem jest konto Minecraft zapisane
+w kodzie. Dane trafiają do `data/web.json`. `<PUBLIC_URL>/join?server=…&name=…` to strona dla linków „dołącz do serwera”: otwiera
+serwer w Hammer Launcherze. Dopóki strona nie jest uruchomiona pod publicznym adresem, same kody działają normalnie – czekają
+tylko chmura, peleryny i lista polecanych serwerów.
 
 ## 🗺️ Co tworzy /zbuduj
 
@@ -312,6 +349,8 @@ Trzymaj rolę integracji bota na samej górze w Ustawieniach serwera → Role �
 | `/kod utworz / lista / info / usun` | Kody rabatowe | Admini, sprzedawcy |
 | `/sklep otworz / zamknij / auto / status` | Ręczne otwarcie lub zamknięcie sklepu albo powrót do godzin pracy | Admini, sprzedawcy |
 | `/sprzedaz` | Statystyki sprzedaży | Admini, sprzedawcy |
+| `/hammerplus nadaj / sprawdz / lista / klucz` | Kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft (`nadaj nick: dni:`, `dni:0` = na zawsze) i klucz publiczny dla launchera | Admini, sprzedawcy |
+| `/polecane dodaj / usun / lista` | Polecane serwery w Hammer Launcherze | Admini, sprzedawcy |
 | `/klient profil / notatka dodaj / notatka usun` | Profile klientów i prywatne notatki zespołu | Zespół |
 | `/zablokuj` · `/odblokuj` | Blokada serwera podczas raidu i jej zdjęcie | Moderatorzy+ |
 | `/kopia` | Kopia zapasowa danych bota od razu (robi się też automatycznie) | Admini |
@@ -509,12 +548,15 @@ src/
 │                            ogłoszenia, powitania/logi, statystyki, raport sprzedaży, kopie zapasowe, profile klientów,
 │                            Powiadom mnie, zaproszenia, blokada serwera, alerty o podszywaniu się, porządki, promocje
 │                            błyskawiczne, odznaki, Zapłać, status zamówienia, Moje zamówienia, przypomnienia dla zespołu,
-│                            karty płatności, Stripe, PayPal, własna rola bota HammerShop (brandrole.js)
+│                            karty płatności, Stripe, PayPal, własna rola bota HammerShop (brandrole.js), kody Hammer+
+│                            (hammerplus.js), polecane serwery launchera (featured.js)
 ├── tickets/                 system ticketów, karty, transkrypcje HTML
 ├── commands/                komendy (polskie nazwy dla Discorda: lib/commandsPl.js)
 ├── handlers/interactions.js przyciski, menu i formularze
-└── lib/                     konfiguracja, baza danych, motyw, uprawnienia, funkcje pomocnicze
+├── lib/                     konfiguracja, baza danych, motyw, uprawnienia, funkcje pomocnicze, kody Hammer+ (plus.js)
+└── web/                     strona sklepu i API dla Hammer Launchera (launcher.js: /api/launcher/*, /join)
 tools/render-assets.js       generuje od nowa wszystkie obrazki (bot + obrazki strony)
+scripts/plus-key.js          npm run plus-key – nowy klucz do podpisywania kodów Hammer+
 scripts/website-theme.js     wygląd HammerShop na stronie (kolory, logo, nazwa, obrazki)
 test/                        testy z symulowanym serwerem Discord (npm test)
 ```
@@ -523,13 +565,14 @@ test/                        testy z symulowanym serwerem Discord (npm test)
 ```bash
 npm test
 ```
-379 testów działa na symulowanym serwerze Discord, który pilnuje prawdziwych limitów Discorda (nazwy, 40 komponentów / 4000
+413 testów działa na symulowanym serwerze Discord, który pilnuje prawdziwych limitów Discorda (nazwy, 40 komponentów / 4000
 znaków na kartę, miejsca na emotki, uprawnienia, reguły AutoMod, tryb społeczności): pełna budowa, wyczyść i zbuduj,
 każde uprawnienie, ścieżka sklep → ticket → zamówienie → opinia, warianty, licznik sztuk, promocje błyskawiczne, odznaki, Zapłać,
 DM-y o statusie zamówienia, Moje zamówienia, przypomnienia dla zespołu, karty płatności, linki do płatności Stripe i PayPal,
 wymagania giveawayów, limity kodów rabatowych (także dla zamówień złożonych w tej samej chwili), godziny pracy przy zmianie
 czasu letniego/zimowego, blokada serwera, nagrody za zaproszenia, odświeżanie paneli w miejscu, weryfikacja, giveawaye, oceny,
-rola HammerShop tylko dla bota, regulamin, aktualizacja NØX → HammerShop (emotki, banery, role) i więcej.
+rola HammerShop tylko dla bota, regulamin, kody Hammer+ i API Hammer Launchera (bez internetu – Mojang i klucze są symulowane),
+aktualizacja NØX → HammerShop (emotki, banery, role) i więcej.
 
 ---
 

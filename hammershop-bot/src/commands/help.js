@@ -66,6 +66,13 @@ module.exports = {
           `${cmd('sales')} – przychód, zamówienia, najlepsze produkty i sprzedawcy`,
         ].join('\n'),
       });
+      e.addFields({
+        name: '🔨 Hammer+ i launcher',
+        value: [
+          `${cmd('hammerplus grant', 'hammerplus check', 'hammerplus list', 'hammerplus key')} – kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft`,
+          `${cmd('featured add', 'featured remove', 'featured list')} – polecane serwery w launcherze`,
+        ].join('\n'),
+      });
     }
     if (isMod(member)) {
       e.addFields({
