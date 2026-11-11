@@ -63,7 +63,7 @@
           ? h(
               'div.field',
               h('span', `Nie da się udostępnić – dodaj ręcznie (${data.excluded.length})`),
-              h('div.rows.share-out', data.excluded.map((x) => h('div.installed-row', h('div.pic', icon(x.type === 'mod' ? 'puzzle' : 'image')), h('div.grow', { style: { minWidth: 0 } }, h('b.ellipsis', { title: x.file }, x.title || x.file), h('small.ellipsis', { style: { display: 'block' } }, `${x.file} · ${KIND[x.type] ?? x.type}`))))),
+              h('div.rows.share-out', data.excluded.map((x) => h('div.installed-row', h('div.pic', icon(x.type === 'mod' ? 'puzzle' : 'image')), h('div.grow', { style: { minWidth: 0 } }, HS.raw(h('b.ellipsis', { title: x.file }, x.title || x.file)), h('small.ellipsis', { style: { display: 'block' } }, `${x.file} · ${KIND[x.type] ?? x.type}`))))),
               h('div.hint', 'Te pliki nie pochodzą z Modrinth, więc przepis ich nie zawiera. Prześlij je znajomemu osobno – doda je u siebie w zakładce Mody.'),
             )
           : null,
@@ -116,7 +116,7 @@
           ? h(
               'div.field',
               h('span', `Brakuje (${res.missing.length})`),
-              h('div.rows.share-out', res.missing.map((x) => h('div.installed-row', h('div.pic', icon(x.type === 'mod' ? 'puzzle' : 'image')), h('div.grow', { style: { minWidth: 0 } }, h('b.ellipsis', { title: x.file }, x.file), h('small.ellipsis', { style: { display: 'block' } }, `${KIND[x.type] ?? x.type} · ${REASON[x.reason] ?? x.reason}`))))),
+              h('div.rows.share-out', res.missing.map((x) => h('div.installed-row', h('div.pic', icon(x.type === 'mod' ? 'puzzle' : 'image')), h('div.grow', { style: { minWidth: 0 } }, HS.raw(h('b.ellipsis', { title: x.file }, x.file)), h('small.ellipsis', { style: { display: 'block' } }, `${KIND[x.type] ?? x.type} · ${REASON[x.reason] ?? x.reason}`))))),
               h('div.hint', 'Poszukaj ich w zakładce Mody albo poproś znajomego o nowy kod.'),
             )
           : null,
@@ -136,7 +136,7 @@
       icon: 'import',
       body: h(
         'div.form',
-        h('div.recipe-name', icon('cube'), h('b.ellipsis', { title: s.name }, s.name)),
+        h('div.recipe-name', icon('cube'), HS.raw(h('b.ellipsis', { title: s.name }, s.name))),
         summaryChips(s),
         preview.notes.map((n) => h('p.cloud-note', icon('info'), n)),
         h('p.muted', `Launcher utworzy nową instancję i pobierze ${s.mods + s.resourcepacks + s.shaders ? 'dodatki z Modrinth' : 'grę'}. Twoje obecne instancje zostają bez zmian.${s.options ? ' Ustawienia gry z przepisu trafią tylko do tej nowej instancji.' : ''}`),

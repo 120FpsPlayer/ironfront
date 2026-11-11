@@ -14,7 +14,7 @@
     const inst = () => state.instance;
 
     function line(l) {
-      return h(`div.${cls(l.line)}`, l.line);
+      return HS.raw(h(`div.${cls(l.line)}`, l.line)); // the game's own words – never translated
     }
     function draw() {
       const i = inst();
@@ -37,7 +37,7 @@
             'div.grow',
             h('h3', c.title),
             c.hints?.length ? h('ul', c.hints.map((x) => h('li', x))) : null,
-            c.details ? h('code', c.details) : null,
+            c.details ? HS.raw(h('code', c.details)) : null,
           ),
           h('button.btn.ghost.sm.icon', { title: 'Ukryj', 'aria-label': 'Ukryj', onclick: () => (state.crashes.delete(inst()?.id), drawCrash()) }, icon('close')),
         ),

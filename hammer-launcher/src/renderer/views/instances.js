@@ -255,7 +255,7 @@
             `div.inst-card${i.id === sel ? '.selected' : ''}`,
             { tabIndex: 0, onclick: () => state.selectInstance(i.id), ondblclick: () => editInstance(i), oncontextmenu: (e) => (e.preventDefault(), actions(i, e.currentTarget.querySelector('.more'))) },
             run ? h('span.running-badge', HS.chip(run === 'preparing' ? 'Pobieranie' : 'W grze', 'ok', 'play')) : null,
-            h('div.top', tile(i, 48), h('div.grow', h('h3.ellipsis', i.name), h('div.dim', { style: { fontSize: '12.5px' } }, `Minecraft ${i.mcVersion}`))),
+            h('div.top', tile(i, 48), h('div.grow', HS.raw(h('h3.ellipsis', i.name)), h('div.dim', { style: { fontSize: '12.5px' } }, `Minecraft ${i.mcVersion}`))),
             h(
               'div.chips',
               HS.chip(LOADERS[i.loader]?.name ?? i.loader, i.loader === 'vanilla' ? null : 'accent', i.loader === 'vanilla' ? 'cube' : 'puzzle'),

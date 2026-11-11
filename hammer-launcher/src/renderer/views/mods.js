@@ -77,7 +77,7 @@
           h(
             'div.rows.share-out',
             entries.map((e) =>
-              h('div.installed-row', h('div.pic', icon(e.type === 'mod' ? 'puzzle' : e.type === 'shader' ? 'sun' : 'image')), h('div.grow', { style: { minWidth: 0 } }, h('b.ellipsis', e.title), h('small.ellipsis', { style: { display: 'block' } }, `${e.new.versionNumber ?? e.new.file} → wraca ${e.old.versionNumber ?? e.old.file}`))),
+              h('div.installed-row', h('div.pic', icon(e.type === 'mod' ? 'puzzle' : e.type === 'shader' ? 'sun' : 'image')), h('div.grow', { style: { minWidth: 0 } }, HS.raw(h('b.ellipsis', e.title)), h('small.ellipsis', { style: { display: 'block' } }, `${e.new.versionNumber ?? e.new.file} → wraca ${e.old.versionNumber ?? e.old.file}`))),
             ),
           ),
           h('div.hint', 'Stare pliki nie były usuwane – czekają w folderze instancji (.hammer/przywracanie). Launcher pamięta trzy ostatnie aktualizacje każdej instancji.'),
@@ -259,8 +259,8 @@
         h('div.pic', p.icon_url ? h('img', { src: p.icon_url, alt: '', loading: 'lazy' }) : icon(TYPES[ui.type].icon)),
         h(
           'div.info',
-          h('div.title', h('h3', { onclick: () => details(p), title: p.title }, p.title), h('small', `od ${p.author}`)),
-          h('p', p.description),
+          h('div.title', HS.raw(h('h3', { onclick: () => details(p), title: p.title }, p.title)), h('small', `od ${p.author}`)),
+          HS.raw(h('p', p.description)),
           h(
             'div.meta',
             h('span', icon('download'), fmt.compact(p.downloads)),
@@ -316,7 +316,7 @@
         wide: true,
         body: h(
           'div',
-          h('div.row', { style: { gap: '16px', marginBottom: '16px', alignItems: 'flex-start' } }, h('div.pic', { style: { width: '72px', height: '72px', borderRadius: '16px', overflow: 'hidden', background: 'var(--panel3)', flex: 'none' } }, p.icon_url ? h('img', { src: p.icon_url, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover' } }) : null), h('div.grow', h('p.muted', p.description), h('div.row', { style: { marginTop: '8px', gap: '14px', color: 'var(--dim)', fontSize: '12px' } }, h('span', `${fmt.num(p.downloads)} pobrań`), h('span', `od ${p.author}`)))),
+          h('div.row', { style: { gap: '16px', marginBottom: '16px', alignItems: 'flex-start' } }, h('div.pic', { style: { width: '72px', height: '72px', borderRadius: '16px', overflow: 'hidden', background: 'var(--panel3)', flex: 'none' } }, p.icon_url ? h('img', { src: p.icon_url, alt: '', style: { width: '100%', height: '100%', objectFit: 'cover' } }) : null), h('div.grow', HS.raw(h('p.muted', p.description)), h('div.row', { style: { marginTop: '8px', gap: '14px', color: 'var(--dim)', fontSize: '12px' } }, h('span', `${fmt.num(p.downloads)} pobrań`), h('span', `od ${p.author}`)))),
           h('div.grid', { style: { gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: '18px' } }, h('div', h('h3', { style: { marginBottom: '8px' } }, 'Opis'), descr), h('div', h('h3', { style: { marginBottom: '8px' } }, ui.type === 'modpack' ? 'Wersje paczki' : i ? `Wersje dla ${i.mcVersion}` : 'Wersje'), versions)),
         ),
         foot: [h('button.btn.ghost', { onclick: () => HS.open(`https://modrinth.com/${ui.type === 'resourcepack' ? 'resourcepack' : ui.type}/${p.slug ?? pid}`) }, icon('external'), 'Otwórz na Modrinth'), h('button.btn', { onclick: () => m.close() }, 'Zamknij')],
@@ -327,8 +327,8 @@
           const gallery = (full.gallery ?? []).slice(0, 4);
           clear(
             descr,
-            gallery.length ? h('div.grid.g2', { style: { gap: '8px', marginBottom: '12px' } }, gallery.map((g) => h('img', { src: g.url, alt: g.title ?? '', loading: 'lazy', style: { width: '100%', aspectRatio: '16/9', objectFit: 'cover', borderRadius: '10px', background: 'var(--panel3)' } }))) : null,
-            bodyText(full.body).map((t) => (t.head ? h('h3', { style: { margin: '12px 0 6px', fontSize: '13.5px' } }, t.text) : h('p.muted', { style: { marginBottom: '8px', fontSize: '13px', whiteSpace: 'pre-line' } }, t.text))),
+            gallery.length ? h('div.grid.g2', { style: { gap: '8px', marginBottom: '12px' } }, gallery.map((g) => HS.raw(h('img', { src: g.url, alt: g.title ?? '', loading: 'lazy', style: { width: '100%', aspectRatio: '16/9', objectFit: 'cover', borderRadius: '10px', background: 'var(--panel3)' } })))) : null,
+            bodyText(full.body).map((t) => HS.raw(t.head ? h('h3', { style: { margin: '12px 0 6px', fontSize: '13.5px' } }, t.text) : h('p.muted', { style: { marginBottom: '8px', fontSize: '13px', whiteSpace: 'pre-line' } }, t.text))),
           );
         })
         .catch(() => clear(descr, h('p.muted', 'Nie udało się wczytać opisu.')));
@@ -487,7 +487,7 @@
               return h(
                 `div.installed-row${x.enabled ? '' : '.off'}`,
                 h('div.pic', x.iconUrl ? h('img', { src: x.iconUrl, alt: '', loading: 'lazy' }) : icon(t.icon)),
-                h('div.grow', { style: { minWidth: 0 } }, h('b.ellipsis', x.title), h('small.ellipsis', { style: { display: 'block' } }, [x.versionNumber, x.file, fmt.size(x.size)].filter(Boolean).join(' · '))),
+                h('div.grow', { style: { minWidth: 0 } }, HS.raw(h('b.ellipsis', x.title)), h('small.ellipsis', { style: { display: 'block' } }, [x.versionNumber, x.file, fmt.size(x.size)].filter(Boolean).join(' · '))),
                 u ? h('button.chip.accent', { title: `Nowa wersja: ${u.latest.versionNumber} – kliknij, żeby zaktualizować (da się cofnąć)`, onclick: (e) => doUpdate([u], e.currentTarget) }, icon('arrow-up'), u.latest.versionNumber) : null,
                 HS.toggle(x.enabled, (v) => attempt(() => api.content.toggle(i.id, ui.type, x.file, v)).then((r) => (r === undefined ? load() : ((x.enabled = v), draw())))),
                 h(

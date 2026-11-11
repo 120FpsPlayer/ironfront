@@ -462,6 +462,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 /* ── skin ── */
 .skin-page{display:grid;grid-template-columns:372px minmax(0,1fr);gap:14px;align-items:start;position:relative}
 .skin-page.dragging:after{content:"Upuść plik PNG ze skórką";position:absolute;inset:0;border:2px dashed rgba(var(--glow),.6);border-radius:var(--r);background:rgba(14,11,9,.86);display:grid;place-items:center;color:var(--accent2);font-weight:800;font-size:15px;z-index:2}
+html[lang="en"] .skin-page.dragging:after{content:"Drop a PNG skin file"}
 .skin-stage{display:flex;justify-content:center;align-items:flex-end;gap:22px;padding:22px 12px 18px;border-radius:var(--r2);background:radial-gradient(ellipse 70% 55% at 50% 100%,rgba(var(--glow),.18),transparent 70%),var(--bg2);border:1px solid var(--line)}
 .skin-stage.sm{padding:14px 10px 12px;gap:12px;flex:none}
 .skin-stage.none{flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:240px;color:var(--muted);font-size:13px}

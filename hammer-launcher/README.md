@@ -1,6 +1,6 @@
 # Hammer Launcher
 
-Launcher Minecrafta: Java Edition od **HammerShop**. Cały interfejs jest po polsku.
+Launcher Minecrafta: Java Edition od **HammerShop**. Interfejs jest po polsku, a dla graczy spoza Polski także po angielsku – patrz [Wersja angielska](#wersja-angielska).
 
 - **Graj jednym kliknięciem.** Launcher sam pobiera grę, właściwą Javę (8 / 17 / 21…) i loader modów.
 - **Instancje.** Każda instancja ma własne mody, światy i ustawienia. Do wyboru Vanilla, Fabric, Quilt, Forge i NeoForge, dowolna wersja gry.
@@ -220,6 +220,38 @@ Wysyłane są tylko pliki PNG i JPG z folderu `screenshots/` instancji, najwyże
 - **Manifest punktu przywracania**: `{ "v": 1, "id": "2026-11-11_14-05-33", "createdAt": …, "state": "pending" | "done", "entries": [{ "type": "mod" | "resourcepack" | "shader", "title", "old": { "file", "disabled", "versionNumber", "index" }, "new": { "file", "versionId", "versionNumber" }, "state": "planned" | "done" | "failed" }] }`. Cofanie patrzy na folder, nie na `state`: stary plik, który leży w punkcie, wraca (po usunięciu nowego); którego tam nie ma – już wrócił albo nigdy nie został ruszony. Manifest leży w folderze gry, więc jest czytany nieufnie: tylko zwykłe nazwy plików `.jar` / `.zip` w `mods/`, `resourcepacks/` i `shaderpacks/`.
 - **Link do zrzutu**: `POST <screenshotShare.url>`, formularz multipart `reqtype=fileupload`, `time=<screenshotShare.time>`, `fileToUpload=<plik>`; odpowiedzią jest sam adres. `time` to `1h`, `12h`, `24h` albo `72h` (inna wartość = `72h`). Zgoda „Nie pytaj ponownie” to ustawienie `screenshotShareAsk: false`.
 
+## Wersja angielska
+
+Launcher jest napisany po polsku i polski pozostaje językiem źródłowym: widoki budują interfejs po polsku, a błędy z procesu głównego mają polską treść. Wersja angielska to **warstwa tłumacząca w oknie** (`src/renderer/js/i18n.js`). Gdy wybrany jest angielski, tłumaczy ona to, co trafia na ekran – teksty, podpowiedzi (`title`), `placeholder`, `aria-label`, `alt`, napisy przycisków i pozycje list – także wszystko, co pojawi się później (komunikaty, okna, paski postępu). Po polsku warstwa w ogóle nie działa.
+
+- **Wybór języka**: *Ustawienia → Wygląd → Język / Language*: *Automatycznie (język systemu)*, *Polski* albo *English*. „Automatycznie” to polski, gdy system jest po polsku (`app.getLocale()` zaczyna się od `pl`), a angielski w każdym innym przypadku. Zmiana działa od razu, bez ponownego uruchamiania. Ustawienie to `language` w `settings.json` (`auto` | `pl` | `en`), a o języku decyduje funkcja `resolveLanguage` w `src/main/i18n.js`.
+- **Słownik** – `src/renderer/i18n/en.json`:
+  - `strings` – dokładny polski tekst → angielski,
+  - `patterns` – teksty ze zmienną częścią, np. `{ "re": "^Aktualizacje modów: (\\d+) w „(.+)”$", "en": "Mod updates: $1 in “$2”" }`. Opcjonalne `"as": { "1": "t" }` mówi, co zrobić z grupą przed wstawieniem: `t` – przetłumacz ją (słownikiem i wzorcami), `tl` – jak `t`, ale od małej litery, `date` – polskie nazwy miesięcy i dni tygodnia na angielskie, `num` – liczba zapisana po polsku („12 345,6”) na angielską, `list` – przetłumacz każdy element listy po przecinku. Wzorce są sprawdzane po kolei, więc bardziej szczegółowe stoją wyżej,
+  - `plurals` – rzeczowniki z liczbą: `{ "pl": ["mod", "mody", "modów"], "en": ["mod", "mods"] }` daje „1 mod / 2 mods / 5 mods”,
+  - `dates` – nazwy miesięcy i dni tygodnia (dla dat, które proces główny zapisał po polsku),
+  - `contexts` – tekst, który w innym miejscu znaczy co innego: `{ "in": ".skin-page", "strings": { "Zestawy": "Outfits" } }` (`in` to selektor CSS; w zakładce *Mody* „Zestawy” to *Bundles*),
+  - `same` – teksty celowo takie same w obu językach („Hammer+”, „Fabric”).
+
+  Do tego kilka reguł bez wpisów: części połączone „ · ” oraz kolejne zdania są tłumaczone osobno, a w tekście „Nazwa – opis” tłumaczony jest opis.
+- **Czego warstwa nie tłumaczy**: tłumaczone są tylko dokładne trafienia w słowniku i we wzorcach, więc nazwa instancji czy świata wpisana przez gracza zostaje taka, jaka jest. Elementy z cudzym tekstem – nazwy, opisy modów z Modrinth, opisy serwerów, linie logów w Konsoli, nazwy plików – mają atrybut `data-no-i18n` i są pomijane w całości. W kodzie widoku: `HS.raw(h('b', instance.name))`. `data-no-i18n="attrs"` pomija tylko własne `title` / `aria-label` elementu.
+- **Liczby i daty** formatuje `HS.fmt` (oraz `HS.locale()`): po angielsku `en-GB` (dzień przed miesiącem, zegar 24-godzinny), po polsku `pl-PL`. Tekst, który nie trafia na stronę, tłumaczy `HS.t('…')`. Jedyny tekst rysowany przez CSS (`content:"…"`) ma w `styles.css` drugą regułę `html[lang="en"] …`.
+- **Proces główny** korzysta z tego samego słownika przez `tr(tekst, język)` z `src/main/i18n.js` – tylko dla tekstów systemowych: menu w zasobniku, tytuły i filtry okien wyboru plików, tytuł okna logowania, status w Discordzie oraz nazwy, które launcher nadaje sam („(kopia)” przy duplikacie instancji, „Skórka z konta”). Komunikaty usług zostają w procesie głównym po polsku – tłumaczy je okno, gdy je pokazuje.
+- **Czego nie ma po angielsku**: instalatora Windows (NSIS jest budowany po polsku), strony logowania w oknie Microsoftu (jej język wybiera Microsoft) oraz treści z sieci – aktualności z `newsUrl`, produktów sklepu, opisów serwerów i modów. Menu Hammer Client w grze ma własne tłumaczenie i idzie za językiem Minecrafta.
+
+### Jak dodać albo poprawić tłumaczenie
+
+1. Nowy tekst w widoku pisz zwyczajnie po polsku. Tłumaczenie dopisz (albo popraw) w `src/renderer/i18n/en.json`: zwykły tekst w `strings`, tekst ze zmienną częścią w `patterns`, nowy rzeczownik z liczbą w `plurals`. Styl: krótko, jak w grach – *Play*, *Instances*, *Mods*, *Settings* – z amerykańską pisownią (*Optimization*, *color*).
+2. `npm test` – testy pilnują słownika (poprawny JSON, brak pustych tłumaczeń, każdy wzorzec się kompiluje i używa tylko grup, które ma, tekst identyczny w obu językach musi być na liście `same`) oraz tego, czy teksty wpisane w `src/renderer/views/*.js`, `js/app.js` i `js/core.js` mają wpis albo wzorzec. `node scripts/i18n-literals.js` wypisuje polskie teksty z kodu okna i procesu głównego, których słownik jeszcze nie zna.
+3. Podgląd po angielsku (te same kroki co po polsku, selektory kroków są tłumaczone słownikiem):
+
+   ```bash
+   node scripts/preview.js preview-en 1 --lang=en
+   ```
+
+   Przebieg kończy się błędem, gdy na którymś ekranie został polski tekst poza `data-no-i18n`: tekst z polskimi literami, tekst będący kluczem słownika albo taki, w którym jest słowo znane tylko z polskiej strony słownika. Obok zrzutów powstaje `i18n-missing.json` – wszystko, czego warstwa nie przetłumaczyła (nazwy, liczby, dane; warto rzucić okiem, czy nie ma tam czegoś naszego). Przykładowe dane podglądu, które celowo są po polsku (nazwy światów, serwerów, skórek), wymienia lista `FOREIGN` w `scripts/preview-i18n.js`.
+4. Angielskie teksty mają inną długość. `node scripts/preview.js preview 1 --collect` zapisuje przy polskim przebiegu `i18n-texts.json` (każdy tekst, który widzi warstwa, ze zrzutem, na którym się pojawił) i `i18n-layout.json`; angielski przebieg z `--compare=preview` wypisuje wtedy do `i18n-layout.txt` miejsca, w których angielski tekst jest ucięty albo zawija się, a polski nie. Co się nie mieści, skracamy w słowniku – układu nie zmieniamy.
+
 ## Uruchomienie (deweloperskie)
 
 Wymagany Node.js 20+.
@@ -303,7 +335,11 @@ Bez `HAMMER_CLIENT_ONLY=1` test Hammer Client jest jednym z kroków pełnego tes
 npm run preview
 ```
 
-Ten skrypt robi zrzuty ekranu interfejsu (Chromium + Playwright, dane przykładowe).
+Ten skrypt robi zrzuty ekranu interfejsu (Chromium + Playwright, dane przykładowe) po polsku i kończy się błędem, gdy strona zgłosi błąd albo coś się nie mieści. To samo po angielsku – z dodatkową kontrolą, czy na ekranie nie został polski tekst (szczegóły w sekcji [Wersja angielska](#wersja-angielska)):
+
+```bash
+node scripts/preview.js preview-en 1 --lang=en
+```
 
 ## Licencje i zastrzeżenia
 

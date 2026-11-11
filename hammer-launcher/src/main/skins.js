@@ -71,8 +71,8 @@ function apiError(status, what) {
   return `Nie udało się – serwer Minecrafta odpowiedział błędem ${status}.`;
 }
 
-/** `limit()` says how many skins the library may hold right now (more with Hammer+). */
-function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.now(), limit = () => MAX_LIBRARY }) {
+/** `limit()` says how many skins the library may hold right now (more with Hammer+); `t(text)` puts the names the launcher gives a skin itself into the player's language. */
+function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.now(), limit = () => MAX_LIBRARY, t = (text) => text }) {
   const indexFile = path.join(dir, 'library.json');
   const outfitsFile = path.join(dir, 'outfits.json');
   const fileOf = (id) => path.join(dir, `${id}.png`);
@@ -103,7 +103,7 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
     } else {
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(fileOf(id), data);
-      entry = { id, name: cleanName(name) || 'Skórka', variant: variantOf(variant), addedAt: now(), usedAt: now(), texture };
+      entry = { id, name: cleanName(name) || t('Skórka'), variant: variantOf(variant), addedAt: now(), usedAt: now(), texture };
       list.push(entry);
     }
     // One address at Mojang belongs to one skin.
@@ -170,7 +170,7 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
       if (!entry) {
         const data = await fetchTexture(url);
         if (data) {
-          entry = remember(list, data, { name: `Skórka z konta (${new Date(now()).toLocaleDateString('pl-PL')})`, variant: worn.variant, texture: url });
+          entry = remember(list, data, { name: `${t('Skórka z konta')} (${new Date(now()).toLocaleDateString('pl-PL')})`, variant: worn.variant, texture: url });
           save(list);
         }
       }
@@ -301,7 +301,7 @@ function createSkins({ dir, fetchFn = (...a) => fetch(...a), now = () => Date.no
   const library = () => load().map((e) => publicEntry(e, null));
 
   /** A file the player picked, checked before anything is sent: { name, dataUrl, legacy }. */
-  const inspect = (png, name = '') => ({ name: cleanName(name) || 'Moja skórka', dataUrl: dataUrl(png), legacy: checkSkin(png).legacy });
+  const inspect = (png, name = '') => ({ name: cleanName(name) || t('Moja skórka'), dataUrl: dataUrl(png), legacy: checkSkin(png).legacy });
 
   return { state, upload, use, reset, setCape, forget, library, inspect, outfits, saveOutfit, removeOutfit, applyOutfit };
 }

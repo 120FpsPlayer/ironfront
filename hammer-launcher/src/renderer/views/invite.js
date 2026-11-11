@@ -64,7 +64,7 @@
         h(
           'div.invite-head',
           remotePic(invite.icon, 'server'),
-          h('div.grow', h('b.ellipsis', { title }, title), h('code', invite.server), h('div.chip-row', asks ? HS.chip(asks, 'accent', 'cube') : HS.chip('dowolna wersja gry', null, 'cube'))),
+          h('div.grow', HS.raw(h('b.ellipsis', { title }, title)), HS.raw(h('code', invite.server)), h('div.chip-row', asks ? HS.chip(asks, 'accent', 'cube') : HS.chip('dowolna wersja gry', null, 'cube'))),
         ),
         pack
           ? h(
@@ -264,12 +264,12 @@
         remotePic(s.icon, 'server', answer?.favicon),
         h(
           'div.grow',
-          h('div.row.title', h('b.ellipsis', { title: s.name }, s.name), online(answer)),
-          s.description ? h('p', { title: s.description }, s.description) : null,
-          h('div.chip-row', gameLine(s.mc, s.loader) ? HS.chip(gameLine(s.mc, s.loader), 'accent') : null, s.pack ? HS.chip('paczka modów', null, 'box') : null, s.tags.map((t) => HS.chip(t))),
+          h('div.row.title', HS.raw(h('b.ellipsis', { title: s.name }, s.name)), online(answer)),
+          s.description ? HS.raw(h('p', { title: s.description }, s.description)) : null,
+          h('div.chip-row', gameLine(s.mc, s.loader) ? HS.chip(gameLine(s.mc, s.loader), 'accent') : null, s.pack ? HS.chip('paczka modów', null, 'box') : null, s.tags.map((t) => HS.raw(HS.chip(t)))),
           h(
             'div.feat-acts',
-            h('small.ellipsis', s.address),
+            HS.raw(h('small.ellipsis', s.address)),
             h(
               'button.btn.sm',
               {
@@ -322,7 +322,7 @@
         h(
           'div.feat.compact',
           remotePic(s.icon, 'server', status.get(s.address)?.favicon),
-          h('div.grow', h('b.ellipsis', { title: s.name }, s.name), online(status.get(s.address))),
+          h('div.grow', HS.raw(h('b.ellipsis', { title: s.name }, s.name)), online(status.get(s.address))),
           h('button.btn.sm.primary', { type: 'button', title: `Wybierz instancję i wejdź na ${s.address}`, onclick: (e) => HS.busy(e.currentTarget, () => fromLink({ featured: s.id })) }, icon('play'), 'Graj'),
         );
       const draw = () =>

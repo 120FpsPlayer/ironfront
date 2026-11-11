@@ -58,13 +58,14 @@ const { createScreenshotShare } = require('./screenshare');
  * `pickFile({ title, filters })` opens the system's file dialog and resolves with a path or null (Electron's
  * dialog in main.js); `saveFile({ title, defaultName, filters })` is the "save as" dialog. `convertImage(data, { maxWidth, maxHeight })` makes PNG bytes that fit that size out of a
  * picture (Electron's nativeImage). `capes` is the list of Hammer+ capes (capes.json). `prepareFn` installs what an
- * instance needs before a start (the tests replace it, so a start needs no downloads).
+ * instance needs before a start (the tests replace it, so a start needs no downloads). `t(text)` gives the names
+ * the launcher makes up itself ("(kopia)", "Skórka z konta") in the player's language (main.js: i18n.js); without it they are Polish.
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance, t = (text) => text }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const store = createSettings(paths.settings);
-  const instances = createInstances(paths);
+  const instances = createInstances(paths, { t });
 
   /* ── Hammer+ ── */
   const allAccounts = () => accounts.list?.() ?? [];
@@ -115,7 +116,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   const modpacks = createModpacks({ modrinth, instances, fetchFn });
   const optimizer = createOptimizer({ modrinth, content });
   const bundles = createBundles({ modrinth, content });
-  const skinStore = createSkins({ dir: path.join(root, 'skins'), fetchFn, limit: () => (plus.status().active ? PLUS_LIBRARY : MAX_LIBRARY) });
+  const skinStore = createSkins({ dir: path.join(root, 'skins'), fetchFn, t, limit: () => (plus.status().active ? PLUS_LIBRARY : MAX_LIBRARY) });
   const games = new GameManager(launchFn ? { launchFn } : {});
   const community = createCommunity({ config, fetchFn });
   const busy = new Set(); // instances being prepared

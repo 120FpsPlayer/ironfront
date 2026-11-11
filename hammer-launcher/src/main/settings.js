@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   playSummary: true, // the „Podsumowanie gry” card on the start screen after a game session
   modUpdateCheck: true, // look for mod updates in the background (when the launcher starts and every six hours)
   screenshotShareAsk: true, // ask before a screenshot is uploaded for a link („Nie pytaj ponownie” switches it off)
+  language: 'auto', // the launcher's language: auto (the system's: Polish for pl, English otherwise) | pl | en – see i18n.js
   // Hammer+ (the values below only work while Hammer+ is active – see PLUS_ONLY)
   accentColor: '', // "#rrggbb" for accent: 'custom'
   background: '', // the player's own background picture: a file name in <launcher folder>/theme/
@@ -38,6 +39,7 @@ const AFTER = ['hide', 'minimize', 'keep'];
 const PRIORITY = ['normal', 'above_normal', 'high'];
 const ACCENTS = ['orange', 'gold', 'red', 'blue', 'green', 'purple'];
 const HERO_STYLES = ['classic', 'aurora', 'forge', 'stars'];
+const LANGUAGES = ['auto', 'pl', 'en'];
 
 /**
  * Settings only Hammer+ may switch on: key → [is this the free value?, what the feature is called in a message].
@@ -74,6 +76,7 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
     };
   }
   if (ACCENTS.includes(patch.accent) || patch.accent === 'custom') out.accent = patch.accent;
+  if (LANGUAGES.includes(patch.language)) out.language = patch.language;
   if (typeof patch.accentColor === 'string' && /^(#[0-9a-f]{6})?$/i.test(patch.accentColor)) out.accentColor = patch.accentColor.toLowerCase();
   if (typeof patch.background === 'string' && /^(background-[0-9a-f]{8}\.(png|jpg|webp))?$/.test(patch.background)) out.background = patch.background;
   if (HERO_STYLES.includes(patch.heroStyle)) out.heroStyle = patch.heroStyle;
@@ -104,4 +107,4 @@ function createSettings(file) {
   };
 }
 
-module.exports = { createSettings, sanitize, plusOnly, DEFAULT_SETTINGS, ACCENTS, HERO_STYLES, PLUS_ONLY };
+module.exports = { createSettings, sanitize, plusOnly, DEFAULT_SETTINGS, ACCENTS, HERO_STYLES, LANGUAGES, PLUS_ONLY };

@@ -38,6 +38,15 @@
     el.replaceChildren();
     return append(el, children);
   }
+  /**
+   * Marks an element whose text is not the launcher's own – a name the player typed, a description from the
+   * network, a file name – so the English version (js/i18n.js) never translates it: raw(h('b', instance.name)).
+   * With 'attrs' only the element's own title / aria-label are left alone, the text inside is still translated.
+   */
+  function raw(el, what = '') {
+    el.setAttribute('data-no-i18n', what);
+    return el;
+  }
 
   const SVG = 'http://www.w3.org/2000/svg';
   function icon(name, cls) {
@@ -54,14 +63,21 @@
     return svg;
   }
 
-  /* ── formatting (Polish) ── */
-  const nf = new Intl.NumberFormat('pl-PL');
+  /* ── formatting (Polish; numbers and dates follow the language – the words are translated by js/i18n.js) ── */
+  const i18n = window.HS_I18N;
+  /** 'pl-PL', or 'en-GB' when the launcher speaks English. */
+  const locale = () => i18n.locale();
+  const formats = {};
+  const nf = { format: (n) => (formats[locale()] ??= new Intl.NumberFormat(locale())).format(n) };
+  /** "1.5" as the language writes it: with a comma in Polish. */
+  const dec = (text) => (i18n.lang === 'en' ? text : text.replace('.', ','));
   const fmt = {
     num: (n) => nf.format(n ?? 0),
-    compact: (n) => new Intl.NumberFormat('pl-PL', { notation: 'compact', maximumFractionDigits: 1 }).format(n ?? 0),
-    gb: (bytes, d = 1) => `${(bytes / 1024 ** 3).toFixed(d).replace('.', ',')} GB`,
-    mb: (mb) => (mb >= 1024 ? `${(mb / 1024).toFixed(mb % 1024 ? 1 : 0).replace('.', ',')} GB` : `${mb} MB`),
-    size: (b) => (b >= 1024 ** 3 ? fmt.gb(b, b >= 10 * 1024 ** 3 ? 1 : 2) : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`),
+    // ("92M" / "21K" in English – the British "92m" reads like metres)
+    compact: (n) => new Intl.NumberFormat(i18n.lang === 'en' ? 'en-US' : locale(), { notation: 'compact', maximumFractionDigits: 1 }).format(n ?? 0),
+    gb: (bytes, d = 1) => `${dec((bytes / 1024 ** 3).toFixed(d))} GB`,
+    mb: (mb) => (mb >= 1024 ? `${dec((mb / 1024).toFixed(mb % 1024 ? 1 : 0))} GB` : `${mb} MB`),
+    size: (b) => (b >= 1024 ** 3 ? fmt.gb(b, b >= 10 * 1024 ** 3 ? 1 : 2) : b >= 1024 ** 2 ? `${dec((b / 1024 ** 2).toFixed(1))} MB` : `${Math.max(1, Math.round(b / 1024))} KB`),
     plural: (n, one, few, many) => {
       const a = Math.abs(n);
       if (a === 1) return one;
@@ -87,13 +103,13 @@
       const d = Math.round(hr / 24);
       if (d === 1) return 'wczoraj';
       if (d < 30) return `${d} dni temu`;
-      return new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' });
+      return new Date(ts).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' });
     },
-    date: (ts) => new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }),
+    date: (ts) => new Date(ts).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }),
     /** "11 lis, 14:05" – for lists (test history, restore points). */
-    dateTime: (ts) => new Date(ts).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    dateTime: (ts) => new Date(ts).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
     /** Frames per second: whole numbers from 100 up, one decimal below ("240", "58,4"). */
-    fps: (n) => (n >= 100 ? nf.format(Math.round(n)) : String(Math.round((n ?? 0) * 10) / 10).replace('.', ',')),
+    fps: (n) => (n >= 100 ? nf.format(Math.round(n)) : dec(String(Math.round((n ?? 0) * 10) / 10))),
   };
 
   const LOADERS = {
@@ -480,14 +496,14 @@
     });
   }
 
-  /** A dropdown menu next to an element. items: [{ label, icon, hint, on, onClick }] */
+  /** A dropdown menu next to an element. items: [{ label, icon, hint, on, onClick, raw }] – raw: the label is a name, not the launcher's text. */
   function menu(anchor, items) {
     document.querySelector('.menu')?.remove();
     const r = anchor.getBoundingClientRect();
     const el = h(
       'div.menu',
       { role: 'menu' },
-      items.map((it) => (it === '-' ? h('div.nav-sep') : h(`button${it.on ? '.on' : ''}`, { role: 'menuitem', onclick: () => (el.remove(), it.onClick()) }, it.node ?? (it.icon ? icon(it.icon) : null), h('span.ellipsis', it.label), it.hint ? h('small', it.hint) : null))),
+      items.map((it) => (it === '-' ? h('div.nav-sep') : h(`button${it.on ? '.on' : ''}`, { role: 'menuitem', onclick: () => (el.remove(), it.onClick()) }, it.node ?? (it.icon ? icon(it.icon) : null), it.raw ? raw(h('span.ellipsis', it.label)) : h('span.ellipsis', it.label), it.hint ? h('small', it.hint) : null))),
     );
     document.body.append(el);
     const w = Math.max(r.width, 240);
@@ -574,9 +590,9 @@
 
   function money(value, currency) {
     try {
-      return new Intl.NumberFormat('pl-PL', currency ? { style: 'currency', currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+      return new Intl.NumberFormat(locale(), currency ? { style: 'currency', currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     } catch {
-      return `${value.toFixed(2).replace('.', ',')}${currency ? ` ${currency}` : ''}`;
+      return `${dec(value.toFixed(2))}${currency ? ` ${currency}` : ''}`;
     }
   }
 
@@ -593,7 +609,7 @@
       h('div.banner', d.bannerUrl ? h('img', { src: d.bannerUrl, alt: '' }) : null, icon('discord')),
       h(
         'div.body',
-        h('div.guild', h('div.guild-icon', d.iconUrl ? h('img', { src: d.iconUrl, alt: '' }) : initials), h('div', { style: { minWidth: 0, paddingBottom: '2px' } }, h('small', 'Nasz Discord'), h('b.ellipsis', d.name))),
+        h('div.guild', h('div.guild-icon', d.iconUrl ? h('img', { src: d.iconUrl, alt: '' }) : initials), h('div', { style: { minWidth: 0, paddingBottom: '2px' } }, h('small', 'Nasz Discord'), raw(h('b.ellipsis', d.name)))),
         d.live && (d.online != null || d.members != null)
           ? h(
               'div.counts',
@@ -603,7 +619,7 @@
           : d.invalid
             ? h('p.warn', { style: { fontSize: '12.5px', marginBottom: '12px' } }, 'Zaproszenie wygasło – ustaw nowe w launcher.config.json albo /zbuduj w bocie.')
             : null,
-        d.description ? h('p.muted', { style: { fontSize: '12.5px', marginBottom: '12px' } }, d.description) : null,
+        d.description ? raw(h('p.muted', { style: { fontSize: '12.5px', marginBottom: '12px' } }, d.description)) : null,
         h('div.perks', chip('Pomoc i tickety', null, 'heart'), chip('Giveawaye', null, 'star'), chip('Nowości i promocje', null, 'bolt')),
         d.invalid ? null : h('button.btn.discord', { onclick: () => open(d.url) }, icon('discord'), 'Dołącz do Discorda'),
       ),
@@ -687,16 +703,16 @@
       onclick: () =>
         menu(
           el,
-          state.instances.map((i) => ({ node: tile(i, 26), label: i.name, hint: state.running.has(i.id) ? 'w grze' : `${i.mcVersion} ${i.loader !== 'vanilla' ? LOADERS[i.loader]?.name : ''}`, on: i.id === state.instance?.id, onClick: () => state.selectInstance(i.id) })),
+          state.instances.map((i) => ({ node: tile(i, 26), label: i.name, raw: true, hint: state.running.has(i.id) ? 'w grze' : `${i.mcVersion} ${i.loader !== 'vanilla' ? LOADERS[i.loader]?.name : ''}`, on: i.id === state.instance?.id, onClick: () => state.selectInstance(i.id) })),
         ),
     });
     const draw = () => {
       const i = state.instance;
-      clear(el, i ? tile(i, 34) : null, h('div', h('b', i?.name ?? 'Brak instancji'), h('small', i ? `Minecraft ${i.mcVersion}${i.loader !== 'vanilla' ? ` · ${LOADERS[i.loader]?.name}` : ''}` : '—')), icon('chevron-down'));
+      clear(el, i ? tile(i, 34) : null, h('div', i ? raw(h('b', i.name)) : h('b', 'Brak instancji'), h('small', i ? `Minecraft ${i.mcVersion}${i.loader !== 'vanilla' ? ` · ${LOADERS[i.loader]?.name}` : ''}` : '—')), icon('chevron-down'));
     };
     draw();
     return { el, draw };
   }
 
-  window.HS = { views: {}, api, h, append, clear, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, copyText, taskBar, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme };
+  window.HS = { views: {}, api, t: i18n.t, locale, h, append, clear, raw, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, copyText, taskBar, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme };
 })();

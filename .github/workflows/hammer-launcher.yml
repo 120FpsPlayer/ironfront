@@ -42,10 +42,16 @@ jobs:
         run: |
           for i in 1 2 3; do npx playwright install --with-deps chromium && break; echo "Instalacja Chromium nie powiodła się (próba $i) – ponawiam"; sleep 30; done
           node scripts/preview.js preview 1
+      - name: Podgląd interfejsu po angielsku (bez polskich tekstów na ekranie)
+        run: node scripts/preview.js preview-en 1 --lang=en
+      # Zrzuty są tylko do obejrzenia – awaria magazynu plików GitHuba nie może zatrzymać budowania instalatora.
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: podglad-interfejsu
-          path: hammer-launcher/preview/*.png
+          path: |
+            hammer-launcher/preview/*.png
+            hammer-launcher/preview-en/*.png
           retention-days: 14
 
   changes:
@@ -109,6 +115,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: podglad-hammer-client
           path: hammer-client/common/build/preview/*.png

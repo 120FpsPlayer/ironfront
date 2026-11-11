@@ -82,7 +82,7 @@
       if (!i) return clear(statsBody, HS.empty('cube', 'Brak instancji', 'Utwórz pierwszą instancję, aby zagrać.'));
       clear(
         statsBody,
-        h('div.row', { style: { marginBottom: '14px' } }, tile(i, 46), h('div.grow', h('h3.ellipsis', i.name), h('div.dim', instanceLine(i)))),
+        h('div.row', { style: { marginBottom: '14px' } }, tile(i, 46), h('div.grow', HS.raw(h('h3.ellipsis', i.name)), h('div.dim', instanceLine(i)))),
         h(
           'div.grid.g2',
           { style: { gap: '10px' } },
@@ -117,7 +117,7 @@
           h(
             'div.sum-top',
             i ? tile(i, 44) : null,
-            h('div.grow', h('h3.ellipsis', s.name), h('div.dim', `Sesja zakończona ${fmt.ago(s.endedAt)}`)),
+            h('div.grow', HS.raw(h('h3.ellipsis', s.name)), h('div.dim', `Sesja zakończona ${fmt.ago(s.endedAt)}`)),
             h('div.sum-stats', part('Ta sesja', fmt.duration(s.playedMs)), part('Łącznie w tej instancji', fmt.duration(s.totalMs)), part('Zrzuty ekranu', shots.count ? fmt.num(shots.count) : 'brak')),
           ),
           shots.count
@@ -245,9 +245,9 @@
             shop.products.map((p) =>
               h(
                 'button.product',
-                { onclick: () => open(shop.url), title: p.description || p.name },
+                { onclick: () => open(shop.url), title: p.description || p.name, 'data-no-i18n': 'attrs' }, // the shop's own words
                 h('div.img', p.image ? h('img', { src: p.image, alt: '', loading: 'lazy' }) : icon('box')),
-                h('div.txt', p.category ? h('small', { style: { color: 'var(--accent2)', fontWeight: 700 } }, p.category) : null, h('b.ellipsis', p.name), p.description ? h('small', p.description) : null, h('div.price', h('span', HS.money(p.price, shop.currency)), p.instant ? HS.chip('Od ręki', 'ok', 'bolt') : null)),
+                h('div.txt', p.category ? HS.raw(h('small', { style: { color: 'var(--accent2)', fontWeight: 700 } }, p.category)) : null, HS.raw(h('b.ellipsis', p.name)), p.description ? HS.raw(h('small', p.description)) : null, h('div.price', h('span', HS.money(p.price, shop.currency)), p.instant ? HS.chip('Od ręki', 'ok', 'bolt') : null)),
               ),
             ),
           ),
@@ -282,7 +282,7 @@
         const s = await api.server.ping(info.server.address);
         clear(
           serverBody,
-          h('div.status', h(`span.dot.${s.online ? 'on' : 'off'}`), h('b', s.online ? 'Online' : 'Offline'), s.online && s.latency != null ? h('span.dim', `${s.latency} ms`) : null, h('span.grow'), h('code.dim', info.server.address)),
+          h('div.status', h(`span.dot.${s.online ? 'on' : 'off'}`), h('b', s.online ? 'Online' : 'Offline'), s.online && s.latency != null ? h('span.dim', `${s.latency} ms`) : null, h('span.grow'), HS.raw(h('code.dim', info.server.address))),
           s.online
             ? h(
                 'div.row',

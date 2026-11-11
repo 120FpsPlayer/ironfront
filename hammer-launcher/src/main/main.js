@@ -18,6 +18,7 @@ const { fromDataUrl } = require('./skins');
 const { useSystemProxy } = require('./proxy');
 const { officialMinecraftDir } = require('./official');
 const { inviteFromArgs } = require('./invite');
+const { tr, bootInfo, resolveLanguage } = require('./i18n');
 
 useSystemProxy(); // networks that require a proxy (HTTPS_PROXY) – without it the launcher would look offline there
 
@@ -32,11 +33,17 @@ if (!app.requestSingleInstanceLock()) {
   let tray = null;
   const ICON = path.join(__dirname, '..', 'renderer', 'assets', 'icon.png');
 
+  /* ── language: Polish, or English from the dictionary (Ustawienia → Język; "auto" follows the system) ── */
+  const language = () => resolveLanguage(services?.settings.get().language, app.getLocale());
+  /** A native text of the launcher (tray, file dialogs, login window) in the current language. */
+  const T = (text) => tr(text, language());
+  const filtersIn = (filters) => filters?.map((f) => ({ ...f, name: T(f.name) }));
+
   /** While the game runs with the launcher hidden, a tray icon brings it back (or stops the game). */
   function showTray() {
     if (tray) return;
     tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: process.platform === 'darwin' ? 18 : 32 }));
-    tray.setToolTip(`${config.name} – gra działa`);
+    tray.setToolTip(`${config.name} – ${T('gra działa')}`);
     const showWin = () => {
       if (!win || win.isDestroyed()) return;
       win.show();
@@ -45,10 +52,10 @@ if (!app.requestSingleInstanceLock()) {
     tray.on('click', showWin);
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: 'Pokaż launcher', click: showWin },
-        { label: 'Zatrzymaj grę', click: () => [...(services?.games.running.keys() ?? [])].forEach((id) => services.games.stop(id)) },
+        { label: T('Pokaż launcher'), click: showWin },
+        { label: T('Zatrzymaj grę'), click: () => [...(services?.games.running.keys() ?? [])].forEach((id) => services.games.stop(id)) },
         { type: 'separator' },
-        { label: 'Zamknij launcher', click: () => app.quit() },
+        { label: T('Zamknij launcher'), click: () => app.quit() },
       ]),
     );
   }
@@ -151,7 +158,8 @@ if (!app.requestSingleInstanceLock()) {
       file: path.join(root, 'accounts.json'),
       crypt,
       config,
-      windowProperties: { width: 520, height: 680, resizable: false, title: 'Logowanie Microsoft', icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'), parent: win ?? undefined, modal: Boolean(win), autoHideMenuBar: true },
+      // (the title is read when the login window opens, so it follows the language chosen by then)
+      windowProperties: { width: 520, height: 680, resizable: false, get title() { return T('Logowanie Microsoft'); }, icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'), parent: win ?? undefined, modal: Boolean(win), autoHideMenuBar: true },
     });
     presence = createPresence(config.discordClientId);
     // Hammer Client: versions.json and one jar per Minecraft version (built by `./gradlew dist` in hammer-client/).
@@ -163,18 +171,20 @@ if (!app.requestSingleInstanceLock()) {
       clientDir,
       officialDir: officialMinecraftDir(),
       emit: send,
-      presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set(a) : null), clear: () => presence.clear() },
+      t: T, // the names the launcher makes up itself (a copied instance, a skin taken from the account)
+      // What friends see in Discord follows the launcher's language as well.
+      presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set({ ...a, state: T(a.state), ...(a.buttons ? { buttons: a.buttons.map((b) => ({ ...b, label: T(b.label).slice(0, 32) })) } : {}) }) : null), clear: () => presence.clear() },
       gpuInfo: () => gpu,
       // Worlds and backups the player removes go to the system trash, never straight off the disk.
       trash: (target) => shell.trashItem(target).catch(() => Promise.reject(new Error('Nie udało się przenieść do kosza. Zamknij programy, które mogą używać tych plików, i spróbuj ponownie.'))),
       // The system's file dialog (the backgrounds of Hammer+).
       pickFile: async ({ title, filters }) => {
-        const res = await dialog.showOpenDialog(win, { title, properties: ['openFile'], filters });
+        const res = await dialog.showOpenDialog(win, { title: T(title), properties: ['openFile'], filters: filtersIn(filters) });
         return res.canceled ? null : res.filePaths[0] ?? null;
       },
       // "Save as" for an instance recipe (.hammerpack) – starts in the player's documents.
       saveFile: async ({ title, defaultName, filters }) => {
-        const res = await dialog.showSaveDialog(win, { title, defaultPath: path.join(app.getPath('documents'), defaultName), filters });
+        const res = await dialog.showSaveDialog(win, { title: T(title), defaultPath: path.join(app.getPath('documents'), defaultName), filters: filtersIn(filters) });
         return res.canceled ? null : res.filePath || null;
       },
       // Tło menu w grze: any picture → PNG that fits the given size, proportions kept (Hammer Client takes 1920×1080).
@@ -223,6 +233,17 @@ if (!app.requestSingleInstanceLock()) {
 
   function registerIpc() {
     const s = () => services;
+    // The language the window starts in (asked synchronously by preload.js, before the page builds anything) and
+    // the same answer again after the setting changed. English comes with its dictionary; Polish needs none.
+    const fromWindow = (event) => !event.senderFrame?.url || event.senderFrame.url.startsWith('file://');
+    ipcMain.on('i18n:boot', (event) => {
+      try {
+        event.returnValue = fromWindow(event) ? bootInfo(s().settings.get().language, app.getLocale()) : { lang: 'pl', dict: null };
+      } catch {
+        event.returnValue = { lang: 'pl', dict: null };
+      }
+    });
+    handle('i18n:load', () => bootInfo(s().settings.get().language, app.getLocale()));
     handle('app:info', () => ({
       version: app.getVersion(),
       platform: process.platform,
@@ -308,7 +329,7 @@ if (!app.requestSingleInstanceLock()) {
       let files = filePaths;
       if (!files?.length) {
         const ext = type === 'mod' ? ['jar'] : ['zip'];
-        const res = await dialog.showOpenDialog(win, { title: 'Dodaj pliki', properties: ['openFile', 'multiSelections'], filters: [{ name: type === 'mod' ? 'Mody (.jar)' : 'Paczki (.zip)', extensions: ext }] });
+        const res = await dialog.showOpenDialog(win, { title: T('Dodaj pliki'), properties: ['openFile', 'multiSelections'], filters: [{ name: T(type === 'mod' ? 'Mody (.jar)' : 'Paczki (.zip)'), extensions: ext }] });
         if (res.canceled) return [];
         files = res.filePaths;
       }
@@ -335,7 +356,7 @@ if (!app.requestSingleInstanceLock()) {
       return instance;
     });
     handle('modpacks:import', async () => {
-      const res = await dialog.showOpenDialog(win, { title: 'Importuj paczkę modów', properties: ['openFile'], filters: [{ name: 'Paczka Modrinth (.mrpack)', extensions: ['mrpack'] }] });
+      const res = await dialog.showOpenDialog(win, { title: T('Importuj paczkę modów'), properties: ['openFile'], filters: [{ name: T('Paczka Modrinth (.mrpack)'), extensions: ['mrpack'] }] });
       if (res.canceled || !res.filePaths[0]) return null;
       const instance = await s().modpacks.installFile(res.filePaths[0], { onProgress: (p) => send('task:progress', { scope: 'modpack', ...p }) });
       s().settings.set({ selectedInstance: instance.id });
@@ -403,7 +424,7 @@ if (!app.requestSingleInstanceLock()) {
     // Skórka: the picture always travels as PNG data and is checked here (64×64 PNG) before anything is sent.
     handle('skins:get', () => s().skins.get());
     handle('skins:pick', async () => {
-      const res = await dialog.showOpenDialog(win, { title: 'Wybierz skórkę', properties: ['openFile'], filters: [{ name: 'Skórka Minecraft (.png)', extensions: ['png'] }] });
+      const res = await dialog.showOpenDialog(win, { title: T('Wybierz skórkę'), properties: ['openFile'], filters: [{ name: T('Skórka Minecraft (.png)'), extensions: ['png'] }] });
       if (res.canceled || !res.filePaths[0]) return null;
       if (fs.statSync(res.filePaths[0]).size > 1024 * 1024) throw new Error('Ten plik jest za duży na skórkę. Skórka to mały obrazek PNG 64×64 pikseli.');
       return s().skins.inspect(fs.readFileSync(res.filePaths[0]), path.basename(res.filePaths[0]));

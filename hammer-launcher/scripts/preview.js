@@ -2,16 +2,23 @@
 
 /**
  * Renders the launcher interface in Chromium with a fake window.hs (no Electron, no network) and saves a
- * screenshot of every screen. Usage: node scripts/preview.js [outDir] [scale]
+ * screenshot of every screen. Usage: node scripts/preview.js [outDir] [scale] [--lang=en] [--collect] [--compare=<dir>]
  * Needs Playwright with Chromium (npx playwright install chromium) – used for development only.
+ *
+ * Without switches the run is Polish. --lang=en (or HAMMER_LANG=en) runs the same steps in English and fails
+ * when Polish is left on a screen; --collect lists every text of the interface – see scripts/preview-i18n.js.
  */
 
 const path = require('node:path');
 const fs = require('node:fs');
 const { chromium } = require('playwright');
+const { createPreviewLanguage } = require('./preview-i18n');
 
-const OUT = path.resolve(process.argv[2] ?? 'preview');
-const SCALE = Number(process.argv[3] ?? 1);
+const ARGS = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const SWITCH = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')).map(([k, v]) => [k, v ?? true]));
+const OUT = path.resolve(ARGS[0] ?? 'preview');
+const SCALE = Number(ARGS[1] ?? 1);
+const LANG = (SWITCH.lang ?? process.env.HAMMER_LANG) === 'en' ? 'en' : 'pl';
 const PAGE = `file://${path.join(__dirname, '..', 'src', 'renderer', 'index.html')}`;
 
 /* Runs inside the page before the app scripts: a believable fake launcher. */
@@ -88,7 +95,7 @@ function mock() {
   }
 
   const now = Date.now();
-  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true };
+  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, language: 'auto', accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true };
   const instances = [
     { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
@@ -342,14 +349,22 @@ function mock() {
   // An update that was cut off half-way (the launcher was closed in the middle).
   window.__interrupted = () => updPoints.unshift({ id: '2026-11-11_20-41-07', createdAt: Date.now() - 5 * 60e3, interrupted: true, entries: [{ type: 'mod', title: 'Lithium', old: { file: 'lithium-fabric-0.14.3.jar', versionNumber: 'mc1.21.4-0.14.3' }, new: { file: 'lithium-fabric-0.14.4.jar', versionNumber: 'mc1.21.4-0.14.4' }, state: 'done' }, { type: 'mod', title: 'FerriteCore', old: { file: 'ferritecore-7.1.1-fabric.jar', versionNumber: '7.1.1' }, new: { file: 'ferritecore-7.1.2-fabric.jar', versionNumber: '7.1.2' }, state: 'planned' }] });
 
+  // The language: the run's own (window.__i18n, set by preview-i18n.js) while the setting says "auto".
+  const i18n = window.__i18n ?? { lang: 'pl', dict: null };
+  const languageNow = () => {
+    const lang = settings.language === 'auto' ? i18n.lang : settings.language;
+    return lang === 'en' && i18n.dict ? { lang: 'en', dict: i18n.dict } : { lang: 'pl', dict: null };
+  };
+
   window.hs = {
     on(ch, fn) {
       if (!listeners.has(ch)) listeners.set(ch, new Set());
       listeners.get(ch).add(fn);
       return () => listeners.get(ch).delete(fn);
     },
+    i18n: { ...languageNow(), load: async () => languageNow() },
     pathForFile: (file) => (/\.hammerpack$/i.test(file?.name ?? '') ? `C:\\Users\\Gracz\\Downloads\\${file.name}` : null),
-    app: { info: async () => ({ plus: plusStatus(), version: '2.4.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ plus: plusStatus(), version: '2.5.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: {
       get: async () => ({ ...settings }),
@@ -699,6 +714,8 @@ function mock() {
   };
 }
 
+let whenStepFails = null; // set in main(): the language lists of the run are written even when a step fails
+
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
@@ -706,13 +723,24 @@ async function main() {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  // The language of this run: in English the steps below find their buttons through the dictionary (T).
+  const language = createPreviewLanguage({ lang: LANG, collect: Boolean(SWITCH.collect), compare: typeof SWITCH.compare === 'string' ? path.resolve(SWITCH.compare) : null, out: OUT });
+  const T = language.T;
+  await page.addInitScript(language.init, language.initArg);
   await page.addInitScript(mock);
+  language.patch(page);
+  whenStepFails = async () => {
+    const found = [];
+    await language.finish(page, found);
+    if (found.length) console.error(found.join('\n'));
+  };
   await page.goto(PAGE);
   await page.waitForTimeout(400);
 
   const shot = async (name) => {
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+    await language.afterShot(page, name);
     console.log(`✓ ${name}`);
   };
   const nav = (title) => page.locator('.nav-item', { hasText: title }).click();
@@ -1627,7 +1655,7 @@ async function main() {
   await shot('102-test-fps-trwa');
   await nav('Graj');
   await page.waitForTimeout(300);
-  if (!(await page.locator('.play-progress').innerText()).includes('Trwa test FPS – gra zamknie się sama')) errors.push('Graj: nie widać, że trwa test FPS');
+  if (!(await page.locator('.play-progress').innerText()).includes(T('Trwa test FPS – gra zamknie się sama'))) errors.push('Graj: nie widać, że trwa test FPS');
   await shot('103-graj-test-fps');
   // The game closed with a result: a message with „Zobacz wynik”, then the new result next to the previous one.
   await noToasts();
@@ -1639,7 +1667,7 @@ async function main() {
   await page.waitForTimeout(600);
   await count('.bench-run', 0);
   await count('.bench .chip.ok', 1);
-  if (!(await page.locator('.bench .chip.ok').innerText()).includes('+38% średnio')) errors.push('Test FPS: nie widać różnicy „+38% średnio”');
+  if (!(await page.locator('.bench .chip.ok').innerText()).includes(T('+38% średnio'))) errors.push('Test FPS: nie widać różnicy „+38% średnio”');
   await noToasts();
   await shot('105-test-fps-wynik');
   await fits('Test FPS – wynik');
@@ -1723,7 +1751,7 @@ async function main() {
   await page.evaluate(() => window.__updates(true));
   await page.waitForTimeout(300);
   await count('.update-line', 1);
-  if (!(await page.locator('.update-line').innerText()).includes('Aktualizacje modów: 3 w „Hammer”')) errors.push('Graj: zła treść karty aktualizacji');
+  if (!(await page.locator('.update-line').innerText()).includes(T('Aktualizacje modów: 3 w „Hammer”'))) errors.push('Graj: zła treść karty aktualizacji');
   await shot('120-graj-aktualizacje-modow');
   await fits('Graj z aktualizacjami');
   await small('120b-graj-aktualizacje-modow-male-okno', () => fits('Graj z aktualizacjami, małe okno'));
@@ -1907,6 +1935,39 @@ async function main() {
   await count('.set-row:has-text("Pytaj przed udostępnieniem zrzutu ekranu")', 0);
   await page.evaluate(() => (window.__noShare = false));
 
+  /* ── Ustawienia → Język / Language: the other language applies at once; back again, every text is as it was ── */
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await viewTop('h2', 'Wygląd');
+  await shot('140-ustawienia-jezyk');
+  await fits('Ustawienia – język');
+  await small('140b-ustawienia-jezyk-male-okno', async () => {
+    await viewTop('h2', 'Wygląd');
+    await fits('Ustawienia – język, małe okno');
+  });
+  const other = LANG === 'en' ? 'pl' : 'en';
+  const languageSelect = () => page.locator('.set-row select:has(option[value="auto"])');
+  const everyText = () => page.evaluate(() => [document.body.innerText, ...[...document.querySelectorAll('[title],[aria-label],[placeholder]')].map((el) => `${el.getAttribute('title') ?? ''}|${el.getAttribute('aria-label') ?? ''}|${el.getAttribute('placeholder') ?? ''}`)].join('\n'));
+  await count('html[lang="' + LANG + '"]', 1);
+  const textBefore = await everyText();
+  await language.pause(page, true);
+  await languageSelect().selectOption(other);
+  await page.waitForTimeout(700);
+  await count('html[lang="' + other + '"]', 1);
+  const textOther = await everyText();
+  if (textOther === textBefore) errors.push('Język: po zmianie języka strona wygląda tak samo');
+  if (!textOther.includes(other === 'en' ? 'Settings' : 'Ustawienia')) errors.push('Język: strona nie przeszła na wybrany język');
+  await top();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: path.join(OUT, '141-jezyk-zmieniony.png') });
+  console.log('✓ 141-jezyk-zmieniony');
+  await languageSelect().selectOption('auto');
+  await page.waitForTimeout(700);
+  await language.pause(page, false);
+  await count('html[lang="' + LANG + '"]', 1);
+  if ((await everyText()) !== textBefore) errors.push('Język: po powrocie do pierwszego języka teksty na stronie nie są takie jak przedtem');
+
+  await language.finish(page, errors);
   await browser.close();
   if (errors.length) {
     console.error('Błędy w konsoli strony:\n' + errors.join('\n'));
@@ -1914,7 +1975,8 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(err);
+  await whenStepFails?.().catch(() => {});
   process.exit(1);
 });

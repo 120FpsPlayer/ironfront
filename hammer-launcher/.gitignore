@@ -1,6 +1,7 @@
 node_modules/
 dist/
 preview/
+preview-en/
 *.log
 .DS_Store
 resources/*.jar

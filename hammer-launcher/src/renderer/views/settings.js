@@ -25,7 +25,7 @@
                   'div.installed-row',
                   { style: a.id === sel ? { borderColor: 'rgba(var(--glow),.5)' } : null },
                   HS.head(a, 40),
-                  h('div.grow', h('b', a.name), h('small', a.needsLogin ? 'Sesja wygasła – zaloguj się ponownie' : `Dodano ${fmt.ago(a.addedAt)}`)),
+                  h('div.grow', HS.raw(h('b', a.name)), h('small', a.needsLogin ? 'Sesja wygasła – zaloguj się ponownie' : `Dodano ${fmt.ago(a.addedAt)}`)),
                   a.needsLogin ? HS.chip('Wymaga logowania', 'warn', 'warning') : a.id === sel ? HS.chip('Aktywne', 'ok', 'check') : h('button.btn.sm', { onclick: () => state.setSettings({ selectedAccount: a.id }).then(() => state.refreshAccounts()) }, 'Używaj'),
                   h(
                     'button.btn.ghost.sm.icon.danger',
@@ -48,6 +48,27 @@
     };
     draw();
     return { el: card, draw };
+  }
+
+  /**
+   * Język / Language: Polish, English, or the system's language (Polish for a Polish system, English for any other).
+   * The choice applies at once: the launcher answers which language that is (and hands the dictionary over), the
+   * page switches and the open tab is drawn again, so numbers and dates follow as well.
+   */
+  const LANGUAGES = [
+    { value: 'auto', label: 'Automatycznie (język systemu)' },
+    { value: 'pl', label: 'Polski' },
+    { value: 'en', label: 'English' },
+  ];
+  function languageRow() {
+    const change = async (value) => {
+      if (!(await attempt(() => state.setSettings({ language: value })))) return;
+      const next = await attempt(() => api.i18n.load());
+      if (!next) return;
+      window.HS_I18N.use(next.lang, next.dict);
+      HS.refreshView();
+    };
+    return row('Język / Language', 'Język launchera. Automatycznie: polski, gdy system jest po polsku – w pozostałych przypadkach angielski.', HS.select(LANGUAGES, state.settings.language ?? 'auto', change));
   }
 
   /**
@@ -90,6 +111,7 @@
       clear(
         card,
         h('div.card-head', icon('palette'), h('h2', 'Wygląd')),
+        languageRow(),
         row(
           'Kolor launchera',
           on ? 'Przyciski, podświetlenia i paski postępu w Twoim kolorze. Ostatnie kółko to dowolny kolor.' : 'Przyciski, podświetlenia i paski postępu w Twoim kolorze.',
@@ -160,7 +182,7 @@
         shown.length
           ? h(
               'div.disk-list',
-              shown.map((i) => h('div.disk-item', h('span.ellipsis', i.name), h('div.progress', h('i', { style: { '--w': `${Math.max(1, Math.round((i.size / biggest) * 100))}%` } })), h('span.size', fmt.size(i.size)))),
+              shown.map((i) => h('div.disk-item', HS.raw(h('span.ellipsis', i.name)), h('div.progress', h('i', { style: { '--w': `${Math.max(1, Math.round((i.size / biggest) * 100))}%` } })), h('span.size', fmt.size(i.size)))),
               usage.instances.length > shown.length ? h('div.hint', `…i jeszcze ${fmt.count(usage.instances.length - shown.length, 'mniejsza instancja', 'mniejsze instancje', 'mniejszych instancji')}.`) : null,
             )
           : null,

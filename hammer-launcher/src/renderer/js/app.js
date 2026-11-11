@@ -77,7 +77,7 @@
         a ? HS.head(a, 36) : h('div.head', { style: { '--s': '36px' } }, icon('user')),
         h(
           'div.meta',
-          h('div.name', h('b', a?.name ?? 'Zaloguj się'), a && HS.plusOn() ? h('span.plus-badge', { title: 'Hammer+ jest aktywny na tym koncie', 'aria-label': 'Hammer+' }, '+') : null),
+          h('div.name', a ? HS.raw(h('b', a.name)) : h('b', 'Zaloguj się'), a && HS.plusOn() ? h('span.plus-badge', { title: 'Hammer+ jest aktywny na tym koncie', 'aria-label': 'Hammer+' }, '+') : null),
           h('small', a ? (a.needsLogin ? 'Sesja wygasła' : 'Konto Microsoft') : 'Konto Microsoft'),
         ),
         icon('chevron-down'),
@@ -88,7 +88,7 @@
   function accountMenu(anchor) {
     if (!state.accounts.length) return login();
     HS.menu(anchor, [
-      ...state.accounts.map((a) => ({ node: HS.head(a, 24), label: a.name, hint: a.needsLogin ? 'wygasło' : null, on: a.id === state.account?.id, onClick: () => state.setSettings({ selectedAccount: a.id }).then(() => state.refreshAccounts()) })),
+      ...state.accounts.map((a) => ({ node: HS.head(a, 24), label: a.name, raw: true, hint: a.needsLogin ? 'wygasło' : null, on: a.id === state.account?.id, onClick: () => state.setSettings({ selectedAccount: a.id }).then(() => state.refreshAccounts()) })),
       '-',
       { icon: 'user-plus', label: 'Dodaj konto', onClick: login },
       { icon: 'gear', label: 'Zarządzaj kontami', onClick: () => go('settings') },

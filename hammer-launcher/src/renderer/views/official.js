@@ -58,7 +58,7 @@
         h('div.pic', w.iconUrl ? h('img', { src: w.iconUrl, alt: '' }) : icon('globe')),
         h(
           'div.grow',
-          h('div.row.title', h('b.ellipsis', { title: w.name }, w.name), w.broken ? HS.chip('Uszkodzony', 'warn', 'warning') : null, w.newer ? HS.chip('Nowsza wersja gry', 'warn', 'warning') : null, w.hardcore ? HS.chip('Hardcore', 'err', 'skull') : null),
+          h('div.row.title', HS.raw(h('b.ellipsis', { title: w.name }, w.name)), w.broken ? HS.chip('Uszkodzony', 'warn', 'warning') : null, w.newer ? HS.chip('Nowsza wersja gry', 'warn', 'warning') : null, w.hardcore ? HS.chip('Hardcore', 'err', 'skull') : null),
           h('small.ellipsis', [w.version ? `Minecraft ${w.version}` : null, w.broken ? 'nie udało się odczytać level.dat' : `ostatnia gra: ${fmt.ago(w.lastPlayed)}`, w.folder !== w.name ? `folder: ${w.folder}` : null].filter(Boolean).join(' · ')),
           w.newer ? h('small.warn', `${NEWER}.`) : null,
         ),

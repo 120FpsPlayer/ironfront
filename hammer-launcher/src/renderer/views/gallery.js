@@ -48,7 +48,7 @@
 
   /** The link, once the upload is done (it is on the clipboard already). */
   function linkDialog(res) {
-    const until = new Date(res.expiresAt).toLocaleString('pl-PL', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    const until = new Date(res.expiresAt).toLocaleString(HS.locale(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     const m = HS.modal({
       title: 'Link do zrzutu ekranu',
       icon: 'check-circle',
@@ -84,7 +84,7 @@
   function viewer(shots, start, onDelete) {
     let i = start;
     const img = h('img', { alt: '' });
-    const title = h('b');
+    const title = HS.raw(h('b')); // the instance's name
     const sub = h('span');
     const close = () => {
       document.removeEventListener('keydown', onKey);
@@ -96,7 +96,7 @@
       const s = shots[i];
       img.src = s.url;
       title.textContent = s.instanceName;
-      sub.textContent = `${new Date(s.takenAt).toLocaleString('pl-PL', { dateStyle: 'long', timeStyle: 'short' })} · ${i + 1} z ${shots.length}`;
+      sub.textContent = `${new Date(s.takenAt).toLocaleString(HS.locale(), { dateStyle: 'long', timeStyle: 'short' })} · ${i + 1} z ${shots.length}`;
     };
     const onKey = (e) => {
       if (document.querySelector('#modal-root .overlay')) return; // a dialog is open on top: the keys are its own
@@ -155,7 +155,7 @@
       clear(
         sel,
         h('option', { value: '' }, 'Wszystkie instancje'),
-        state.instances.map((i) => h('option', { value: i.id, selected: i.id === filter }, i.name)),
+        state.instances.map((i) => HS.raw(h('option', { value: i.id, selected: i.id === filter }, i.name))),
       );
 
     function draw() {
@@ -175,7 +175,7 @@
               'button.shot',
               { title: s.file, onclick: () => viewer(shots, idx, () => draw()) },
               h('img', { src: s.url, alt: '', loading: 'lazy', decoding: 'async' }),
-              h('div.meta', h('span.ellipsis', s.instanceName), h('span', fmt.ago(s.takenAt))),
+              h('div.meta', HS.raw(h('span.ellipsis', s.instanceName)), h('span', fmt.ago(s.takenAt))),
             ),
           ),
         ),

@@ -81,9 +81,9 @@
         h('div.pic', pic ? h('img', { src: pic, alt: '' }) : icon('server')),
         h(
           'div.grow',
-          h('b.ellipsis', server.name || server.address),
-          h('small.ellipsis', [server.address, s?.online && s.version ? plain(s.version) : null].filter(Boolean).join(' · ')),
-          s?.online && s.motd ? h('small.ellipsis.motd', plain(s.motd)) : null,
+          HS.raw(h('b.ellipsis', server.name || server.address)),
+          HS.raw(h('small.ellipsis', [server.address, s?.online && s.version ? plain(s.version) : null].filter(Boolean).join(' · '))),
+          s?.online && s.motd ? HS.raw(h('small.ellipsis.motd', plain(s.motd))) : null,
         ),
         statusBox(s),
         h(

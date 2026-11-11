@@ -5,7 +5,7 @@
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
 
-  const when = (ms) => new Date(ms).toLocaleString('pl-PL', { dateStyle: 'long', timeStyle: 'short' });
+  const when = (ms) => new Date(ms).toLocaleString(HS.locale(), { dateStyle: 'long', timeStyle: 'short' });
   /** "do 11 grudnia 2026" or "bezterminowo" – how long the active code lasts. */
   const until = (st) => (st?.until ? `do ${fmt.date(st.until * 1000)}` : 'bezterminowo');
 
@@ -34,8 +34,9 @@
     HS.go(view);
     if (!heading) return;
     let tries = 0;
+    const names = [heading, ...window.HS_I18N.readings(heading)]; // the heading as written here, and as the page shows it in English
     const find = () => {
-      const card = [...document.querySelectorAll('#view h2')].find((el) => el.textContent.trim().startsWith(heading))?.closest('.card');
+      const card = [...document.querySelectorAll('#view h2')].find((el) => names.some((name) => el.textContent.trim().startsWith(name)))?.closest('.card');
       if (card) document.getElementById('view').scrollTop = card.offsetTop - 16;
       else if ((tries += 1) < 25) setTimeout(find, 100);
     };

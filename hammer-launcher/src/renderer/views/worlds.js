@@ -6,7 +6,7 @@
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
 
   const MODES = { 0: ['Przetrwanie', null, 'heart'], 1: ['Kreatywny', 'accent', 'magic'], 2: ['Przygoda', null, 'compass'], 3: ['Widz', null, 'eye'] };
-  const when = (ts) => new Date(ts).toLocaleString('pl-PL', { dateStyle: 'long', timeStyle: 'short' });
+  const when = (ts) => new Date(ts).toLocaleString(HS.locale(), { dateStyle: 'long', timeStyle: 'short' });
   const sizeOf = (w) => `${w.sizePartial ? 'ponad ' : ''}${fmt.size(w.size)}`;
 
   function renameWorld(instance, world, onDone) {
@@ -50,7 +50,7 @@
           'div.grow',
           h(
             'div.row.title',
-            h('b.ellipsis', { title: w.name }, w.name),
+            HS.raw(h('b.ellipsis', { title: w.name }, w.name)),
             w.broken ? HS.chip('Uszkodzony', 'warn', 'warning') : null,
             mode ? HS.chip(mode[0], mode[1], mode[2]) : null,
             w.hardcore ? HS.chip('Hardcore', 'err', 'skull') : null,
@@ -131,7 +131,7 @@
         h('div.pic', icon('zip')),
         h(
           'div.grow',
-          h('div.row.title', { style: { gap: '8px' } }, h('b.ellipsis', b.world), b.auto ? HS.chip('automatyczna', null, 'history') : null),
+          h('div.row.title', { style: { gap: '8px' } }, HS.raw(h('b.ellipsis', b.world)), b.auto ? HS.chip('automatyczna', null, 'history') : null),
           h('small.ellipsis', { style: { display: 'block' }, title: b.file }, `${when(b.createdAt)} · ${fmt.size(b.size)} · ${b.file}`),
         ),
         h(

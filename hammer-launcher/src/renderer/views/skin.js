@@ -198,7 +198,7 @@
                 return h(
                   `div.skin-tile${s.active ? '.on' : ''}`,
                   HS.skinView(s.dataUrl, { slim: s.variant === 'slim', height: 112 }),
-                  h('b.ellipsis', { title: s.name }, s.name),
+                  HS.raw(h('b.ellipsis', { title: s.name }, s.name)),
                   h('small', s.variant === 'slim' ? 'smukły' : 'klasyczny'),
                   h(
                     'div.row',
@@ -274,7 +274,7 @@
         return h(
           `div.outfit-tile${worn ? '.on' : ''}`,
           HS.skinView(o.dataUrl, { slim: o.variant === 'slim', height: 112 }),
-          h('b.ellipsis', { title: o.name }, o.name),
+          HS.raw(h('b.ellipsis', { title: o.name }, o.name)),
           h('small.ellipsis', { title: o.skinName }, `${o.variant === 'slim' ? 'smukły' : 'klasyczny'} · ${o.cape ? o.capeName : 'bez peleryny'}`),
           h(
             'div.row',

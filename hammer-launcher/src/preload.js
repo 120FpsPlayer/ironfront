@@ -13,6 +13,21 @@ async function call(channel, ...args) {
   return res.data;
 }
 
+/**
+ * The launcher's language and – for English – its dictionary, known before the page builds anything
+ * ({ lang: 'pl' | 'en', dict }). Asked once, synchronously, so the first screen is already in the right language.
+ */
+function languageAtStart() {
+  try {
+    const res = ipcRenderer.sendSync('i18n:boot');
+    if (res?.lang === 'en' && res.dict) return { lang: 'en', dict: res.dict };
+  } catch {
+    // the launcher did not answer – Polish, the language the interface is written in
+  }
+  return { lang: 'pl', dict: null };
+}
+const language = languageAtStart();
+
 const listeners = new Map();
 ipcRenderer.on('hs:event', (_e, { channel, payload }) => {
   for (const fn of listeners.get(channel) ?? []) fn(payload);
@@ -31,6 +46,8 @@ const api = {
       return null;
     }
   },
+  // The language the page starts in; load() answers the same after the setting changed (Ustawienia → Język).
+  i18n: { lang: language.lang, dict: language.dict, load: () => call('i18n:load') },
   app: { info: () => call('app:info'), openExternal: (url) => call('app:open-external', url), openFolder: (id, sub) => call('app:open-folder', id, sub) },
   window: { minimize: () => call('window:minimize'), maximize: () => call('window:maximize'), close: () => call('window:close') },
   settings: { get: () => call('settings:get'), set: (patch) => call('settings:set', patch) },

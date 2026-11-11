@@ -46,7 +46,8 @@ function clean(data, base = {}) {
   return out;
 }
 
-function createInstances(paths) {
+/** `t` puts the launcher's own words in names it makes up ("(kopia)") into the player's language – see i18n.js. */
+function createInstances(paths, { t = (text) => text } = {}) {
   const dir = (id) => path.join(paths.instances, id);
   const file = (id) => path.join(dir(id), 'instance.json');
   const exists = (id) => /^[a-z0-9-]{1,48}$/.test(String(id)) && fs.existsSync(file(id));
@@ -114,7 +115,7 @@ function createInstances(paths) {
   function duplicate(id) {
     const current = get(id);
     if (!current) throw new Error('Nie ma takiej instancji.');
-    const copy = create({ ...current, name: `${current.name} (kopia)`.slice(0, 48) });
+    const copy = create({ ...current, name: `${current.name} ${t('(kopia)')}`.slice(0, 48) });
     fs.cpSync(dir(id), dir(copy.id), { recursive: true, filter: (src) => path.basename(src) !== 'instance.json' });
     return patchInternal(copy.id, { versionId: current.versionId, installedFor: current.installedFor, optimized: current.optimized });
   }
