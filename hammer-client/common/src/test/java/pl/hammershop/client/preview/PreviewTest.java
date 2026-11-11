@@ -173,6 +173,7 @@ class PreviewTest {
         fakeWorld(g);
         Hammer.renderHud(g);
         var fps = (pl.hammershop.client.module.HudModule) Modules.byId("fps");
+        fps.scale.reset();
         float full = fps.scaledW();
         assertTrue(full > 10);
         cfg.setHudScale(0.6f);
@@ -202,6 +203,102 @@ class PreviewTest {
         Hammer.renderHud(g);
         g.save(new File(out, "22-hud-100-percent.png"));
         for (Module m : Modules.ALL) m.data().enabled = null;
+        assertEquals(0, Hammer.problemCount());
+    }
+
+    @Test
+    void everyModuleHasItsOwnSize() throws Exception {
+        // only two modules on the screen, so "empty space" really is empty
+        for (Module m : Modules.ALL) m.setEnabled(false);
+        var fps = (pl.hammershop.client.module.HudModule) Modules.byId("fps");
+        var cps = (pl.hammershop.client.module.HudModule) Modules.byId("cps");
+        fps.setEnabled(true);
+        cps.setEnabled(true);
+        fps.scale.reset();
+        cps.scale.reset();
+        Hammer.input().reset();
+        HudEditorScreen editor = new HudEditorScreen();
+        editor.state.opened = System.nanoTime() - 4_000_000_000L;
+        Java2DGfx g = new Java2DGfx(1280, 720, 3);
+        assertTrue(Hammer.renderScreen(editor, g, 0, 0));
+        assertTrue(Hammer.renderScreen(editor, g, 0, 0));
+        assertEquals(null, editor.selected());
+        // a click on the FPS module selects it …
+        float x = fps.left(g.width()) + 3;
+        float y = fps.top(g.height()) + 3;
+        Hammer.input().mouseDown(0);
+        assertTrue(Hammer.renderScreen(editor, g, x, y));
+        Hammer.input().mouseUp(0);
+        assertTrue(Hammer.renderScreen(editor, g, x, y));
+        assertEquals(fps, editor.selected());
+        assertTrue(!fps.placed(), "a click only selects – the module stays in its automatic stack");
+        // … and its buttons change only that module
+        editor.resizeSelected(0.25f);
+        assertEquals(1.25f, fps.scale.value(), 0.001f);
+        assertEquals(1f, cps.scale.value(), 0.001f);
+        editor.resizeSelected(-0.5f);
+        assertEquals(0.75f, fps.scale.value(), 0.001f);
+        editor.resizeSelected(-9f);
+        assertEquals(fps.scale.min, fps.scale.value(), 0.001f, "never smaller than the limit");
+        editor.resizeSelected(9f);
+        assertEquals(fps.scale.max, fps.scale.value(), 0.001f, "never bigger than the limit");
+        fps.scale.set(1.5f);
+        // the "+" button next to the module: one press = one step
+        g = new Java2DGfx(1280, 720, 3);
+        fakeWorld(g);
+        assertTrue(Hammer.renderScreen(editor, g, 0, 0));
+        float s = pl.hammershop.client.ui.Ui.uiScale(g);
+        float tbx = (fps.left(g.width()) + fps.scaledW()) / s + 8;
+        float tby = Math.max(2, (fps.top(g.height()) + fps.scaledH() / 2f) / s - 11);
+        float plusX = (tbx + 92 - 14) * s;
+        float plusY = (tby + 11) * s;
+        Hammer.input().mouseDown(0);
+        assertTrue(Hammer.renderScreen(editor, g, plusX, plusY));
+        Hammer.input().mouseUp(0);
+        assertTrue(Hammer.renderScreen(editor, g, plusX, plusY));
+        assertEquals(1.55f, fps.scale.value(), 0.001f, "the + button");
+        assertEquals(fps, editor.selected(), "pressing a size button keeps the module selected");
+        assertEquals(1f, cps.scale.value(), 0.001f);
+        // a clean, settled frame for the picture
+        for (int i = 0; i < 2; i++) {
+            g = new Java2DGfx(1280, 720, 3);
+            fakeWorld(g);
+            assertTrue(Hammer.renderScreen(editor, g, plusX, plusY));
+        }
+        g.save(new File(out, "24-hud-editor-selected.png"));
+        // dragging the corner handle resizes it too
+        float hx = fps.left(g.width()) + fps.scaledW();
+        float hy = fps.top(g.height()) + fps.scaledH();
+        float before = fps.scale.value();
+        Hammer.input().mouseDown(0);
+        assertTrue(Hammer.renderScreen(editor, g, hx, hy));
+        assertTrue(Hammer.renderScreen(editor, g, hx * 0.6f, hy * 0.6f));
+        Hammer.input().mouseUp(0);
+        assertTrue(Hammer.renderScreen(editor, g, hx * 0.6f, hy * 0.6f));
+        assertTrue(fps.scale.value() < before - 0.2f, "dragging the handle towards the corner makes it smaller: " + fps.scale.value());
+        assertEquals(1f, cps.scale.value(), 0.001f);
+        // the neighbour moved down to make room, nothing overlaps
+        assertTrue(cps.top(g.height()) >= fps.top(g.height()) + fps.scaledH(), "CPS sits below the resized FPS");
+        // pressing and moving the mouse drags the module to a place of its own
+        float dx = fps.left(g.width()) + 3;
+        float dy = fps.top(g.height()) + 3;
+        Hammer.input().mouseDown(0);
+        assertTrue(Hammer.renderScreen(editor, g, dx, dy));
+        assertTrue(Hammer.renderScreen(editor, g, dx + 120, dy + 90));
+        Hammer.input().mouseUp(0);
+        assertTrue(Hammer.renderScreen(editor, g, dx + 120, dy + 90));
+        assertTrue(fps.placed(), "dragging places the module");
+        assertTrue(fps.left(g.width()) > 100 && fps.top(g.height()) > 70, fps.left(g.width()) + ", " + fps.top(g.height()));
+        fps.resetPosition();
+        // a click on empty space takes the selection away
+        Hammer.input().mouseDown(0);
+        assertTrue(Hammer.renderScreen(editor, g, g.width() - 5, g.height() / 2f - 60));
+        Hammer.input().mouseUp(0);
+        assertTrue(Hammer.renderScreen(editor, g, g.width() - 5, g.height() / 2f - 60));
+        assertEquals(null, editor.selected());
+        fps.scale.reset();
+        for (Module m : Modules.ALL) m.data().enabled = null;
+        Hammer.input().reset();
         assertEquals(0, Hammer.problemCount());
     }
 

@@ -41,7 +41,7 @@ T = {
     'news.4': ('Działa od Minecrafta 1.21 do 26.3', 'Works from Minecraft 1.21 to 26.3'),
     'tip.0': ('Prawy Shift otwiera panel modułów Hammer.', 'Right Shift opens the Hammer module panel.'),
     'tip.1': ('Przytrzymaj C, aby przybliżyć. Kółko myszy zmienia zoom.', 'Hold C to zoom in. The mouse wheel changes the zoom.'),
-    'tip.2': ('HUD za duży? W edytorze HUD zmniejszysz wszystko jednym suwakiem.', 'HUD too big? One slider in the HUD editor shrinks all of it.'),
+    'tip.2': ('W edytorze HUD kliknij moduł – każdy ma własny rozmiar (− / +).', 'In the HUD editor click a module – each one has its own size (− / +).'),
     'tip.3': ('Dołącz do naszego Discorda – giveawaye, pomoc i nowości.', 'Join our Discord – giveaways, help and news.'),
     'tip.4': ('F2 robi zrzut ekranu – znajdziesz go w Galerii launchera.', "F2 takes a screenshot – it shows up in the launcher's Gallery."),
     'tip.5': ('Naciśnij B, aby dodać waypoint tam, gdzie stoisz.', 'Press B to add a waypoint where you stand.'),
@@ -109,8 +109,9 @@ T = {
 
     # HUD editor
     'editor.title': ('Edytor HUD', 'HUD editor'),
-    'editor.hint': ('Przeciągnij moduły tam, gdzie chcesz je mieć.', 'Drag the modules where you want them.'),
-    'editor.hint2': ('Kółko myszy – rozmiar  ·  prawy przycisk – ustawienia  ·  Esc – zapisz', 'Mouse wheel – size  ·  right click – options  ·  Esc – save'),
+    'editor.hint': ('Przeciągaj moduły. Kliknij jeden, aby zmienić jego rozmiar.', 'Drag the modules. Click one to change its size.'),
+    'editor.hint2': ('Rozmiar zmienisz przyciskami - i +, uchwytem w rogu albo kółkiem myszy. Prawy przycisk otwiera ustawienia modułu.', 'Change the size with the - and + buttons, the corner handle or the mouse wheel. A right click opens the module options.'),
+    'editor.size_of': ('Rozmiar: %s', 'Size: %s'),
     'editor.mods': ('Moduły', 'Modules'), 'editor.reset': ('Reset', 'Reset'),
 
     # HUD texts
