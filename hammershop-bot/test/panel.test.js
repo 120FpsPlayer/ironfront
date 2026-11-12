@@ -300,6 +300,49 @@ test('a newer release with a signature and a required version; switching back; d
   await admin('POST', 'releases/current', { body: { version: '2.6.0' } });
 });
 
+test('a big installer goes up in pieces: a lost answer, a repeated piece and a piece from too far ahead all end in the right file', async () => {
+  const file = crypto.randomBytes(300_000);
+  const name = 'Hammer-Launcher-Setup-2.7.0.exe';
+  const part = path.join(releases.DIR(), `.part-${name}`);
+  const piece = (offset, end, opts = {}) => admin('PUT', `releases/file?name=${name}&offset=${offset}&total=${file.length}`, { raw: file.subarray(offset, end), ...opts });
+
+  assert.equal((await piece(0, 100_000, { who: 'admin' })).status, 403);
+  const first = await piece(0, 100_000);
+  assert.deepEqual([first.status, first.body], [200, { name, offset: 100_000, done: false }]);
+  // Half a file is neither listed nor served.
+  assert.ok(!(await admin('GET', 'releases')).body.files.some((f) => f.name.includes('2.7.0')));
+  assert.equal(fs.existsSync(path.join(releases.DIR(), name)), false);
+  // A piece from further on than the server has: the server says where it is.
+  const ahead = await piece(200_000, 300_000);
+  assert.deepEqual([ahead.status, ahead.body.offset], [409, 100_000]);
+  assert.equal((await piece(100_000, 200_000)).body.offset, 200_000);
+  // The answer got lost and the same piece comes again – it lands in the same place, nothing is doubled.
+  assert.equal((await piece(100_000, 200_000)).body.offset, 200_000);
+  assert.equal(fs.statSync(part).size, 200_000);
+  // A piece that would run past the end of the file is refused and changes nothing.
+  assert.equal((await admin('PUT', `releases/file?name=${name}&offset=200000&total=${file.length}`, { raw: Buffer.alloc(100_001) })).status, 400);
+  assert.equal(fs.statSync(part).size, 200_000);
+  const last = await piece(200_000, 300_000);
+  assert.deepEqual([last.status, last.body], [200, { name, size: file.length, done: true, republished: null }]);
+  assert.ok(fs.readFileSync(path.join(releases.DIR(), name)).equals(file));
+  assert.equal(fs.existsSync(part), false);
+  // The answer to the very last piece got lost: asking again finds the finished file.
+  assert.equal((await piece(200_000, 300_000)).body.done, true);
+  assert.ok((await admin('GET', 'releases')).body.files.some((f) => f.name === name && f.size === file.length));
+
+  // Starting over (offset 0) replaces what was there; a file in one piece is done at once.
+  const other = crypto.randomBytes(50_000);
+  await piece(0, 100_000);
+  const whole = await admin('PUT', `releases/file?name=${name}&offset=0&total=${other.length}`, { raw: other });
+  assert.equal(whole.body.done, true);
+  assert.ok(fs.readFileSync(path.join(releases.DIR(), name)).equals(other));
+
+  for (const [query, status] of [['offset=-1&total=10', 400], ['offset=x&total=10', 400], ['offset=0', 400], ['offset=0&total=0', 400], ['offset=10&total=10', 400], [`offset=0&total=${701 * 1024 * 1024}`, 413]]) {
+    assert.equal((await admin('PUT', `releases/file?name=${name}&${query}`, { raw: Buffer.from('x') })).status, status, query);
+  }
+  assert.equal((await admin('DELETE', `releases/file?name=${name}`)).status, 200);
+});
+
 test('version numbers compare as numbers', () => {
   const c = releases.compareVersions;
   assert.deepEqual([c('2.10.0', '2.9.3'), c('2.6.0', '2.6.0'), c('1.0.0', '2.0.0'), c('2.6.0-beta.1', '2.6.0'), c('2.6.0', '2.6.0-beta.1'), c('2.6.0-beta.1', '2.6.0-beta.2')], [1, 0, -1, -1, 1, -1]);
@@ -438,6 +481,16 @@ test('the launcher page and the panel are their own pages; sign-in brings people
     assert.match(res.body, /<html lang="pl">/);
   }
   assert.equal((await call('GET', '/admin')).headers.get('x-robots-tag'), 'noindex');
+  // Scripts and styles are named with a stamp of their content: a proxy that makes browsers keep them (Cloudflare:
+  // four hours) cannot hide an update of the site.
+  for (const [page, assets] of [['/admin', ['site.css', 'admin.css', 'admin.js']], ['/launcher', ['site.css', 'launcher.css', 'launcher.js']]]) {
+    const html = (await call('GET', page)).body;
+    for (const asset of assets) {
+      const stamp = crypto.createHash('sha1').update(fs.readFileSync(path.join(__dirname, '..', 'web', 'public', 'assets', asset))).digest('hex').slice(0, 8);
+      assert.ok(html.includes(`"/assets/${asset}?v=${stamp}"`), `${page}: ${asset}`);
+      assert.equal((await call('GET', `/assets/${asset}?v=${stamp}`)).status, 200);
+    }
+  }
   await signIn(MEMBER, 'launcher');
   assert.equal(signIn.landed, '/launcher?connected=1');
   await signIn(MEMBER, 'admin');

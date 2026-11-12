@@ -204,6 +204,7 @@
       });
       if (!exe.children.length) exe.appendChild(option('', '— najpierw wgraj plik .exe —'));
       if (keepExe) exe.value = keepExe;
+      if (exe.selectedIndex < 0) exe.selectedIndex = 0; // the file that was chosen is published now – it left the list
       guessVersion();
       var list = $('releases-list');
       list.textContent = '';
@@ -235,26 +236,69 @@
     Array.prototype.forEach.call($('release-blockmap').options, function (o) { if (o.value === map) $('release-blockmap').value = map; });
   }
   $('release-file').addEventListener('change', function () { $('release-version').value = ''; guessVersion(); });
-  function upload(file) {
+  // A file goes up in pieces, each its own request: a proxy in front of the site never sees the whole installer
+  // (Cloudflare refuses a request over 100 MB – and the browser then just stops, with no error), and a broken
+  // connection costs one piece. A piece that stalls or fails is sent again; the server says where it really is.
+  var PIECE = 8 * 1024 * 1024;
+  var STALL_MS = 60000;
+  var TRIES = 6;
+  function showUpload(file, sent, note) {
+    var pct = Math.min(100, Math.floor((sent / file.size) * 100));
+    $('upload-bar').style.width = pct + '%';
+    $('upload-text').textContent = file.name + ' – ' + pct + '% (' + megabytes(sent) + ' z ' + megabytes(file.size) + ')' + (note ? ' – ' + note : '');
+  }
+  function sendPiece(file, offset) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
-      xhr.open('PUT', '/api/admin/releases/file?name=' + encodeURIComponent(file.name));
+      var watchdog = null;
+      var over = false;
+      function alive() { clearTimeout(watchdog); watchdog = setTimeout(function () { xhr.abort(); }, STALL_MS); }
+      function fail(message, status, serverOffset) {
+        if (over) return;
+        over = true;
+        clearTimeout(watchdog);
+        var err = new Error(message);
+        err.status = status || 0;
+        err.offset = serverOffset;
+        reject(err);
+      }
+      xhr.open('PUT', '/api/admin/releases/file?name=' + encodeURIComponent(file.name) + '&offset=' + offset + '&total=' + file.size);
       xhr.setRequestHeader('content-type', 'application/octet-stream');
-      xhr.upload.onprogress = function (e) {
-        if (!e.lengthComputable) return;
-        var pct = Math.round((e.loaded / e.total) * 100);
-        $('upload-bar').style.width = pct + '%';
-        $('upload-text').textContent = file.name + ' – ' + pct + '% (' + megabytes(e.loaded) + ' z ' + megabytes(e.total) + ')';
-      };
+      xhr.upload.onprogress = function (e) { alive(); showUpload(file, offset + e.loaded); };
       xhr.onload = function () {
         var body = {};
-        try { body = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
-        if (xhr.status >= 200 && xhr.status < 300) resolve(body);
-        else reject(new Error(body.error || (xhr.status === 413 ? 'Plik jest za duży dla serwera (limit przesyłania w nginx / proxy?).' : 'Wysyłanie nie powiodło się (' + xhr.status + ').')));
+        try { body = JSON.parse(xhr.responseText); } catch (e) { /* not JSON: a proxy's own error page */ }
+        if (xhr.status >= 200 && xhr.status < 300 && (body.done || typeof body.offset === 'number')) { over = true; clearTimeout(watchdog); return resolve(body); }
+        return fail(body.error || (xhr.status === 413 ? 'Serwer albo proxy przed nim nie przyjmuje kawałków po 8 MB (limit rozmiaru wysyłki).' : 'Wysyłanie nie powiodło się (' + xhr.status + ').'), xhr.status || 500, body.offset);
       };
-      xhr.onerror = function () { reject(new Error('Połączenie zostało przerwane podczas wysyłania.')); };
-      xhr.send(file);
+      xhr.onerror = function () { fail('Połączenie zostało przerwane podczas wysyłania.'); };
+      xhr.onabort = function () { fail('Serwer przestał odpowiadać podczas wysyłania.'); };
+      alive();
+      xhr.send(file.slice(offset, Math.min(offset + PIECE, file.size)));
     });
+  }
+  function upload(file) {
+    if (!file.size) return Promise.reject(new Error('Plik ' + file.name + ' jest pusty.'));
+    var offset = 0;
+    var failures = 0;
+    function next() {
+      showUpload(file, offset);
+      return sendPiece(file, offset).then(function (r) {
+        failures = 0;
+        if (r.done) { showUpload(file, file.size); return r; }
+        offset = r.offset;
+        return next();
+      }, function (err) {
+        // Worth another try: no answer at all, a server or proxy hiccup, or the server being somewhere else in the file.
+        var again = !err.status || err.status >= 500 || err.status === 408 || err.status === 429 || (err.status === 409 && typeof err.offset === 'number');
+        failures += 1;
+        if (!again || failures >= TRIES) throw err;
+        if (typeof err.offset === 'number') offset = Math.min(err.offset, file.size);
+        showUpload(file, offset, 'przerwa w połączeniu, ponawiam (' + failures + ' z ' + (TRIES - 1) + ')…');
+        return new Promise(function (go) { setTimeout(go, Math.min(1000 * Math.pow(2, failures - 1), 15000)); }).then(next);
+      });
+    }
+    return next();
   }
   $('release-files').addEventListener('change', function () {
     var files = Array.prototype.slice.call($('release-files').files);

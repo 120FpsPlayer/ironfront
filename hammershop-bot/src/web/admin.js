@@ -187,7 +187,16 @@ async function api(req, res, url, h) {
     ownerOnly();
     const name = url.searchParams.get('name') ?? '';
     if (method === 'PUT') {
-      const saved = await releases.receive(req, name);
+      // ?offset=&total= – one piece of the file (the panel sends big installers a few MB at a time).
+      const piece = url.searchParams.has('offset') || url.searchParams.has('total') ? { offset: Number(url.searchParams.get('offset') ?? NaN), total: Number(url.searchParams.get('total') ?? NaN) } : null;
+      let saved;
+      try {
+        saved = await releases.receive(req, name, piece);
+      } catch (err) {
+        if (err.offset === undefined) throw err;
+        return h.send(res, 409, { error: err.message, offset: err.offset }); // the panel goes on from where the server is
+      }
+      if (saved.done === false) return h.send(res, 200, saved);
       // A new build under the name of a published release: its record follows the file (an old signature no longer fits).
       const stale = store.releases().find((r) => r.file === saved.name);
       if (stale) await releases.publish({ ...stale, signature: null, makeCurrent: false });

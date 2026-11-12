@@ -98,7 +98,7 @@
           <div><h2>1. Wgraj instalator</h2><p class="muted small">Plik <span class="mono">Hammer-Launcher-Setup-x.y.z.exe</span> z GitHub Actions (artefakt <span class="mono">Hammer-Launcher-Windows</span>). Opcjonalnie także plik <span class="mono">.blockmap</span> – dzięki niemu gracze pobierają tylko to, co się zmieniło.</p></div>
           <label>Pliki z komputera<input type="file" id="release-files" multiple accept=".exe,.blockmap"></label>
           <div class="progress" id="upload-progress" hidden><div id="upload-bar"></div><span id="upload-text"></span></div>
-          <p class="hint">Najwyżej <span id="max-mb">700</span> MB na plik. Duży plik możesz też skopiować na serwer do folderu <span class="mono">data/releases/</span> (np. przez SFTP) – pojawi się na liście poniżej.</p>
+          <p class="hint">Najwyżej <span id="max-mb">700</span> MB na plik. Plik idzie na serwer w kawałkach po 8 MB, a przerwane połączenie samo się wznawia – nie zamykaj karty, dopóki pasek nie zniknie. Plik możesz też skopiować do folderu <span class="mono">data/releases/</span> na serwerze (np. przez SFTP) – pojawi się na liście poniżej.</p>
           <div class="list" id="files-list"></div>
         </div>
         <form class="card fields" id="release-form">

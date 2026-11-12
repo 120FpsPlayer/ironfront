@@ -80,7 +80,9 @@ sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
 Caddy sam wyrobi i odnowi certyfikat. Wejdź na `https://twojadomena.pl` – powinna otworzyć się strona sklepu.
 
-> Używasz nginx zamiast Caddy? Ustaw `client_max_body_size 800m;` i `proxy_read_timeout 600s;` – inaczej wgrywanie instalatora w panelu się nie uda.
+> Używasz nginx zamiast Caddy? Ustaw `client_max_body_size 16m;` – panel wgrywa instalator w kawałkach po 8 MB, a domyślny limit nginx (1 MB) to za mało.
+>
+> Strona może też stać za Cloudflare (np. na hostingu z własną domeną): jego limit 100 MB na jedno żądanie nie przeszkadza, bo żaden kawałek nie jest większy niż 8 MB.
 
 ## 6. Zbuduj serwer Discord i sprawdź całość
 1. Utwórz na Discordzie nowy, pusty serwer, dodaj bota (link z logów) i wpisz `/zbuduj`. Z `BOT_PROFILE=launcher` powstanie serwer **Hammer Launcher** (kanały pobierania, aktualizacji, aktualności, Hammer+, zgłoszeń błędów), bez profilu – serwer sklepu HammerShop.

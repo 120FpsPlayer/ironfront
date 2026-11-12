@@ -23,9 +23,9 @@ main.wrap { padding: 28px 0 10px; }
 .item { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; background: #0f0b0866; }
 .item .title { font-weight: 600; overflow-wrap: anywhere; }
 .item .body, td .body { color: var(--soft); font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
-.progress { position: relative; height: 26px; border-radius: 8px; background: #0f0b08; border: 1px solid var(--line); overflow: hidden; }
-.progress div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-3), var(--accent)); }
-.progress span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.progress { position: relative; min-height: 26px; border-radius: 8px; background: #0f0b08; border: 1px solid var(--line); overflow: hidden; }
+.progress div { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent-3), var(--accent)); transition: width .2s; }
+.progress span { position: relative; display: block; padding: 4px 10px; text-align: center; font-size: 12px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; text-shadow: 0 1px 2px #000a; }
 .plan-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
 .alert-preview { border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 500; }
 .alert-preview.info { background: #ffa94d22; border: 1px solid #ffa94d66; }

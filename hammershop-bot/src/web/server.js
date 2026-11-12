@@ -384,7 +384,25 @@ function pageHtml(file) {
   return fs
     .readFileSync(path.join(PUBLIC, file), 'utf8')
     .replace(new RegExp(`<!--${other}-->[\\s\\S]*?<!--/${other}-->`, 'g'), '')
-    .replace(new RegExp(`<!--/?${mine}-->`, 'g'), '');
+    .replace(new RegExp(`<!--/?${mine}-->`, 'g'), '')
+    .replace(/((?:href|src)=")(\/assets\/[A-Za-z0-9._/-]+\.(?:css|js))"/g, (all, attr, url) => `${attr}${url}?v=${stampOf(url)}"`);
+}
+
+/**
+ * A stamp of a script's or stylesheet's content, put into its address on the pages (admin.js?v=1a2b3c4d). A proxy in
+ * front of the site may tell browsers to keep .js and .css for hours whatever this server says (Cloudflare does) –
+ * with the stamp a changed file has a new address, so an update of the site is seen at once.
+ */
+const stamps = new Map(); // url → { mtime, stamp }
+function stampOf(url) {
+  try {
+    const file = path.join(PUBLIC, url);
+    const mtime = fs.statSync(file).mtimeMs;
+    if (stamps.get(url)?.mtime !== mtime) stamps.set(url, { mtime, stamp: crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex').slice(0, 8) });
+    return stamps.get(url).stamp;
+  } catch {
+    return '0';
+  }
 }
 
 function serveStatic(req, res, pathname) {

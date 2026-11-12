@@ -77,14 +77,139 @@ function hashFile(name) {
   });
 }
 
+const tooBig = (limit) => problem(413, `Plik jest za duży – najwyżej ${Math.round(limit / 1024 / 1024)} MB (RELEASE_MAX_MB w .env).`);
+/** A full disk said plainly – a small hosting plan runs out of room long before RELEASE_MAX_MB. */
+const diskProblem = (err) => (err?.code === 'ENOSPC' || err?.code === 'EDQUOT' ? problem(507, 'Na dysku serwera zabrakło miejsca – usuń stare pliki albo zwiększ dysk.') : err);
+
+/** The pieces of an upload that is still on its way: data/releases/.part-<name> (never listed, never served). */
+const partOf = (name) => path.join(DIR(), `.part-${name}`);
+/** name → stops the request that is writing that file's piece right now (a retry takes over from a stalled one). */
+const writing = new Map();
+
+/** Unfinished uploads nobody came back to (older than a day) are swept when a new upload starts. */
+function sweepParts() {
+  for (const entry of fs.readdirSync(DIR())) {
+    if (!entry.startsWith('.part-') && !entry.startsWith('.upload-')) continue;
+    const file = path.join(DIR(), entry);
+    try {
+      if (Date.now() - fs.statSync(file).mtimeMs > 24 * 3600 * 1000) fs.rmSync(file, { force: true });
+    } catch {
+      // gone already
+    }
+  }
+}
+
 /**
- * An upload from the admin panel: the request body is the file. Written under a temporary name first, so a broken
- * upload never leaves half an installer where the launcher could fetch it. → { name, size }
+ * Reads what is left of a request's body and throws it away. An answer sent while the browser is still uploading
+ * leaves browsers and proxies hanging (the upload just stops) – so every answer to a piece waits for its body.
  */
-function receive(req, name) {
-  if (!isFileName(name)) throw problem(400, 'Nazwa pliku może zawierać litery, cyfry, kropki, myślniki i podkreślenia, i musi kończyć się na .exe albo .blockmap.');
+const drain = (req) =>
+  new Promise((resolve) => {
+    if (req.complete || req.destroyed) return resolve();
+    req.once('end', resolve).once('close', resolve).once('error', resolve);
+    return req.resume();
+  });
+
+/** What can be said about a piece before its body is read: an answer ({ done: true }), null (write it) or a thrown problem. */
+async function beforePart(req, name, offset, total) {
   const limit = MAX_BYTES();
-  if (Number(req.headers['content-length']) > limit) throw problem(413, `Plik jest za duży – najwyżej ${Math.round(limit / 1024 / 1024)} MB (RELEASE_MAX_MB w .env).`);
+  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(total) || offset < 0 || total < 0) throw problem(400, 'Nieprawidłowe położenie kawałka pliku.');
+  if (!total) throw problem(400, 'Plik jest pusty.');
+  if (total > limit) throw tooBig(limit);
+  const length = Number(req.headers['content-length']);
+  if (offset >= total || (Number.isFinite(length) && offset + length > total)) throw problem(400, 'Kawałek wychodzi poza rozmiar pliku.');
+  fs.mkdirSync(DIR(), { recursive: true });
+  await writing.get(name)?.(); // a piece of this file still being written (a stalled request the panel gave up on) stops first
+  const part = partOf(name);
+  const have = fs.existsSync(part) ? fs.statSync(part).size : 0;
+  if (!offset) sweepParts();
+  else if (have < offset) {
+    // The answer to the last piece got lost on the way, but the file is complete: nothing left to send.
+    if (!have && fs.existsSync(fileOf(name)) && fs.statSync(fileOf(name)).size === total) return { name, size: total, done: true };
+    throw Object.assign(problem(409, 'Serwer ma mniej tego pliku, niż zakłada przeglądarka – wysyłanie wraca do tego miejsca.'), { offset: have });
+  } else if (have > offset) fs.truncateSync(part, offset); // what a broken piece left behind
+  return null;
+}
+
+/**
+ * One piece of an upload: the body is the bytes [offset, offset + length) of a file of `total` bytes. The panel sends
+ * a big installer this way, a few MB per request – a proxy in front of the site (Cloudflare lets 100 MB through) never
+ * sees the whole file, and a broken connection costs one piece, not the upload.
+ *
+ *   offset 0       starts the file anew
+ *   offset > 0     continues; the piece is written at that place, so sending the same piece again is harmless.
+ *                  If the server has less than `offset`, it answers 409 with the offset it does have (err.offset).
+ *
+ * → { name, offset, done: false } while pieces are missing, { name, size, done: true } when the file is complete
+ *   (only then does it get its real name – half an installer is never where the launcher could fetch it).
+ */
+async function receivePart(req, name, offset, total) {
+  let early;
+  try {
+    early = await beforePart(req, name, offset, total);
+  } catch (err) {
+    await drain(req);
+    throw err;
+  }
+  if (early) {
+    await drain(req);
+    return early;
+  }
+  const part = partOf(name);
+  return new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(part, offset ? { flags: 'r+', start: offset } : { flags: 'w' });
+    const closed = new Promise((done) => out.once('close', done));
+    let size = 0;
+    let failed = false;
+    const stop = () => {
+      fail(problem(409, 'Ten kawałek zastąpiła nowsza próba wysyłania.'));
+      req.destroy();
+      return closed;
+    };
+    const settle = (fn, value) => {
+      if (writing.get(name) === stop) writing.delete(name);
+      fn(value);
+    };
+    const fail = (err) => {
+      if (failed) return;
+      failed = true;
+      req.unpipe(out);
+      out.destroy();
+      // The part stays: the next try continues from it. The rest of this piece is read off the wire before the answer.
+      Promise.all([closed, drain(req)]).then(() => settle(reject, diskProblem(err)));
+    };
+    writing.set(name, stop);
+    req.on('data', (c) => {
+      size += c.length;
+      if (offset + size > total) {
+        fail(problem(400, 'Kawałek wychodzi poza rozmiar pliku.'));
+        req.destroy();
+      }
+    });
+    req.on('error', fail);
+    req.on('aborted', () => fail(problem(400, 'Wysyłanie zostało przerwane.')));
+    out.on('error', fail);
+    out.on('finish', async () => {
+      await closed; // the file is renamed (and the next piece opens it) only once this handle is shut
+      if (failed) return;
+      if (!size) return fail(problem(400, 'Pusty kawałek pliku.'));
+      if (offset + size < total) return settle(resolve, { name, offset: offset + size, done: false });
+      return fs.rename(part, fileOf(name), (err) => (err ? fail(err) : settle(resolve, { name, size: total, done: true })));
+    });
+    req.pipe(out);
+  });
+}
+
+/**
+ * An upload from the admin panel: the request body is the file – or, with part = { offset, total }, one piece of it
+ * (see receivePart). Written under a temporary name first, so a broken upload never leaves half an installer where
+ * the launcher could fetch it. → { name, size }
+ */
+function receive(req, name, part = null) {
+  if (!isFileName(name)) throw problem(400, 'Nazwa pliku może zawierać litery, cyfry, kropki, myślniki i podkreślenia, i musi kończyć się na .exe albo .blockmap.');
+  if (part) return receivePart(req, name, part.offset, part.total);
+  const limit = MAX_BYTES();
+  if (Number(req.headers['content-length']) > limit) throw tooBig(limit);
   fs.mkdirSync(DIR(), { recursive: true });
   const tmp = path.join(DIR(), `.upload-${crypto.randomBytes(6).toString('hex')}`);
   return new Promise((resolve, reject) => {
@@ -95,12 +220,12 @@ function receive(req, name) {
       if (failed) return;
       failed = true;
       out.destroy();
-      fs.rm(tmp, { force: true }, () => reject(err));
+      fs.rm(tmp, { force: true }, () => reject(diskProblem(err)));
     };
     req.on('data', (c) => {
       size += c.length;
       if (size > limit) {
-        fail(problem(413, `Plik jest za duży – najwyżej ${Math.round(limit / 1024 / 1024)} MB (RELEASE_MAX_MB w .env).`));
+        fail(tooBig(limit));
         req.destroy();
       }
     });
