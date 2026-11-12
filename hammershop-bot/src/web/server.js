@@ -431,14 +431,14 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://local');
   const p = url.pathname;
   // Hammer Launcher: featured servers, Hammer+ cloud sync and capes (src/web/launcher.js).
-  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured(), publicUrl: () => web().publicUrl, ip: clientIp });
+  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured(), publicUrl: () => web().publicUrl, ip: clientIp, plusOf: (mc) => Boolean(hooks.plus?.running?.(mc)) });
   // The admin panel (src/web/admin.js).
   if (p.startsWith(admin.PREFIX)) {
     return admin.api(req, res, url, {
       send, fail, jsonBody, userOf, limited, originOk,
       level: (id) => hooks.level(id), announce: (a) => hooks.announce(a), log: (t) => hooks.log(t),
       plus: hooks.plus, featured: hooks.featuredAdmin, currency: () => hooks.currency(),
-      publicUrl: () => web().publicUrl, authReady, paymentsReady, webhookReady,
+      publicUrl: () => web().publicUrl, authReady, paymentsReady, webhookReady, playing: () => launcher.onlineNow(),
     });
   }
   if (!p.startsWith('/api/shop/')) {

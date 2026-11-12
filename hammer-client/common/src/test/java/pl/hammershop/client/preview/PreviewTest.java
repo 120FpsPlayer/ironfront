@@ -101,7 +101,56 @@ class PreviewTest {
             assertTrue(pl.hammershop.client.ui.Draw.hasIcon(m.icon), "icon of " + m.id + ": " + m.icon);
             for (var s : m.settings) assertTrue(!s.label().startsWith("setting."), "label of " + m.id + "." + s.id);
         }
-        assertEquals(43, Modules.ALL.size());
+        assertEquals(55, Modules.ALL.size());
+    }
+
+    @Test
+    void tabBadges() {
+        var P = pl.hammershop.client.core.Presence.class;
+        var cfg = Hammer.config();
+        String me = platform.playerUuid();
+        String other = "11111111111141118111111111111111";
+        String plus = "22222222222242228222222222222222";
+        String nobody = "33333333333343338333333333333333";
+        pl.hammershop.client.core.Presence.clear();
+        try {
+            // Your own name: H, or H+ with Hammer+ – also without any server.
+            assertEquals(1, Hammer.tabBadge(me, true));
+            cfg.plusActive = true;
+            assertEquals(2, Hammer.tabBadge(me, true));
+            cfg.plusActive = false;
+            // Others: nothing without a server, and nothing until it has answered.
+            assertEquals(0, Hammer.tabBadge(other, false));
+            cfg.api = "https://example.invalid/api/launcher";
+            assertEquals(0, Hammer.tabBadge(other, false));
+            pl.hammershop.client.core.Presence.accept(java.util.List.of(other, plus, nobody), "{\"players\":{\"" + other + "\":\"h\",\"" + plus + "\":\"p\",\"x\":\"p\"}}");
+            assertEquals(1, Hammer.tabBadge(other, false));
+            assertEquals(2, Hammer.tabBadge(plus, false));
+            assertEquals(0, Hammer.tabBadge(nobody, false));
+            // Offline-mode ids (not version 4) and broken ids never get one.
+            assertEquals(0, Hammer.tabBadge("11111111111131118111111111111111", false));
+            assertEquals(0, Hammer.tabBadge("steve", false));
+            assertEquals(0, Hammer.tabBadge(null, false));
+            // The "players online" HUD counts them: me and the two others on the list.
+            assertEquals(3, pl.hammershop.client.core.Presence.count(platform.online, me));
+            // What is sent: who I am (or null when I do not want to be shown) and who I ask about.
+            assertEquals("{\"me\":\"" + me + "\",\"uuids\":[\"" + other + "\"]}", pl.hammershop.client.core.Presence.request(me, java.util.List.of(other)));
+            assertEquals("{\"me\":null,\"uuids\":[]}", pl.hammershop.client.core.Presence.request("", java.util.List.of()));
+            // A broken answer changes nothing and is reported to the caller.
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> pl.hammershop.client.core.Presence.accept(java.util.List.of(other), "<html>502</html>"));
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> pl.hammershop.client.core.Presence.accept(java.util.List.of(other), "{\"capes\":{}}"));
+            assertEquals(1, Hammer.tabBadge(other, false));
+            // The module switched off: no badge anywhere, not even your own.
+            Modules.tabBadge.setEnabled(false);
+            assertEquals(0, Hammer.tabBadge(me, true));
+            assertEquals(0, Hammer.tabBadge(plus, false));
+        } finally {
+            Modules.tabBadge.data().enabled = null;
+            cfg.api = "";
+            cfg.plusActive = false;
+            pl.hammershop.client.core.Presence.clear();
+        }
+        assertTrue(P != null);
     }
 
     @Test

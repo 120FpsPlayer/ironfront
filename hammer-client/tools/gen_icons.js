@@ -30,6 +30,8 @@ const ICONS = {
   copy: 'copy', sky: 'cloud-sun', target: 'bullseye', maximize: 'maximize', video: 'video', list: 'list', hud: 'border-all',
   drop: 'droplet', contrast: 'circle-half-stroke', font: 'font', refresh: 'arrows-rotate', ok: 'circle-check', error: 'circle-xmark',
   heart: 'heart', pin: 'location-pin', crown: 'crown', skull: 'skull', chat: 'comment-dots', tab: 'table-list',
+  badge: 'certificate', xp: 'award', air: 'lungs', worldtime: 'cloud-moon', hand: 'hand', rotation: 'arrows-spin', portal: 'dungeon',
+  chunk: 'draw-polygon', graph: 'chart-line', attack: 'hand-fist',
   discord: 'brands/discord',
 };
 

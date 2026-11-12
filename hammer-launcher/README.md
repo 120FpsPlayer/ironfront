@@ -27,8 +27,9 @@ Launcher Minecrafta: Java Edition od **HammerShop**. Interfejs jest po polsku, a
 - **Konta Microsoft.** Logowanie przez oficjalne okno Microsoftu. Tokeny są szyfrowane przez system (Windows DPAPI / pęk kluczy), a hasła launcher nigdy nie widzi.
 - **Hammer Client – menu w grze jak w Lunar Client.** W instancjach Fabric i Quilt launcher sam dodaje nasz mod – dla każdej wersji Minecrafta od 1.21 do 26.3 ma osobny plik i wybiera właściwy (zmienisz wersję gry w instancji – launcher podmieni mod):
   - własne menu główne,
-  - panel modułów pod prawym Shiftem: 38 modułów z własnymi ustawieniami, profile, kolor akcentu,
-  - HUD z edytorem (FPS, CPS, klawisze, koordynaty, kompas, pancerz, efekty, cel z paskiem życia, licznik przedmiotów, ping, TPS…),
+  - panel modułów pod prawym Shiftem: 55 modułów z własnymi ustawieniami, profile, kolor akcentu,
+  - HUD z edytorem (FPS i wykres FPS, CPS, klawisze, koordynaty, kompas, pancerz, efekty, cel z paskiem życia, licznik przedmiotów, przedmiot w ręce, doświadczenie, ping, TPS, gracze online…),
+  - znaczek **H** przed nickiem graczy Hammer Client na liście graczy (Tab) – i **H+** dla Hammer+,
   - zoom pod C, freelook, przełączany sprint, własny celownik, fullbright, własna pora dnia i pogoda,
   - przyciski Hammer Mody i Discord w menu pauzy.
 

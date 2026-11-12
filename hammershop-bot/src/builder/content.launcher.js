@@ -153,7 +153,7 @@ function plus(x) {
   c.addTextDisplayComponents(
     text(
       `### ${x.E('sparkles')} Co dostajesz\n` +
-        `> ${x.E('brush')} Własne kolory i tła launchera\n> ${x.E('camera')} Własne tło menu w grze\n> ${x.E('crown')} Peleryny Hammer+ – widzą je gracze z Hammer Client\n` +
+        `> ${x.E('brush')} Własne kolory i tła launchera\n> ${x.E('camera')} Własne tło menu w grze\n> ${x.E('crown')} Peleryny Hammer+ i znaczek H+ przy nicku w Tab – widzą je gracze z Hammer Client\n` +
         `> ${x.E('folder')} Automatyczne kopie światów\n> ${x.E('cloud')} Chmura: ustawienia launchera na każdym komputerze\n> ${x.E('person')} Biblioteka na 200 skórek i zestawy skórek`,
     ),
   );

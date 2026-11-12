@@ -115,6 +115,7 @@ function overview(h) {
     release: releases.publicInfo(h.publicUrl()),
     downloads: { days: series(st.downloads, 14, undefined, now), total30: series(st.downloads, 30, undefined, now).reduce((s, d) => s + d.value, 0) },
     launches: { days: launches, today: today.unique, versions: today.versions },
+    playing: h.playing?.() ?? 0, // accounts in a game with Hammer Client right now
     orders: { paid7: since(7).length, revenue7: sum(since(7)), paid30: since(30).length, revenue30: sum(since(30)), currency: h.currency() },
     accounts: { users: Object.keys(state.users).length, cloud: Object.keys(state.cloud).length, capes: Object.keys(state.capes).length },
     plus: { ready: plusLib.ready(), active: h.plus.active(), plans: store.plusPlans().length },

@@ -1,0 +1,7 @@
+{
+  "providers": [
+    { "type": "space", "advances": { " ": 2 } },
+    { "type": "bitmap", "file": "hammerclient:font/badge_h.png", "ascent": 7, "height": 8, "chars": [""] },
+    { "type": "bitmap", "file": "hammerclient:font/badge_plus.png", "ascent": 7, "height": 8, "chars": [""] }
+  ]
+}

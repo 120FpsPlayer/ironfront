@@ -64,4 +64,5 @@ To zasady naszego serwera Discord i korzystania z **{brand}**. Będąc tutaj alb
 ## {e:lock_locked} §7 · Prywatność
 > **7.1** Bot zapisuje tylko to, czego potrzebuje do działania: ID Discorda, treść ticketów i ich transkrypcje, a przy Hammer+ – nick i UUID konta Minecraft oraz dane zamówienia. Danych karty nie widzimy – zostają w Stripe.
 > **7.2** Launcher liczy uruchomienia anonimowo (same liczby na dzień i wersję – bez adresów IP i kont). Chmura Hammer+ przechowuje ustawienia launchera, które sam do niej wyślesz.
-> **7.3** Chcesz wiedzieć, co o Tobie przechowujemy, albo to usunąć? Napisz ticket – załatwimy to.
+> **7.3** Żeby gracze Hammer Client widzieli u siebie znaczek **H** / **H+** i peleryny, gra pyta nasz serwer o konta z listy graczy i zgłasza, że Twoje konto właśnie gra (same identyfikatory kont Minecraft). Tę informację serwer trzyma tylko w pamięci, przez 5 minut. Możesz to wyłączyć w grze: panel modułów → **Znaczek Hammer w Tab**.
+> **7.4** Chcesz wiedzieć, co o Tobie przechowujemy, albo to usunąć? Napisz ticket – załatwimy to.

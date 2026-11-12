@@ -261,6 +261,7 @@
     { icon: 'shirt', title: 'Biblioteka na 200 skórek', text: 'Bez Hammer+ launcher pamięta 24 ostatnie skórki.', go: ['skin', 'Twoje skórki'] },
     { icon: 'outfit', title: 'Zestawy', text: 'Skórka, model postaci i peleryna pod jedną nazwą – zakładasz wszystko jednym kliknięciem.', go: ['skin', 'Zestawy'] },
     { icon: 'crown', title: 'Peleryny Hammer+', text: `${capeCount ? `${fmt.count(capeCount, 'peleryna', 'peleryny', 'peleryn')} do wyboru` : 'Peleryny do wyboru'}. Widzą je gracze z Hammer Client – w zwykłym Minecrafcie ich nie widać.`, go: ['skin', 'Peleryny Hammer+'] },
+    { icon: 'star', title: 'Znaczek H+ w grze', text: 'Na liście graczy (Tab) przed Twoim nickiem widać H+ zamiast zwykłego H. Widzą go gracze z Hammer Client.', go: null },
     { icon: 'cloud', title: 'Chmura', text: 'Wygląd launchera, listy serwerów i układ HUD na każdym Twoim komputerze. Zacznie działać, gdy sklep HammerShop będzie online.', go: null },
   ];
 

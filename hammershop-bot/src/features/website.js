@@ -471,6 +471,11 @@ const panelPlus = {
     const guild = guildOf();
     return guild ? require('./hammerplus').activeAccounts(guild.id) : 0;
   },
+  /** The account (UUID, 32 hex digits) has Hammer+ running – it gets the H+ badge in the game's player list. */
+  running: (mc) => {
+    const guild = guildOf();
+    return Boolean(guild) && require('./hammerplus').runningUntil(guild.id, mc) !== null;
+  },
 };
 
 /** The featured servers for the panel – the same list /featured edits. */

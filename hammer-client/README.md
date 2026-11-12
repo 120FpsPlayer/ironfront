@@ -10,10 +10,11 @@ Działa na Minecrafcie **od 1.21 do 26.3** (wszystkie wydania pomiędzy).
 - **Panel modułów** pod **prawym Shiftem** (i przyciskiem w menu pauzy): karty modułów z wyszukiwarką, kategorie, ustawienia każdego modułu (kolory z tęczą RGB, suwaki, listy), profile (np. osobny układ na PvP i na survival), kolor akcentu, wybór czcionki HUD.
 - **Edytor HUD**: przeciągasz moduły myszką, przyciągają się do krawędzi i do siebie, każdy moduł ma **własny rozmiar**: klikasz go, a obok pojawiają się przyciski − / + i uchwyt w rogu (działa też kółko myszy i suwak w okienku edytora). Gdy nic nie jest zaznaczone, suwak **Rozmiar całego HUD** (50–150%) zmienia wszystko naraz. Prawy przycisk otwiera ustawienia. Pozycje są zapisane względem ekranu, więc pasują do każdej rozdzielczości.
 - **Waypointy** pod **B**: zaznaczasz miejsce, w którym stoisz (nazwa, kolor), a znacznik z odległością widać potem na ekranie. Miejsce śmierci zapisuje się samo. Lista jest osobna dla każdego serwera i świata i zostaje na Twoim komputerze.
-- **43 moduły**:
-  - **HUD**: FPS, CPS, klawisze (W A S D, mysz, spacja), koordynaty z kierunkiem i biomem, kompas, pancerz z wytrzymałością, efekty mikstur, ping, zegar, podgląd ekwipunku, licznik przedmiotów (totemy, jabłka, perły…), combo, zasięg ciosu, cel (nazwa, pasek życia, odległość), licznik życia, nazwa bloku, prędkość, nasycenie, adres serwera, TPS serwera, pamięć RAM, dzień w grze, poziom światła, czas sesji, stoper, zabójstwa i śmierci, znak Hammer Client.
+- **Znaczek Hammer na liście graczy (Tab)**: przed nickiem każdego, kto gra na Hammer Client, widać złote **H** z logo – a u graczy z Hammer+ **H+**. Tak samo inni gracze Hammer Client widzą Ciebie.
+- **55 modułów**:
+  - **HUD**: FPS i **wykres FPS** (spadki widać od razu), CPS, klawisze (W A S D, mysz, spacja), koordynaty z kierunkiem i biomem, **chunk**, **kalkulator portalu Nether**, **obrót** (kąt patrzenia), kompas, pancerz z wytrzymałością, **przedmiot w ręce** (ile sztuk masz w ekwipunku albo ile zostało narzędzia), efekty mikstur, ping, zegar, **godzina w świecie gry i faza księżyca**, **pogoda**, podgląd ekwipunku, licznik przedmiotów (totemy, jabłka, perły…), combo, zasięg ciosu, **siła ataku**, cel (nazwa, pasek życia, odległość), licznik życia, **doświadczenie** (poziom i postęp), **powietrze pod wodą**, nazwa bloku, prędkość, nasycenie, adres serwera, **gracze online** (i ilu z nich gra na Hammer Client), TPS serwera, pamięć RAM, dzień w grze, poziom światła, czas sesji, stoper, zabójstwa i śmierci, znak Hammer Client.
   - **Rozgrywka**: przybliżenie pod **C** (płynne, kółko myszy zmienia zoom), swobodna kamera (freelook) pod **lewym Altem**, waypointy, czat (godzina przy wiadomości – kliknięcie w nią kopiuje treść – i dużo dłuższa historia), przełączany sprint i skradanie, ostrzeżenie o niskiej wytrzymałości i o niskim życiu.
-  - **Wygląd**: własny celownik, ping w liczbach na liście graczy (Tab), mniej zasłaniania (niższy ogień, bez nakładki dyni, bez winiety), fullbright, własna pora dnia, bezchmurne niebo, bez trzęsienia kamery, stały FOV.
+  - **Wygląd**: własny celownik, znaczek Hammer i ping w liczbach na liście graczy (Tab), mniej zasłaniania (niższy ogień, bez nakładki dyni, bez winiety), fullbright, własna pora dnia, bezchmurne niebo, bez trzęsienia kamery, stały FOV.
 - Teksty po polsku i angielsku (jak język gry).
 
 Tylko wygląd i ułatwienia – nic, co daje nieuczciwą przewagę (żadnego X-raya, reacha, aimbota). Freelook jest domyślnie wyłączony, bo część serwerów PvP go zabrania.
@@ -26,11 +27,14 @@ Dodatki dla osób z aktywnym Hammer+ (kod wpisuje się w Hammer Launcherze, któ
 - **style HUD**: Szkło, Neon, Kontur (zwykły „Klasyczny” jest dla wszystkich),
 - **tła menu**: Noc, Zorza, Lawa, Złoto oraz **własny obraz** (wybierany w launcherze),
 - **celownik**: trzy dodatkowe kształty (strzałka, litera T, romb) i animacje (pulsowanie, oddech, dynamiczny),
-- **peleryny Hammer** – widzi je każdy, kto gra na Hammer Client.
+- **peleryny Hammer** – widzi je każdy, kto gra na Hammer Client,
+- **znaczek H+** przed nickiem na liście graczy (zamiast zwykłego H).
 
 Opcje Hammer+ są w panelu oznaczone plusem. Bez Hammer+ są widoczne, ale zablokowane (kłódka) i działają jak ustawienie domyślne; wybór zostaje zapamiętany na później.
 
 Peleryny innych graczy: mod pyta serwer sklepu o graczy, których właśnie widzisz (wysyła tylko ich identyfikatory kont, paczkami, w tle). Można to wyłączyć w panelu: Ustawienia → „Pokazuj peleryny Hammer innych graczy”.
+
+Znaczek na liście graczy działa podobnie: na serwerze (nie w grze jednoosobowej) mod co półtorej minuty zgłasza serwerowi sklepu „to konto gra teraz na Hammer Client” i pyta o konta z listy graczy – wysyła same identyfikatory kont, paczkami, w tle. Serwer trzyma tę informację tylko w pamięci, przez 5 minut, i niczego nie zapisuje. H+ dostaje konto, które ma aktywny Hammer+ według serwera sklepu. Moduł **Znaczek Hammer w Tab** (Wygląd) ma dwa przełączniki: „Pokazuj innym, że gram na Hammer Client” i „Znaczek przy moim nicku”; wyłączenie całego modułu wyłącza też te zapytania. Znaczki to dwa znaki własnej czcionki gry (`assets/hammerclient/font/badge.json`), rysowane przez `tools/gen_badges.py` z logo.
 
 Uwaga dla właściciela: kod moda jest publiczny, więc blokady po stronie gracza da się obejść przeróbką moda. Naprawdę chronione jest tylko to, co sprawdza serwer sklepu – czyli peleryna widoczna u innych graczy (i funkcje launchera korzystające z serwera).
 

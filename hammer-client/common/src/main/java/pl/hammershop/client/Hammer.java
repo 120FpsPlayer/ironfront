@@ -10,6 +10,7 @@ import pl.hammershop.client.core.Config;
 import pl.hammershop.client.core.Fmt;
 import pl.hammershop.client.core.Lang;
 import pl.hammershop.client.core.Log;
+import pl.hammershop.client.core.Presence;
 import pl.hammershop.client.core.Stats;
 import pl.hammershop.client.core.Waypoints;
 import pl.hammershop.client.module.HudCanvas;
@@ -123,6 +124,7 @@ public final class Hammer {
         Lang.load(platform.language());
         STATS.tick(platform);
         Capes.tick();
+        Presence.tick();
         if (platform.keyPressed(Keys.WAYPOINTS.id) && inWorld && platform.inGameFocus() && Modules.waypoints != null && Modules.waypoints.enabled()) open(new WaypointsScreen());
         if (platform.keyPressed(Keys.MENU.id) && inWorld && platform.inGameFocus()) open(new ModMenuScreen());
         if (platform.keyPressed(Keys.HUD.id)) {
@@ -296,6 +298,14 @@ public final class Hammer {
     /** Cape of a player (UUID without dashes): the own Hammer+ cape, or another player's from the shop's server; null = none. */
     public static String cape(String uuid, boolean self) {
         return Capes.of(uuid, self);
+    }
+
+    /**
+     * The badge in front of a name in the player list (Tab): 0 = none, 1 = H (plays on Hammer Client), 2 = H+ (with
+     * Hammer+). `uuid` is the account id without dashes.
+     */
+    public static int tabBadge(String uuid, boolean self) {
+        return Presence.of(uuid, self);
     }
 
     public static boolean tabPing() {

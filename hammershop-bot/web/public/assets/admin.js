@@ -88,6 +88,7 @@
       stats.textContent = '';
       var stat = function (value, label, note) { stats.appendChild(el('div', { class: 'stat' }, [el('b', { text: String(value) }), el('span', { text: label }), note ? el('small', { text: note }) : null])); };
       stat(o.launches.today, 'launcherów dzisiaj', 'różne komputery, które dziś go uruchomiły');
+      stat(o.playing || 0, 'gra teraz na Hammer Client', 'gracze na serwerach, z ostatnich 5 minut');
       stat(o.downloads.total30, 'pobrań w 30 dni', o.release ? 'aktualna wersja ' + o.release.version : 'brak opublikowanej wersji');
       stat(o.plus.active, 'aktywnych kont Hammer+', o.plus.plans ? 'planów w sprzedaży: ' + o.plus.plans : 'sprzedaż na stronie wyłączona');
       stat(money(o.orders.revenue30, currency), 'ze strony w 30 dni', o.orders.paid30 + ' zamówień · 7 dni: ' + money(o.orders.revenue7, currency));

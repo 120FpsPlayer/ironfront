@@ -108,4 +108,15 @@ public final class FakePlatform implements Platform, Game {
     public String dimension() { return "minecraft:overworld"; }
     public String worldKey() { return worldKey; }
     public boolean singleplayer() { return false; }
+    public String playerUuid() { return "0123456789ab4def8123456789abcdef"; }
+    public int xpLevel() { return 30; }
+    public float xpProgress() { return 0.45f; }
+    public int air = 300;
+    public int air() { return air; }
+    public int maxAir() { return 300; }
+    public int weather() { return 1; }
+    public List<String> online = new ArrayList<>(List.of("0123456789ab4def8123456789abcdef", "11111111111141118111111111111111", "22222222222242228222222222222222"));
+    public List<String> onlinePlayers() { return online; }
+    public float attackCharge = 1f;
+    public float attackCharge() { return attackCharge; }
 }

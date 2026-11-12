@@ -88,6 +88,28 @@ public interface Game {
 
     boolean singleplayer();
 
+    /** The player's account id as 32 hex digits, or "" when unknown. */
+    String playerUuid();
+
+    int xpLevel();
+
+    /** Progress to the next level, 0–1. */
+    float xpProgress();
+
+    /** Air left and a full breath, in game ticks (20 per second). */
+    int air();
+
+    int maxAir();
+
+    /** The real weather of the world (not what the "clear sky" module shows): 0 = clear, 1 = rain or snow, 2 = thunderstorm. */
+    int weather();
+
+    /** Account ids (32 hex digits) of the players on the server's list (Tab); empty outside a server. */
+    List<String> onlinePlayers();
+
+    /** How far the next hit is charged, 0–1 (1 = full strength). */
+    float attackCharge();
+
     record Target(String name, float health, float maxHealth, double distance, boolean player) {
     }
 

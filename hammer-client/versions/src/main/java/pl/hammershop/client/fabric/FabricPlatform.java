@@ -217,6 +217,61 @@ public final class FabricPlatform implements Platform, Game {
         }
     }
 
+    private static java.util.UUID profileId(PlayerInfo info) {
+        //#if MC >= 1.21.9
+        return info.getProfile().id();
+        //#else
+        return info.getProfile().getId();
+        //#endif
+    }
+
+    // Account ids as 32 hex digits – asked for every name on the list every frame, so they are kept.
+    private static final Map<java.util.UUID, String> HEX = new HashMap<>();
+
+    private static String hex(java.util.UUID id) {
+        String s = HEX.get(id);
+        if (s == null) {
+            if (HEX.size() > 4000) HEX.clear();
+            s = id.toString().replace("-", "");
+            HEX.put(id, s);
+        }
+        return s;
+    }
+
+    private static final Component[] BADGES = new Component[3];
+
+    /** The H (1) or H+ (2) of the player list: a glyph of our own font, followed by a small gap. */
+    private static Component badge(int kind) {
+        if (BADGES[kind] == null) {
+            Identifier font = Identifier.fromNamespaceAndPath("hammerclient", "badge");
+            //#if MC >= 1.21.9
+            net.minecraft.network.chat.Style style = net.minecraft.network.chat.Style.EMPTY.withFont(new net.minecraft.network.chat.FontDescription.Resource(font));
+            //#else
+            net.minecraft.network.chat.Style style = net.minecraft.network.chat.Style.EMPTY.withFont(font);
+            //#endif
+            BADGES[kind] = Component.literal(kind == 2 ? "\uE001 " : "\uE000 ").withStyle(style.withColor(net.minecraft.ChatFormatting.WHITE));
+        }
+        return BADGES[kind];
+    }
+
+    /**
+     * A name on the player list (Tab): players on Hammer Client get the H in front of it, players with Hammer+ the H+.
+     * Null = leave the name as it is. The game measures and draws the name it gets here, so the column widths fit.
+     */
+    public static Component tabName(PlayerInfo info, Component name) {
+        if (!ready || info == null || name == null) return null;
+        try {
+            java.util.UUID id = profileId(info);
+            if (id == null) return null;
+            int kind = Hammer.tabBadge(hex(id), id.equals(mc().getUser().getProfileId()));
+            if (kind != 1 && kind != 2) return null;
+            // An empty parent, so the name keeps its own colours and the badge its own font.
+            return Component.empty().append(badge(kind)).append(name);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** A chat message is about to be added: the time goes in front of it (clicking it copies the message). */
     public static Component chat(Component message) {
         if (!ready || message == null) return message;
@@ -295,8 +350,30 @@ public final class FabricPlatform implements Platform, Game {
         }
     }
 
+    private static boolean badgesChecked;
+
+    /**
+     * Once, when the main menu is first drawn (the game's fonts are loaded by then): the two badges of the player
+     * list must be glyphs of our own font. The automatic tests of every supported game version wait for this line.
+     */
+    private static void checkBadges() {
+        try {
+            int h = mc().font.width(badge(1));
+            int plus = mc().font.width(badge(2));
+            // A font that did not load draws the same "missing" box for both.
+            boolean fine = h >= 9 && h <= 13 && plus >= h + 3;
+            Log.info("Znaczki listy graczy: " + (fine ? "OK" : "BŁĄD") + " (H " + h + " px, H+ " + plus + " px)");
+        } catch (RuntimeException e) {
+            Log.warn("Znaczki listy graczy: BŁĄD", e);
+        }
+    }
+
     static void drawScreen(GuiGraphicsExtractor g, UiScreen ui) {
         if (!ok()) return;
+        if (!badgesChecked && ui instanceof MainMenuScreen) {
+            badgesChecked = true;
+            checkBadges();
+        }
         Minecraft mc = mc();
         boolean drawn;
         GFX.begin(g);
@@ -923,6 +1000,85 @@ public final class FabricPlatform implements Platform, Game {
         blockTick = ticks;
         block = mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? mc.level.getBlockState(hit.getBlockPos()).getBlock().getName().getString() : "";
         return block;
+    }
+
+    @Override
+    public String playerUuid() {
+        try {
+            java.util.UUID id = mc().getUser().getProfileId();
+            return id == null ? "" : hex(id);
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    @Override
+    public int xpLevel() {
+        LocalPlayer p = player();
+        return p == null ? 0 : p.experienceLevel;
+    }
+
+    @Override
+    public float xpProgress() {
+        LocalPlayer p = player();
+        return p == null ? 0 : p.experienceProgress;
+    }
+
+    @Override
+    public int air() {
+        LocalPlayer p = player();
+        return p == null ? 300 : p.getAirSupply();
+    }
+
+    @Override
+    public int maxAir() {
+        LocalPlayer p = player();
+        return p == null ? 300 : p.getMaxAirSupply();
+    }
+
+    private static boolean readingRealWeather;
+
+    /** The "clear sky" module hides rain and thunder – except from our own weather HUD, which shows what the world really does. */
+    public static boolean hideWeather() {
+        return !readingRealWeather && Hammer.clearWeather();
+    }
+
+    @Override
+    public int weather() {
+        ClientLevel level = mc().level;
+        if (level == null) return 0;
+        readingRealWeather = true;
+        try {
+            return level.isThundering() ? 2 : level.isRaining() ? 1 : 0;
+        } finally {
+            readingRealWeather = false;
+        }
+    }
+
+    private List<String> online = List.of();
+    private int onlineTick = -100;
+
+    @Override
+    public List<String> onlinePlayers() {
+        Minecraft mc = mc();
+        if (player() == null || mc.getConnection() == null) return List.of();
+        // Asked every frame; the list is rebuilt once a second.
+        if (ticks - onlineTick >= 20 || ticks < onlineTick) {
+            onlineTick = ticks;
+            List<String> out = new ArrayList<>();
+            for (PlayerInfo info : mc.getConnection().getListedOnlinePlayers()) {
+                java.util.UUID id = profileId(info);
+                if (id != null) out.add(hex(id));
+            }
+            online = out;
+        }
+        return online;
+    }
+
+    @Override
+    public float attackCharge() {
+        LocalPlayer p = player();
+        return p == null ? 1f : p.getAttackStrengthScale(0f);
     }
 
     // The lists below are rebuilt once per game tick, not per frame.

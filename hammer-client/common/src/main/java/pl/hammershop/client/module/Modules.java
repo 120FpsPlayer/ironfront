@@ -6,6 +6,7 @@ import pl.hammershop.client.module.feature.ChatTweaks;
 import pl.hammershop.client.module.feature.Crosshair;
 import pl.hammershop.client.module.feature.Freelook;
 import pl.hammershop.client.module.feature.Overlays;
+import pl.hammershop.client.module.feature.TabBadge;
 import pl.hammershop.client.module.feature.TabPing;
 import pl.hammershop.client.module.feature.Tweaks;
 import pl.hammershop.client.module.feature.WaypointsModule;
@@ -13,11 +14,13 @@ import pl.hammershop.client.module.feature.Zoom;
 import pl.hammershop.client.module.hud.Armor;
 import pl.hammershop.client.module.hud.Compass;
 import pl.hammershop.client.module.hud.DurabilityWarning;
+import pl.hammershop.client.module.hud.FpsGraph;
 import pl.hammershop.client.module.hud.HealthWarning;
 import pl.hammershop.client.module.hud.InfoHuds;
 import pl.hammershop.client.module.hud.InventoryHud;
 import pl.hammershop.client.module.hud.ItemCounter;
 import pl.hammershop.client.module.hud.Keystrokes;
+import pl.hammershop.client.module.hud.MoreHuds;
 import pl.hammershop.client.module.hud.Potions;
 import pl.hammershop.client.module.hud.TargetHud;
 import pl.hammershop.client.module.hud.Watermark;
@@ -37,6 +40,7 @@ public final class Modules {
     public static Tweaks.ClearWeather weather;
     public static WaypointsModule waypoints;
     public static TabPing tabPing;
+    public static TabBadge tabBadge;
     public static ChatTweaks chat;
     public static Overlays overlays;
 
@@ -54,6 +58,7 @@ public final class Modules {
         weather = null;
         waypoints = null;
         tabPing = null;
+        tabBadge = null;
         chat = null;
         overlays = null;
         // HUD
@@ -85,6 +90,17 @@ public final class Modules {
         add(new InfoHuds.Session());
         add(new InfoHuds.Stopwatch());
         if (p.supports(Feature.COMBO)) add(new InfoHuds.Kills());
+        add(new FpsGraph());
+        add(new MoreHuds.HeldItem());
+        add(new MoreHuds.Xp());
+        add(new MoreHuds.Air());
+        add(new MoreHuds.AttackCharge());
+        add(new MoreHuds.Players());
+        add(new MoreHuds.WorldTime());
+        add(new MoreHuds.WeatherHud());
+        add(new MoreHuds.Rotation());
+        add(new MoreHuds.Portal());
+        add(new MoreHuds.Chunk());
         add(new Watermark());
         // gameplay
         if (p.supports(Feature.ZOOM)) add(zoom = new Zoom());
@@ -101,6 +117,7 @@ public final class Modules {
         if (p.supports(Feature.TIME_CHANGER)) add(timeChanger = new Tweaks.TimeChanger());
         if (p.supports(Feature.WEATHER)) add(weather = new Tweaks.ClearWeather());
         if (p.supports(Feature.TAB_PING)) add(tabPing = new TabPing());
+        if (p.supports(Feature.TAB_BADGE)) add(tabBadge = new TabBadge());
         if (p.supports(Feature.OVERLAYS)) add(overlays = new Overlays());
         add(new Tweaks.NoHurtCam());
         add(new Tweaks.StaticFov());

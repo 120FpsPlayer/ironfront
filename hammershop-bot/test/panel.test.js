@@ -452,6 +452,37 @@ test('Hammer+ bought by card: the nick is checked first, the code comes right af
   assert.deepEqual([rows[0].kind, rows[0].plusNick, rows[0].user.name, rows[0].status], ['plus', 'Steve', 'Kupiec', 'paid']);
 });
 
+test('who plays on Hammer Client right now: the mod says "me", asks about the player list and gets H or H+ per player', async () => {
+  const v4 = () => { const u = crypto.randomBytes(16).toString('hex'); return `${u.slice(0, 12)}4${u.slice(13)}`; };
+  const dashed = (mc) => `${mc.slice(0, 8)}-${mc.slice(8, 12)}-${mc.slice(12, 16)}-${mc.slice(16, 20)}-${mc.slice(20)}`;
+  const presence = (body, headers = {}) => call('PUT', '/api/launcher/presence', { body, origin: null, headers });
+  const before = (await admin('GET', 'overview')).body.playing;
+  const a = v4();
+  const b = v4();
+  // Nobody is known before anyone said "me".
+  assert.deepEqual((await presence({ me: null, uuids: [a, b, MC.Notch] })).body, { players: {} });
+  // A plays; B asks about the list and sees A with the plain H.
+  assert.deepEqual((await presence({ me: a, uuids: [a] })).body, { players: { [a]: 'h' } });
+  assert.deepEqual((await presence({ me: b, uuids: [a, b, MC.Steve] })).body, { players: { [a]: 'h', [b]: 'h' } });
+  // Notch has Hammer+ running (a code was issued above): once he plays, everyone sees H+ – under the spelling asked for.
+  assert.equal(hammerplus.runningUntil(guild.id, MC.Notch) !== null, true);
+  assert.deepEqual((await presence({ me: dashed(MC.Notch), uuids: [dashed(MC.Notch).toUpperCase(), a, 'nie-uuid', '__proto__'] })).body, { players: { [dashed(MC.Notch).toUpperCase()]: 'p', [a]: 'h' } });
+  assert.equal((await admin('GET', 'overview')).body.playing, before + 3);
+  // Offline-mode ids (not version 4) are never announced; more than 100 accounts are refused; only PUT with a JSON object.
+  const offline = `${a.slice(0, 12)}3${a.slice(13)}`;
+  assert.deepEqual((await presence({ me: offline, uuids: [offline] })).body, { players: {} });
+  assert.equal((await presence({ me: a, uuids: Array.from({ length: 101 }, v4) })).status, 400);
+  assert.equal((await presence({ me: a, uuids: Array.from({ length: 100 }, v4) })).status, 200);
+  assert.equal((await call('GET', '/api/launcher/presence')).status, 405);
+  assert.equal((await presence([a])).status, 400);
+  assert.deepEqual((await presence({ me: 5, uuids: 'x' })).body, { players: {} });
+  // One address speaks for a household, not for a crowd: the ninth account from it is not marked.
+  const crowd = Array.from({ length: 9 }, v4);
+  for (const mc of crowd) await presence({ me: mc, uuids: [] }, { 'x-forwarded-for': '10.77.0.1' });
+  const marked = (await presence({ me: null, uuids: crowd })).body.players;
+  assert.deepEqual(Object.keys(marked).sort(), crowd.slice(0, 8).sort());
+});
+
 test('without a price list or a signing key Hammer+ is not on sale', async () => {
   env.plusPrivateKey = '';
   assert.deepEqual([(await call('GET', '/api/shop/plus')).body.ready, (await call('GET', '/api/shop/plus')).body.plans], [false, []]);

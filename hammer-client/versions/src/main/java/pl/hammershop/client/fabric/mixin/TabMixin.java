@@ -7,9 +7,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import net.minecraft.network.chat.Component;
 import pl.hammershop.client.fabric.FabricPlatform;
 
-/** The player list (Tab): the ping of every player as a number instead of the signal bars. */
+/** The player list (Tab): the ping of every player as a number instead of the signal bars, and the Hammer badge in front of names. */
 @Mixin(PlayerTabOverlay.class)
 public abstract class TabMixin {
     //#if MC >= 26.1
@@ -19,5 +21,11 @@ public abstract class TabMixin {
     //#endif
     private void hammer$ping(GuiGraphicsExtractor graphics, int width, int x, int y, PlayerInfo info, CallbackInfo ci) {
         if (info != null && FabricPlatform.tabPing(graphics, width, x, y, info.getLatency())) ci.cancel();
+    }
+
+    @Inject(method = "getNameForDisplay", at = @At("RETURN"), cancellable = true)
+    private void hammer$badge(PlayerInfo info, CallbackInfoReturnable<Component> cir) {
+        Component named = FabricPlatform.tabName(info, cir.getReturnValue());
+        if (named != null) cir.setReturnValue(named);
     }
 }

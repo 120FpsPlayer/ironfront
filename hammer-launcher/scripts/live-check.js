@@ -124,7 +124,8 @@ function playAndWatch(instance, ready) {
 
 /**
  * Hammer Client for MC_VERSION: the launcher picks the jar made for that version, adds Fabric API and starts the
- * game; the mod reports its main menu in the log ("[Hammer Client] Menu główne Hammer otwarte").
+ * game; the mod reports its main menu in the log ("[Hammer Client] Menu główne Hammer otwarte") and, once that menu
+ * is drawn, that the badges of the player list are glyphs of its own font ("Znaczki listy graczy: OK").
  */
 async function hammerClientCheck() {
   const client = services.hammerClient.info();
@@ -143,7 +144,8 @@ async function hammerClientCheck() {
   }
   const hc = services.instances.create({ name: 'Test Hammer Client', mcVersion: MC, loader: 'fabric', optimized: false, hammerClient: true });
   await step(`${label}: ${NO_GAME ? 'instalacja w instancji' : 'start gry z menu Hammer'}`, async () => {
-    const line = await playAndWatch(hc, NO_GAME ? undefined : /\[Hammer Client\] Menu główne Hammer otwarte/);
+    const line = await playAndWatch(hc, NO_GAME ? undefined : /\[Hammer Client\] Znaczki listy graczy: /);
+    assert(NO_GAME || /Znaczki listy graczy: OK/.test(line), `Znaczki H / H+ listy graczy nie wczytały się: ${line}`);
     const dir = services.instances.dir(hc.id);
     const mods = fs.readdirSync(path.join(dir, 'mods'));
     assert(mods.includes('hammer-client.jar'), `Brak hammer-client.jar: ${mods.join(', ')}`);

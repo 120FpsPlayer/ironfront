@@ -17,6 +17,11 @@
  *   GET capes?uuids=a,b   { capes: { "<uuid>": "<capeId>" } } – public, at most 100 accounts; only accounts whose
  *                         Hammer+ was running when they picked the cape and still is
  *   PUT cape              Bearer, { cape: "<capeId>" | null } → { cape }
+ *   PUT presence          { me: "<uuid>" | null, uuids: ["<uuid>", …] } → { players: { "<uuid>": "h" | "p" } } – public,
+ *                         at most 100 accounts. `me` says "this account is playing on Hammer Client right now" (kept in
+ *                         memory for five minutes, never written down); the answer names those of `uuids` who play on
+ *                         Hammer Client now: "h", or "p" when their Hammer+ is running. The mod draws the H / H+ badge
+ *                         in front of their names in the player list (Tab) from it.
  *
  * Bearer = a Hammer+ code (src/lib/plus.js) in "Authorization: Bearer HP1.…": its signature and expiry are checked with
  * the configured key, and the account is the Minecraft UUID inside it. Without a key those endpoints answer 503.
@@ -38,6 +43,10 @@ const CLOUD_LIMIT = 256 * 1024;
 const CAPE_LIMIT = 4 * 1024;
 const DRAIN_LIMIT = 4 * 1024 * 1024; // how much of a too-big upload is still read (and thrown away) so the sender gets the answer
 const MAX_UUIDS = 100;
+const PRESENCE_LIMIT = 8 * 1024;
+const PRESENCE_MS = 5 * 60_000; // how long "I play on Hammer Client" holds without being said again
+const MAX_PRESENT = 200_000;
+const MAX_ANNOUNCED = 8; // accounts one address may announce within PRESENCE_MS (a household, not a whole server)
 const MAX_DEPTH = 64;
 const SLOW_DOWN = 'Zwolnij trochę i spróbuj ponownie.';
 
@@ -119,7 +128,44 @@ function account(req, res) {
 }
 
 /** Which methods each path under /api/launcher/ takes. */
-const ROUTES = { health: ['GET'], featured: ['GET'], news: ['GET'], capes: ['GET'], cloud: ['GET', 'PUT'], cape: ['PUT'] };
+const ROUTES = { health: ['GET'], featured: ['GET'], news: ['GET'], capes: ['GET'], presence: ['PUT'], cloud: ['GET', 'PUT'], cape: ['PUT'] };
+
+// ── Who plays on Hammer Client right now: account → until when. Only in memory – gone with a restart, back within a minute. ──
+const present = new Map();
+const announced = new Map(); // address (hashed) → Map(account → until): one address cannot mark a crowd as Hammer players
+let presenceSwept = 0;
+
+function sweepPresence(now) {
+  if (now - presenceSwept < 60_000 && present.size < MAX_PRESENT) return;
+  presenceSwept = now;
+  for (const [mc, until] of present) if (until <= now) present.delete(mc);
+  for (const [key, list] of announced) {
+    for (const [mc, until] of list) if (until <= now) list.delete(mc);
+    if (!list.size) announced.delete(key);
+  }
+  if (present.size >= MAX_PRESENT) present.clear(); // flooded: forget, real players are back with their next call
+}
+
+/** Marks the account as playing now; false when this address already speaks for too many accounts. */
+function announce(mc, address, now = Date.now()) {
+  sweepPresence(now);
+  const key = visitorKey(address);
+  const mine = announced.get(key) ?? new Map();
+  for (const [other, until] of mine) if (until <= now) mine.delete(other);
+  if (!mine.has(mc) && mine.size >= MAX_ANNOUNCED) return false;
+  mine.set(mc, now + PRESENCE_MS);
+  announced.set(key, mine);
+  present.set(mc, now + PRESENCE_MS);
+  return true;
+}
+
+const isPresent = (mc, now = Date.now()) => (present.get(mc) ?? 0) > now;
+/** How many accounts play on Hammer Client right now (for the admin panel). */
+function onlineNow(now = Date.now()) {
+  let n = 0;
+  for (const until of present.values()) if (until > now) n += 1;
+  return n;
+}
 const MAX_NEWS = 12;
 // Who started the launcher today is only ever kept as a salted hash, in memory, until midnight – enough to count
 // "launchers today" without storing a single address.
@@ -137,7 +183,7 @@ function feed(publicUrl, now = Date.now()) {
  * /api/launcher/… – h: { send, fail, limited } (the website's own helpers: security headers, per-IP limits) and
  * featured() → the featured servers.
  */
-async function api(req, res, url, { send, fail, limited, featured, publicUrl = () => '', ip = () => null }) {
+async function api(req, res, url, { send, fail, limited, featured, publicUrl = () => '', ip = () => null, plusOf = () => false }) {
   const route = url.pathname.slice(PREFIX.length);
   const method = req.method === 'HEAD' ? 'GET' : req.method;
   // The launcher calls from its own window, not from a page of this site – and never with a cookie: the code is in a header.
@@ -168,6 +214,21 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
       if (cape) capes[uuid] = cape;
     }
     return send(res, 200, { capes });
+  }
+
+  if (route === 'presence') {
+    const body = await jsonBody(req, PRESENCE_LIMIT);
+    const asked = Array.isArray(body.uuids) ? body.uuids.filter((u) => typeof u === 'string') : [];
+    if (asked.length > MAX_UUIDS) return fail(res, 400, `Najwyżej ${MAX_UUIDS} kont w jednym zapytaniu.`);
+    // Only real (online-mode) accounts play on Hammer Launcher: their ids are version 4.
+    const me = body.me == null ? null : plus.normalizeUuid(body.me);
+    if (me && me[12] === '4') announce(me, ip(req));
+    const players = {};
+    for (const uuid of asked) {
+      const mc = plus.normalizeUuid(uuid);
+      if (mc && isPresent(mc)) players[uuid] = plusOf(mc) ? 'p' : 'h';
+    }
+    return send(res, 200, { players }, { 'cache-control': 'no-store' });
   }
 
   // Everything below belongs to one Hammer+ account.
@@ -275,4 +336,4 @@ function join(req, res, url, { send }) {
   return send(res, 200, joinHtml(url), { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': JOIN_CSP });
 }
 
-module.exports = { api, join, joinHtml, feed, launcherVersion, CAPES, CLOUD_LIMIT, MAX_UUIDS, PREFIX };
+module.exports = { api, join, joinHtml, feed, launcherVersion, onlineNow, CAPES, CLOUD_LIMIT, MAX_UUIDS, PRESENCE_MS, PREFIX };
