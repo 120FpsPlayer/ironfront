@@ -247,10 +247,36 @@ jobs:
         run: ls -la resources/hammer-client
       - run: npm ci
       - run: npm run dist:win
+      # The packaged app is hardened (Electron fuses, asar integrity) – it must still start after that.
+      - name: Zabezpieczenia pliku exe i start spakowanej aplikacji
+        shell: bash
+        run: |
+          npx --no-install electron-fuses read --app "dist/win-unpacked/Hammer Launcher.exe"
+          "dist/win-unpacked/Hammer Launcher.exe" &
+          sleep 25
+          if tasklist //FI "IMAGENAME eq Hammer Launcher.exe" | grep -qi "Hammer Launcher.exe"; then
+            echo "Spakowany launcher uruchomił się i działa."
+            taskkill //F //T //IM "Hammer Launcher.exe" || true
+          else
+            echo "::error::Spakowany launcher zakończył się zaraz po starcie."
+            exit 1
+          fi
+      # Signed releases (optional): with the secret UPDATE_SIGNING_KEY the installer gets a .sig next to it – its
+      # content goes into "Podpis wydania" in the website's admin panel (hammer-launcher/README.md → Aktualizacje launchera).
+      - name: Podpis wydania (jeśli ustawiono UPDATE_SIGNING_KEY)
+        shell: bash
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then echo "Brak sekretu UPDATE_SIGNING_KEY – wydanie bez podpisu."; exit 0; fi
+          for f in dist/Hammer-Launcher-Setup-*.exe; do node scripts/sign-release.js "$f" > /dev/null; ls -la "$f.sig"; done
       - uses: actions/upload-artifact@v4
         with:
           name: Hammer-Launcher-Windows
           path: |
             hammer-launcher/dist/*.exe
+            hammer-launcher/dist/*.exe.blockmap
+            hammer-launcher/dist/*.exe.sig
+            hammer-launcher/dist/latest.yml
           if-no-files-found: error
           retention-days: 30

@@ -2175,6 +2175,7 @@ async function main() {
   await page.waitForTimeout(300);
   if (!(await updateState()).includes(T('Wersja przenośna nie aktualizuje się sama – nową pobierzesz ze strony.'))) errors.push('Ustawienia: nie widać, dlaczego wersja przenośna się nie aktualizuje');
   await page.evaluate(() => window.__self({ reason: 'dev' }));
+  await page.waitForTimeout(200);
   if (!(await updateState()).includes(T('Wersja deweloperska nie aktualizuje się sama.'))) errors.push('Ustawienia: nie widać, że wersja deweloperska się nie aktualizuje');
 
   // „O launcherze”: the BETA mark after the name and the line with the way to Discord.

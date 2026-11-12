@@ -49,6 +49,20 @@
       "!**/*.map"
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://hammershop.pl/updates"
+      }
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
     "protocols": [
       {
         "name": "Hammer Launcher",

@@ -220,6 +220,49 @@ Wysyłane są tylko pliki PNG i JPG z folderu `screenshots/` instancji, najwyże
 - **Manifest punktu przywracania**: `{ "v": 1, "id": "2026-11-11_14-05-33", "createdAt": …, "state": "pending" | "done", "entries": [{ "type": "mod" | "resourcepack" | "shader", "title", "old": { "file", "disabled", "versionNumber", "index" }, "new": { "file", "versionId", "versionNumber" }, "state": "planned" | "done" | "failed" }] }`. Cofanie patrzy na folder, nie na `state`: stary plik, który leży w punkcie, wraca (po usunięciu nowego); którego tam nie ma – już wrócił albo nigdy nie został ruszony. Manifest leży w folderze gry, więc jest czytany nieufnie: tylko zwykłe nazwy plików `.jar` / `.zip` w `mods/`, `resourcepacks/` i `shaderpacks/`.
 - **Link do zrzutu**: `POST <screenshotShare.url>`, formularz multipart `reqtype=fileupload`, `time=<screenshotShare.time>`, `fileToUpload=<plik>`; odpowiedzią jest sam adres. `time` to `1h`, `12h`, `24h` albo `72h` (inna wartość = `72h`). Zgoda „Nie pytaj ponownie” to ustawienie `screenshotShareAsk: false`.
 
+## Wersja beta
+
+Launcher jest w wersji **beta**: obok nazwy „Hammer Launcher” (pasek tytułu, ekran główny, *Ustawienia → O launcherze*, tytuł okna) widać znaczek **BETA**. To tylko oznaczenie – nazwa programu, instalatora i folderów się nie zmienia. Znaczek znika po ustawieniu `"channel": ""` (albo `"stable"`) w `launcher.config.json`.
+
+## Aktualności i komunikaty ze strony
+
+Gdy strona HammerShop / Hammer Launcher jest online, **Aktualności** na ekranie głównym pochodzą z jej panelu admina (`<strona>/admin` → *Aktualności*): tytuł, treść, etykieta, data, przypięcie na górze i opcjonalny link. Nowe wpisy mają kropkę „nowe”, dopóki nie zobaczysz ekranu głównego. Launcher odświeża je co 10 minut i po powrocie do okna.
+
+**Komunikat** z panelu (*Komunikat*) to pasek na samej górze okna, widoczny na każdym ekranie: informacja (pomarańczowy), ostrzeżenie (żółty) albo ważne (czerwony – tego nie da się zamknąć). Zamknięty komunikat nie wraca, dopóki w panelu nie pojawi się nowy.
+
+Jeśli strona nie odpowiada, launcher pokazuje wbudowane porady i działa dalej – nic z tego nie spowalnia startu ani nie blokuje gry.
+
+## Aktualizacje launchera
+
+Zainstalowany launcher (instalator Windows) **aktualizuje się sam – z serwera właściciela, nie z GitHuba**: kilka sekund po starcie i potem co 4 godziny sprawdza, czy jest nowa wersja, pobiera ją w tle (tylko to, co się zmieniło) i instaluje, gdy go zamkniesz. Na ekranie głównym i w *Ustawienia → Aktualizacje launchera* pojawia się wtedy „Aktualizacja … jest gotowa” z przyciskiem **Uruchom ponownie i zaktualizuj** i opisem zmian („Co nowego”). Launcher nigdy nie uruchamia się ponownie, gdy działa gra.
+
+- *Ustawienia → Aktualizacje launchera*: przełącznik **Aktualizuj automatycznie** (wyłączony = launcher tylko mówi o nowej wersji i daje przycisk **Pobierz i zainstaluj**), aktualna wersja, stan i **Sprawdź teraz**.
+- **Wymagana aktualizacja**: gdy właściciel oznaczy starsze wersje jako niewspierane, launcher pokazuje okno „Wymagana aktualizacja” i nie pozwala grać, dopóki się nie zaktualizuje. Bez połączenia ze stroną nic nie jest blokowane.
+- **Wersja przenośna** (portable) i uruchomienie deweloperskie nie podmieniają się same – mówią, że jest nowa wersja, i dają przycisk do strony z instalatorem.
+
+### Jak wydać nową wersję (właściciel)
+1. Podnieś `version` w `package.json`, wypchnij zmianę i pobierz z GitHub Actions artefakt **Hammer-Launcher-Windows** (jest w nim instalator `Hammer-Launcher-Setup-x.y.z.exe`, jego plik `.blockmap` i `latest.yml`). Przetestuj instalator u siebie.
+2. Na stronie: `<strona>/admin` → **Wersje launchera** → wgraj instalator (i `.blockmap`, żeby gracze pobierali same zmiany) → wpisz wersję i „Co nowego” → **Opublikuj wersję**.
+3. Od tej chwili strona daje ten plik do pobrania, a zainstalowane launchery same się zaktualizują. Plik `latest.yml` strona tworzy sama – tego z artefaktu nie trzeba wgrywać.
+
+### Podpisane wydania (zalecane)
+Aktualizacja to program, który uruchomi się na komputerach wszystkich graczy. Launcher zawsze sprawdza sumę sha512 pobranego pliku, a z ustawionym `updatePublicKey` instaluje **wyłącznie wydania podpisane Twoim kluczem** – nawet ktoś, kto włamałby się na serwer albo konto admina, nie podmieni aktualizacji.
+
+```bash
+node scripts/sign-release.js --new-key
+```
+wypisze nową parę kluczy: **publiczny** wpisujesz do `launcher.config.json` → `updatePublicKey` (i budujesz launcher), **prywatny** zachowujesz u siebie – nigdy w repozytorium ani na serwerze strony.
+
+```bash
+node scripts/sign-release.js dist/Hammer-Launcher-Setup-2.6.1.exe --key klucz-prywatny.txt
+```
+wypisze podpis i zapisze go obok instalatora w pliku `.sig`. Jego zawartość wklejasz w panelu admina w polu **Podpis wydania**. W GitHub Actions wystarczy dodać sekret repozytorium `UPDATE_SIGNING_KEY` (klucz prywatny) – plik `.sig` znajdzie się wtedy w artefakcie. Uwaga: po ustawieniu `updatePublicKey` launcher odrzuci każde wydanie bez poprawnego podpisu, a zgubiony klucz prywatny oznacza, że gracze muszą ręcznie zainstalować wersję z nowym kluczem.
+
+### Dla deweloperów: aktualności, komunikat, aktualizacje
+- `GET <shopApi albo website>/api/launcher/news` → `{ news: [{ id, title, body, tag, date, at, url, image, pinned }], alert: { id, level, text, url, until } | null, release: { version, notes, date, minVersion, size, url } | null }`. Trasa publiczna; launcher wysyła nagłówek `User-Agent: Hammer-Launcher/<wersja> (hammershop.pl)` – strona liczy z niego uruchomienia (same liczby). Wszystko z tej odpowiedzi jest traktowane jako niezaufany tekst: przycinane, pokazywane jako tekst, linki tylko `https://` (`src/main/news.js`, `src/main/text.js`).
+- Aktualizacje: `electron-updater`, dostawca „generic”, adres `<updateUrl>` albo `<shopApi albo website>/updates` (`latest.yml` + instalator + `.blockmap`). Logika jest w `src/main/selfupdate.js` (bez Electrona – prawdziwy `autoUpdater` i zegar są wstrzykiwane, więc testy używają atrap): wybór adresu, porównywanie wersji liczbami, stany, odmowa przy uruchomionej grze, wersje bez samoaktualizacji, sprawdzanie podpisu (`signature` w `latest.yml` = podpis Ed25519 tekstu `"<wersja>\n<sha512>"`), wymagana wersja.
+- Zamknięty komunikat i „ostatnio widziane aktualności” launcher pamięta w `settings.json`.
+
 ## Wersja angielska
 
 Launcher jest napisany po polsku i polski pozostaje językiem źródłowym: widoki budują interfejs po polsku, a błędy z procesu głównego mają polską treść. Wersja angielska to **warstwa tłumacząca w oknie** (`src/renderer/js/i18n.js`). Gdy wybrany jest angielski, tłumaczy ona to, co trafia na ekran – teksty, podpowiedzi (`title`), `placeholder`, `aria-label`, `alt`, napisy przycisków i pozycje list – także wszystko, co pojawi się później (komunikaty, okna, paski postępu). Po polsku warstwa w ogóle nie działa.
@@ -273,6 +316,10 @@ npm run dist:win
 W folderze `dist/` powstaną `Hammer-Launcher-Setup-<wersja>.exe` (instalator po polsku) oraz `Hammer-Launcher-<wersja>-portable.exe` (bez instalacji).
 Instalator buduje się też automatycznie w GitHub Actions (workflow **Hammer Launcher**, artefakt *Hammer-Launcher-Windows*).
 
+W `dist/` są też `latest.yml` i pliki `.blockmap` – potrzebne do [aktualizacji launchera](#aktualizacje-launchera) (wgrywasz instalator i `.blockmap` w panelu admina strony; nic nie jest publikowane automatycznie).
+
+**Zabezpieczenia spakowanej aplikacji.** Kod launchera jest spakowany w `app.asar`, a Electron ma włączone „bezpieczniki” (`build.electronFuses` w `package.json`): sprawdzanie integralności `app.asar`, ładowanie kodu tylko z niego, wyłączone uruchamianie launchera jako zwykłego Node.js (`ELECTRON_RUN_AS_NODE`), `NODE_OPTIONS` i `--inspect`, szyfrowane ciasteczka. Zwykła podmiana plików w folderze launchera przestaje działać. To utrudnia grzebanie w programie, ale nie robi z niego sejfu: w launcherze nie ma żadnych sekretów (tylko klucze publiczne), a wszystko, co ważne – płatności, kody Hammer+, aktualizacje – jest sprawdzane na serwerze albo podpisem. GitHub Actions po zbudowaniu instalatora odczytuje bezpieczniki i uruchamia spakowaną aplikację, żeby potwierdzić, że po zabezpieczeniu normalnie startuje.
+
 Pliki nie są podpisane certyfikatem, więc Windows SmartScreen pokaże ostrzeżenie *„System Windows ochronił ten komputer”*: kliknij **Więcej informacji → Uruchom mimo to**. Przy publicznej dystrybucji warto kupić certyfikat do podpisywania kodu.
 
 ## Konfiguracja – `launcher.config.json`
@@ -284,7 +331,10 @@ Pliki nie są podpisane certyfikatem, więc Windows SmartScreen pokaże ostrzeż
 | `discordInvite` | Link zaproszenia na Discorda, np. `https://discord.gg/abc`. **Puste = launcher bierze zaproszenie ze strony bota** (to, które bot utworzył przy `/zbuduj`). Najlepiej wpisać stałe zaproszenie (bez wygasania). |
 | `shopApi` | Adres strony bota HammerShop, jeśli jest inny niż `website` (np. `https://sklep.hammershop.pl`). Stąd launcher bierze produkty, zaproszenie na Discorda i listę polecanych serwerów (`/api/launcher/featured`), tu też trafia chmura Hammer+ (`/api/launcher`, tylko https). |
 | `server.name`, `server.address` | Opcjonalnie: serwer Minecraft na ekranie głównym (status, liczba graczy, przycisk **Dołącz**). Puste = karta się nie pokazuje. |
-| `newsUrl` | Adres JSON z aktualnościami: `[{"title": "…", "body": "…", "tag": "Nowość", "date": "10.11.2026", "url": "https://…"}]`. Puste = wbudowane porady. |
+| `newsUrl` | Własny adres JSON z aktualnościami: `[{"title": "…", "body": "…", "tag": "Nowość", "date": "10.11.2026", "url": "https://…"}]`. **Puste = aktualności, komunikat i informacja o wersji z panelu admina strony** (`<shopApi albo website>/api/launcher/news`), a gdy strona nie odpowiada – wbudowane porady. |
+| `channel` | `"beta"` pokazuje znaczek **BETA** obok nazwy launchera. `""` albo `"stable"` = bez znaczka. |
+| `updateUrl` | Folder z aktualizacjami launchera (`latest.yml` + instalator). Puste = `<shopApi albo website>/updates`. Tylko `https://` (albo `http://localhost` do testów); bez żadnego adresu aktualizacje są wyłączone. |
+| `updatePublicKey` | Klucz publiczny do [podpisanych wydań](#podpisane-wydania-zalecane): base64 z 32 bajtów klucza Ed25519. Puste = podpis nie jest wymagany (launcher sprawdza tylko sumę sha512). |
 | `discordClientId` | ID aplikacji z Discord Developer Portal do statusu „Gra w…” (obraz `logo` w Rich Presence). |
 | `plusPublicKey` | Klucz publiczny sklepu do sprawdzania kodów Hammer+: base64 z 32 bajtów klucza Ed25519. Puste = Hammer+ nie da się aktywować. Klucz prywatny ma tylko bot. |
 | `microsoft.clientId` | Własna aplikacja Azure do logowania (patrz niżej). Puste = domyślne okno logowania. |
