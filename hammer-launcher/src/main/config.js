@@ -11,6 +11,9 @@ const path = require('node:path');
 const DEFAULTS = {
   name: 'Hammer Launcher',
   brand: 'HammerShop',
+  // 'beta' puts a small „BETA” mark next to the launcher's name; '' or 'stable' = no mark. Only a label – the
+  // product, the installer and the folders keep their names.
+  channel: 'beta',
   website: 'https://hammershop.pl',
   shopUrl: 'https://hammershop.pl',
   // The bot's website (GET /api/shop/store) – Discord invite and store products. Empty = the website above.
@@ -20,7 +23,10 @@ const DEFAULTS = {
   server: { name: 'Serwer HammerShop', address: '' },
   discordClientId: '',
   microsoft: { clientId: '', redirect: '' },
+  // The launcher's own updates (selfupdate.js): the folder with latest.yml. Empty = "<shopApi or website>/updates".
   updateUrl: '',
+  // Base64 of the raw 32-byte Ed25519 key that signs launcher updates. Empty = signatures are not enforced.
+  updatePublicKey: '',
   // Hammer+: base64 of the raw 32-byte Ed25519 key the shop signs its codes with. Empty = codes cannot be activated.
   plusPublicKey: '',
   defaultInstance: { name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', optimized: true },

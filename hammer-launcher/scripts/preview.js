@@ -95,7 +95,7 @@ function mock() {
   }
 
   const now = Date.now();
-  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, language: 'auto', accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true };
+  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, language: 'auto', accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true, autoUpdate: true, closedAlert: '', newsSeenAt: now - 30 * 3600e3 };
   const instances = [
     { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
@@ -349,6 +349,35 @@ function mock() {
   // An update that was cut off half-way (the launcher was closed in the middle).
   window.__interrupted = () => updPoints.unshift({ id: '2026-11-11_20-41-07', createdAt: Date.now() - 5 * 60e3, interrupted: true, entries: [{ type: 'mod', title: 'Lithium', old: { file: 'lithium-fabric-0.14.3.jar', versionNumber: 'mc1.21.4-0.14.3' }, new: { file: 'lithium-fabric-0.14.4.jar', versionNumber: 'mc1.21.4-0.14.4' }, state: 'done' }, { type: 'mod', title: 'FerriteCore', old: { file: 'ferritecore-7.1.1-fabric.jar', versionNumber: '7.1.1' }, new: { file: 'ferritecore-7.1.2-fabric.jar', versionNumber: '7.1.2' }, state: 'planned' }] });
 
+  /* ── Aktualności and the message bar from the shop's admin panel, the launcher's own updates ── */
+  // The shop's news (already sorted: pinned first, then newest); two of them are newer than the last visit.
+  const NEWS = [
+    { id: 'n_4', title: 'Hammer+ taniej o 20% do niedzieli', body: 'Własne kolory, animowane tła, automatyczne kopie światów i chmura.\nKod rabatowy: HAMMER20', tag: 'Promocja', date: '12.11.2026', at: now - 2 * 3600e3, url: 'https://hammershop.pl/launcher#plus', image: shopArt('−20%', '#ffb36b', '#c2410c'), pinned: true },
+    { id: 'n_3', title: 'Launcher 2.6.0: aktualności i komunikaty prosto ze sklepu', body: 'Od tej wersji launcher aktualizuje się sam, a nowości ze sklepu widzisz od razu na ekranie Graj.', tag: 'Nowość', date: '11.11.2026', at: now - 26 * 3600e3, url: null, image: null, pinned: false },
+    { id: 'n_2', title: 'Turniej PvP w sobotę o 18:00', body: 'Zapisy na Discordzie do piątku. Do wygrania rangi i Hammer+ na 3 miesiące.', tag: 'Event', date: '9.11.2026', at: now - 3 * 864e5, url: 'https://discord.gg/hammershop', image: null, pinned: false },
+    { id: 'n_1', title: 'Nowe polecane serwery', body: 'W zakładce Serwery znajdziesz serwery, które polecamy – z liczbą graczy na żywo.', tag: null, date: '2.11.2026', at: now - 10 * 864e5, url: null, image: null, pinned: false },
+  ];
+  // The built-in tips – what the start screen shows while the shop is away or has no news.
+  const TIPS = [
+    { title: 'Witaj w Hammer Launcherze!', body: 'Zaloguj się kontem Microsoft, wybierz instancję i kliknij GRAJ. Launcher sam pobierze grę, Javę i mody.', tag: 'Start' },
+    { title: 'Jedno kliknięcie – więcej FPS', body: 'Zakładka Optymalizacja dobiera RAM, flagi Javy i mody wydajnościowe (Sodium, Lithium, FerriteCore…) pod Twoją wersję gry.', tag: 'Wydajność' },
+    { title: 'Tysiące modów w zakładce Mody', body: 'Szukaj modów, paczek tekstur, shaderów i całych paczek modów z Modrinth – zależności instalują się same.', tag: 'Mody' },
+  ];
+  const feed = { news: NEWS, source: 'shop', alert: null, release: null, ok: true, fetchedAt: now };
+  const feedView = () => ({ ...feed, news: feed.news.map((n) => ({ ...n })), alert: feed.alert && (feed.alert.level === 'critical' || feed.alert.id !== settings.closedAlert) ? { ...feed.alert } : null, seenAt: settings.newsSeenAt });
+  /** The shop said something else: window.__feed({ alert }) / ({ news: 'tips' }) – the window hears it like from the launcher. */
+  window.__feed = (patch) => {
+    Object.assign(feed, patch.news === 'tips' ? { ...patch, news: TIPS, source: 'builtin', ok: false } : patch.news === 'shop' ? { ...patch, news: NEWS, source: 'shop', ok: true } : patch);
+    window.__emit('news:update', feedView());
+  };
+  // The launcher's own update: up to date until the preview says otherwise with window.__self({ … }).
+  const self = { status: 'idle', supported: true, reason: null, current: '2.6.0', latest: null, percent: null, notes: null, error: null, checkedAt: now - 40 * 60e3, upToDate: true, gameRunning: false, release: null, required: null };
+  const selfState = () => ({ ...self, auto: settings.autoUpdate !== false });
+  window.__self = (patch) => {
+    Object.assign(self, patch);
+    window.__emit('selfupdate:state', selfState());
+  };
+
   // The language: the run's own (window.__i18n, set by preview-i18n.js) while the setting says "auto".
   const i18n = window.__i18n ?? { lang: 'pl', dict: null };
   const languageNow = () => {
@@ -364,22 +393,49 @@ function mock() {
     },
     i18n: { ...languageNow(), load: async () => languageNow() },
     pathForFile: (file) => (/\.hammerpack$/i.test(file?.name ?? '') ? `C:\\Users\\Gracz\\Downloads\\${file.name}` : null),
-    app: { info: async () => ({ plus: plusStatus(), version: '2.5.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ plus: plusStatus(), version: '2.6.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', channel: window.__stable ? '' : 'beta', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: {
       get: async () => ({ ...settings }),
       set: async (p) => {
         Object.assign(settings, p);
         if ('modUpdateCheck' in p) window.__updates(Boolean(p.modUpdateCheck) && updOn, updMany); // switched off: the badges go at once
+        if ('autoUpdate' in p) window.__self(p.autoUpdate && self.status === 'available' ? { status: 'downloading', percent: 0 } : {}); // switched on: an announced update is fetched
         return { ...settings };
       },
     },
     system: { info: async () => ({}) },
-    news: { list: async () => [
-      { title: 'Witaj w Hammer Launcherze!', body: 'Zaloguj się kontem Microsoft, wybierz instancję i kliknij GRAJ. Launcher sam pobierze grę, Javę i mody.', tag: 'Start' },
-      { title: 'Jedno kliknięcie – więcej FPS', body: 'Zakładka Optymalizacja dobiera RAM, flagi Javy i mody wydajnościowe (Sodium, Lithium, FerriteCore…) pod Twoją wersję gry.', tag: 'Wydajność' },
-      { title: 'Tysiące modów w zakładce Mody', body: 'Szukaj modów, paczek tekstur, shaderów i całych paczek modów z Modrinth – zależności instalują się same.', tag: 'Mody' },
-    ] },
+    news: {
+      feed: async () => (await wait(), feedView()),
+      refresh: async () => feedView(),
+      closeAlert: async () => {
+        if (feed.alert && feed.alert.level !== 'critical') settings.closedAlert = feed.alert.id;
+        return feedView();
+      },
+      seen: async () => (settings.newsSeenAt = Math.max(settings.newsSeenAt, ...feed.news.map((n) => n.at ?? 0))),
+    },
+    selfUpdate: {
+      status: async () => selfState(),
+      // „Sprawdź teraz”: a moment of „Sprawdzam…”, then what the preview prepared (window.__selfNext) – else "up to date".
+      check: async () => {
+        window.__self({ status: 'checking', error: null });
+        await gate(250);
+        window.__self(window.__selfNext ?? { status: 'idle', upToDate: true, latest: null });
+        return selfState();
+      },
+      download: async () => (window.__self({ status: 'downloading', percent: 0 }), selfState()),
+      install: async () => {
+        if (self.gameRunning) throw new Error('Najpierw zamknij grę – aktualizacja uruchamia launcher ponownie.');
+        window.__installed = (window.__installed ?? 0) + 1;
+        return selfState();
+      },
+      update: async () => {
+        if (self.gameRunning) throw new Error('Najpierw zamknij grę – aktualizacja uruchamia launcher ponownie.');
+        if (self.status === 'ready') window.__installed = (window.__installed ?? 0) + 1;
+        else window.__self({ status: 'downloading', percent: 0, latest: self.latest ?? self.required?.version ?? null, error: null });
+        return selfState();
+      },
+    },
     server: { ping: async (address) => (address === 'nowy.example.pl' ? new Promise(() => {}) : (await wait(), PINGS[address] ?? { online: true, latency: 23, version: '1.21.4', players: { online: 137, max: 500 } })) },
     accounts: { list: async () => (window.__noAccount ? [] : accounts.map((a) => ({ ...a, skinUrl: skinLib.find((x) => x.id === wardrobe.worn)?.dataUrl ?? null }))), login: async () => accounts[0], remove: async () => true, select: async () => true },
     versions: {
@@ -1934,6 +1990,258 @@ async function main() {
   await page.waitForTimeout(300);
   await count('.set-row:has-text("Pytaj przed udostępnieniem zrzutu ekranu")', 0);
   await page.evaluate(() => (window.__noShare = false));
+
+  /* ── „BETA”, the shop's news and message bar, the launcher's own updates, „Kup Hammer+” ── */
+  await noToasts();
+  // (as at the start of the launcher: two news items came since the start screen was last seen)
+  await nav('Instancje');
+  await page.evaluate(() => window.hs.settings.set({ newsSeenAt: Date.now() - 30 * 3600e3 }).then((saved) => (HS.state.settings = saved)));
+  await nav('Graj');
+  await page.waitForTimeout(300);
+  // „BETA” right after the name: title bar, start screen, sidebar – and in the window's title.
+  await count('.tb-brand .beta-pill', 1);
+  await count('.hero .eyebrow .beta-pill', 1);
+  await count('.version-tag .beta-pill', 1);
+  if ((await page.title()) !== 'Hammer Launcher (beta)') errors.push(`BETA: tytuł okna to „${await page.title()}”`);
+  const nameBox = await page.locator('.tb-brand span').first().boundingBox();
+  const pillBox = await page.locator('.tb-brand .beta-pill').boundingBox();
+  if (!(pillBox.x >= nameBox.x + nameBox.width && pillBox.x - (nameBox.x + nameBox.width) < 16)) errors.push('BETA: znaczek nie stoi tuż za nazwą na pasku tytułu');
+  // Aktualności from the shop: a pinned item, tags, dates, the „nowe” mark on what came since the last visit.
+  await count('.news-item', 4);
+  await count('.news-item.pinned .news-pin', 1);
+  await count('.news-item .news-new', 2);
+  await count('.news-item.clickable', 2);
+  await count('.news-item .news-img', 1);
+  await viewTop('h2', 'Aktualności');
+  await shot('150-aktualnosci-ze-sklepu');
+  await fits('Aktualności ze sklepu');
+  await small('150b-aktualnosci-ze-sklepu-male-okno', async () => {
+    await viewTop('h2', 'Aktualności');
+    await fits('Aktualności ze sklepu, małe okno');
+  });
+  // Seen: the mark stays during this visit and is gone the next time the start screen is opened.
+  if (!(await page.evaluate(() => HS.state.settings.newsSeenAt > Date.now() - 3 * 3600e3))) errors.push('Aktualności: launcher nie zapamiętał, co zostało pokazane');
+  await page.evaluate(() => HS.go('home'));
+  await count('.news-item .news-new', 2);
+  await nav('Instancje');
+  await nav('Graj');
+  await page.waitForTimeout(200);
+  await count('.news-item .news-new', 0);
+  // The shop is away (or has no news): the built-in tips, like before.
+  await page.evaluate(() => window.__feed({ news: 'tips' }));
+  await count('.news-item', 3);
+  await count('.news-item .news-pin', 0);
+  await viewTop('h2', 'Aktualności');
+  await shot('151-aktualnosci-wbudowane');
+  await page.evaluate(() => window.__feed({ news: 'shop' }));
+  await count('.news-item', 4);
+
+  // The message bar: on every screen, under the title bar.
+  await top();
+  await page.evaluate(() => window.__feed({ alert: { id: 'a_17', level: 'info', text: 'W ten weekend na serwerze Hammer SMP podwójne nagrody za zadania.', url: 'https://hammershop.pl/aktualnosci/weekend', until: Date.now() + 3 * 3600e3 } }));
+  await count('.alert-bar.info:visible', 1);
+  await count('.alert-bar button:has-text("Więcej")', 1);
+  await shot('152-komunikat-informacja');
+  await fits('Komunikat – informacja');
+  await nav('Mody');
+  await page.waitForTimeout(300);
+  await count('.alert-bar.info:visible', 1);
+  // Closing it: gone on every screen, and it stays closed while the shop keeps sending the same message.
+  await page.locator('.alert-bar button[title="Zamknij komunikat"]').click();
+  await count('.alert-bar:visible', 0);
+  if ((await page.evaluate(() => window.hs.settings.get().then((x) => x.closedAlert))) !== 'a_17') errors.push('Komunikat: zamknięty komunikat nie został zapamiętany');
+  await page.evaluate(() => window.__feed({}));
+  await count('.alert-bar:visible', 0);
+  // Another message (a new id) shows again – amber for a warning, two lines at most in the smallest window.
+  await page.evaluate(() => window.__feed({ alert: { id: 'a_18', level: 'warning', text: 'Dziś między 22:00 a 23:30 przerwa techniczna sklepu HammerShop: w tym czasie nie zadziała chmura Hammer+, polecane serwery ani aktualności. Granie działa normalnie – niczego nie musisz robić, po przerwie wszystko wróci samo.', url: null, until: null } }));
+  await count('.alert-bar.warning:visible', 1);
+  await count('.alert-bar button:has-text("Więcej")', 0);
+  await shot('153-komunikat-ostrzezenie');
+  await small('153b-komunikat-ostrzezenie-male-okno', async () => {
+    await fits('Komunikat – ostrzeżenie, małe okno');
+    const tall = await page.locator('.alert-bar').evaluate((el) => el.offsetHeight);
+    if (tall > 60) errors.push(`Komunikat: pasek ma ${tall} px wysokości w małym oknie`);
+    const overflowNow = await page.locator('.sidebar').evaluate((el) => el.scrollHeight - el.clientHeight);
+    if (overflowNow > 0) errors.push(`Pasek boczny nie mieści się w najmniejszym oknie z komunikatem (o ${overflowNow} px).`);
+  });
+  // A critical one is red and cannot be closed.
+  await page.evaluate(() => window.__feed({ alert: { id: 'a_19', level: 'critical', text: 'Logowanie Microsoft ma awarię – uruchamianie gry może teraz nie działać. To nie jest wina launchera.', url: 'https://hammershop.pl/status', until: null } }));
+  await count('.alert-bar.critical:visible', 1);
+  await count('.alert-bar button[title="Zamknij komunikat"]', 0);
+  await nav('Graj');
+  await shot('154-komunikat-krytyczny');
+  // Past its time a message goes by itself.
+  await page.evaluate(() => window.__feed({ alert: { id: 'a_20', level: 'info', text: 'Za chwilę zniknę.', url: null, until: Date.now() + 700 } }));
+  await count('.alert-bar:visible', 1);
+  await page.waitForTimeout(1600);
+  await count('.alert-bar:visible', 0);
+  await page.evaluate(() => window.__feed({ alert: null }));
+
+  // The launcher's own update on the start screen. Automatic updates off: it only tells, with „Pobierz i zainstaluj”.
+  const NOTES = 'Aktualności i komunikaty prosto ze sklepu.\nLauncher aktualizuje się sam – także w tle, gdy grasz.\nPoprawki w zakładce Skórka i szybsze sprawdzanie modów.';
+  await top();
+  await count('.update-card', 0);
+  await page.evaluate(() => window.hs.settings.set({ autoUpdate: false }));
+  await page.evaluate((notes) => window.__self({ status: 'available', latest: '2.6.1', upToDate: false, notes }), NOTES);
+  await count('.update-card', 1);
+  await count('.update-card button:has-text("Pobierz i zainstaluj")', 1);
+  await shot('155-aktualizacja-dostepna');
+  await fits('Aktualizacja dostępna');
+  await page.locator('.update-card button', { hasText: 'Pobierz i zainstaluj' }).click();
+  await page.evaluate(() => window.__self({ percent: 42 }));
+  await count('.update-card .progress', 1);
+  if (!(await page.locator('.update-card').innerText()).includes('42%')) errors.push('Aktualizacja: nie widać postępu pobierania');
+  await shot('156-aktualizacja-pobieranie');
+  await page.evaluate(() => window.__self({ status: 'ready', percent: null }));
+  await count('.update-card button:has-text("Uruchom ponownie i zaktualizuj"):not([disabled])', 1);
+  if (!(await page.locator('.update-card').innerText()).includes(T('Aktualizacja 2.6.1 jest gotowa'))) errors.push('Aktualizacja: nie widać „Aktualizacja 2.6.1 jest gotowa”');
+  await shot('157-aktualizacja-gotowa');
+  await fits('Aktualizacja gotowa');
+  await small('157b-aktualizacja-gotowa-male-okno', () => fits('Aktualizacja gotowa, małe okno'));
+  // A game runs: no restart – the button is grey and the card says why.
+  await page.evaluate(() => {
+    HS.state.running.set('hammershop', 'running');
+    HS.bus.emit('game');
+    window.__self({ gameRunning: true });
+  });
+  await count('.update-card button:has-text("Uruchom ponownie i zaktualizuj")[disabled]', 1);
+  if (!(await page.locator('.update-card').innerText()).includes(T('Najpierw zamknij grę – aktualizacja uruchamia launcher ponownie.'))) errors.push('Aktualizacja: nie widać, dlaczego przycisk jest wyłączony');
+  await shot('158-aktualizacja-gotowa-gra-dziala');
+  await page.evaluate(() => {
+    HS.state.running.clear();
+    HS.bus.emit('game');
+    window.__self({ gameRunning: false });
+  });
+  await page.locator('.update-card button', { hasText: 'Uruchom ponownie i zaktualizuj' }).click();
+  await page.waitForTimeout(200);
+  if ((await page.evaluate(() => window.__installed)) !== 1) errors.push('Aktualizacja: „Uruchom ponownie i zaktualizuj” nie uruchomiło instalacji');
+
+  // Ustawienia → Aktualizacje launchera: the version, the state, „Sprawdź teraz” and the switch.
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  await viewTop('h2', 'Aktualizacje launchera');
+  await count('.set-row:has-text("Aktualizuj automatycznie") input:checked', 0);
+  await count('.card:has-text("Aktualizacje launchera") button:has-text("Uruchom ponownie i zaktualizuj")', 1);
+  await shot('159-ustawienia-aktualizacja-gotowa');
+  await fits('Ustawienia – aktualizacja gotowa');
+  await page.evaluate(() => window.__self({ status: 'idle', latest: null, notes: null, upToDate: true }));
+  await page.locator('.set-row', { hasText: 'Aktualizuj automatycznie' }).locator('.switch').click();
+  await count('.set-row:has-text("Aktualizuj automatycznie") input:checked', 1);
+  const updateState = () => page.locator('.update-state').innerText();
+  if (!(await updateState()).includes(T('Masz najnowszą wersję'))) errors.push('Ustawienia: nie widać „Masz najnowszą wersję”');
+  await viewTop('h2', 'Aktualizacje launchera');
+  await shot('160-ustawienia-aktualizacje');
+  await small('160b-ustawienia-aktualizacje-male-okno', async () => {
+    await viewTop('h2', 'Aktualizacje launchera');
+    await fits('Ustawienia – aktualizacje, małe okno');
+  });
+  // „Sprawdź teraz”: „Sprawdzam…”, then the answer – here a new version that starts downloading at once.
+  await page.evaluate((notes) => ((window.__hold = true), (window.__selfNext = { status: 'downloading', latest: '2.6.1', percent: 42, upToDate: false, notes })), NOTES);
+  await page.locator('button', { hasText: 'Sprawdź teraz' }).click();
+  await page.waitForTimeout(200);
+  if (!(await updateState()).includes(T('Sprawdzam…'))) errors.push('Ustawienia: nie widać „Sprawdzam…”');
+  await count('button:has-text("Sprawdź teraz")[disabled]', 1);
+  await shot('161-ustawienia-aktualizacje-sprawdzam');
+  await release();
+  await page.waitForTimeout(400);
+  if (!(await updateState()).includes(T('Pobieram 42%'))) errors.push('Ustawienia: nie widać „Pobieram 42%”');
+  await count('.card:has-text("Aktualizacje launchera") .progress', 1);
+  await shot('162-ustawienia-aktualizacje-pobieram');
+  // An update without the owner's signature is refused – in calm words.
+  await page.evaluate(() => window.__self({ status: 'error', percent: null, latest: '2.6.1', notes: null, error: 'Aktualizacja 2.6.1 nie ma podpisu HammerShop, więc launcher jej nie zainstaluje. Jeśli to się powtarza, daj nam znać na Discordzie.' }));
+  await count('.update-state.warn', 1);
+  await shot('163-ustawienia-aktualizacje-brak-podpisu');
+  await fits('Ustawienia – aktualizacja bez podpisu');
+  await page.evaluate(() => window.__self({ status: 'error', error: 'Nie udało się sprawdzić aktualizacji launchera. Spróbuję ponownie później.' }));
+  await count('.update-state.warn', 1);
+  await page.evaluate(() => (window.__selfNext = null));
+
+  // A build that cannot replace itself (the portable exe): it only tells – the button opens the download page.
+  const RELEASE = { version: '2.6.1', notes: NOTES, url: 'https://hammershop.pl/launcher', size: 257000000, date: Date.now() - 3600e3 };
+  await page.evaluate((release) => window.__self({ status: 'unsupported', supported: false, reason: 'portable', error: null, latest: null, notes: release.notes, release }), RELEASE);
+  await count('.set-row:has-text("Aktualizuj automatycznie")', 0);
+  await count('.card:has-text("Aktualizacje launchera") button:has-text("Pobierz ze strony")', 1);
+  await viewTop('h2', 'Aktualizacje launchera');
+  await shot('164-ustawienia-aktualizacje-wersja-przenosna');
+  await fits('Ustawienia – wersja przenośna');
+  await nav('Graj');
+  await page.waitForTimeout(300);
+  await count('.update-card button:has-text("Pobierz ze strony")', 1);
+  await shot('165-nowa-wersja-wersja-przenosna');
+  await fits('Nowa wersja – wersja przenośna');
+  await page.evaluate(() => window.__self({ release: null, notes: null }));
+  await count('.update-card', 0);
+  await nav('Ustawienia');
+  await page.waitForTimeout(300);
+  if (!(await updateState()).includes(T('Wersja przenośna nie aktualizuje się sama – nową pobierzesz ze strony.'))) errors.push('Ustawienia: nie widać, dlaczego wersja przenośna się nie aktualizuje');
+  await page.evaluate(() => window.__self({ reason: 'dev' }));
+  if (!(await updateState()).includes(T('Wersja deweloperska nie aktualizuje się sama.'))) errors.push('Ustawienia: nie widać, że wersja deweloperska się nie aktualizuje');
+
+  // „O launcherze”: the BETA mark after the name and the line with the way to Discord.
+  await bottom();
+  await count('.card:has-text("O launcherze") h3 .beta-pill', 1);
+  await count('.beta-note button:has-text("Dołącz do Discorda")', 1);
+  await shot('166-o-launcherze-beta');
+  await fits('O launcherze – beta');
+  await small('166b-o-launcherze-beta-male-okno', async () => {
+    await bottom();
+    await fits('O launcherze – beta, małe okno');
+  });
+
+  // „Wymagana aktualizacja”: nothing else can be done – but the window can still be minimised or closed.
+  await nav('Graj');
+  await page.evaluate((notes) => window.__self({ status: 'available', supported: true, reason: null, latest: '2.6.1', notes, upToDate: false, required: { version: '2.6.1', minVersion: '2.6.1' }, release: { version: '2.6.1', notes, url: 'https://hammershop.pl/launcher', size: 257000000, date: Date.now() } }), NOTES);
+  await count('.overlay.must .modal', 1);
+  await count('.update-card', 0);
+  await shot('167-wymagana-aktualizacja');
+  await modalFits('Wymagana aktualizacja');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(60, 400);
+  await count('.overlay.must .modal', 1); // neither Escape nor a click next to it closes it
+  const behind = await page.evaluate(() => ({ shell: document.querySelector('.shell').inert, play: Boolean(document.elementFromPoint(900, 420)?.closest('.overlay.must')), bar: Boolean(document.elementFromPoint(1217, 19)?.closest('.tb-close')) }));
+  if (!behind.shell || !behind.play) errors.push('Wymagana aktualizacja: da się kliknąć w launcher pod oknem');
+  if (!behind.bar) errors.push('Wymagana aktualizacja: okno zasłania przyciski paska tytułu');
+  await page.locator('.overlay.must button', { hasText: 'Zaktualizuj teraz' }).click();
+  await page.evaluate(() => window.__self({ percent: 64 }));
+  await count('.overlay.must .progress', 1);
+  await count('.overlay.must button:has-text("Zaktualizuj teraz")[disabled]', 1);
+  await shot('168-wymagana-aktualizacja-pobieranie');
+  await small('168b-wymagana-aktualizacja-male-okno', () => modalFits('Wymagana aktualizacja, małe okno'));
+  // A game is still running: the update waits, and the window says why.
+  await page.evaluate(() => window.__self({ status: 'ready', percent: null, gameRunning: true }));
+  await count('.overlay.must button:has-text("Zaktualizuj teraz")[disabled]', 1);
+  await shot('169-wymagana-aktualizacja-gra-dziala');
+  await page.evaluate(() => window.__self({ gameRunning: false }));
+  await page.locator('.overlay.must button', { hasText: 'Zaktualizuj teraz' }).click();
+  await page.waitForTimeout(200);
+  if ((await page.evaluate(() => window.__installed)) !== 2) errors.push('Wymagana aktualizacja: „Zaktualizuj teraz” nie uruchomiło instalacji');
+  // The launcher's own update failed: the download page is the way out.
+  await page.evaluate(() => window.__self({ status: 'error', error: 'Nie udało się pobrać aktualizacji launchera. Spróbuję ponownie później.' }));
+  await count('.overlay.must button:has-text("Pobierz ze strony")', 1);
+  await shot('170-wymagana-aktualizacja-blad');
+  await modalFits('Wymagana aktualizacja – błąd');
+  // On a build that cannot replace itself the button opens the download page.
+  await page.evaluate(() => window.__self({ status: 'unsupported', supported: false, reason: 'portable', error: null, latest: null }));
+  await count('.overlay.must button:has-text("Pobierz nową wersję")', 1);
+  await count('.overlay.must button:has-text("Zaktualizuj teraz")', 0);
+  await shot('171-wymagana-aktualizacja-wersja-przenosna');
+  await modalFits('Wymagana aktualizacja – wersja przenośna');
+  // The shop stops answering (or the launcher is new enough): nothing is blocked any more.
+  await page.evaluate(() => window.__self({ status: 'idle', supported: true, reason: null, required: null, release: null, latest: null, notes: null, upToDate: true }));
+  await count('.overlay.must', 0);
+  if (await page.evaluate(() => document.querySelector('.shell').inert)) errors.push('Wymagana aktualizacja: launcher został zablokowany po zamknięciu okna');
+
+  // Hammer+: „Kup Hammer+” next to „Mam kod” – it leads to the launcher's page of the website.
+  await page.evaluate(() => window.__plus(false));
+  await plusPill();
+  await count('.plus-acts button:has-text("Kup Hammer+")', 1);
+  await count('.plus-acts button:has-text("Mam kod")', 1);
+  await page.evaluate(() => (window.__opened = []) && (window.hs.app.openExternal = async (url) => (window.__opened.push(url), true)));
+  await page.locator('.plus-acts button', { hasText: 'Kup Hammer+' }).click();
+  if ((await page.evaluate(() => window.__opened.join())) !== 'https://hammershop.pl/launcher#plus') errors.push(`Hammer+: „Kup Hammer+” otwiera ${await page.evaluate(() => window.__opened.join())}`);
+  await shot('172-hammerplus-kup');
+  await fits('Hammer+ – Kup Hammer+');
+  await small('172b-hammerplus-kup-male-okno', () => fits('Hammer+ – Kup Hammer+, małe okno'));
 
   /* ── Ustawienia → Język / Language: the other language applies at once; back again, every text is as it was ── */
   await nav('Ustawienia');

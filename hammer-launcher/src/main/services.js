@@ -21,7 +21,9 @@ const { createModpacks } = require('./modpacks');
 const { createOptimizer, writeOptionsPreset, setGpuPreference, recommend, performanceModsIn, OPTION_PRESETS } = require('./optimizer');
 const { createProgress } = require('./progress');
 const { ping } = require('./serverping');
-const { loadNews } = require('./news');
+const { createNewsFeed, alertVisible, closeAlert, newestAt } = require('./news');
+const { createSelfUpdate, updatesBase } = require('./selfupdate');
+const { APP_VERSION, userAgent } = require('./net');
 const { systemInfo } = require('./system');
 const { majorOf, javaMajorFor, detectJavaMajor } = require('./java');
 const { jvmArgs, effectivePreset, zgcSupported } = require('./jvm');
@@ -60,8 +62,12 @@ const { createScreenshotShare } = require('./screenshare');
  * picture (Electron's nativeImage). `capes` is the list of Hammer+ capes (capes.json). `prepareFn` installs what an
  * instance needs before a start (the tests replace it, so a start needs no downloads). `t(text)` gives the names
  * the launcher makes up itself ("(kopia)", "Skórka z konta") in the player's language (main.js: i18n.js); without it they are Polish.
+ * `appVersion` is the running launcher's version (app.getVersion()). `updater` is electron-updater's autoUpdater
+ * and `updateSupport` says whether this build can replace itself (selfupdate.js → updateSupport) – main.js loads
+ * the updater only where it can; `updateLog(line)` writes the updater's log. Without them the launcher only
+ * tells that a newer version exists.
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance, t = (text) => text }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance, t = (text) => text, appVersion = APP_VERSION, updater = null, updateSupport = { supported: false, reason: 'dev' }, updateLog = () => {} }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
   const store = createSettings(paths.settings);
@@ -104,10 +110,12 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       // The background check for mod updates follows its switch at once.
       if (saved.modUpdateCheck && !before.modUpdateCheck) updateWatch.run().catch(() => null);
       if (!saved.modUpdateCheck && before.modUpdateCheck) updateWatch.clear();
+      // „Aktualizuj automatycznie” switched on: an update that was only announced is fetched now.
+      if (saved.autoUpdate !== before.autoUpdate) selfUpdate.refresh();
       return saved;
     },
   };
-  const shop = createShopApi({ config, fetchFn });
+  const shop = createShopApi({ config, fetchFn, version: appVersion });
   const backgrounds = createBackgrounds({ dir: path.join(root, 'theme') });
   const menuBackground = createMenuBackground({ dir: path.join(root, 'theme'), convert: convertImage });
 
@@ -142,6 +150,34 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   });
   plusChanged(); // arms the timer for a code that ends while the launcher is open
 
+  /* ── the shop's news and messages, and the launcher's own updates ── */
+  /** The feed as the window gets it: without a message the player has closed, and with what „nowe” is measured against. */
+  const feedView = (s) => ({ ...s, alert: alertVisible(s.alert, { closed: store.get().closedAlert, now: now() }) ? s.alert : null, seenAt: store.get().newsSeenAt });
+  const feed = createNewsFeed({
+    api: shop,
+    config,
+    fetchFn,
+    now,
+    onChange: (s) => {
+      selfUpdate.setRelease(s.release, s.ok); // a newer version, and whether this one is still supported
+      emit('news:update', feedView(s));
+    },
+  });
+  // A game that runs or is being started: the launcher never restarts or installs under it.
+  const selfUpdate = createSelfUpdate({
+    updater,
+    version: appVersion,
+    feedUrl: updatesBase(config),
+    support: updateSupport,
+    publicKey: config.updatePublicKey,
+    gameRunning: () => games.running.size > 0 || busy.size > 0,
+    autoUpdate: () => store.get().autoUpdate !== false,
+    onChange: (state) => emit('selfupdate:state', state),
+    log: updateLog,
+    now,
+    userAgent: userAgent(appVersion),
+  });
+
   const sharing = recipes.createSharing({ instances, content, modrinth, versionsApi, serverList });
   const featured = createFeatured({ api: shop, now });
   // What the player is looking at before saying yes: a recipe read from a code or file, an invitation from a link.
@@ -157,6 +193,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
 
   games.on('log', (e) => emit('game:log', e));
   games.on('state', (e) => emit('game:state', e));
+  games.on('state', () => selfUpdate.refresh()); // „Uruchom ponownie i zaktualizuj” is off while a game runs
   // A game ended. An FPS test is not a game session: it leaves its result and nothing else. After every real
   // session – also one that crashed – the play time is counted and the automatic world backups and the cloud
   // copy (Hammer+) run; one that ended normally gets its summary on the start screen.
@@ -241,6 +278,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
    */
   async function launch(instanceId, { join, server, world, benchmark = null } = {}) {
     let instance = need(instanceId);
+    // „Wymagana aktualizacja”: the shop no longer supports this version – only what it said just now counts.
+    if (selfUpdate.status().required) throw new Error('Ta wersja launchera nie jest już wspierana. Zaktualizuj launcher, żeby grać dalej.');
     if (games.isRunning(instance.id)) throw new Error('Ta instancja już działa.');
     if (busy.has(instance.id)) throw new Error('Gra jest już przygotowywana.');
     if (worldTasks.has(instance.id)) throw new Error('Poczekaj, aż launcher skończy kopię zapasową świata – potem uruchom grę.');
@@ -853,7 +892,51 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     optimizerInfo,
     applyOptimization,
     ping: (address) => ping(address),
-    news: () => loadNews(config.newsUrl, { fetchFn }),
+    /** Aktualności and the message bar – from the shop's /news (or newsUrl), else the built-in tips. Nothing here throws. */
+    news: {
+      /** { news, source, alert, release, ok, fetchedAt, seenAt } – the first call waits a moment for the shop, never long. */
+      feed: async () => feedView(await feed.current()),
+      /** Asks the shop again (at most once a minute; `force`: now) – the 'news:update' event brings what changed. */
+      refresh: async (opts) => feedView(await feed.refresh({ force: opts?.force === true })),
+      /** The player closed the message bar: it stays closed until the shop sends another message. A critical one stays. */
+      closeAlert: () => {
+        const s = feed.peek();
+        store.set({ closedAlert: closeAlert(s.alert, store.get().closedAlert) });
+        const view = feedView(s);
+        emit('news:update', view);
+        return view;
+      },
+      /** The home screen showed the news: what is there now is no longer „nowe” the next time. */
+      markSeen: () => {
+        const newest = newestAt(feed.peek().news);
+        if (newest > store.get().newsSeenAt) store.set({ newsSeenAt: newest });
+        return store.get().newsSeenAt;
+      },
+      start: () => feed.start(),
+      stop: () => feed.stop(),
+    },
+    /** Aktualizacje launchera – see selfupdate.js for the state ({ status, latest, percent, release, required, … }). */
+    selfUpdate: {
+      status: () => selfUpdate.status(),
+      /** „Sprawdź teraz”: asks the shop about the newest version and – where the launcher can update itself – the update server. */
+      check: async () => {
+        await feed.refresh({ force: true });
+        return selfUpdate.check();
+      },
+      download: () => selfUpdate.download(),
+      /** Restarting waits for what the last game session left running (automatic backups, the cloud copy). */
+      install: async () => {
+        await afterSessions();
+        return selfUpdate.install();
+      },
+      update: async () => {
+        await afterSessions();
+        return selfUpdate.update();
+      },
+      installOnQuit: (exitCode) => selfUpdate.installOnQuit(exitCode),
+      start: () => selfUpdate.start(),
+      stop: () => selfUpdate.stop(),
+    },
     system: () => systemInfo(gpuInfo()),
     community,
     /** { versions: every supported Minecraft version, oldest → newest; version: the mod's version; available }. */

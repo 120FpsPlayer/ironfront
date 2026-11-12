@@ -7,6 +7,22 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const USER_AGENT = 'Hammer-Launcher/1.0 (hammershop.pl)';
+
+/** The launcher's own version (package.json – the same number app.getVersion() answers in the built app). */
+const VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+const APP_VERSION = (() => {
+  try {
+    const { version } = require('../../package.json');
+    return VERSION.test(String(version)) ? String(version) : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+/**
+ * What the launcher calls itself towards the HammerShop website: "Hammer-Launcher/2.6.0 (hammershop.pl)".
+ * The shop counts launcher starts per version from this header, so its requests carry the real version.
+ */
+const userAgent = (version = APP_VERSION) => `Hammer-Launcher/${VERSION.test(String(version ?? '')) ? version : APP_VERSION} (hammershop.pl)`;
 /** Hosts Modrinth allows in modpacks (the .mrpack specification) plus Modrinth's CDN. */
 const ALLOWED_HOSTS = ['cdn.modrinth.com', 'github.com', 'raw.githubusercontent.com', 'gitlab.com', 'objects.githubusercontent.com'];
 
@@ -86,4 +102,4 @@ async function download(url, dest, { sha1, fetchFn = fetch, maxBytes = 1024 * 10
   }
 }
 
-module.exports = { download, checkUrl, safeName, insideDir, sha1File, USER_AGENT, ALLOWED_HOSTS };
+module.exports = { download, checkUrl, safeName, insideDir, sha1File, USER_AGENT, APP_VERSION, userAgent, ALLOWED_HOSTS };

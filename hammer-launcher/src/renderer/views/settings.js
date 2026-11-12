@@ -1,6 +1,7 @@
 'use strict';
 /* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's look (colour; with Hammer+ any colour,
-   animated and own backgrounds), automatic world backups and the cloud (Hammer+), folders, disk space and clean-up, about.
+   animated and own backgrounds), automatic world backups and the cloud (Hammer+), folders, disk space and clean-up,
+   the launcher's own updates, about (with the „BETA” mark and where to report problems).
    Also the switches of the summary after a game, the background check for mod updates and the question before a
    screenshot is uploaded for a link. */
 
@@ -286,6 +287,7 @@
     const acc = accountsCard();
     const look = lookCard();
     const disk = diskCard();
+    const updates = HS.updateUi.settingsCard();
     const s = () => state.settings;
     const set = (patch) => attempt(() => state.setSettings(patch));
 
@@ -322,6 +324,13 @@
         filesCard.append(row('Pytaj przed udostępnieniem zrzutu ekranu', `„Udostępnij link” w Galerii wysyła zrzut do zewnętrznego serwisu (${info.service}). Launcher najpierw wyjaśnia, co to znaczy, i pyta o zgodę.`, HS.toggle(s().screenshotShareAsk !== false, (v) => set({ screenshotShareAsk: v }))));
       })
       .catch(() => {});
+    // „O launcherze” in a beta build: one quiet line with the way to our Discord (the invitation the launcher already knows).
+    const betaNote = HS.isBeta() ? h('p.hint.beta-note', 'Wersja beta – jeśli coś nie działa, daj nam znać na Discordzie.') : null;
+    if (betaNote) {
+      HS.community.discord().then((d) => {
+        if (alive && d?.url && !d.invalid) betaNote.append(' ', h('button.link', { type: 'button', onclick: () => HS.open(d.url) }, icon('discord'), 'Dołącz do Discorda'));
+      });
+    }
     const jvmArgs = h('textarea.input', { rows: 2, value: s().customJvmArgs ?? '', placeholder: 'np. -XX:+UseLargePages', onchange: (e) => set({ customJvmArgs: e.target.value }) });
 
     clear(
@@ -366,6 +375,7 @@
           look.el,
           plusCard(),
           disk.el,
+          updates.el,
           h(
             'section.card',
             h('div.card-head', icon('info'), h('h2', 'O launcherze')),
@@ -373,7 +383,7 @@
               'div.row',
               { style: { gap: '16px' } },
               h('img', { src: 'assets/hammer-mark.png', alt: '', style: { width: '56px', height: '56px' } }),
-              h('div.grow', h('h3', `${state.info?.config?.name ?? 'Hammer Launcher'} ${state.info?.version ?? ''}`), h('p.muted', 'Szybki launcher Minecrafta z modami i optymalizacją. Mody i paczki pochodzą z Modrinth. Minecraft jest znakiem towarowym Mojang Studios – launcher nie jest z nim powiązany.'), h('div.dev-credit', 'by HammerShop', h('i.tb-slash', { 'aria-hidden': 'true' }), h('span', 'developed by ', h('strong', '120FpsPlayer')))),
+              h('div.grow', h('h3', `${state.info?.config?.name ?? 'Hammer Launcher'} ${state.info?.version ?? ''}`, HS.betaPill()), h('p.muted', 'Szybki launcher Minecrafta z modami i optymalizacją. Mody i paczki pochodzą z Modrinth. Minecraft jest znakiem towarowym Mojang Studios – launcher nie jest z nim powiązany.'), betaNote, h('div.dev-credit', 'by HammerShop', h('i.tb-slash', { 'aria-hidden': 'true' }), h('span', 'developed by ', h('strong', '120FpsPlayer')))),
               state.info?.config?.website ? h('button.btn', { onclick: () => HS.open(state.info.config.website) }, icon('globe'), 'Strona') : null,
             ),
           ),
@@ -386,6 +396,7 @@
     return () => {
       alive = false;
       disk.stop();
+      updates.stop();
       offs.forEach((f) => f());
     };
   }

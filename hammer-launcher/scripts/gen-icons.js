@@ -29,7 +29,7 @@ const ICONS = {
   disk: 'solid/hard-drive', shirt: 'solid/shirt', undo: 'solid/arrow-rotate-left', 'eye-off': 'solid/eye-slash', bricks: 'solid/trowel-bricks',
   lock: 'solid/lock', cloud: 'solid/cloud', 'cloud-down': 'solid/cloud-arrow-down', key: 'solid/key', paste: 'solid/paste', images: 'solid/images',
   save: 'solid/floppy-disk', outfit: 'solid/vest', share: 'solid/share-nodes', invite: 'solid/envelope-open-text', send: 'solid/paper-plane',
-  export: 'solid/file-export',
+  export: 'solid/file-export', pin: 'solid/thumbtack', bullhorn: 'solid/bullhorn',
 };
 
 const out = {};

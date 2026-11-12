@@ -1,6 +1,7 @@
 {
   "name": "Hammer Launcher",
   "brand": "HammerShop",
+  "channel": "beta",
   "website": "https://hammershop.pl",
   "shopUrl": "https://hammershop.pl",
   "shopApi": "",
@@ -16,6 +17,7 @@
     "redirect": ""
   },
   "updateUrl": "",
+  "updatePublicKey": "",
   "defaultInstance": {
     "name": "Hammer",
     "mcVersion": "1.21.1",

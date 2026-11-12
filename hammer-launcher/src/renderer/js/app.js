@@ -82,7 +82,7 @@
         ),
         icon('chevron-down'),
       ),
-      h('div.version-tag', `Hammer Launcher v${state.info?.version ?? ''}`),
+      h('div.version-tag', `Hammer Launcher v${state.info?.version ?? ''}`, HS.betaPill()),
     );
   }
   function accountMenu(anchor) {
@@ -110,6 +110,7 @@
       clear(view, h('div.page', HS.empty('warning', 'Coś poszło nie tak', err.message)));
     }
     drawNav();
+    bus.emit('view', id);
   }
   HS.go = go;
   /** Draws the open tab again where it is (after Hammer+ went on or off, or a copy from the cloud changed things). */
@@ -279,6 +280,69 @@
     go('mods');
   };
 
+  /* ── the shop's message: a bar under the title bar, on every screen ── */
+  const alertBar = document.getElementById('alert-bar');
+  const ALERT_ICONS = { info: 'bullhorn', warning: 'warning', critical: 'warning' };
+  let alertTimer = null;
+  function drawAlert() {
+    clearTimeout(alertTimer);
+    const a = state.feed?.alert;
+    const left = a?.until != null ? a.until - Date.now() : null;
+    if (!a || (left != null && left <= 0)) {
+      alertBar.hidden = true;
+      return clear(alertBar);
+    }
+    // Past its time the message goes by itself, also when the launcher just stays open.
+    if (left != null) alertTimer = setTimeout(drawAlert, Math.min(left + 500, 2 ** 31 - 1));
+    alertBar.className = `alert-bar ${a.level}`;
+    alertBar.hidden = false;
+    clear(
+      alertBar,
+      icon(ALERT_ICONS[a.level] ?? 'bullhorn'),
+      HS.raw(h('div.txt', { title: a.text }, a.text)), // the shop's own words
+      a.url ? h('button.btn.sm', { type: 'button', onclick: () => HS.open(a.url) }, 'Więcej', icon('external')) : null,
+      // A critical message stays until the shop takes it down.
+      a.level === 'critical'
+        ? null
+        : h(
+            'button.btn.ghost.sm.icon',
+            {
+              type: 'button',
+              title: 'Zamknij komunikat',
+              'aria-label': 'Zamknij komunikat',
+              onclick: () => {
+                state.feed = { ...state.feed, alert: null };
+                drawAlert();
+                api.news
+                  .closeAlert()
+                  .then(setFeed)
+                  .catch(() => {});
+              },
+            },
+            icon('close'),
+          ),
+    );
+  }
+  /** Aktualności, the message and the newest version as the launcher knows them now. */
+  function setFeed(feed) {
+    if (!feed) return;
+    state.feed = feed;
+    drawAlert();
+    bus.emit('feed', feed);
+  }
+  api.on('news:update', setFeed);
+
+  /* ── the launcher's own update: the card on the start screen, Ustawienia, and the required-update window ── */
+  function setSelfUpdate(st) {
+    if (!st) return;
+    state.selfUpdate = st;
+    bus.emit('selfupdate', st);
+    HS.updateUi.syncRequired();
+  }
+  HS.setSelfUpdate = setSelfUpdate;
+  api.on('selfupdate:state', setSelfUpdate);
+  bus.on('game', () => HS.updateUi.syncRequired());
+
   api.on('cloud:conflict', (c) => HS.plusUi.cloudConflict(c));
   api.on('cloud:synced', () => bus.emit('cloud'));
 
@@ -300,15 +364,27 @@
       for (const id of await api.benchmark.running()) state.benchmarks.add(id);
       state.playSummary = await api.play.summary();
       state.updates = await api.updates.status();
+      state.selfUpdate = await api.selfUpdate.status();
     } catch (err) {
       toast('err', err.message, 8000);
     }
+    // „BETA” right after the name in the title bar, and in the window's title.
+    if (HS.isBeta()) {
+      document.querySelector('.tb-brand span')?.after(HS.betaPill());
+      document.title = `${state.info?.config?.name ?? 'Hammer Launcher'} (beta)`;
+    }
+    // Aktualności and the shop's message come in the background – the start never waits for the shop.
+    api.news
+      .feed()
+      .then(setFeed)
+      .catch(() => {});
     drawPill();
     drawFoot();
     HS.community.discord().then(drawDiscordMini);
     setInterval(() => HS.community.discord().then(drawDiscordMini), 5 * 60_000);
     go('home');
     document.getElementById('app').classList.remove('booting');
+    HS.updateUi.syncRequired();
     if (!state.instances.length) {
       try {
         const created = await api.instances.ensureDefault();

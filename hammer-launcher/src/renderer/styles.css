@@ -787,3 +787,63 @@ button.chip.plus-chip:hover{background:rgba(var(--gold-glow),.2);border-color:rg
 
 /* (the screenshot viewer – .lightbox, z-index 45 – lies under dialogs: the question before a delete, the consent before a link) */
 .lightbox .lb-top .btn{flex:none}
+
+/* ── „BETA” next to the launcher's name, the shop's message bar, shop news, the launcher's own updates ── */
+.beta-pill{display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:8px;font-size:9.5px;font-weight:800;letter-spacing:.12em;line-height:1;text-transform:uppercase;white-space:nowrap;flex:none;vertical-align:middle;color:var(--accent-ink);background:linear-gradient(180deg,var(--accent2),var(--accent));box-shadow:0 0 10px rgba(var(--glow),.3)}
+.tb-brand .beta-pill{margin-left:-2px}
+.version-tag .beta-pill{margin-left:6px;height:14px;font-size:8.5px;vertical-align:1px}
+.hero .eyebrow .beta-pill{letter-spacing:.12em}
+h3 .beta-pill{margin-left:8px;vertical-align:2px}
+.beta-note{margin-top:6px}
+button.link{display:inline-flex;align-items:center;gap:5px;color:var(--accent2);font-weight:700;font-size:inherit;vertical-align:baseline;border-radius:4px}
+button.link:hover{color:var(--accent-hi);text-decoration:underline}
+button.link svg.i{width:12px;height:12px}
+
+.alert-bar{display:flex;align-items:center;gap:10px;min-height:38px;padding:5px 10px 5px 16px;font-size:12.5px;font-weight:600;color:var(--text);border-bottom:1px solid var(--line);flex:none;-webkit-app-region:no-drag}
+.alert-bar[hidden]{display:none}
+.alert-bar>svg.i{width:15px;height:15px;flex:none}
+.alert-bar .txt{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;overflow-wrap:anywhere}
+.alert-bar .btn{flex:none;height:28px}
+.alert-bar .btn.icon{width:28px}
+.alert-bar.info{background:linear-gradient(90deg,rgba(var(--glow),.2),rgba(var(--glow),.07));border-bottom-color:rgba(var(--glow),.32)}
+.alert-bar.info>svg.i{color:var(--accent)}
+.alert-bar.warning{background:linear-gradient(90deg,rgba(255,200,87,.2),rgba(255,200,87,.07));border-bottom-color:rgba(255,200,87,.36)}
+.alert-bar.warning>svg.i{color:var(--warn)}
+.alert-bar.critical{background:linear-gradient(90deg,rgba(226,58,58,.42),rgba(226,58,58,.2));border-bottom-color:rgba(255,122,122,.55);color:#fff}
+.alert-bar.critical>svg.i{color:#ffb3b3}
+
+.news-meta{gap:8px;margin-bottom:3px;min-height:0;flex-wrap:wrap}
+.news-meta:empty{display:none}
+.news-item p{white-space:pre-line;overflow-wrap:anywhere}
+.news-item h3{overflow-wrap:anywhere}
+.news-item.pinned{border-color:rgba(var(--glow),.3)}
+.news-pin{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:rgba(var(--glow),.13);color:var(--accent);flex:none}
+.news-pin svg.i{width:11px;height:11px}
+.news-new{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--accent2)}
+.news-new i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(var(--glow),.18),0 0 8px rgba(var(--glow),.7)}
+.news-img{width:84px;height:64px;border-radius:9px;object-fit:cover;flex:none;align-self:center;border:1px solid var(--line)}
+
+.update-card{padding:14px 16px;border-color:rgba(var(--glow),.32);background:linear-gradient(90deg,rgba(var(--glow),.09),transparent 60%),var(--panel)}
+.update-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.update-top>.grow{min-width:200px}
+.update-top b{display:block;font-size:14px}
+.update-top small{display:block;color:var(--dim);font-size:12px;margin-top:1px}
+.update-acts{display:flex;gap:8px;flex:none}
+.update-card>.progress{margin-top:12px}
+.update-notes{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.update-notes small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.update-notes p{white-space:pre-line;overflow-wrap:anywhere;font-size:12.5px;color:var(--muted);max-height:104px;overflow:auto}
+.update-state{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin:-4px 0 10px}
+.update-state>svg.i{width:14px;height:14px;color:var(--accent);flex:none}
+.update-state.warn{color:var(--warn)}
+.update-state.warn>svg.i{color:var(--warn)}
+.update-state+.progress{margin-bottom:12px}
+.cloud-note.warn{background:rgba(255,200,87,.07);border-color:rgba(255,200,87,.26)}
+.cloud-note.warn svg.i{color:var(--warn)}
+/* „Wymagana aktualizacja”: above every other window, but the title bar stays free (minimise, close) */
+.overlay.must{top:38px;z-index:55}
+.overlay.must .modal{max-height:calc(100vh - 118px)}
+.overlay.must .modal-body{display:flex;flex-direction:column;gap:10px}
+.overlay.must .modal-body>p:first-child{font-weight:700;font-size:14px}
+.overlay.must .modal-foot{align-items:center}
+.overlay.must .update-notes{margin-top:2px}

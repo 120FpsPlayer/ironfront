@@ -354,6 +354,8 @@
     playSummary: null, // „Podsumowanie gry” of the last session – shown on the start screen until dismissed
     updates: { checkedAt: null, total: 0, instances: [] }, // mod updates found by the background check: [{ id, name, count }]
     plus: null, // Hammer+: { active, until, account, reason, text, … } from the launcher
+    feed: null, // Aktualności and the shop's message: { news, source, alert, release, ok, seenAt } – null until the launcher answered
+    selfUpdate: null, // the launcher's own update: { status, current, latest, percent, notes, error, release, required, … }
     backgroundUrl: null, // the player's own launcher background (Hammer+)
     get account() {
       return this.accounts.find((a) => a.id === this.settings.selectedAccount) ?? this.accounts[0] ?? null;
@@ -382,6 +384,13 @@
       bus.emit('instances', this.instances);
     },
   };
+
+  /* ── „BETA” next to the launcher's name (launcher.config.json → channel: "beta") ── */
+  const isBeta = () => state.info?.config?.channel === 'beta';
+  /** The small mark that goes right after the name – nothing in a stable build. */
+  function betaPill() {
+    return isBeta() ? h('span.beta-pill', { title: 'Wersja beta' }, 'BETA') : null;
+  }
 
   /* ── toasts ── */
   const TOAST_ICONS = { ok: 'check-circle', err: 'x-circle', warning: 'warning', info: 'info' };
@@ -714,5 +723,5 @@
     return { el, draw };
   }
 
-  window.HS = { views: {}, api, t: i18n.t, locale, h, append, clear, raw, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, copyText, taskBar, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme };
+  window.HS = { views: {}, api, t: i18n.t, locale, h, append, clear, raw, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, copyText, taskBar, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme, isBeta, betaPill };
 })();

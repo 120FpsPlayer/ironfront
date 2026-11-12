@@ -1,6 +1,7 @@
 'use strict';
 /* Graj – start screen: big PLAY button, instance picker, install progress, news, server status – and, when there is
-   something to say, the summary of the last game session and the mod updates found in the background. */
+   something to say, a new version of the launcher, the summary of the last game session and the mod updates found
+   in the background. Aktualności come from the shop (pinned items, tags, dates, a „nowe” mark) or are the built-in tips. */
 
 (() => {
   const { api, h, clear, icon, fmt, LOADERS, tile, bus, state, open } = HS;
@@ -23,6 +24,13 @@
       { icon: 'plus', label: 'Nowa instancja…', onClick: () => HS.editInstance() },
     ]);
   }
+
+  // „nowe”: items newer than what the start screen showed the last time. The mark stays for the whole visit –
+  // it is measured against the time remembered when the screen was opened, and that is forgotten on leaving it.
+  let seenBase = null;
+  bus.on('view', (id) => {
+    if (id !== 'home') seenBase = null;
+  });
 
   function render(root) {
     const playArea = h('div');
@@ -134,6 +142,47 @@
       );
     }
 
+    /* ── Aktualności: the shop's news (or the list of newsUrl) – the built-in tips when there is none ── */
+    function drawNews() {
+      const feed = state.feed;
+      if (!feed) return; // the launcher has not answered yet – the placeholders stay
+      const own = feed.source === 'builtin'; // the launcher's own tips are translated; the shop's words are shown as they are
+      const text = (el) => (own ? el : HS.raw(el));
+      if (seenBase == null) seenBase = state.settings.newsSeenAt ?? feed.seenAt ?? 0;
+      // (the very first time nothing is marked – everything would be)
+      const fresh = (n) => feed.source === 'shop' && seenBase > 0 && typeof n.at === 'number' && n.at > seenBase;
+      clear(
+        newsList,
+        feed.news.map((n) =>
+          h(
+            `div.news-item${n.url ? '.clickable' : ''}${n.pinned ? '.pinned' : ''}`,
+            { onclick: n.url ? () => open(n.url) : null, style: n.url ? { cursor: 'pointer' } : null },
+            h('div.bar'),
+            h(
+              'div.grow',
+              h(
+                'div.row.news-meta',
+                n.pinned ? h('span.news-pin', { title: 'Przypięte', 'aria-label': 'Przypięte' }, icon('pin')) : null,
+                n.tag ? text(HS.chip(n.tag, 'accent')) : null,
+                n.date ? text(h('small.dim', n.date)) : null,
+                fresh(n) ? h('span.news-new', { title: 'Nowe od Twojej ostatniej wizyty' }, h('i'), 'nowe') : null,
+              ),
+              text(h('h3', n.title)),
+              n.body ? text(h('p', n.body)) : null,
+            ),
+            n.image && /^(https:\/\/|data:image\/)/.test(n.image) ? h('img.news-img', { src: n.image, alt: '', loading: 'lazy', decoding: 'async', onerror: (e) => e.target.remove() }) : null,
+          ),
+        ),
+      );
+      // Shown: the next visit marks only what comes after this.
+      if (feed.source === 'shop' && feed.news.some((n) => typeof n.at === 'number' && n.at > (state.settings.newsSeenAt ?? 0))) {
+        api.news
+          .seen()
+          .then((at) => (state.settings.newsSeenAt = at))
+          .catch(() => {});
+      }
+    }
+
     /* ── mod updates the background check found: one card that leads to the list ── */
     const updatesBox = h('div');
     function drawUpdates() {
@@ -194,13 +243,15 @@
     const shopBox = h('div');
     // Polecane serwery: a compact strip under the two columns – only when the shop has a list.
     const featured = HS.inviteUi.featuredStrip();
+    // A new version of the launcher: found, downloading, ready to install (or, where it cannot update itself, where to get it).
+    const selfUpdate = HS.updateUi.homeCard();
     const hero = h(
       'section.hero',
       HS.fxLayer(), // the animated background picked in Ustawienia → Wygląd (Hammer+); empty for the classic look
       h('canvas.embers', { 'aria-hidden': 'true' }),
       h('div.grid-bg'),
       h('img.mark', { src: 'assets/hammer-mark.png', alt: '' }),
-      h('div.eyebrow', icon('hammer'), 'Hammer Launcher'),
+      h('div.eyebrow', icon('hammer'), 'Hammer Launcher', HS.betaPill()),
       h('h1', 'Minecraft, który ', h('span', 'po prostu działa'), '.'),
       h('p', 'Więcej FPS, mody w jednym kliknięciu i zero kombinowania z Javą. Wybierz instancję i graj.'),
       playArea,
@@ -213,7 +264,7 @@
         'div.page',
         loginCta,
         hero,
-        h('div.home-notes', summaryBox, updatesBox),
+        h('div.home-notes', selfUpdate.el, summaryBox, updatesBox),
         h(
           'div.home-grid',
           h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, h('section.card', h('div.card-head', icon('book'), h('h2', 'Aktualności')), newsList), h('section.card', h('div.card-head', icon('cube'), h('h2', 'Wybrana instancja')), statsBody)),
@@ -258,23 +309,7 @@
     drawPlay();
     drawSummary();
     drawUpdates();
-
-    api.news
-      .list()
-      .then((items) =>
-        clear(
-          newsList,
-          items.map((n) =>
-            h(
-              `div.news-item${n.url ? '.clickable' : ''}`,
-              { onclick: n.url ? () => open(n.url) : null, style: n.url ? { cursor: 'pointer' } : null },
-              h('div.bar'),
-              h('div.grow', h('div.row', { style: { gap: '8px', marginBottom: '3px' } }, n.tag ? HS.chip(n.tag, 'accent') : null, n.date ? h('small.dim', n.date) : null), h('h3', n.title), h('p', n.body)),
-            ),
-          ),
-        ),
-      )
-      .catch(() => clear(newsList, h('p.muted', 'Nie udało się pobrać aktualności.')));
+    drawNews();
 
     async function ping() {
       if (!info.server?.address) return;
@@ -299,10 +334,11 @@
     ping();
     const timer = setInterval(ping, 60000);
 
-    const offs = [bus.on('instances', drawClient), bus.on('settings', drawClient), bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home')), bus.on('summary', drawSummary), bus.on('instances', drawSummary), bus.on('updates', drawUpdates), bus.on('instances', drawUpdates)];
+    const offs = [bus.on('instances', drawClient), bus.on('settings', drawClient), bus.on('instances', drawPlay), bus.on('settings', drawPlay), bus.on('game', drawPlay), bus.on('accounts', () => HS.go('home')), bus.on('summary', drawSummary), bus.on('instances', drawSummary), bus.on('updates', drawUpdates), bus.on('instances', drawUpdates), bus.on('feed', drawNews)];
     return () => {
       clearInterval(timer);
       featured.stop();
+      selfUpdate.stop();
       stopEmbers();
       offs.forEach((f) => f());
     };

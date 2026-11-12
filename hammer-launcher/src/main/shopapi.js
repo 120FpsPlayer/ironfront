@@ -10,13 +10,16 @@
  * and for everybody, without a code:
  *
  *   GET  <base>/featured                   → { servers: [{ id, name, address, description, tags, icon, mc, loader, pack }] }
+ *   GET  <base>/news                       → { news: [...], alert: {...} | null, release: {...} | null }   (news.js)
  *
  * base = <shopApi or website from launcher.config.json>/api/launcher. Errors come as { error: "<Polish text>" }.
  * The shop may not be online (yet): no answer, a server error or a page that is not this API all end in one
  * friendly ShopError with `offline: true` – callers show its text and carry on, nothing here ever blocks a start.
+ * Every request says which launcher asks: User-Agent "Hammer-Launcher/<version> (hammershop.pl)" – the shop
+ * counts launcher starts per version from it.
  */
 
-const { USER_AGENT } = require('./net');
+const { userAgent } = require('./net');
 
 const OFFLINE_NOTE = 'Chmura zadziała, gdy sklep HammerShop będzie online.';
 const MAX_BODY = 256 * 1024; // what PUT /cloud accepts
@@ -38,8 +41,9 @@ function apiBase(config = {}) {
   return /^https:\/\/[^\s/]+/.test(site) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(site) ? `${site}/api/launcher` : '';
 }
 
-function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs = 8000 }) {
+function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs = 8000, version }) {
   const base = () => apiBase(config);
+  const agent = userAgent(version); // `version` is the running launcher's (app.getVersion()); without it: package.json
   const offline = (status = 0) => new ShopError(OFFLINE_NOTE, { offline: true, status });
 
   /**
@@ -56,7 +60,7 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     try {
       res = await fetchFn(root + pathname, {
         method,
-        headers: { ...(open ? {} : { authorization: `Bearer ${code}` }), accept: 'application/json', 'user-agent': USER_AGENT, ...(json ? { 'content-type': 'application/json' } : {}) },
+        headers: { ...(open ? {} : { authorization: `Bearer ${code}` }), accept: 'application/json', 'user-agent': agent, ...(json ? { 'content-type': 'application/json' } : {}) },
         body: json ? JSON.stringify(json) : undefined,
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -120,7 +124,17 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     return body.servers;
   }
 
-  return { base, getCloud, putCloud, putCape, getFeatured };
+  /**
+   * Aktualności, the message bar and the newest launcher version – the raw answer (news.js checks every field).
+   * Public: asked without a code. Throws the "not online" ShopError when the shop does not answer with this API.
+   */
+  async function getNews() {
+    const { status, body } = await call('GET', '/news', null, null, { open: true });
+    if (status !== 200) throw offline(status);
+    return body;
+  }
+
+  return { base, getCloud, putCloud, putCape, getFeatured, getNews };
 }
 
 module.exports = { createShopApi, apiBase, ShopError, OFFLINE_NOTE, MAX_BODY };

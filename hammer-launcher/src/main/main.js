@@ -19,6 +19,7 @@ const { useSystemProxy } = require('./proxy');
 const { officialMinecraftDir } = require('./official');
 const { inviteFromArgs } = require('./invite');
 const { tr, bootInfo, resolveLanguage } = require('./i18n');
+const { updateSupport, updatesBase } = require('./selfupdate');
 
 useSystemProxy(); // networks that require a proxy (HTTPS_PROXY) – without it the launcher would look offline there
 
@@ -32,6 +33,9 @@ if (!app.requestSingleInstanceLock()) {
   let gpu = null;
   let tray = null;
   const ICON = path.join(__dirname, '..', 'renderer', 'assets', 'icon.png');
+  // „BETA” next to the name (launcher.config.json → channel); the product itself keeps its name.
+  const beta = String(config.channel ?? '').trim().toLowerCase() === 'beta';
+  const windowTitle = beta ? `${config.name} (beta)` : config.name;
 
   /* ── language: Polish, or English from the dictionary (Ustawienia → Język; "auto" follows the system) ── */
   const language = () => resolveLanguage(services?.settings.get().language, app.getLocale());
@@ -125,12 +129,17 @@ if (!app.requestSingleInstanceLock()) {
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
       backgroundColor: '#0e0b09',
       show: false,
-      title: config.name,
+      title: windowTitle,
       icon: ICON,
       webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
     });
     Menu.setApplicationMenu(null);
-    win.once('ready-to-show', () => win.show());
+    win.once('ready-to-show', () => {
+      win.show();
+      services?.selfUpdate.start(); // the launcher's own update: a first look a few seconds from now, then every four hours
+    });
+    // Back in front of the player: a quiet look at the shop's news and messages (never more often than once a minute).
+    win.on('focus', () => services?.news.refresh().catch(() => null));
     win.webContents.on('will-navigate', (e) => e.preventDefault());
     win.webContents.setWindowOpenHandler(({ url }) => {
       try {
@@ -145,9 +154,46 @@ if (!app.requestSingleInstanceLock()) {
     win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   }
 
+  /** The log of the launcher's own updates: <launcher folder>/logs/launcher-update.log – it starts over when it grows big. */
+  function updateLogger(root) {
+    const file = path.join(root, 'logs', 'launcher-update.log');
+    return (line) => {
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        if (fs.existsSync(file) && fs.statSync(file).size > 256 * 1024) fs.rmSync(file, { force: true });
+        fs.appendFileSync(file, `${new Date().toISOString()} ${String(line).replace(/\s+/g, ' ').slice(0, 600)}\n`);
+      } catch {
+        // a log that cannot be written never gets in the way
+      }
+    };
+  }
+
+  /**
+   * Can this build replace itself (the installed Windows build and the AppImage can), and with what: electron-updater
+   * is loaded only then – a portable exe, a development run and other packages never touch it.
+   */
+  function setupUpdater(log) {
+    const support = updateSupport({
+      platform: process.platform,
+      packaged: app.isPackaged,
+      portable: Boolean(process.env.PORTABLE_EXECUTABLE_FILE),
+      appImage: Boolean(process.env.APPIMAGE),
+      hasConfig: app.isPackaged && fs.existsSync(path.join(process.resourcesPath, 'app-update.yml')),
+    });
+    if (!support.supported || !updatesBase(config)) return { support, updater: null };
+    try {
+      return { support, updater: require('electron-updater').autoUpdater };
+    } catch (err) {
+      log(`electron-updater could not be loaded: ${err?.message ?? err}`);
+      return { support: { supported: false, reason: 'config' }, updater: null };
+    }
+  }
+
   function setupServices() {
     const root = defaultRoot(app.getPath('appData'));
     fs.mkdirSync(root, { recursive: true });
+    const updateLog = updateLogger(root);
+    const { support: updateBuild, updater } = setupUpdater(updateLog);
     const crypt = createCrypt({
       safeStorage,
       keyFile: path.join(root, '.key'),
@@ -172,6 +218,11 @@ if (!app.requestSingleInstanceLock()) {
       officialDir: officialMinecraftDir(),
       emit: send,
       t: T, // the names the launcher makes up itself (a copied instance, a skin taken from the account)
+      // The launcher's own version and updates (selfupdate.js).
+      appVersion: app.getVersion(),
+      updater,
+      updateSupport: updateBuild,
+      updateLog,
       // What friends see in Discord follows the launcher's language as well.
       presence: { set: (a) => (services?.settings.get().discordRpc ? presence.set({ ...a, state: T(a.state), ...(a.buttons ? { buttons: a.buttons.map((b) => ({ ...b, label: T(b.label).slice(0, 32) })) } : {}) }) : null), clear: () => presence.clear() },
       gpuInfo: () => gpu,
@@ -247,7 +298,7 @@ if (!app.requestSingleInstanceLock()) {
     handle('app:info', () => ({
       version: app.getVersion(),
       platform: process.platform,
-      config: { name: config.name, brand: config.brand, website: config.website, shopUrl: config.shopUrl, discordInvite: config.discordInvite, server: config.server },
+      config: { name: config.name, brand: config.brand, channel: beta ? 'beta' : '', website: config.website, shopUrl: config.shopUrl, discordInvite: config.discordInvite, server: config.server },
       root: s().paths.root,
       secureStorage: safeStorage.isEncryptionAvailable(),
       hammerClient: s().hammerClient.info(),
@@ -267,7 +318,16 @@ if (!app.requestSingleInstanceLock()) {
     handle('settings:get', () => s().settings.get());
     handle('settings:set', (patch) => s().settings.set(patch));
     handle('system:info', () => s().system());
-    handle('news:list', () => s().news());
+    // Aktualności and the message bar (the shop's /news), and the launcher's own updates.
+    handle('news:feed', () => s().news.feed());
+    handle('news:refresh', () => s().news.refresh());
+    handle('news:close-alert', () => s().news.closeAlert());
+    handle('news:seen', () => s().news.markSeen());
+    handle('selfupdate:status', () => s().selfUpdate.status());
+    handle('selfupdate:check', () => s().selfUpdate.check());
+    handle('selfupdate:download', () => s().selfUpdate.download());
+    handle('selfupdate:install', () => s().selfUpdate.install());
+    handle('selfupdate:update', () => s().selfUpdate.update());
     handle('server:ping', (address) => s().ping(address || config.server?.address));
 
     handle('accounts:list', () => s().accounts.list());
@@ -519,7 +579,11 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc();
     createWindow();
     services.updates.start(); // mod updates: a quiet look shortly after the start, then every six hours
+    services.news.start(); // the shop's news and messages: a quiet look every ten minutes
   });
+
+  // The launcher is closing: an update that was downloaded installs now – never under a running game (selfupdate.js).
+  app.on('quit', (_event, exitCode) => services?.selfUpdate.installOnQuit(exitCode));
 
   app.on('window-all-closed', () => {
     // A running game keeps the launcher alive (play time, logs); it quits when the game ends.
