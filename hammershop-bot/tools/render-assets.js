@@ -72,6 +72,7 @@ const BANNERS = [
   ['bot-commands', 'KOMENDY', 'solid/robot'],
   ['contact', 'KONTAKT', 'solid/envelope'],
   ['whats-new', 'NOWOŚCI', 'solid/newspaper'],
+  ['launcher', 'LAUNCHER', 'solid/rocket'],
   ['welcome', 'WITAMY', 'solid/hand'],
   // extras for the shop layout
   ['tickets', 'TICKETY', 'solid/ticket'],
@@ -651,8 +652,10 @@ async function main() {
   }
 
   const only = process.argv[2];
+  const one = process.argv[3]; // "banners launcher" → just that banner (the others keep their bytes)
   if (!only || only === 'banners') {
     for (const [key, title, icon, opts] of BANNERS) {
+      if (one && key !== one) continue;
       await render(bannerHtml(title, icon, opts), path.join(OUT, 'banners', `${key}.png`), { width: 1080, height: 400 });
       process.stdout.write(`banner ${key}\n`);
     }

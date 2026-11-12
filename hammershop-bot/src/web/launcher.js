@@ -6,6 +6,11 @@
  *   GET health            { ok: true, plus } – plus: the Hammer+ signing key is configured
  *   GET featured          { servers: [{ id, name, address, description, tags, icon, mc, loader, pack }] } – the servers
  *                         from /featured; public, cacheable for 5 minutes
+ *   GET news              { news: [{ id, title, body, tag, date, at, url, image, pinned }], alert: { id, level, text, url,
+ *                         until } | null, release: { version, notes, date, minVersion, size, url } | null } – what the
+ *                         admin panel published (src/web/admin.js): the home screen's news, the bar at the top of the
+ *                         launcher and the newest installer. Public; every call counts as one start of the launcher
+ *                         (only numbers per day and version are kept)
  *   GET cloud             Bearer → { updatedAt, data }; 404 when nothing is stored for the account
  *   PUT cloud             Bearer, { data: {…}, baseUpdatedAt? }, at most 256 KB → { updatedAt };
  *                         409 { error, updatedAt, data } (the stored copy) when baseUpdatedAt is older than what is stored
@@ -24,6 +29,8 @@
 const crypto = require('node:crypto');
 const plus = require('../lib/plus');
 const store = require('./store');
+const admin = require('./admin');
+const releases = require('./releases');
 
 const PREFIX = '/api/launcher/';
 const CAPES = ['hammer', 'gold', 'ember', 'royal', 'frost', 'crimson'];
@@ -112,13 +119,25 @@ function account(req, res) {
 }
 
 /** Which methods each path under /api/launcher/ takes. */
-const ROUTES = { health: ['GET'], featured: ['GET'], capes: ['GET'], cloud: ['GET', 'PUT'], cape: ['PUT'] };
+const ROUTES = { health: ['GET'], featured: ['GET'], news: ['GET'], capes: ['GET'], cloud: ['GET', 'PUT'], cape: ['PUT'] };
+const MAX_NEWS = 12;
+// Who started the launcher today is only ever kept as a salted hash, in memory, until midnight – enough to count
+// "launchers today" without storing a single address.
+const SALT = crypto.randomBytes(16);
+const visitorKey = (ip) => crypto.createHash('sha256').update(SALT).update(String(ip ?? '')).digest('base64').slice(0, 16);
+/** "Hammer-Launcher/2.6.0 (…)" → "2.6.0"; anything else → null. */
+const launcherVersion = (ua) => /^Hammer-?Launcher\/(\d{1,4}\.\d{1,4}\.\d{1,4})\b/i.exec(String(ua ?? ''))?.[1] ?? null;
+
+/** What GET news answers. */
+function feed(publicUrl, now = Date.now()) {
+  return { news: store.newsList().slice(0, MAX_NEWS).map(admin.publicNews), alert: admin.publicAlert(store.getAlert(now)), release: releases.publicInfo(publicUrl) };
+}
 
 /**
  * /api/launcher/… – h: { send, fail, limited } (the website's own helpers: security headers, per-IP limits) and
  * featured() → the featured servers.
  */
-async function api(req, res, url, { send, fail, limited, featured }) {
+async function api(req, res, url, { send, fail, limited, featured, publicUrl = () => '', ip = () => null }) {
   const route = url.pathname.slice(PREFIX.length);
   const method = req.method === 'HEAD' ? 'GET' : req.method;
   // The launcher calls from its own window, not from a page of this site – and never with a cookie: the code is in a header.
@@ -132,6 +151,11 @@ async function api(req, res, url, { send, fail, limited, featured }) {
 
   if (route === 'health') return send(res, 200, { ok: true, plus: plus.ready() });
   if (route === 'featured') return send(res, 200, { servers: featured() }, { 'cache-control': 'public, max-age=300' });
+  if (route === 'news') {
+    const version = launcherVersion(req.headers['user-agent']);
+    if (version) store.countLaunch(version, visitorKey(ip(req))); // browsers looking at the launcher page are not launchers
+    return send(res, 200, feed(publicUrl()), { 'cache-control': 'no-cache' });
+  }
 
   if (route === 'capes') {
     const asked = String(url.searchParams.get('uuids') ?? '').split(',').map((u) => u.trim()).filter(Boolean);
@@ -251,4 +275,4 @@ function join(req, res, url, { send }) {
   return send(res, 200, joinHtml(url), { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': JOIN_CSP });
 }
 
-module.exports = { api, join, joinHtml, CAPES, CLOUD_LIMIT, MAX_UUIDS, PREFIX };
+module.exports = { api, join, joinHtml, feed, launcherVersion, CAPES, CLOUD_LIMIT, MAX_UUIDS, PREFIX };

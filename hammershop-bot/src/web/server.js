@@ -19,8 +19,16 @@
  * (onPaid): an order ticket opens on Discord and the product is delivered like any other paid order. The order then
  * carries its ticket (number + link) and whether it was delivered – the page's receipt and My orders show them.
  *
- * Hammer Launcher has its own corner here: /api/launcher/* (featured servers, Hammer+ cloud sync and capes) and the
- * /join page – see src/web/launcher.js.
+ * Hammer Launcher has its own corner here: /api/launcher/* (featured servers, news, Hammer+ cloud sync and capes) and
+ * the /join page – see src/web/launcher.js. Its page is /launcher (web/public/launcher.html): the download button
+ * (GET /download → the installer in /updates/, which is also where the launcher's own updater looks – see
+ * src/web/releases.js), the news, and Hammer+ bought by card:
+ *
+ *   GET  plus             { ready, plans [{ id, name, days, price }], currency } – the price list from the admin panel
+ *   POST checkout         { kind: 'plus', plan, nick, requestId } → { url } – the nick is checked at Mojang first; once
+ *                         paid, the bot issues the code for that Minecraft account (onPaid) and the order shows it
+ *
+ * The admin panel is /admin (web/public/admin.html) with its API under /api/admin/ – see src/web/admin.js.
  */
 
 const http = require('node:http');
@@ -32,6 +40,9 @@ const store = require('./store');
 const stripe = require('./stripe');
 const discord = require('./discord');
 const launcher = require('./launcher');
+const admin = require('./admin');
+const releases = require('./releases');
+const plusLib = require('../lib/plus');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'web', 'public');
 const STRIPE_MIN = 50; // Stripe's smallest charge in EUR cents
@@ -40,10 +51,26 @@ const web = () => env.web;
 const secure = () => web().publicUrl.startsWith('https://');
 const authReady = () => Boolean(discord.clientId() && web().clientSecret && web().publicUrl);
 const paymentsReady = () => Boolean(env.stripeKey && web().publicUrl);
+const webhookReady = () => Boolean(web().stripeWebhookSecret);
+const plusOnSale = () => plusLib.ready() && paymentsReady() && authReady() && store.plusPlans().length > 0;
 
 // ───────────── Products ─────────────
-/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency, featured }. */
-let hooks = { catalog: () => [], info: () => ({}), onPaid: async () => null, onLogin: async () => null, isMember: () => null, currency: () => 'eur', featured: () => [] };
+/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency, featured, level, announce, log, plus, featuredAdmin }. */
+/** The bot's own "the user did something wrong" errors (lib/utils.js UserError) – their text is written for Discord. */
+const isUserError = (err) => err?.constructor?.name === 'UserError';
+const plainMessage = (err) => String(err.message).replace(/\*\*|__|`/g, '');
+const notConnected = async () => {
+  throw Object.assign(new Error('Bot nie jest jeszcze połączony z Discordem – spróbuj ponownie za chwilę.'), { status: 503 });
+};
+let hooks = {
+  catalog: () => [], info: () => ({}), onPaid: async () => null, onLogin: async () => null, isMember: () => null, currency: () => 'eur', featured: () => [],
+  // The admin panel and Hammer+ sales (src/features/website.js fills these in):
+  level: async () => null, // (userId) → 'owner' | 'admin' | null
+  announce: async () => null, // ({ kind, title, body, url, image, tag, version }) → { url } – posted on Discord
+  log: async () => null, // (text) → the bot's log channel
+  plus: { lookup: notConnected, grant: notConnected, recent: () => [], inspect: () => ({ valid: false, message: 'Bot nie jest połączony.' }), active: () => 0 },
+  featuredAdmin: { list: () => [], add: notConnected, remove: notConnected },
+};
 const products = () => hooks.catalog();
 const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, eta: p.eta ?? null, instant: Boolean(p.instant), published: true });
 
@@ -108,10 +135,18 @@ function sameOrigin(req) {
   return allowed.includes(origin);
 }
 
+/** A change made in the admin panel must come from the panel: the browser's Origin header is required and must be this site. */
+function originOk(req) {
+  const origin = req.headers.origin;
+  return Boolean(origin) && [web().publicUrl, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean).includes(origin);
+}
+
+const clientIp = (req) => String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+
 // Simple per-IP limits: { key → [timestamps] }
 const hits = new Map();
 function limited(req, bucket, max, windowMs = 60_000) {
-  const ip = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+  const ip = clientIp(req);
   const key = `${bucket}:${ip}`;
   const now = Date.now();
   const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
@@ -145,7 +180,26 @@ function orderJson(order) {
     ticketUrl: paid ? order.ticketUrl ?? null : null,
     delivered: paid && Boolean(order.delivered),
     waiting: paid && Boolean(order.waitingForMember && !order.handedOver),
+    ...(order.kind === 'plus' && { plus: plusJson(order) }),
   };
+}
+
+/**
+ * A Hammer+ order: whose it is, how long it runs and – once paid – the code. The code itself is never stored: it is
+ * signed again from what the order holds (the same account, the same end date), so the database has nothing in it
+ * that works as a code.
+ */
+function plusJson(order) {
+  const p = order.plus ?? {};
+  let code = null;
+  if (order.status === 'paid' && p.grantedAt && plusLib.ready()) {
+    try {
+      code = plusLib.issue({ mc: p.mc, days: p.grantDays ?? p.days, now: p.grantedAt });
+    } catch {
+      code = null;
+    }
+  }
+  return { nick: p.nick ?? null, days: p.days ?? null, until: p.exp == null ? null : p.exp * 1000, code };
 }
 
 /** Stripe says paid (verify or webhook) → the order is paid once; the team is told once. */
@@ -173,13 +227,14 @@ async function checkout(req, res, user) {
   if (limited(req, 'checkout', 10)) return fail(res, 429, 'Zbyt wiele prób – odczekaj minutę i spróbuj ponownie.');
   const body = await jsonBody(req);
   if (body.kind === 'access') return fail(res, 409, 'Wystarczy zalogować się przez Discord – nie ma opłaty za dostęp.');
-  if (body.kind !== 'products') return fail(res, 400, 'Nieznany rodzaj zamówienia.');
+  if (body.kind !== 'products' && body.kind !== 'plus') return fail(res, 400, 'Nieznany rodzaj zamówienia.');
   const kind = 'products';
   const requestId = String(body.requestId ?? '').slice(0, 100) || crypto.randomUUID();
 
   // The same click twice (double click, back button) → the same payment page.
   const again = store.orderByRequest(user.id, requestId);
   if (again?.status === 'pending' && again.url) return send(res, 200, { url: again.url, order: again.id });
+  if (body.kind === 'plus') return checkoutPlus(res, user, body, requestId);
 
   const list = products();
   const wanted = new Map();
@@ -203,6 +258,37 @@ async function checkout(req, res, user) {
   const order = store.createOrder({ userId: user.id, kind, items, amount, currency, requestId });
   try {
     const session = await stripe.createCheckout({ order, user, lines, currency, idempotencyKey: `hs-${order.id}` });
+    store.updateOrder(order.id, { stripe_id: session.id, url: session.url });
+    return send(res, 200, { url: session.url, order: order.id });
+  } catch (err) {
+    store.updateOrder(order.id, { status: 'failed', note: err.message });
+    console.warn(`[web] płatność ${order.id}:`, err.message);
+    return fail(res, 502, err.status === 401 ? 'Płatności nie są jeszcze poprawnie skonfigurowane – skontaktuj się z HammerShop.' : 'Nie udało się otworzyć strony płatności. Spróbuj ponownie.');
+  }
+}
+
+/** Hammer+ for one Minecraft account: the plan's price from the admin panel, the nick checked at Mojang before anyone pays. */
+async function checkoutPlus(res, user, body, requestId) {
+  if (!plusOnSale()) return fail(res, 503, 'Hammer+ nie jest jeszcze w sprzedaży na stronie. Nic nie zostało pobrane.');
+  const plan = store.plusPlans().find((p) => p.id === String(body.plan ?? ''));
+  if (!plan) return fail(res, 400, 'Nie ma już takiego planu Hammer+ – odśwież stronę i wybierz ponownie.');
+  let account;
+  try {
+    account = await hooks.plus.lookup(String(body.nick ?? ''));
+  } catch (err) {
+    if (!isUserError(err) && !err.status) throw err;
+    return fail(res, err.status ?? 400, plainMessage(err));
+  }
+  const currency = hooks.currency();
+  const name = `${plan.name} – ${account.nick}`;
+  const items = [{ id: `plus:${plan.id}`, name, price: plan.price, quantity: 1, productId: null, variant: null, eta: 'Kod od razu po płatności' }];
+  const order = store.createOrder({ userId: user.id, kind: 'plus', items, amount: plan.price, currency, requestId, plus: { plan: plan.id, days: plan.days, mc: account.mc, nick: account.nick } });
+  try {
+    const session = await stripe.createCheckout({
+      order, user, currency, idempotencyKey: `hs-${order.id}`, returnPath: '/launcher',
+      lines: [{ name, amount: plan.price, quantity: 1, description: `Hammer+ w Hammer Launcherze dla konta Minecraft ${account.nick} – ${plan.days ? `${plan.days} dni` : 'na zawsze'}` }],
+      message: 'Zaraz po płatności zobaczysz swój kod Hammer+ na stronie i dostaniesz go w wiadomości prywatnej na Discordzie. Wpisujesz go w Hammer Launcherze: Hammer+ → „Mam kod”.',
+    });
     store.updateOrder(order.id, { stripe_id: session.id, url: session.url });
     return send(res, 200, { url: session.url, order: order.id });
   } catch (err) {
@@ -247,19 +333,24 @@ async function webhook(req, res) {
 }
 
 // ───────────── Discord sign-in ─────────────
-function authStart(req, res) {
-  if (!authReady()) return redirect(res, '/?auth=unavailable');
+/** Where sign-in may send people back to – only pages of this site that ask for it. */
+const NEXT = { launcher: '/launcher', admin: '/admin' };
+
+function authStart(req, res, url) {
+  const next = NEXT[url.searchParams.get('next')] ?? null;
+  if (!authReady()) return redirect(res, `${next ?? '/'}?auth=unavailable`);
   const state = crypto.randomBytes(16).toString('base64url');
-  return redirect(res, discord.authorizeUrl(state), [cookie('hs_oauth', state, 600)]);
+  return redirect(res, discord.authorizeUrl(state), [cookie('hs_oauth', state, 600), cookie('hs_next', next ?? '', next ? 600 : 0)]);
 }
 
 async function authCallback(req, res, url) {
-  const clear = cookie('hs_oauth', '', 0);
-  if (url.searchParams.get('error')) return redirect(res, '/?auth=cancelled', [clear]);
+  const back = Object.values(NEXT).includes(cookies(req).hs_next) ? cookies(req).hs_next : '/';
+  const clear = [cookie('hs_oauth', '', 0), cookie('hs_next', '', 0)];
+  if (url.searchParams.get('error')) return redirect(res, `${back}?auth=cancelled`, clear);
   const state = url.searchParams.get('state');
   const expected = cookies(req).hs_oauth;
   if (!state || !expected || state.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
-    return redirect(res, '/?auth=failed', [clear]);
+    return redirect(res, `${back}?auth=failed`, clear);
   }
   try {
     const { me, accessToken } = await discord.userFromCode(String(url.searchParams.get('code') ?? ''));
@@ -270,16 +361,25 @@ async function authCallback(req, res, url) {
       return null;
     });
     const token = store.createSession(user.id);
-    return redirect(res, `/?connected=1${joined?.added ? '&joined=1' : ''}`, [clear, cookie('hs_sid', token, 30 * 86_400)]);
+    return redirect(res, `${back}?connected=1${joined?.added ? '&joined=1' : ''}`, [...clear, cookie('hs_sid', token, 30 * 86_400)]);
   } catch (err) {
     console.warn('[web] logowanie:', err.message);
-    return redirect(res, '/?auth=failed', [clear]);
+    return redirect(res, `${back}?auth=failed`, clear);
   }
 }
 
 // ───────────── Static files ─────────────
 const TYPES = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.css': 'text/css', '.js': 'text/javascript' };
+/** The launcher page and the admin panel load nothing but their own files (and pictures over https). */
+const PAGE_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; media-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const PAGES = { '/launcher': 'launcher.html', '/admin': 'admin.html' };
+
 function serveStatic(req, res, pathname) {
+  const page = PAGES[pathname.replace(/\/+$/, '')];
+  if (page && fs.existsSync(path.join(PUBLIC, page))) {
+    res.writeHead(200, { ...HEADERS, 'content-type': TYPES['.html'], 'cache-control': 'no-cache', 'content-security-policy': PAGE_CSP, ...(page === 'admin.html' && { 'x-robots-tag': 'noindex' }) });
+    return req.method === 'HEAD' ? res.end() : fs.createReadStream(path.join(PUBLIC, page)).pipe(res);
+  }
   const file = pathname === '/' || pathname === '/index.html' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(pathname).replace(/^([/\\])+/, ''));
   if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
     // Unknown paths show the store (single page) – but not for missing assets.
@@ -287,7 +387,7 @@ function serveStatic(req, res, pathname) {
     return serveStatic(req, res, '/');
   }
   const ext = path.extname(file);
-  const cache = ext === '.html' ? 'no-cache' : 'public, max-age=604800, immutable';
+  const cache = ['.html', '.js', '.css'].includes(ext) ? 'no-cache' : 'public, max-age=604800, immutable'; // pages and their code are always fresh, pictures keep
   res.writeHead(200, { ...HEADERS, 'content-type': TYPES[ext] ?? 'application/octet-stream', 'cache-control': cache });
   if (req.method === 'HEAD') return res.end();
   fs.createReadStream(file).pipe(res);
@@ -298,10 +398,36 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://local');
   const p = url.pathname;
   // Hammer Launcher: featured servers, Hammer+ cloud sync and capes (src/web/launcher.js).
-  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured() });
+  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured(), publicUrl: () => web().publicUrl, ip: clientIp });
+  // The admin panel (src/web/admin.js).
+  if (p.startsWith(admin.PREFIX)) {
+    return admin.api(req, res, url, {
+      send, fail, jsonBody, userOf, limited, originOk,
+      level: (id) => hooks.level(id), announce: (a) => hooks.announce(a), log: (t) => hooks.log(t),
+      plus: hooks.plus, featured: hooks.featuredAdmin, currency: () => hooks.currency(),
+      publicUrl: () => web().publicUrl, authReady, paymentsReady, webhookReady,
+    });
+  }
   if (!p.startsWith('/api/shop/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'Niedozwolona metoda');
     if (p === '/join' || p === '/join/') return launcher.join(req, res, url, { send }); // "join this server" links → the launcher
+    // Hammer Launcher's installer: the download button, and the feed its own updater reads (src/web/releases.js).
+    if (p === '/download' || p === '/download/') {
+      const release = store.currentRelease();
+      if (!release) return redirect(res, '/launcher?download=none');
+      if (req.method === 'GET' && !limited(req, 'download', 20)) store.countDownload(release.version);
+      return redirect(res, `/updates/${encodeURIComponent(release.file)}`);
+    }
+    if (p.startsWith('/updates/')) {
+      if (limited(req, 'updates', 600)) return fail(res, 429, 'Zwolnij trochę i spróbuj ponownie.');
+      let name = null;
+      try {
+        name = decodeURIComponent(p.slice('/updates/'.length));
+      } catch {
+        return fail(res, 404, 'Nie znaleziono'); // a broken %-escape is not a file name
+      }
+      return releases.serve(req, res, name, { send, fail, headers: HEADERS });
+    }
     return serveStatic(req, res, p);
   }
   const route = p.slice('/api/shop/'.length);
@@ -323,7 +449,8 @@ async function handle(req, res) {
       });
     }
     if (route === 'session') return send(res, 200, sessionJson(userOf(req)));
-    if (route === 'auth/start') return authStart(req, res);
+    if (route === 'plus') return send(res, 200, { ready: plusOnSale(), plans: plusOnSale() ? store.plusPlans() : [], currency: hooks.currency(), authReady: authReady() });
+    if (route === 'auth/start') return authStart(req, res, url);
     if (route === 'auth/callback') return authCallback(req, res, url);
     if (route.startsWith('image/')) {
       const p = products().find((x) => x.id === decodeURIComponent(route.slice(6)));
@@ -364,11 +491,12 @@ function createWebServer(h = {}) {
   hooks = { ...hooks, ...h };
   return http.createServer((req, res) => {
     handle(req, res).catch((err) => {
-      if (!err.status) console.error('[web]', err);
-      if (!res.headersSent) fail(res, err.status ?? 500, err.status ? err.message : 'Coś poszło nie tak po naszej stronie. Spróbuj ponownie.');
+      const status = err.status ?? (isUserError(err) ? 400 : null); // a wrong nick, address, version… – said plainly
+      if (!status) console.error('[web]', err);
+      if (!res.headersSent) fail(res, status ?? 500, status ? plainMessage(err) : 'Coś poszło nie tak po naszej stronie. Spróbuj ponownie.');
       else res.end();
     });
   });
 }
 
-module.exports = { createWebServer, authReady, paymentsReady };
+module.exports = { createWebServer, authReady, paymentsReady, webhookReady, plusOnSale };

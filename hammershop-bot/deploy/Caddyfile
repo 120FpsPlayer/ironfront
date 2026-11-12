@@ -1,0 +1,25 @@
+# Caddy: HTTPS dla strony HammerShop (certyfikat Let's Encrypt wyrabia i odnawia się sam).
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile     ← podmień domenę poniżej na swoją
+#   sudo systemctl reload caddy
+# 8080 to WEB_PORT z pliku .env.
+
+hammershop.pl, www.hammershop.pl {
+	encode zstd gzip
+
+	# Instalator launchera wgrywany w panelu admina ma kilkaset MB.
+	request_body {
+		max_size 800MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:8080 {
+		# Wgrywanie dużego pliku i pobieranie instalatora mogą trwać długo.
+		transport http {
+			response_header_timeout 10m
+		}
+	}
+}

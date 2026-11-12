@@ -1,0 +1,31 @@
+# Usługa systemd: bot HammerShop + strona, uruchamiane razem z serwerem i wznawiane po awarii.
+#   sudo cp deploy/hammershop.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hammershop
+#   journalctl -u hammershop -f        ← podgląd logów na żywo
+[Unit]
+Description=HammerShop – bot Discord i strona
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hammershop
+Group=hammershop
+WorkingDirectory=/opt/hammershop/hammershop-bot
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+# Program widzi tylko swój folder i nie może zmieniać reszty systemu.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hammershop/hammershop-bot/data
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -16,9 +16,9 @@ Wpisz **`/zbuduj`**, kliknij **Zbuduj**, poczekaj około dwóch minut – gotowe
 | | |
 |---|---|
 | 🎭 **19 ról** | **🔨 HammerShop** – własna rola bota: najwyższa rola na serwerze, więc bot jest na samej górze listy członków, i **ma ją tylko bot**. Dalej CEO, Co-CEO, Manager, Administrator, Moderator, Support, Stażysta, Sprzedawca, Stały Klient, Klient, Boty, Członek, 3 role z powiadomieniami + 3 separatory – wszystkie w jasnopomarańczowej palecie i z właściwymi uprawnieniami |
-| 📁 **9 kategorii, 32 kanały** (31 z wyłączonym kanałem statusu sklepu) | Statystyki · Witamy · Sklep · Pomoc · Społeczność · Zespół (z pokojem głosowym zespołu) · Logi · Tickety · Zamknięte tickety |
+| 📁 **9 kategorii, 33 kanały** (32 z wyłączonym kanałem statusu sklepu) | Statystyki · Witamy · Sklep · Pomoc · Społeczność · Zespół (z pokojem głosowym zespołu) · Logi · Tickety · Zamknięte tickety |
 | 🔐 **Dobrze ustawione uprawnienia** | Nowe osoby widzą tylko **#weryfikacja**, **#regulamin** i **#powitania** (tylko do odczytu – dzięki temu dociera do nich ping powitalny). Kanały informacyjne są tylko do odczytu, strefy zespołu i logów są prywatne |
-| 🖼️ **Własne banery** | 36 jasnopomarańczowych banerów (1080×400) – każdy kanał informacyjny zaczyna się od własnego banera i ostylowanej karty |
+| 🖼️ **Własne banery** | 37 jasnopomarańczowych banerów (1080×400) – każdy kanał informacyjny zaczyna się od własnego banera i ostylowanej karty |
 | 😀 **Własne emotki** | 67 jasnopomarańczowych emotek (`:hs_cart:`, `:hs_check:`, `:hs_paypal:`…) – bot używa ich we wszystkich swoich wiadomościach |
 | 🔨 **Branding** | Zmienia nazwę serwera na **HammerShop**, ustawia logo z młotkiem jako ikonę serwera (i baner na serwerach z boostami) |
 | 🌐 **Tryb społeczności** | Kanały ogłoszeń, ekran powitalny, kanał z zasadami i kanał aktualizacji |
@@ -283,6 +283,7 @@ tę listę ze strony bota – zmiany widać w nim najpóźniej po 5 minutach.
 |---|---|
 | `GET health` | Czy API działa i czy klucz Hammer+ jest ustawiony |
 | `GET featured` | Polecane serwery z `/polecane` |
+| `GET news` | Aktualności, komunikat na górze launchera i najnowsza wersja – to, co opublikujesz w [panelu admina](#-strona-launchera-aktualizacje-i-panel-admina). Każde zapytanie launchera liczy się jako jedno uruchomienie (same liczby na dzień i wersję) |
 | `GET cloud` · `PUT cloud` | Synchronizacja danych launchera w chmurze dla konta Hammer+ (do 256 KB; starszy zapis nie nadpisze nowszego) |
 | `GET capes?uuids=…` · `PUT cape` | Peleryny Hammer+ (`hammer`, `gold`, `ember`, `royal`, `frost`, `crimson`) – widoczne u innych graczy, dopóki Hammer+ konta jest ważny |
 
@@ -291,12 +292,61 @@ w kodzie. Dane trafiają do `data/web.json`. `<PUBLIC_URL>/join?server=…&name=
 serwer w Hammer Launcherze. Dopóki strona nie jest uruchomiona pod publicznym adresem, same kody działają normalnie – czekają
 tylko chmura, peleryny i lista polecanych serwerów.
 
+## 🚀 Strona launchera, aktualizacje i panel admina
+
+Bot, strona i Hammer Launcher to jeden system – wszystko stoi na **Twoim serwerze**, nic nie idzie przez GitHub Releases:
+
+```
+                 ┌──────────── Twój serwer 24/7 (ten program) ────────────┐
+ Discord  ◄────► │  bot HammerShop  ◄──►  strona (PUBLIC_URL)             │ ◄────►  Stripe (płatności)
+ (serwer,        │  /zbuduj, tickety,     /            sklep              │
+  tickety,       │  sklep, #launcher      /launcher    pobieranie, Hammer+│ ◄────►  Hammer Launcher u graczy
+  ogłoszenia)    │                        /admin       panel admina       │         (aktualności, komunikat,
+                 │                        /updates/    instalator + aktualizacje        aktualizacje, Hammer+)
+                 └─────────────────────────────────────────────────────────┘
+```
+
+### Strona launchera – `PUBLIC_URL/launcher`
+- Przycisk **Pobierz na Windows** (`/download`) daje aktualny instalator z Twojego serwera i pokazuje wersję, rozmiar i datę. Dopóki nic nie opublikujesz, przycisk mówi *Już wkrótce*.
+- **Aktualności** z panelu admina, zrzuty ekranu, częste pytania.
+- **Hammer+ kupowany kartą (Stripe):** gracz loguje się przez Discorda, wybiera plan, wpisuje **nick Minecraft** (sprawdzany w Mojang, zanim cokolwiek zapłaci) i płaci. Zaraz po płatności bot wystawia kod dla tego konta – kupujący widzi go **na stronie** (także później, w *Twoje kody Hammer+*) i dostaje **na DM**. Kupno w trakcie trwającego Hammer+ dolicza czas na końcu. Sam kod nigdy nie jest zapisywany – strona podpisuje go od nowa z danych zamówienia. Każdy zakup trafia do logów i do `/hammerplus lista` („kupiony na stronie”).
+- Link **Launcher** jest też w menu strony sklepu.
+
+### Aktualizacje launchera – `PUBLIC_URL/updates/`
+Zainstalowany launcher sam sprawdza `PUBLIC_URL/updates/latest.yml`, pobiera nową wersję w tle i instaluje ją przy następnym uruchomieniu. Plik `latest.yml` tworzy strona – z instalatora, który wgrasz w panelu (wersja, sha512, rozmiar). Pobieranie obsługuje wznawianie i pobieranie samych zmian (`.blockmap`).
+
+**Jak wydać nową wersję:**
+1. Zbuduj launcher (GitHub Actions → artefakt **Hammer-Launcher-Windows**) i przetestuj instalator u siebie.
+2. `PUBLIC_URL/admin` → **Wersje launchera** → wgraj `Hammer-Launcher-Setup-x.y.z.exe` (i, jeśli chcesz, plik `.blockmap`). Duży plik możesz też wrzucić na serwer do `data/releases/` przez SFTP – pojawi się na liście.
+3. Wpisz wersję i „Co nowego”, kliknij **Opublikuj wersję**. Gotowe: strona daje ten plik do pobrania, launchery się aktualizują, a bot ogłasza wersję na **#launcher** (z pingiem roli *Ogłoszenia*).
+4. *Najstarsza wspierana wersja* – starsze launchery pokażą „Wymagana aktualizacja” i nie pozwolą grać, dopóki się nie zaktualizują. Używaj tylko wtedy, gdy stara wersja naprawdę nie może działać.
+5. Coś poszło nie tak? **Ustaw jako aktualną** przy starszej wersji – strona wraca do niej (launchery z nowszą wersją same się nie cofną, więc najlepiej wydać poprawkę z wyższym numerem).
+
+**Podpisywanie wydań (zalecane):** aktualizacja to program uruchamiany na komputerach wszystkich graczy. Launcher zawsze sprawdza sumę sha512 z `latest.yml`, ale jeśli w `launcher.config.json` ustawisz `updatePublicKey`, przyjmie **tylko wydania podpisane Twoim kluczem** – wtedy nawet ktoś, kto włamałby się na serwer albo konto admina, nie podmieni aktualizacji. Klucz prywatny trzymasz u siebie (nie na serwerze): `node scripts/sign-release.js` w folderze launchera robi plik `.sig`, którego zawartość wklejasz w polu *Podpis wydania* (szczegóły w README launchera).
+
+### Panel admina – `PUBLIC_URL/admin`
+Logujesz się przez Discorda. Dostęp mają tylko: **właściciel** (właściciel serwera i `OWNER_IDS` z `.env`) – wszystko – oraz **administratorzy bota** (role CEO … Administrator) – wszystko oprócz wersji launchera i cennika Hammer+. Każda zmiana trafia na kanał logów z informacją, kto ją zrobił.
+
+| Zakładka | Co robi |
+|---|---|
+| **Pulpit** | Ile launcherów uruchomiono dziś i w ostatnich 14 dniach, pobrania instalatora, używane wersje, aktywne konta Hammer+, przychód ze strony. Liczone są same liczby – bez adresów IP i kont |
+| **Aktualności** | Wiadomości na ekranie głównym launchera („Aktualności”) i na stronie launchera: tytuł, treść, etykieta, link, obrazek, przypięcie. Opcjonalnie od razu także na Discordzie (**#launcher**). U graczy pojawiają się najpóźniej po 10 minutach |
+| **Komunikat** | Pasek na samej górze launchera (informacja / ostrzeżenie / ważne), z linkiem i czasem wyświetlania – np. przerwa techniczna |
+| **Wersje launchera** | Wgrywanie instalatora, publikacja, wymagana wersja, podpis, powrót do starszej wersji, liczba pobrań *(tylko właściciel)* |
+| **Hammer+** | Wystawianie kodu dla nicku, sprawdzanie kodu, lista wystawionych i **cennik na stronie** – plany (nazwa, dni, cena) sprzedawane przez Stripe *(cennik: tylko właściciel)*. Pusty cennik = sprzedaż wyłączona |
+| **Polecane serwery** | Lista „Polecane serwery” w launcherze (to samo co `/polecane`) |
+| **Zamówienia** | Ostatnie 100 płatności ze strony ze statusem i linkiem do ticketu |
+
+Na Discordzie `/zbuduj` tworzy kanał **#launcher** z kartą launchera i przyciskami *Pobierz launcher* / *Hammer+* (na istniejącym serwerze: `/zbuduj tylko:update`), a `/launcher` pokazuje tę kartę z aktualną wersją każdemu, kto zapyta.
+
+**Uruchomienie na własnym serwerze** (VPS, domena, HTTPS, Stripe, kopie zapasowe) – krok po kroku w [`DEPLOY.md`](DEPLOY.md).
+
 ## 🗺️ Co tworzy /zbuduj
 
 ```
 〔 📊 STATYSTYKI 〕     🟢┃ꜱᴋʟᴇᴘ ᴏᴛᴡᴀʀᴛʏ · 👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: 123 · ⭐┃ᴏᴘɪɴɪᴇ: 45       (widzą wszyscy, nikt nie może wejść)
 〔 👋 WITAMY 〕         ✅┃ᴡᴇʀʏꜰɪᴋᴀᴄᴊᴀ · 📜┃ʀᴇɢᴜʟᴀᴍɪɴ · 👋┃ᴘᴏᴡɪᴛᴀɴɪᴀ · 📌┃ɪɴꜰᴏʀᴍᴀᴄᴊᴇ · 📢┃ᴏɢᴌᴏꜱᴢᴇɴɪᴀ
-                        🎉┃ɢɪᴠᴇᴀᴡᴀʏᴇ · 🎭┃ʀᴏʟᴇ
+                        🔨┃ʟᴀᴜɴᴄʜᴇʀ · 🎉┃ɢɪᴠᴇᴀᴡᴀʏᴇ · 🎭┃ʀᴏʟᴇ
 〔 🛒 SKLEP 〕          🛒┃ꜱᴋʟᴇᴘ · 📦┃ᴊᴀᴋ-ᴋᴜᴘɪᴄ · 💳┃ᴘᴌᴀᴛɴᴏꜱᴄɪ · ✨┃ᴅᴏꜱᴛᴀᴡʏ · ⭐┃ᴏᴘɪɴɪᴇ · 🧾┃ʀᴇᴀʟɪᴢᴀᴄᴊᴇ
 〔 🎧 POMOC 〕          🎫┃ᴛɪᴄᴋᴇᴛʏ · ❓┃ꜰᴀǫ
 〔 💬 SPOŁECZNOŚĆ 〕    💬┃ᴄᴢᴀᴛ · 🏆┃ʀᴀɴᴋɪɴɢ · 🚀┃ʙᴏᴏꜱᴛᴇʀᴢʏ
@@ -351,6 +401,7 @@ Trzymaj rolę integracji bota na samej górze w Ustawieniach serwera → Role �
 | `/sprzedaz` | Statystyki sprzedaży | Admini, sprzedawcy |
 | `/hammerplus nadaj / sprawdz / lista / klucz` | Kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft (`nadaj nick: dni:`, `dni:0` = na zawsze) i klucz publiczny dla launchera | Admini, sprzedawcy |
 | `/polecane dodaj / usun / lista` | Polecane serwery w Hammer Launcherze | Admini, sprzedawcy |
+| `/launcher` | Karta Hammer Launchera: co to jest, aktualna wersja z opisem zmian i przyciski *Pobierz launcher* / *Hammer+* | Wszyscy |
 | `/klient profil / notatka dodaj / notatka usun` | Profile klientów i prywatne notatki zespołu | Zespół |
 | `/zablokuj` · `/odblokuj` | Blokada serwera podczas raidu i jej zdjęcie | Moderatorzy+ |
 | `/kopia` | Kopia zapasowa danych bota od razu (robi się też automatycznie) | Admini |
@@ -554,7 +605,12 @@ src/
 ├── commands/                komendy (polskie nazwy dla Discorda: lib/commandsPl.js)
 ├── handlers/interactions.js przyciski, menu i formularze
 ├── lib/                     konfiguracja, baza danych, motyw, uprawnienia, funkcje pomocnicze, kody Hammer+ (plus.js)
-└── web/                     strona sklepu i API dla Hammer Launchera (launcher.js: /api/launcher/*, /join)
+└── web/                     strona sklepu i API dla Hammer Launchera (launcher.js: /api/launcher/*, /join), panel admina
+                             (admin.js: /api/admin/*), instalatory i aktualizacje launchera (releases.js: /download, /updates/)
+web/public/                  strony: index.html (sklep), launcher.html (/launcher), admin.html (/admin) i ich pliki w assets/
+data/web.json                konta i zamówienia ze strony, aktualności, komunikat, wersje launchera, cennik Hammer+
+data/releases/               instalatory launchera wgrane w panelu admina
+DEPLOY.md                    uruchomienie na własnym serwerze 24/7 (deploy/: usługa systemd, Caddy)
 tools/render-assets.js       generuje od nowa wszystkie obrazki (bot + obrazki strony)
 scripts/plus-key.js          npm run plus-key – nowy klucz do podpisywania kodów Hammer+
 scripts/website-theme.js     wygląd HammerShop na stronie (kolory, logo, nazwa, obrazki)

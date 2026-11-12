@@ -218,7 +218,7 @@ function informationPosts(x, build) {
   guide.addTextDisplayComponents(
     text(
       `### ${x.E('home')} Zacznij tutaj\n` +
-        `> ${x.ch('rules')} – regulamin\n> ${x.ch('announcements')} – oficjalne nowości\n> ${x.ch('giveaways')} – darmowe nagrody\n` +
+        `> ${x.ch('rules')} – regulamin\n> ${x.ch('announcements')} – oficjalne nowości\n> ${x.ch('launcher')} – Hammer Launcher: pobieranie i nowe wersje\n> ${x.ch('giveaways')} – darmowe nagrody\n` +
         `> ${x.ch('roles')} – role i powiadomienia\n` +
         `### ${x.E('cart')} Sklep\n` +
         `> ${x.ch('shop')} – wszystkie produkty\n> ${x.ch('howToBuy')} – jak złożyć zamówienie\n> ${x.ch('payments')} – metody płatności\n` +
@@ -454,6 +454,8 @@ function postsFor(key, guild) {
       return informationPosts(x, build);
     case 'announcements':
       return [{ banner: 'announcements' }, announcementsIntro(x)];
+    case 'launcher':
+      return [{ banner: 'launcher' }, card(require('../features/launcherinfo').card(guild))];
     case 'giveaways':
       return [{ banner: 'giveaways' }, giveawaysIntro(x)];
     case 'roles':

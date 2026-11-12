@@ -80,6 +80,7 @@ const MAP = {
     reason: C('powod', 'Widoczny dla klientów, np. „przerwa techniczna – wracamy wieczorem”'),
   }),
   enable: C('wlacz-platnosc', 'Włącz z powrotem metodę płatności (admini i sprzedawcy)', { method: C('metoda', 'Metoda płatności') }),
+  launcher: C('launcher', 'Hammer Launcher: co to jest, aktualna wersja i skąd go pobrać'),
   featured: C('polecane', 'Polecane serwery w Hammer Launcherze (admini i sprzedawcy)', {
     add: C('dodaj', 'Dodaj serwer do polecanych w launcherze', {
       name: C('nazwa', 'Nazwa serwera'),

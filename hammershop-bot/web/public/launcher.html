@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hammer Launcher – launcher Minecrafta od HammerShop</title>
+<meta name="description" content="Hammer Launcher (beta) – nasz własny launcher Minecrafta: instancje, ponad tysiąc modów z Modrinth, FPS boost jednym kliknięciem i własny klient w grze. Pobierz za darmo.">
+<meta name="theme-color" content="#0e0b09">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HammerShop">
+<meta property="og:locale" content="pl_PL">
+<meta property="og:title" content="Hammer Launcher – launcher Minecrafta od HammerShop">
+<meta property="og:description" content="Wszystko w jednym miejscu: instancje, mody, FPS boost jednym kliknięciem i własny klient w grze. Wersja beta – za darmo.">
+<meta property="og:image" content="/assets/launcher/graj.jpg">
+<link rel="icon" href="/assets/hammershop-icon.png">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/launcher.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="HammerShop – strona główna"><i aria-hidden="true"></i>Hammer<b>Shop</b></a>
+    <nav class="nav" aria-label="Główna nawigacja">
+      <a href="/">Sklep</a>
+      <a href="/launcher" aria-current="page">Launcher</a>
+      <a href="#plus">Hammer+</a>
+      <a id="nav-discord" href="#" target="_blank" rel="noopener" hidden>Discord</a>
+    </nav>
+    <div class="right who" id="who">
+      <a class="btn small" id="login" href="/api/shop/auth/start?next=launcher" hidden>Zaloguj przez Discord</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero wrap">
+    <div class="hero-copy">
+      <p class="eyebrow">Nowość od HammerShop <span class="pill beta">Beta</span></p>
+      <h1>Hammer <span>Launcher</span></h1>
+      <p class="lead">Nasz własny, autorski launcher Minecrafta. Instancje, ponad tysiąc modów, FPS boost jednym kliknięciem i własny klient w grze – wszystko w jednym miejscu.</p>
+      <div class="cta">
+        <a class="btn primary big" id="download" href="/download" aria-disabled="true">Pobierz na Windows</a>
+        <a class="btn big" href="#funkcje">Zobacz, co potrafi</a>
+      </div>
+      <p class="meta" id="download-meta" role="status">Sprawdzam najnowszą wersję…</p>
+      <ul class="ticks">
+        <li>Za darmo</li>
+        <li>Windows 10 i 11 (64-bit)</li>
+        <li>Aktualizuje się sam</li>
+      </ul>
+    </div>
+    <figure class="hero-shot"><img src="/assets/launcher/graj.jpg" width="1400" height="881" alt="Ekran główny Hammer Launchera: przycisk Graj, wybór instancji i aktualności"></figure>
+  </section>
+
+  <section class="wrap" id="funkcje" aria-labelledby="funkcje-h">
+    <h2 class="section-title" id="funkcje-h">Wszystko, czego potrzebujesz do grania</h2>
+    <div class="features">
+      <article class="card"><span class="ico" aria-hidden="true">🧩</span><h3>Wszystko w jednym miejscu</h3><p>Instancje z różnymi wersjami gry, światy, serwery, skórki i zrzuty ekranu – bez szukania po folderach.</p></article>
+      <article class="card"><span class="ico" aria-hidden="true">⚡</span><h3>FPS boost jednym kliknięciem</h3><p>Launcher sam dobiera pamięć, ustawienia Javy i mody wydajnościowe pod Twój komputer i wersję gry.</p></article>
+      <article class="card"><span class="ico" aria-hidden="true">📦</span><h3>Ponad tysiąc modów</h3><p>Mody, paczki modów, tekstury i shadery z Modrinth – zależności instalują się same, aktualizacje da się cofnąć.</p></article>
+      <article class="card"><span class="ico" aria-hidden="true">🔨</span><h3>Własny klient w grze</h3><p>Hammer Client: własne menu, edytor HUD, waypointy, zoom i dziesiątki modułów – od Minecrafta 1.21 do najnowszej wersji.</p></article>
+      <article class="card"><span class="ico" aria-hidden="true">🔐</span><h3>Twoje konto Microsoft</h3><p>Logujesz się oficjalnie przez Microsoft. Potrzebujesz oryginalnego Minecrafta: Java Edition.</p></article>
+      <article class="card"><span class="ico" aria-hidden="true">🤝</span><h3>Graj ze znajomymi</h3><p>Zaproszenia jednym linkiem, polecane serwery i udostępnianie całej instancji jednym kodem.</p></article>
+    </div>
+  </section>
+
+  <section class="wrap shots" aria-label="Zrzuty ekranu">
+    <figure><img loading="lazy" src="/assets/launcher/mody.jpg" width="1100" height="692" alt="Przeglądarka modów w Hammer Launcherze"><figcaption>Mody z Modrinth</figcaption></figure>
+    <figure><img loading="lazy" src="/assets/launcher/optymalizacja.jpg" width="1100" height="692" alt="Zakładka Optymalizacja z przyciskiem Zoptymalizuj wszystko"><figcaption>Optymalizacja</figcaption></figure>
+    <figure><img loading="lazy" src="/assets/launcher/klient.jpg" width="1100" height="619" alt="Menu główne Hammer Client w grze"><figcaption>Hammer Client w grze</figcaption></figure>
+  </section>
+
+  <section class="wrap" id="aktualnosci" aria-labelledby="news-h" hidden>
+    <h2 class="section-title" id="news-h">Aktualności</h2>
+    <div class="news" id="news"></div>
+  </section>
+
+  <section class="wrap" id="plus" aria-labelledby="plus-h">
+    <div class="plus-box">
+      <div class="plus-copy">
+        <p class="eyebrow gold">Hammer+</p>
+        <h2 id="plus-h">Launcher po Twojemu</h2>
+        <p class="soft">Hammer+ to dodatek dla tych, którzy chcą więcej wyglądu i wygody. Nie daje żadnej przewagi w grze – a wszystko, co w launcherze jest za darmo, zostaje za darmo.</p>
+        <ul class="perks">
+          <li>Własne kolory i tła launchera</li>
+          <li>Własne tło menu w grze</li>
+          <li>Peleryny Hammer+ widoczne dla graczy z Hammer Client</li>
+          <li>Automatyczne kopie światów</li>
+          <li>Chmura: ustawienia launchera na każdym komputerze</li>
+          <li>Biblioteka na 200 skórek i zestawy skórek</li>
+        </ul>
+      </div>
+      <div class="plus-buy">
+        <div id="plus-result" hidden></div>
+        <div class="plans" id="plans"></div>
+        <p class="muted small" id="plus-note">Kod Hammer+ jest przypisany do Twojego konta Minecraft. Płatność obsługuje Stripe (karta, Apple Pay, Google Pay).</p>
+        <div id="my-codes" hidden>
+          <h3>Twoje kody Hammer+</h3>
+          <div class="stack" id="my-codes-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap faq" aria-labelledby="faq-h">
+    <h2 class="section-title" id="faq-h">Częste pytania</h2>
+    <details><summary>Windows ostrzega mnie przy instalacji. Czy to bezpieczne?</summary><p>Tak. W wersji beta instalator nie ma jeszcze płatnego certyfikatu wydawcy, dlatego Windows SmartScreen może pokazać okno „System Windows ochronił ten komputer”. Kliknij <b>Więcej informacji</b>, a potem <b>Uruchom mimo to</b>. Pobieraj launcher tylko z tej strony.</p></details>
+    <details><summary>Czy potrzebuję oryginalnego Minecrafta?</summary><p>Tak – Minecraft: Java Edition na koncie Microsoft. Launcher loguje Cię oficjalną stroną Microsoftu i nie obsługuje kont nieoryginalnych.</p></details>
+    <details><summary>Jak działają aktualizacje?</summary><p>Zainstalowany launcher sam sprawdza, czy jest nowa wersja, pobiera ją w tle i instaluje przy następnym uruchomieniu. Nie musisz niczego pobierać ponownie.</p></details>
+    <details><summary>To wersja beta – co to znaczy?</summary><p>Launcher działa, ale wciąż go dopracowujemy. Jeśli coś nie działa albo masz pomysł, napisz do nas na Discordzie – każda uwaga pomaga.</p></details>
+    <details><summary>Jak aktywować Hammer+?</summary><p>Po zakupie od razu zobaczysz swój kod na tej stronie i dostaniesz go w wiadomości prywatnej na Discordzie. W launcherze otwórz <b>Hammer+ → „Mam kod”</b> i wklej go. Kod działa na koncie Minecraft, dla którego został kupiony.</p></details>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>© HammerShop · Hammer Launcher <span class="pill beta">Beta</span></span>
+    <span>Nie jesteśmy powiązani z Mojang ani Microsoft.</span>
+    <a class="right" href="/">Sklep HammerShop</a>
+  </div>
+</footer>
+
+<dialog id="nick-dialog" aria-labelledby="nick-h">
+  <form method="dialog" id="nick-form">
+    <h2 id="nick-h">Dla którego konta Minecraft?</h2>
+    <p class="muted" id="nick-plan"></p>
+    <div class="fields gap-top">
+      <label>Twój nick w Minecraft (Java Edition)
+        <input type="text" id="nick" name="nick" maxlength="16" autocomplete="off" spellcheck="false" placeholder="np. Notch" required pattern="[A-Za-z0-9_]{1,16}">
+        <span class="hint">Kod zadziała tylko na tym koncie – sprawdź pisownię.</span>
+      </label>
+      <p class="notice bad" id="nick-error" role="alert" hidden></p>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button" id="nick-cancel">Anuluj</button>
+      <button class="btn gold" type="submit" id="nick-pay">Przejdź do płatności</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="/assets/launcher.js"></script>
+</body>
+</html>

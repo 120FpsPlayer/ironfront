@@ -343,7 +343,7 @@ test('cloud data and capes survive a restart (data/web.json)', async () => {
   assert.deepEqual((await call('GET', '/api/launcher/cloud', { code })).body, { updatedAt: saved.body.updatedAt, data: { keep: ['me'] } });
   assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body, { capes: { [mc]: 'hammer' } });
   const file = JSON.parse(require('node:fs').readFileSync(require('node:path').join(db.dataDir, 'web.json'), 'utf8'));
-  assert.deepEqual(Object.keys(file).sort(), ['capes', 'cloud', 'orders', 'sessions', 'users'], 'next to the website\'s accounts and orders');
+  assert.deepEqual(Object.keys(file).sort(), ['alert', 'capes', 'cloud', 'news', 'orders', 'plusPlans', 'releases', 'sessions', 'stats', 'users'], 'next to the website\'s accounts, orders and what the admin panel published');
   assert.ok(!JSON.stringify(file).includes(code), 'the code itself is never stored');
 });
 

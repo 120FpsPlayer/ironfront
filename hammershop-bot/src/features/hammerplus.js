@@ -87,7 +87,17 @@ const recent = (guildId, limit = 15) => [...codes(guildId)].sort((a, b) => b.at 
 async function grant(guildId, { nick, days, by, now = Date.now() }) {
   requireKey();
   if (!Number.isInteger(days) || days < 0 || days > MAX_DAYS) throw new UserError(`Podaj liczbę dni od 0 (na zawsze) do ${MAX_DAYS}.`);
-  const account = await lookup(nick);
+  return grantKnown(guildId, { ...(await lookup(nick)), days, by, now });
+}
+
+/**
+ * The same for an account that was already looked up ({ mc, nick } from lookup) – nothing here needs the network, so
+ * a code for a paid website order can always be issued. source: where it came from ('website' for a Stripe purchase).
+ */
+function grantKnown(guildId, { mc, nick, days, by = null, now = Date.now(), source = null }) {
+  requireKey();
+  if (!Number.isInteger(days) || days < 0 || days > MAX_DAYS) throw new UserError(`Podaj liczbę dni od 0 (na zawsze) do ${MAX_DAYS}.`);
+  const account = { mc, nick };
   let code;
   let payload;
   try {
@@ -96,7 +106,7 @@ async function grant(guildId, { nick, days, by, now = Date.now() }) {
   } catch (err) {
     throw err instanceof plus.PlusError ? new UserError(err.message) : err;
   }
-  const record = { id: payload.id, mc: payload.mc, nick: account.nick, exp: payload.exp, by: by ?? null, at: now };
+  const record = { id: payload.id, mc: payload.mc, nick: account.nick, exp: payload.exp, by: by ?? null, at: now, ...(source && { source }) };
   const g = db.guild(guildId);
   g.plusCodes = [...g.plusCodes, record].slice(-KEEP);
   db.save();
@@ -121,14 +131,25 @@ function inspect(guildId, code, now = Date.now()) {
   }
 }
 
+/** When the account's Hammer+ ends according to what was issued here: unix seconds, 0 = never, null = it has none running. */
+function runningUntil(guildId, mc, now = Date.now()) {
+  const live = codes(guildId).filter((c) => c.mc === mc && !expired(c.exp, now));
+  if (!live.length) return null;
+  return live.some((c) => c.exp === 0) ? 0 : Math.max(...live.map((c) => c.exp));
+}
+
+/** How many Minecraft accounts have Hammer+ running right now. */
+const activeAccounts = (guildId, now = Date.now()) => new Set(codes(guildId).filter((c) => !expired(c.exp, now)).map((c) => c.mc)).size;
+
 /** One line of /hammerplus list: "🟢 `Notch` · na zawsze · wystawiony przez <@1> · 2 dni temu". */
 function line(record, now = Date.now()) {
   const gone = expired(record.exp, now);
-  return `${gone ? '⌛' : '🟢'} \`${truncate(record.nick, 20)}\` · ${gone ? `wygasł ${ts(record.exp * 1000, 'R')}` : validity(record.exp)} · wystawiony przez ${record.by ? `<@${record.by}>` : 'bota'} · ${ts(record.at, 'R')}`;
+  const from = record.source === 'website' ? `kupiony na stronie${record.by ? ` przez <@${record.by}>` : ''}` : `wystawiony przez ${record.by ? `<@${record.by}>` : 'bota'}`;
+  return `${gone ? '⌛' : '🟢'} \`${truncate(record.nick, 20)}\` · ${gone ? `wygasł ${ts(record.exp * 1000, 'R')}` : validity(record.exp)} · ${from} · ${ts(record.at, 'R')}`;
 }
 
 hooks.on('ready', () => {
   if (env.plusPrivateKey && !plus.ready()) console.warn('🔨 Hammer+: HAMMER_PLUS_PRIVATE_KEY w .env jest nieprawidłowy (potrzebny klucz Ed25519: base64 z PKCS#8 DER) – wygeneruj nowy: npm run plus-key');
 });
 
-module.exports = { lookup, grant, inspect, codes, find, recent, line, validity, expired, setupHelp, requireKey, setFetch, MAX_DAYS };
+module.exports = { lookup, grant, grantKnown, runningUntil, activeAccounts, inspect, codes, find, recent, line, validity, expired, setupHelp, requireKey, setFetch, MAX_DAYS };

@@ -39,11 +39,12 @@ async function call(method, path, body = null, { idempotencyKey } = {}) {
 }
 
 /**
- * A Checkout Session for an order. lines: [{ name, amount (cents, each), quantity, description? }].
+ * A Checkout Session for an order. lines: [{ name, amount (cents, each), quantity, description? }]. returnPath: the page
+ * Stripe sends the buyer back to ('/' the store, '/launcher' for Hammer+); message: the line under the Pay button.
  * Returns { id, url }.
  */
-function createCheckout({ order, user, lines, currency, idempotencyKey }) {
-  const back = web().publicUrl;
+function createCheckout({ order, user, lines, currency, idempotencyKey, returnPath = '/', message = null }) {
+  const back = `${web().publicUrl}${returnPath}`; // "<site>/" – the store, "<site>/launcher" – Hammer+
   return call(
     'POST',
     '/checkout/sessions',
@@ -51,9 +52,9 @@ function createCheckout({ order, user, lines, currency, idempotencyKey }) {
       mode: 'payment',
       submit_type: 'pay',
       locale: 'pl', // Stripe's own page in Polish too
-      custom_text: { submit: { message: 'Zaraz po płatności Twoje zamówienie otworzy się w prywatnym tickecie na Discordzie HammerShop – produkty z dostawą natychmiastową dostarczymy tam i w wiadomości prywatnej.' } },
-      success_url: `${back}/?payment=return&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${back}/?payment=cancelled`,
+      custom_text: { submit: { message: message ?? 'Zaraz po płatności Twoje zamówienie otworzy się w prywatnym tickecie na Discordzie HammerShop – produkty z dostawą natychmiastową dostarczymy tam i w wiadomości prywatnej.' } },
+      success_url: `${back}?payment=return&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${back}?payment=cancelled`,
       client_reference_id: user.id,
       line_items: lines.map((l) => ({
         quantity: l.quantity,

@@ -75,6 +75,8 @@ const CATEGORIES = [
       text('welcome', '👋 powitania', { profile: 'rules', topic: 'Przywitaj naszych nowych członków 🧡', post: 'welcome' }),
       text('information', '📌 informacje', { profile: 'readonly', topic: 'O nas, kanały, zespół i kontakt.', post: 'information' }),
       news('announcements', '📢 ogłoszenia', { topic: 'Oficjalne ogłoszenia i nowości.', post: 'announcements' }),
+      // Hammer Launcher: its card with the download button, and under it the news and versions the admin panel posts.
+      text('launcher', '🔨 launcher', { profile: 'readonly', topic: 'Hammer Launcher – nasz launcher Minecrafta: pobieranie, nowości i nowe wersje.', post: 'launcher' }),
       text('giveaways', '🎉 giveawaye', { profile: 'readonly', topic: 'Giveawaye – kliknij Dołącz, żeby wziąć udział!', post: 'giveaways' }),
       text('roles', '🎭 role', { profile: 'readonly', topic: 'Role na serwerze i role z powiadomieniami.', post: 'roles' }),
     ],
