@@ -443,6 +443,9 @@ function staffHandbook(x) {
 function postsFor(key, guild) {
   const x = context(guild);
   const build = db.build(guild.id);
+  // The Hammer Launcher server (BOT_PROFILE=launcher) has its own cards – content.launcher.js; the rest is shared.
+  const own = require('../lib/profile').launcher ? require('./content.launcher').postsFor(key, x, build) : null;
+  if (own) return own;
   switch (key) {
     case 'verify':
       return [{ banner: 'verification' }, { payload: verifyPanel(guild) }];

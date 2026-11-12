@@ -92,7 +92,8 @@ async function grant(interaction, role) {
     text(`## ${e(g, 'check')} Konto zweryfikowane!\nWitamy w **${config.brand.name}**, ${interaction.member.displayName} 🧡 Wszystkie kanały są już odblokowane – zacznij tutaj:`),
   );
   const links = [
-    ['shop', 'Sklep', 'cart'],
+    // The shop server starts people at the shop, the Hammer Launcher server at the download.
+    require('../lib/profile').launcher ? ['launcher', 'Pobierz launcher', 'download'] : ['shop', 'Sklep', 'cart'],
     ['tickets', 'Pomoc', 'ticket'],
     ['roles', 'Role', 'bell'],
   ]

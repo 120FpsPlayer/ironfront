@@ -32,7 +32,7 @@ const PING_CHOICES = [
   ['none', 'No ping'],
   ['pingAnnouncements', '📢 Announcements role'],
   ['pingGiveaways', '🎉 Giveaways role'],
-  ['pingRestocks', '📦 Restocks role'],
+  require('../lib/profile').launcher ? ['pingUpdates', '🚀 Updates role'] : ['pingRestocks', '📦 Restocks role'],
   ['everyone', '@everyone'],
 ];
 

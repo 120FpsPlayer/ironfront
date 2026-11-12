@@ -401,7 +401,7 @@
     var wanted = location.hash.slice(1);
     show(loaders[wanted] ? wanted : 'pulpit');
   }).catch(function (err) {
-    $('gate-text').textContent = err.status === 401 ? 'Zaloguj się kontem Discord, które jest właścicielem albo administratorem serwera HammerShop.' : err.message;
+    $('gate-text').textContent = err.status === 401 ? 'Zaloguj się kontem Discord, które jest właścicielem albo administratorem naszego serwera Discord.' : err.message;
     $('gate-login').hidden = err.status !== 401;
     if (new URLSearchParams(location.search).get('auth') === 'unavailable') $('gate-text').textContent = 'Logowanie przez Discorda nie jest jeszcze uruchomione: ustaw PUBLIC_URL i DISCORD_CLIENT_SECRET w pliku .env.';
   });

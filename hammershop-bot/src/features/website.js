@@ -307,7 +307,7 @@ async function onPaid(order) {
 
 // ───────────── Hammer+ bought on the website ─────────────
 const DAY_MS = 86_400_000;
-const plusPage = () => (env.web.publicUrl ? `${env.web.publicUrl}/launcher` : null);
+const plusPage = () => require('./launcherinfo').page();
 
 /** The DM with the code: whose it is, how long it runs, where to type it in. */
 function plusDm(guild, order, code, record) {
@@ -401,9 +401,12 @@ async function panelLevel(userId) {
   return level;
 }
 
-/** The channel news about the launcher go to: #launcher when /build made it, otherwise the announcements. */
-function launcherChannel(guild) {
-  for (const key of ['launcher', 'announcements']) {
+/**
+ * The channel a post about the launcher goes to. On the Hammer Launcher server new versions have #aktualizacje and
+ * news #aktualności; on the shop server both go under the launcher's card (#launcher), or to the announcements.
+ */
+function launcherChannel(guild, kind = 'news') {
+  for (const key of [kind === 'release' ? 'updates' : 'news', 'launcher', 'announcements']) {
     const channel = guild.channels.cache.get(db.channelId(guild.id, key));
     if (channel?.isTextBased?.()) return channel;
   }
@@ -416,7 +419,7 @@ function launcherChannel(guild) {
  */
 async function announce({ kind, title, body, url, image }) {
   const guild = guildOf();
-  const channel = guild && launcherChannel(guild);
+  const channel = guild && launcherChannel(guild, kind);
   if (!channel) return null;
   const release = kind === 'release';
   const c = container(COLORS.brand);
@@ -431,7 +434,7 @@ async function announce({ kind, title, body, url, image }) {
   const lead = release ? 'Nowa wersja jest już do pobrania. Zainstalowany launcher zaktualizuje się sam.' : '';
   c.addTextDisplayComponents(text(truncate(`# ${release ? '🚀 ' : ''}${title}\n${[lead, body].filter(Boolean).join('\n\n')}`, 3800)));
   c.addSeparatorComponents(divider());
-  const roleId = release ? db.roleId(guild.id, 'pingAnnouncements') : null;
+  const roleId = release ? db.roleId(guild.id, 'pingUpdates') ?? db.roleId(guild.id, 'pingAnnouncements') : null; // 🚀 Aktualizacje where the server has it
   c.addTextDisplayComponents(text(`-# 🔨 Hammer Launcher · ${config.brand.name}${roleId ? ` · <@&${roleId}>` : ''}`));
   const link = url || plusPage();
   if (link) c.addActionRowComponents(row(linkBtn(link, release ? 'Pobierz launcher' : 'Otwórz', '🔗')));

@@ -40,7 +40,7 @@ const MAP = {
   announce: C('ogloszenie', 'Opublikuj ładne ogłoszenie (otwiera formularz)', {
     channel: C('kanal', 'Gdzie opublikować (domyślnie: kanał z ogłoszeniami)'),
     ping: C('ping', 'Kogo powiadomić', {}, {
-      none: 'Bez pingu', pingAnnouncements: '📢 Rola Ogłoszenia', pingGiveaways: '🎉 Rola Giveawaye', pingRestocks: '📦 Rola Dostawy', everyone: '@everyone',
+      none: 'Bez pingu', pingAnnouncements: '📢 Rola Ogłoszenia', pingGiveaways: '🎉 Rola Giveawaye', pingRestocks: '📦 Rola Dostawy', pingUpdates: '🚀 Rola Aktualizacje', everyone: '@everyone',
     }),
     banner: C('baner', 'Baner na górze', {}, {
       none: 'Bez banera', announcements: '📢 Ogłoszenia', updates: '🔔 Aktualizacje', 'whats-new': '📰 Nowości', restocks: '📦 Dostawy',

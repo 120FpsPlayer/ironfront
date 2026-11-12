@@ -7,12 +7,14 @@ const { e, ce, COLORS } = require('../lib/theme');
 const { isSafeSelfRole } = require('../lib/guards');
 const { embed, count } = require('../lib/utils');
 const { container, text, divider, btn, row, v2 } = require('../lib/v2');
+const profile = require('../lib/profile');
 
 /** Notification roles members can toggle in #roles (button id: sr:<key>). */
 const SELF_ROLES = [
   { key: 'pingAnnouncements', label: 'Ogłoszenia', icon: 'bell', description: 'ważne nowości, aktualizacje i otwarcia' },
   { key: 'pingGiveaways', label: 'Giveawaye', icon: 'gift', description: 'każdy nowy giveaway' },
-  { key: 'pingRestocks', label: 'Dostawy', icon: 'box', description: 'nowe produkty i dostawy' },
+  // The third one is the server's own: the shop pings for restocks, the launcher's server for new versions.
+  profile.launcher ? { key: 'pingUpdates', label: 'Aktualizacje', icon: 'rocket', description: 'każda nowa wersja launchera' } : { key: 'pingRestocks', label: 'Dostawy', icon: 'box', description: 'nowe produkty i dostawy' },
 ];
 
 /** Who-is-who card + the notification role buttons (posted in #roles). */
@@ -28,10 +30,11 @@ function rolesPanels(guild) {
     text(
       `### ${e(guild, 'shield')} Zespół\n` +
         lines([
-          ['brand', `sam bot ${config.brand.name} – przez niego działają sklep, tickety i zamówienia`],
+          ['brand', profile.launcher ? `sam bot ${config.brand.name} – przez niego działają tickety, weryfikacja i ogłoszenia nowych wersji` : `sam bot ${config.brand.name} – przez niego działają sklep, tickety i zamówienia`],
           ['founder', `właściciel ${config.brand.name}`],
-          ['coowner', 'prowadzi sklep razem z CEO'],
-          ['manager', 'zarządza zespołem i sklepem'],
+          ['coowner', profile.launcher ? 'prowadzi projekt razem z CEO' : 'prowadzi sklep razem z CEO'],
+          ['developer', 'tworzy launcher i Hammer Client'],
+          ['manager', profile.launcher ? 'zarządza zespołem i serwerem' : 'zarządza zespołem i sklepem'],
           ['admin', 'administracja serwera'],
           ['moderator', 'dba o bezpieczeństwo czatu i obsługuje zgłoszenia'],
           ['support', 'odpowiada na tickety i pytania'],
@@ -45,6 +48,7 @@ function rolesPanels(guild) {
         lines([
           ['loyal', `nadawana automatycznie po ${count(config.shop.loyalAfterOrders || 5, 'zrealizowanym zamówieniu', 'zrealizowanych zamówieniach', 'zrealizowanych zamówieniach')}`],
           ['customer', 'nadawana automatycznie po pierwszym zrealizowanym zamówieniu'],
+          ['tester', 'testuje nowe wersje przed wydaniem – nadaje ją zespół'],
           ['member', 'każdy po weryfikacji'],
         ]),
     ),

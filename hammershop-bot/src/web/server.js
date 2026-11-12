@@ -43,6 +43,7 @@ const launcher = require('./launcher');
 const admin = require('./admin');
 const releases = require('./releases');
 const plusLib = require('../lib/plus');
+const profile = require('../lib/profile');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'web', 'public');
 const STRIPE_MIN = 50; // Stripe's smallest charge in EUR cents
@@ -373,12 +374,26 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.jpg'
 /** The launcher page and the admin panel load nothing but their own files (and pictures over https). */
 const PAGE_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; media-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const PAGES = { '/launcher': 'launcher.html', '/admin': 'admin.html' };
+/**
+ * A page as this site shows it. The same files serve both sites: what is between <!--shop--> … <!--/shop--> is only
+ * for HammerShop's site, <!--launcher--> … <!--/launcher--> only for Hammer Launcher's own (BOT_PROFILE=launcher) –
+ * its name, the big H, no link to a shop.
+ */
+function pageHtml(file) {
+  const [mine, other] = profile.launcher ? ['launcher', 'shop'] : ['shop', 'launcher'];
+  return fs
+    .readFileSync(path.join(PUBLIC, file), 'utf8')
+    .replace(new RegExp(`<!--${other}-->[\\s\\S]*?<!--/${other}-->`, 'g'), '')
+    .replace(new RegExp(`<!--/?${mine}-->`, 'g'), '');
+}
 
 function serveStatic(req, res, pathname) {
-  const page = PAGES[pathname.replace(/\/+$/, '')];
+  // Hammer Launcher's own site has no shop: its front page – and any address that is no file – is the launcher's page.
+  const home = profile.launcher && (pathname === '/' || pathname === '/index.html' || (!pathname.startsWith('/assets/') && !path.extname(pathname)));
+  const page = PAGES[pathname.replace(/\/+$/, '')] ?? (home ? 'launcher.html' : null);
   if (page && fs.existsSync(path.join(PUBLIC, page))) {
     res.writeHead(200, { ...HEADERS, 'content-type': TYPES['.html'], 'cache-control': 'no-cache', 'content-security-policy': PAGE_CSP, ...(page === 'admin.html' && { 'x-robots-tag': 'noindex' }) });
-    return req.method === 'HEAD' ? res.end() : fs.createReadStream(path.join(PUBLIC, page)).pipe(res);
+    return res.end(req.method === 'HEAD' ? undefined : pageHtml(page));
   }
   const file = pathname === '/' || pathname === '/index.html' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(pathname).replace(/^([/\\])+/, ''));
   if (!file.startsWith(PUBLIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {

@@ -480,7 +480,7 @@ async function buildServer({ guild, mode = 'add', invokerId, keepChannelIds = []
       await attempt('Ikona serwera', () => guild.setIcon(logoPath(S.logo), reason), { warn: true });
     }
     if (S.setBanner !== false && guild.features.includes('BANNER')) {
-      await attempt('Baner serwera', () => guild.setBanner(path.join(ASSETS, 'brand', 'server-banner.png'), reason), { warn: true });
+      await attempt('Baner serwera', () => guild.setBanner(path.join(ASSETS, 'brand', require('../lib/profile').launcher ? 'server-banner-launcher.png' : 'server-banner.png'), reason), { warn: true });
     }
     tick('Nazwa, ikona i bezpieczeństwo');
 

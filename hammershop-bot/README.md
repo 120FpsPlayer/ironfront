@@ -10,6 +10,34 @@ Wpisz **`/zbuduj`**, kliknij **Zbuduj**, poczekaj około dwóch minut – gotowe
 
 ---
 
+## 🔀 Dwa serwery, jeden bot: HammerShop i Hammer Launcher
+
+Ten sam bot prowadzi dwa różne serwery – który, wybierasz jedną linią w `.env`:
+
+| `BOT_PROFILE` | Serwer | Co buduje `/zbuduj` |
+|---|---|---|
+| *(puste)* | **HammerShop** – sklep | Wszystko, co opisuje reszta tego pliku: sklep, zamówienia, płatności, opinie |
+| `launcher` | **Hammer Launcher** – społeczność launchera | Serwer o nazwie **Hammer Launcher** z logo **dużym H**, własnymi banerami, rolami, regulaminem i kanałami launchera – bez sklepu |
+
+**Serwer Hammer Launcher** (`BOT_PROFILE=launcher`):
+
+```
+〔 📊 STATYSTYKI 〕     👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: 123 · 🚀┃ᴡᴇʀꜱᴊᴀ: 2.6.0 · ⬇┃ᴘᴏʙʀᴀɴɪᴀ: 456      (wersja i pobrania biorą się ze strony)
+〔 👋 WITAMY 〕         ✅┃ᴡᴇʀʏꜰɪᴋᴀᴄᴊᴀ · 📜┃ʀᴇɢᴜʟᴀᴍɪɴ · 👋┃ᴘᴏᴡɪᴛᴀɴɪᴀ · 📌┃ɪɴꜰᴏʀᴍᴀᴄᴊᴇ · 📢┃ᴏɢᴌᴏꜱᴢᴇɴɪᴀ · 🎭┃ʀᴏʟᴇ
+〔 🔨 LAUNCHER 〕       ⬇┃ᴘᴏʙɪᴇʀᴢ · 🚀┃ᴀᴋᴛᴜᴀʟɪᴢᴀᴄᴊᴇ · 📰┃ᴀᴋᴛᴜᴀʟɴᴏꜱᴄɪ · ⭐┃ʜᴀᴍᴍᴇʀ-ᴘʟᴜꜱ · ❓┃ꜰᴀǫ
+〔 🎧 POMOC 〕          🎫┃ᴛɪᴄᴋᴇᴛʏ · 🐛┃ᴢɢᴌᴏꜱ-ʙᴌᴀᴅ · 💡┃ᴘʀᴏᴘᴏᴢʏᴄᴊᴇ
+〔 💬 SPOŁECZNOŚĆ 〕    💬┃ᴄᴢᴀᴛ · 📸┃ᴢʀᴢᴜᴛʏ-ᴇᴋʀᴀɴᴜ · 🎮┃ꜱᴇʀᴡᴇʀʏ · 🎉┃ɢɪᴠᴇᴀᴡᴀʏᴇ · 🏆┃ʀᴀɴᴋɪɴɢ · 💎┃ʙᴏᴏꜱᴛᴇʀᴢʏ
+〔 🔒 ZESPÓŁ 〕 · 〔 📁 LOGI 〕 · 〔 🎫 TICKETY 〕 · 〔 🔐 ZAMKNIĘTE TICKETY 〕
+```
+
+- **Role:** 🔨 Hammer Launcher (rola bota), CEO, Co-CEO, **Developer**, Manager, Administrator, Moderator, Support, Stażysta, **Tester**, Boty, Członek oraz powiadomienia: Ogłoszenia, **Aktualizacje** (ping przy nowej wersji) i Giveawaye.
+- **Tickety:** *Pomoc z launcherem*, *Zgłoś błąd*, *Hammer+ i płatności*, *Odbierz nagrodę*, *Zgłoś użytkownika*, *Rekrutacja*, *Odwołanie od kary* – z pytaniami o wersję launchera, Minecrafta i log.
+- **Połączenie ze stroną i launcherem:** nowa wersja opublikowana w panelu admina pojawia się na **#aktualizacje** (z pingiem roli Aktualizacje), aktualność – na **#aktualności**, a kanały statystyk pokazują aktualną wersję i liczbę pobrań. `/launcher` pokazuje kartę launchera z aktualną wersją.
+- **Strona:** adres główny (`PUBLIC_URL`) to **strona launchera** z logo H i nazwą Hammer Launcher – pobieranie, aktualności, Hammer+ przez Stripe; panel admina jest pod `/admin`.
+- **Te same emotki** co w HammerShop (jedyny wyjątek: emotka logo to H). Komend sklepu (`/produkt`, `/sklep`, `/promocja`, `/opinia`…) na tym serwerze nie ma, a `/pomoc` mówi o launcherze.
+- **Gdzie zmienić teksty:** `config.launcher.json` (nazwa, opisy, rodzaje ticketów, gotowe odpowiedzi – nakładane na `config.json`), `regulamin-launcher.md`, układ kanałów i ról w `src/builder/layout.launcher.js`, karty kanałów w `src/builder/content.launcher.js`. Grafiki: `assets/banners-launcher/`, `assets/brand/logo-launcher.png`, `assets/brand/server-banner-launcher.png` (`npm run render-assets -- launcher` rysuje je od nowa).
+- **Oba serwery naraz:** uruchom dwie kopie bota w osobnych folderach – każda ze swoim `.env` (osobny token bota i `BOT_PROFILE`), portem strony i folderem `data/`.
+
 ## ✨ Co dostajesz
 
 ### 🏗️ `/zbuduj` – cały serwer jednym kliknięciem
@@ -611,7 +639,9 @@ web/public/                  strony: index.html (sklep), launcher.html (/launche
 data/web.json                konta i zamówienia ze strony, aktualności, komunikat, wersje launchera, cennik Hammer+
 data/releases/               instalatory launchera wgrane w panelu admina
 DEPLOY.md                    uruchomienie na własnym serwerze 24/7 (deploy/: usługa systemd, Caddy)
-tools/render-assets.js       generuje od nowa wszystkie obrazki (bot + obrazki strony)
+config.launcher.json         ustawienia serwera Hammer Launcher (BOT_PROFILE=launcher) – nakładane na config.json
+regulamin-launcher.md        regulamin serwera Hammer Launcher
+tools/render-assets.js       generuje od nowa wszystkie obrazki (bot + obrazki strony; `launcher` – grafiki serwera launchera)
 scripts/plus-key.js          npm run plus-key – nowy klucz do podpisywania kodów Hammer+
 scripts/website-theme.js     wygląd HammerShop na stronie (kolory, logo, nazwa, obrazki)
 test/                        testy z symulowanym serwerem Discord (npm test)

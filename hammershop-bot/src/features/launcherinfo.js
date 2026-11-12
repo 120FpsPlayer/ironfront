@@ -12,7 +12,10 @@ const { COLORS, e, ce } = require('../lib/theme');
 const { container, text, divider, header, linkBtn, row } = require('../lib/v2');
 const { truncate, ts } = require('../lib/utils');
 
-const page = () => (env.web.publicUrl ? `${env.web.publicUrl}/launcher` : null);
+const profile = require('../lib/profile');
+
+/** The launcher's page of the website: its own page on the shop's site, the front page on the launcher's own site. */
+const page = () => (env.web.publicUrl ? `${env.web.publicUrl}${profile.launcher ? '/' : '/launcher'}` : null);
 const channel = (guild, key, fallback) => (db.channelId(guild.id, key) ? `<#${db.channelId(guild.id, key)}>` : fallback);
 
 /** The newest published installer – null when the website is off or nothing is published yet. */
@@ -36,7 +39,7 @@ function card(guild, { live = false } = {}) {
         `> ${E('flame')} **FPS boost jednym kliknięciem** – pamięć, Java i mody wydajnościowe dobrane pod Twój komputer\n` +
         `> ${E('box')} **Ponad tysiąc modów** z Modrinth – zależności instalują się same\n` +
         `> ${E('sparkles')} **Hammer Client w grze** – własne menu, edytor HUD, waypointy i zoom\n` +
-        `> ${E('refresh')} **Aktualizuje się sam** – nowości i nowe wersje ogłaszamy na ${channel(guild, 'launcher', 'tym serwerze')}`,
+        `> ${E('refresh')} **Aktualizuje się sam** – nowości i nowe wersje ogłaszamy na ${channel(guild, 'updates', channel(guild, 'launcher', 'tym serwerze'))}`,
     ),
   );
   const release = live ? currentRelease() : null;

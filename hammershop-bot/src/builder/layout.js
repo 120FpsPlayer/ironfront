@@ -152,4 +152,5 @@ const WELCOME_SCREEN = [
   { channel: 'rules', emoji: '📜', description: 'Przeczytaj regulamin przed zakupem' },
 ];
 
-module.exports = { ROLES, CATEGORIES, WELCOME_SCREEN, OLD_COLORS };
+// The Hammer Launcher server (BOT_PROFILE=launcher) has its own layout – everything that reads this file gets that one.
+module.exports = require('../lib/profile').launcher ? require('./layout.launcher') : { ROLES, CATEGORIES, WELCOME_SCREEN, OLD_COLORS };

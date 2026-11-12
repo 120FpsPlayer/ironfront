@@ -1,0 +1,160 @@
+{
+  "brand": {
+    "name": "Hammer Launcher",
+    "color": "#FF9F43",
+    "footer": "Hammer Launcher • launcher Minecrafta",
+    "tagline": "Launcher Minecrafta · Mody · FPS boost · Wszystko w jednym miejscu",
+    "about": "**Hammer Launcher** to nasz własny, autorski launcher Minecrafta: instancje, ponad tysiąc modów, FPS boost jednym kliknięciem i własny klient w grze. Ten serwer to jego dom – tu pobierzesz launcher, dowiesz się o nowych wersjach, dostaniesz pomoc i poznasz innych graczy."
+  },
+  "server": {
+    "logo": "launcher"
+  },
+  "rules": {
+    "file": "regulamin-launcher.md"
+  },
+  "shop": {
+    "deliveryTime": "",
+    "paymentMethods": []
+  },
+  "panel": {
+    "title": "Centrum pomocy",
+    "description": "Launcher nie działa jak trzeba, znalazłeś błąd albo masz pytanie o Hammer+? Wybierz kategorię poniżej – otworzymy **prywatny kanał**, który widzisz tylko Ty i nasz zespół.",
+    "rules": [
+      "Podaj wersję launchera i wersję Minecrafta",
+      "Opisz krok po kroku, co robisz i co się wtedy dzieje",
+      "Dołącz log: w launcherze Konsola → Udostępnij log",
+      "Jedna sprawa = jeden ticket"
+    ]
+  },
+  "ticketTypes": [
+    {
+      "id": "order",
+      "label": "Zakup",
+      "emoji": "🛒",
+      "icon": "cart",
+      "description": "Zakup w sklepie",
+      "shopOnly": true,
+      "channelPrefix": "zakup",
+      "staffRoles": [],
+      "questions": []
+    },
+    {
+      "id": "support",
+      "label": "Pomoc z launcherem",
+      "emoji": "🧰",
+      "icon": "question",
+      "description": "Instalacja, logowanie, mody, wydajność – pomożemy",
+      "channelPrefix": "pomoc",
+      "staffRoles": [],
+      "questions": [
+        { "id": "subject", "label": "Temat", "style": "short", "placeholder": "Np. gra nie uruchamia się po instalacji modów", "required": true, "maxLength": 100 },
+        { "id": "version", "label": "Wersja launchera i Minecrafta", "style": "short", "placeholder": "Np. launcher 2.6.0, Minecraft 1.21.4 Fabric", "required": true, "maxLength": 100 },
+        { "id": "details", "label": "Opisz dokładnie, co się dzieje", "style": "paragraph", "placeholder": "Co robisz, co widzisz i co już zostało sprawdzone? Wklej link do logu: Konsola → Udostępnij log.", "required": true, "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "bug",
+      "label": "Zgłoś błąd",
+      "emoji": "🐛",
+      "icon": "warning",
+      "description": "Coś w launcherze albo Hammer Client działa źle",
+      "channelPrefix": "blad",
+      "staffRoles": [],
+      "questions": [
+        { "id": "subject", "label": "Co nie działa?", "style": "short", "placeholder": "Np. edytor HUD nie zapisuje pozycji", "required": true, "maxLength": 100 },
+        { "id": "version", "label": "Wersja launchera i Minecrafta", "style": "short", "placeholder": "Np. launcher 2.6.0, Minecraft 1.21.4 Fabric", "required": true, "maxLength": 100 },
+        { "id": "steps", "label": "Jak wywołać błąd – krok po kroku", "style": "paragraph", "placeholder": "1. Otwieram… 2. Klikam… 3. Dzieje się…", "required": true, "maxLength": 1000 },
+        { "id": "log", "label": "Link do logu albo zrzutu ekranu", "style": "short", "placeholder": "Konsola → Udostępnij log (opcjonalnie)", "required": false, "maxLength": 300 }
+      ]
+    },
+    {
+      "id": "plus",
+      "label": "Hammer+ i płatności",
+      "emoji": "⭐",
+      "icon": "star",
+      "description": "Zakup Hammer+, kod, który nie działa, pytania o płatność",
+      "channelPrefix": "hammerplus",
+      "staffRoles": [],
+      "questions": [
+        { "id": "nick", "label": "Twój nick w Minecraft", "style": "short", "placeholder": "Np. Notch", "required": true, "maxLength": 16 },
+        { "id": "details", "label": "W czym możemy pomóc?", "style": "paragraph", "placeholder": "Np. kod nie działa, chcę kupić Hammer+ inaczej niż kartą, numer zamówienia ze strony…", "required": true, "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "reward",
+      "label": "Odbierz nagrodę",
+      "emoji": "🎁",
+      "icon": "gift",
+      "description": "Wygrana w giveawayu? Odbierz nagrodę tutaj",
+      "channelPrefix": "nagroda",
+      "staffRoles": [],
+      "questions": [
+        { "id": "giveaway", "label": "Który giveaway wygrałeś/aś?", "style": "short", "placeholder": "Np. Hammer+ na 30 dni", "required": true, "maxLength": 100 },
+        { "id": "nick", "label": "Twój nick w Minecraft", "style": "short", "placeholder": "Potrzebny, jeśli nagrodą jest Hammer+", "required": false, "maxLength": 16 }
+      ]
+    },
+    {
+      "id": "report",
+      "label": "Zgłoś użytkownika",
+      "emoji": "🚨",
+      "icon": "warning",
+      "description": "Zgłoś oszusta albo kogoś, kto łamie zasady",
+      "channelPrefix": "zgloszenie",
+      "staffRoles": [],
+      "questions": [
+        { "id": "who", "label": "Kogo zgłaszasz? (nick / ID)", "style": "short", "placeholder": "Nick albo ID użytkownika", "required": true, "maxLength": 100 },
+        { "id": "what", "label": "Co się stało?", "style": "paragraph", "placeholder": "Opisz sytuację i dodaj linki do zrzutów ekranu.", "required": true, "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "apply",
+      "label": "Rekrutacja",
+      "emoji": "📝",
+      "icon": "pencil",
+      "description": "Chcesz dołączyć do zespołu Hammer Launchera? Aplikuj tutaj",
+      "channelPrefix": "rekrutacja",
+      "staffRoles": [],
+      "questions": [
+        { "id": "age", "label": "Ile masz lat?", "style": "short", "placeholder": "Np. 17", "required": true, "maxLength": 20 },
+        { "id": "role", "label": "W czym chcesz pomagać?", "style": "short", "placeholder": "Support, moderacja, testy, programowanie…", "required": true, "maxLength": 100 },
+        { "id": "experience", "label": "Doświadczenie", "style": "paragraph", "placeholder": "Co już robiłeś/aś na innych serwerach albo w projektach?", "required": true, "maxLength": 1000 },
+        { "id": "why", "label": "Dlaczego mamy wybrać właśnie Ciebie?", "style": "paragraph", "placeholder": "Kilka zdań o sobie.", "required": true, "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "appeal",
+      "label": "Odwołanie od kary",
+      "emoji": "🙏",
+      "icon": "info",
+      "description": "Odwołaj się od wyciszenia, przerwy lub ostrzeżenia",
+      "channelPrefix": "odwolanie",
+      "staffRoles": [],
+      "questions": [
+        { "id": "what", "label": "Jaka to kara i kiedy ją nałożono?", "style": "short", "placeholder": "Np. wyciszenie na 7 dni, 10.11", "required": true, "maxLength": 200 },
+        { "id": "why", "label": "Dlaczego powinniśmy ją zdjąć?", "style": "paragraph", "placeholder": "Opisz swoją wersję.", "required": true, "maxLength": 1000 }
+      ]
+    }
+  ],
+  "snippets": [
+    { "id": "greeting", "name": "👋 Powitanie", "content": "Cześć {user}! Tu {staff} – zajmę się Twoim ticketem. Daj mi chwilę, już sprawdzam." },
+    { "id": "log", "name": "📋 Prośba o log", "content": "Żeby to sprawdzić, potrzebuję logu: w launcherze otwórz **Konsola → Udostępnij log** i wklej tutaj link, który dostaniesz." },
+    { "id": "version", "name": "🔢 Prośba o wersję", "content": "Podaj proszę wersję launchera (lewy dolny róg okna) oraz wersję Minecrafta i loader instancji, na której to się dzieje." },
+    { "id": "update", "name": "⬆️ Zaktualizuj launcher", "content": "To jest już naprawione w najnowszej wersji. Otwórz **Ustawienia → Aktualizacje launchera → Sprawdź teraz** i daj znać, czy po aktualizacji działa." },
+    { "id": "pluscode", "name": "⭐ Jak wpisać kod Hammer+", "content": "Kod Hammer+ wpisujesz w launcherze: **Hammer+ → „Mam kod” → wklej → Aktywuj**. Działa na koncie Minecraft, dla którego został wystawiony – upewnij się, że to konto jest wybrane w launcherze." },
+    { "id": "wait", "name": "⏳ Prosimy o cierpliwość", "content": "Dzięki za cierpliwość, {user} – sprawdzamy to i wrócimy z odpowiedzią najszybciej, jak się da." },
+    { "id": "resolved", "name": "✅ Rozwiązane", "content": "Wygląda na to, że sprawa jest załatwiona. Jeśli coś jeszcze nie działa, napisz tutaj – w innym wypadku ticket za chwilę zamkniemy. Miłej gry! 🧡" },
+    { "id": "rules", "name": "📜 Regulamin", "content": "Przypominam o naszym regulaminie – znajdziesz go na kanale z regulaminem. Prosimy o trzymanie się zasad." }
+  ],
+  "shopStatus": { "enabled": false },
+  "salesReport": { "enabled": false },
+  "welcomeDiscount": { "enabled": false },
+  "promos": { "enabled": false },
+  "affiliates": { "enabled": false },
+  "balance": { "enabled": false },
+  "gifts": { "enabled": false },
+  "cart": { "enabled": false },
+  "deals": { "enabled": false },
+  "abandonedOrders": { "enabled": false },
+  "invites": { "enabled": true, "rewards": [] },
+  "orders": { "receipts": false, "proofs": false, "vouchReminderHours": 0, "statusDms": false, "paymentProofs": false }
+}

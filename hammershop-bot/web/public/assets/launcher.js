@@ -77,7 +77,7 @@
     var box = $('plans');
     box.textContent = '';
     if (!plus.ready) {
-      box.appendChild(el('p', { class: 'notice', text: 'Hammer+ nie jest jeszcze w sprzedaży na stronie. Kod możesz dostać od zespołu HammerShop na Discordzie.' }));
+      box.appendChild(el('p', { class: 'notice', text: 'Hammer+ nie jest jeszcze w sprzedaży na stronie. Kod możesz dostać od naszego zespołu na Discordzie.' }));
       return;
     }
     plus.plans.forEach(function (plan) {
@@ -131,7 +131,7 @@
     });
     return el('div', { class: 'code-card' }, [
       el('div', { class: 'row' }, [el('b', { text: (fresh ? 'Gotowe! ' : '') + 'Konto ' + (p.nick || '') }), until ? el('span', { class: 'pill gold', text: until }) : null, p.code ? copy : null]),
-      p.code ? el('code', { class: 'code', text: p.code }) : el('p', { class: 'muted small', text: order.delivery || 'Kod wystawi zespół HammerShop – napisz do nas na Discordzie.' }),
+      p.code ? el('code', { class: 'code', text: p.code }) : el('p', { class: 'muted small', text: order.delivery || 'Kod wystawi nasz zespół – napisz do nas na Discordzie.' }),
       fresh ? el('p', { class: 'small soft', text: 'Otwórz Hammer Launcher → Hammer+ → „Mam kod” i wklej kod. Wysłaliśmy go też w wiadomości prywatnej na Discordzie.' }) : null,
     ]);
   }

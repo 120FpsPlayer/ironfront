@@ -12,7 +12,11 @@ const { slash } = require('../lib/commandsPl');
 /** Static emoji slots per boost level. */
 const SLOTS = { 0: 50, 1: 100, 2: 150, 3: 250 };
 
-const fileFor = (name) => path.join(ASSETS, 'emojis', `${name}.png`);
+/** The emojis are the same on every server – except the few the Hammer Launcher server draws its own way (its logo: the H). */
+function fileFor(name) {
+  const own = require('../lib/profile').launcher ? path.join(ASSETS, 'emojis-launcher', `${name}.png`) : null;
+  return own && fs.existsSync(own) ? own : path.join(ASSETS, 'emojis', `${name}.png`);
+}
 
 /** Emoji name prefixes of earlier versions – their emojis are replaced by the current ones. */
 const LEGACY_PREFIXES = ['nox_'];

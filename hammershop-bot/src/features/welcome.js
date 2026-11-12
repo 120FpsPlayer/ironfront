@@ -17,19 +17,23 @@ function welcomeCard(member) {
   const g = member.guild;
   const verify = db.channelId(g.id, 'verify');
   const shop = db.channelId(g.id, 'shop');
+  // On the Hammer Launcher server the next stop after verifying is the download channel.
+  const download = require('../lib/profile').launcher ? db.channelId(g.id, 'launcher') : null;
   const c = container(COLORS.brand);
   c.addSectionComponents(
     section(
       `## ${e(g, 'moon')} Witaj w ${config.brand.name}, ${member}!\n` +
         `Jesteś naszym **${ordinal(g.memberCount ?? 1)}** członkiem – cieszymy się, że jesteś z nami 🧡\n` +
         (verify ? `> ${e(g, 'shield')} Zweryfikuj się na <#${verify}>, żeby odblokować serwer\n` : '') +
-        (shop ? `> ${e(g, 'cart')} A potem zajrzyj na <#${shop}>` : ''),
+        (shop ? `> ${e(g, 'cart')} A potem zajrzyj na <#${shop}>` : '') +
+        (download ? `> ${e(g, 'download')} A potem pobierz launcher na <#${download}>` : ''),
       member.displayAvatarURL?.({ size: 256 }),
     ),
   );
   const links = [];
   if (verify) links.push(linkBtn(channelUrl(g.id, verify), 'Zweryfikuj się', ce(g, 'check')));
   if (shop) links.push(linkBtn(channelUrl(g.id, shop), 'Sklep', ce(g, 'cart')));
+  if (download) links.push(linkBtn(channelUrl(g.id, download), 'Pobierz launcher', ce(g, 'download')));
   if (links.length) c.addActionRowComponents(row(...links));
   return v2(c, { mentions: { users: [member.id] } });
 }

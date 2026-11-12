@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { AttachmentBuilder } = require('discord.js');
 const config = require('./config');
+const profile = require('./profile');
 const db = require('./db');
 
 const ASSETS = path.join(__dirname, '..', '..', 'assets');
@@ -77,7 +78,11 @@ function ce(guild, name) {
   return id ? { id, name: emojiName(name) } : (FALLBACK[name] ?? '▫️');
 }
 
-const bannerPath = (key) => path.join(ASSETS, 'banners', `${key}.png`);
+/** The Hammer Launcher server has its own banners (assets/banners-launcher/, the H in the corner) – the rest are shared. */
+function bannerPath(key) {
+  const own = profile.launcher ? path.join(ASSETS, 'banners-launcher', `${key}.png`) : null;
+  return own && fs.existsSync(own) ? own : path.join(ASSETS, 'banners', `${key}.png`);
+}
 const hasBanner = (key) => fs.existsSync(bannerPath(key));
 
 const bannerArts = new Map();
@@ -97,11 +102,12 @@ const BANNER_ALT = {
   payments: 'Płatności', products: 'Produkty', proofs: 'Realizacje', purchase: 'Zakup', restocks: 'Dostawy', reviews: 'Opinie',
   roles: 'Role', rules: 'Regulamin', shop: 'Sklep', staff: 'Zespół', support: 'Pomoc', tickets: 'Tickety', updates: 'Aktualizacje',
   verification: 'Weryfikacja', vip: 'VIP', vouches: 'Opinie', welcome: 'Powitanie', 'whats-new': 'Nowości',
+  launcher: 'Pobierz', plus: 'Hammer+', bugs: 'Zgłoś błąd', suggestions: 'Propozycje', servers: 'Serwery',
 };
 
 /** A banner image as an attachment (posted above channel cards). */
 function banner(key) {
-  return new AttachmentBuilder(bannerPath(key), { name: `hammershop-${key}.png`, description: `${config.brand.name} – ${BANNER_ALT[key] ?? key}` });
+  return new AttachmentBuilder(bannerPath(key), { name: `${profile.launcher ? 'hammerlauncher' : 'hammershop'}-${key}.png`, description: `${config.brand.name} – ${BANNER_ALT[key] ?? key}` });
 }
 
 module.exports = {

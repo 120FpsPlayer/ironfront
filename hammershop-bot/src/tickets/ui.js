@@ -28,7 +28,8 @@ const typeText = (guild, type) => (type?.icon && guild ? e(guild, type.icon) : t
 
 function panelPayload(guild, style = 'buttons') {
   const p = config.panel;
-  const types = config.ticketTypes;
+  // The Hammer Launcher server has no shop: the type that only the shop's Buy buttons open is not offered there.
+  const types = config.ticketTypes.filter((t) => !(t.shopOnly && require('../lib/profile').launcher));
   const useSections = style !== 'select' && types.length <= 8;
 
   const c = container(COLORS.brand);
@@ -244,7 +245,7 @@ function manageSelect(ticket, guild) {
   }
   options.push({ label: 'Poproś autora o zamknięcie', value: 'closereq', emoji: '📨', description: 'Autor potwierdza, że sprawa jest załatwiona' });
   for (const t of config.ticketTypes) {
-    if (t.id === ticket.typeId || options.length >= 25) continue;
+    if (t.id === ticket.typeId || options.length >= 25 || (t.shopOnly && require('../lib/profile').launcher)) continue;
     options.push({ label: `Przenieś do: ${t.label}`.slice(0, 100), value: `move:${t.id}`, emoji: typeEmoji(guild, t), description: 'Zmień kategorię ticketu' });
   }
   return new StringSelectMenuBuilder().setCustomId('ticket:manage').setPlaceholder('⚙️ Zarządzaj ticketem (zespół)').addOptions(options);

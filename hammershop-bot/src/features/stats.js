@@ -21,6 +21,9 @@ const weekEnds = (key) => (key + 1) * WEEK - 3 * 86_400_000;
 const STAT_NAMES = {
   statMembers: (n) => channelName(`👥 Członkowie: ${n.toLocaleString('en-US')}`),
   statVouches: (n) => channelName(`⭐ Opinie: ${n.toLocaleString('en-US')}`),
+  // The Hammer Launcher server: the newest published launcher and how often its installer was downloaded.
+  statVersion: (v) => channelName(`🚀 Wersja: ${v ?? 'beta'}`),
+  statDownloads: (n) => channelName(`⬇ Pobrania: ${n.toLocaleString('en-US')}`),
 };
 
 function trackMessage(message) {
@@ -71,7 +74,22 @@ function statNames(guild) {
   };
   const shop = require('./shopstatus').statusChannelName(guild.id);
   if (shop) names.statShop = shop;
+  if (db.channelId(guild.id, 'statVersion') || db.channelId(guild.id, 'statDownloads')) {
+    const launcher = launcherNumbers();
+    names.statVersion = STAT_NAMES.statVersion(launcher.version);
+    names.statDownloads = STAT_NAMES.statDownloads(launcher.downloads);
+  }
   return names;
+}
+
+/** { version, downloads } of the launcher's installers on the website (src/web/store.js) – nothing published: null and 0. */
+function launcherNumbers() {
+  try {
+    const store = require('../web/store');
+    return { version: store.currentRelease()?.version ?? null, downloads: store.releases().reduce((sum, r) => sum + (r.downloads ?? 0), 0) };
+  } catch {
+    return { version: null, downloads: 0 };
+  }
 }
 
 async function updateStatChannels(client) {

@@ -5,7 +5,7 @@ const { env } = require('../env');
 const db = require('./db');
 
 /** Role keys created by /build, grouped by power level. */
-const ADMIN_KEYS = ['founder', 'coowner', 'manager', 'admin'];
+const ADMIN_KEYS = ['founder', 'coowner', 'manager', 'developer', 'admin']; // developer: only the Hammer Launcher server has it
 const MOD_KEYS = [...ADMIN_KEYS, 'moderator'];
 const SUPPORT_KEYS = [...MOD_KEYS, 'support', 'trialSupport'];
 const STAFF_KEYS = [...SUPPORT_KEYS, 'seller'];

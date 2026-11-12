@@ -44,7 +44,8 @@ Najważniejsze linie:
 
 | Linia | Skąd ją wziąć |
 |---|---|
-| `DISCORD_TOKEN=` | Developer Portal → Twoja aplikacja → **Bot → Reset Token** |
+| `BOT_PROFILE=launcher` | **dla serwera Hammer Launcher** – nazwa, logo H, kanały launchera, strona główna = strona launchera. Dla sklepu HammerShop zostaw puste |
+| `DISCORD_TOKEN=` | Developer Portal → Twoja aplikacja → **Bot → Reset Token** (dla serwera launchera najlepiej osobna aplikacja „Hammer Launcher” z logo H) |
 | `GUILD_ID=` | ID Twojego serwera Discord |
 | `OWNER_IDS=` | Twoje ID na Discordzie (pełny dostęp do panelu admina) – tylko zaufane osoby |
 | `WEB_PORT=8080` | port, na którym działa strona (Caddy przekazuje na niego ruch) |
@@ -82,16 +83,19 @@ Caddy sam wyrobi i odnowi certyfikat. Wejdź na `https://twojadomena.pl` – pow
 > Używasz nginx zamiast Caddy? Ustaw `client_max_body_size 800m;` i `proxy_read_timeout 600s;` – inaczej wgrywanie instalatora w panelu się nie uda.
 
 ## 6. Zbuduj serwer Discord i sprawdź całość
-1. Na Discordzie: `/zbuduj` (albo `/zbuduj tylko:update` na istniejącym serwerze – doda kanał **#launcher**).
+1. Utwórz na Discordzie nowy, pusty serwer, dodaj bota (link z logów) i wpisz `/zbuduj`. Z `BOT_PROFILE=launcher` powstanie serwer **Hammer Launcher** (kanały pobierania, aktualizacji, aktualności, Hammer+, zgłoszeń błędów), bez profilu – serwer sklepu HammerShop.
 2. `https://twojadomena.pl/admin` → **Zaloguj przez Discord**. Pulpit pokaże, czego jeszcze brakuje w `.env`.
 3. **Hammer+ → Cennik**: dodaj plany i ceny. Kup jeden kartą testową Stripe `4242 4242 4242 4242` (z kluczem `sk_test_…`) – kod powinien pojawić się na stronie i na DM.
 4. `/hammerplus klucz` pokaże klucz publiczny – musi być taki sam jak `plusPublicKey` w `launcher.config.json` launchera.
 
 ## 7. Podłącz launcher i wydaj pierwszą wersję
-1. W `hammer-launcher/launcher.config.json` ustaw `"website": "https://twojadomena.pl"` (to stąd launcher bierze aktualności, komunikaty, aktualizacje i Hammer+), zatwierdź zmianę i poczekaj na GitHub Actions.
+1. W `hammer-launcher/launcher.config.json` ustaw `"website": "https://twojadomena.pl"` (to stąd launcher bierze aktualności, komunikaty, aktualizacje i Hammer+) oraz `"discordInvite"` – stałe zaproszenie na serwer Hammer Launcher. Zatwierdź zmianę i poczekaj na GitHub Actions.
 2. Pobierz artefakt **Hammer-Launcher-Windows**, zainstaluj i przetestuj u siebie.
 3. `https://twojadomena.pl/admin` → **Wersje launchera** → wgraj `Hammer-Launcher-Setup-x.y.z.exe` → **Opublikuj wersję**.
 4. Od teraz `https://twojadomena.pl/launcher` daje launcher do pobrania, a każda kolejna opublikowana wersja sama trafia do graczy.
+
+## Sklep i launcher naraz
+HammerShop (sklep) i Hammer Launcher to dwie kopie tego samego bota: dwa foldery (np. `/opt/hammershop/hammershop-bot` i `/opt/hammerlauncher/hammershop-bot`), dwa pliki `.env` (inny `DISCORD_TOKEN`, `BOT_PROFILE`, `WEB_PORT` i `PUBLIC_URL`), dwie usługi systemd (skopiuj plik usługi pod drugą nazwą i popraw ścieżki) i dwie domeny w `Caddyfile`. Klucz `HAMMER_PLUS_PRIVATE_KEY` wpisz w tej kopii, która sprzedaje i wystawia kody Hammer+ – czyli w kopii launchera.
 
 ## Kopie zapasowe
 Wszystko, co ważne, jest w dwóch miejscach: **`.env`** i folder **`data/`** (baza bota, zamówienia, aktualności, instalatory).

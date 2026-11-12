@@ -20,7 +20,10 @@ try {
   process.exit(1);
 }
 
-const tests = ['test/payloads.test.js', 'test/build.test.js'];
+// The Hammer Launcher server (BOT_PROFILE=launcher) is checked with its own build: config.launcher.json, its channels and cards.
+const launcher = require('../src/lib/profile').launcher;
+if (launcher) console.log('ℹ Profil: Hammer Launcher (BOT_PROFILE=launcher) – config.json + config.launcher.json.');
+const tests = launcher ? ['test/profile-launcher.test.js'] : ['test/payloads.test.js', 'test/build.test.js'];
 const res = spawnSync(process.execPath, ['--test', ...tests], { stdio: 'pipe', encoding: 'utf8' });
 const out = `${res.stdout}${res.stderr}`;
 const failed = out.split('\n').filter((l) => l.startsWith('not ok'));

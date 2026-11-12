@@ -3,8 +3,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const hours = require('./hours');
+const profile = require('./profile');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
+/** The Hammer Launcher server (BOT_PROFILE=launcher): what it says and does differently, laid over config.json. */
+const LAUNCHER_PATH = path.join(__dirname, '..', '..', 'config.launcher.json');
 
 /**
  * Sections added in later versions. A config.json without them (kept from an older version) gets exactly
@@ -63,12 +66,25 @@ const SWITCHES = [
 /** "automatyczne kopie zapasowe (backups.enabled), …" – the features config.json turns off (empty when none). */
 const turnedOff = (c) => SWITCHES.filter(([, , off]) => off(c)).map(([what, where]) => `${what} (${where})`);
 
-function read() {
+/** b laid over a: objects are merged key by key, everything else (lists too) is replaced. */
+function overlay(a, b) {
+  if (!b || typeof b !== 'object' || Array.isArray(b) || !a || typeof a !== 'object' || Array.isArray(a)) return b;
+  const out = { ...a };
+  for (const [key, value] of Object.entries(b)) out[key] = key in a ? overlay(a[key], value) : value;
+  return out;
+}
+
+function readFile(file, label) {
   try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (err) {
-    throw new Error(`Nie można odczytać pliku config.json: ${err.message}`);
+    throw new Error(`Nie można odczytać pliku ${label}: ${err.message}`);
   }
+}
+
+function read() {
+  const base = readFile(CONFIG_PATH, 'config.json');
+  return profile.launcher ? overlay(base, readFile(LAUNCHER_PATH, 'config.launcher.json')) : base;
 }
 
 /** Checks the raw config.json object and fills in the defaults (changes and returns it). */
@@ -149,5 +165,6 @@ config.getType = (id) => config.ticketTypes.find((t) => t.id === id) ?? null;
 config.turnedOff = (c = config) => turnedOff(c);
 /** For tests: the same checks and defaults for another config.json object. */
 config.load = load;
+config.overlay = overlay;
 
 module.exports = config;

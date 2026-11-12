@@ -37,6 +37,8 @@ h1, h2, h3 { line-height: 1.18; letter-spacing: -0.02em; text-wrap: balance; }
 .logo { display: inline-flex; align-items: center; font-size: 21px; font-weight: 900; letter-spacing: -1px; color: var(--text); text-decoration: none; }
 .logo i { width: 1.2em; height: 1.2em; margin-right: 0.3em; background: url(/assets/hammershop-mark.svg) center/contain no-repeat; filter: drop-shadow(0 0 10px #ff8a2b55); }
 .logo b { color: var(--accent); font-weight: 900; }
+/* The Hammer Launcher site: the big H instead of the hammer. */
+.logo.h i { width: 1.15em; height: 1.3em; background-image: url(/assets/launcher-h.png); filter: drop-shadow(0 0 10px #ffc23355); }
 .nav { display: flex; gap: 4px; margin-left: 8px; }
 .nav a { color: var(--soft); text-decoration: none; padding: 7px 12px; border-radius: 7px; font-weight: 500; font-size: 14px; }
 .nav a:hover { color: var(--text); background: #ffffff0a; }
