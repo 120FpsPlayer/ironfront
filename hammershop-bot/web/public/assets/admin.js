@@ -188,6 +188,8 @@
       $('releases-readonly').hidden = r.canEdit;
       $('releases-edit').hidden = !r.canEdit;
       $('max-mb').textContent = String(r.maxMb);
+      diskFree = typeof r.diskFree === 'number' ? r.diskFree : null;
+      $('disk-free').textContent = diskFree === null ? '' : ' Wolne miejsce na serwerze: ' + sizeText(diskFree) + '.';
       var files = $('files-list');
       var exe = $('release-file');
       var map = $('release-blockmap');
@@ -236,78 +238,148 @@
     Array.prototype.forEach.call($('release-blockmap').options, function (o) { if (o.value === map) $('release-blockmap').value = map; });
   }
   $('release-file').addEventListener('change', function () { $('release-version').value = ''; guessVersion(); });
+  // ── Uploading an installer ──
   // A file goes up in pieces, each its own request: a proxy in front of the site never sees the whole installer
   // (Cloudflare refuses a request over 100 MB – and the browser then just stops, with no error), and a broken
-  // connection costs one piece. A piece that stalls or fails is sent again; the server says where it really is.
-  var PIECE = 8 * 1024 * 1024;
-  var STALL_MS = 60000;
-  var TRIES = 6;
-  function showUpload(file, sent, note) {
-    var pct = Math.min(100, Math.floor((sent / file.size) * 100));
-    $('upload-bar').style.width = pct + '%';
-    $('upload-text').textContent = file.name + ' – ' + pct + '% (' + megabytes(sent) + ' z ' + megabytes(file.size) + ')' + (note ? ' – ' + note : '');
-  }
-  function sendPiece(file, offset) {
+  // connection costs one piece. The pieces fit the line: they start small, grow while they go through quickly and
+  // shrink when one is slow or fails. A piece that stalls is sent again; the server says where it really is. An upload
+  // that broke off for good goes on from that place when the same file is chosen again.
+  var FIRST_PIECE = 1024 * 1024;
+  var MIN_PIECE = 256 * 1024;
+  var MAX_PIECE = 8 * 1024 * 1024;
+  var STALL_MS = 45000; // nothing leaves the browser for this long → the piece is given up on
+  var ANSWER_MS = 60000; // the piece is out, the server has this long to say it has it
+  var TRIES = 8;
+  var diskFree = null;
+  function sizeText(bytes) { return bytes >= 2048 * 1048576 ? (bytes / 1073741824).toFixed(1).replace('.', ',') + ' GB' : megabytes(bytes); }
+  function speedText(perSecond) { return perSecond >= 1048576 ? (perSecond / 1048576).toFixed(1).replace('.', ',') + ' MB/s' : Math.max(1, Math.round(perSecond / 1024)) + ' KB/s'; }
+  function leftText(seconds) { return seconds < 90 ? 'jeszcze ok. ' + Math.max(1, Math.round(seconds)) + ' s' : 'jeszcze ok. ' + Math.round(seconds / 60) + ' min'; }
+  function uploadNote(text) { $('upload-note').textContent = text || ''; $('upload-note').hidden = !text; }
+  function uploadError(text) { $('upload-error').textContent = text || ''; $('upload-error').hidden = !text; }
+
+  function sendPiece(file, offset, length, key, onProgress) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       var watchdog = null;
+      var sent = false;
       var over = false;
-      function alive() { clearTimeout(watchdog); watchdog = setTimeout(function () { xhr.abort(); }, STALL_MS); }
+      var loaded = 0;
+      var moved = Date.now();
+      // Once a second the bar is told how long nothing has moved – and whether the browser or the server is waited for.
+      var ticker = setInterval(function () { onProgress(offset + loaded, Math.floor((Date.now() - moved) / 1000), sent); }, 1000);
+      function watch(ms) { clearTimeout(watchdog); watchdog = setTimeout(function () { xhr.abort(); }, ms); }
       function fail(message, status, serverOffset) {
         if (over) return;
         over = true;
         clearTimeout(watchdog);
+        clearInterval(ticker);
         var err = new Error(message);
         err.status = status || 0;
         err.offset = serverOffset;
         reject(err);
       }
-      xhr.open('PUT', '/api/admin/releases/file?name=' + encodeURIComponent(file.name) + '&offset=' + offset + '&total=' + file.size);
+      xhr.open('PUT', '/api/admin/releases/file?name=' + encodeURIComponent(file.name) + '&offset=' + offset + '&total=' + file.size + '&key=' + encodeURIComponent(key));
       xhr.setRequestHeader('content-type', 'application/octet-stream');
-      xhr.upload.onprogress = function (e) { alive(); showUpload(file, offset + e.loaded); };
+      xhr.upload.onprogress = function (e) { if (!sent) watch(STALL_MS); loaded = e.loaded; moved = Date.now(); onProgress(offset + loaded, 0, sent); };
+      xhr.upload.onload = function () { sent = true; moved = Date.now(); watch(ANSWER_MS); };
       xhr.onload = function () {
         var body = {};
         try { body = JSON.parse(xhr.responseText); } catch (e) { /* not JSON: a proxy's own error page */ }
-        if (xhr.status >= 200 && xhr.status < 300 && (body.done || typeof body.offset === 'number')) { over = true; clearTimeout(watchdog); return resolve(body); }
-        return fail(body.error || (xhr.status === 413 ? 'Serwer albo proxy przed nim nie przyjmuje kawałków po 8 MB (limit rozmiaru wysyłki).' : 'Wysyłanie nie powiodło się (' + xhr.status + ').'), xhr.status || 500, body.offset);
+        if (xhr.status >= 200 && xhr.status < 300 && (body.done || typeof body.offset === 'number')) { over = true; clearTimeout(watchdog); clearInterval(ticker); return resolve(body); }
+        return fail(body.error || (xhr.status === 413 ? 'Serwer albo proxy przed nim nie przyjmuje nawet małych kawałków pliku (limit rozmiaru wysyłki).' : 'Serwer odpowiedział błędem ' + xhr.status + '.'), xhr.status || 500, body.offset);
       };
-      xhr.onerror = function () { fail('Połączenie zostało przerwane podczas wysyłania.'); };
-      xhr.onabort = function () { fail('Serwer przestał odpowiadać podczas wysyłania.'); };
-      alive();
-      xhr.send(file.slice(offset, Math.min(offset + PIECE, file.size)));
+      xhr.onerror = function () { fail('Połączenie zostało zerwane w trakcie wysyłania.'); };
+      xhr.onabort = function () {
+        fail(sent ? 'Kawałek wyszedł z przeglądarki, ale serwer nie potwierdził go przez ' + ANSWER_MS / 1000 + ' s.' : 'Przez ' + STALL_MS / 1000 + ' s żadne dane nie wyszły z przeglądarki – połączenie stoi.');
+      };
+      watch(STALL_MS);
+      xhr.send(file.slice(offset, offset + length));
     });
   }
+
   function upload(file) {
-    if (!file.size) return Promise.reject(new Error('Plik ' + file.name + ' jest pusty.'));
+    if (!file.size) return Promise.reject(new Error('Plik jest pusty.'));
+    var key = file.size + '-' + (file.lastModified || 0);
     var offset = 0;
+    var piece = FIRST_PIECE;
     var failures = 0;
+    var marks = []; // [time, bytes on their way or there] – the speed is read off the last ten seconds
+    function show(bytes, idle, sent) {
+      var now = Date.now();
+      marks.push([now, bytes]);
+      while (marks.length > 2 && now - marks[0][0] > 10000) marks.shift();
+      var span = (now - marks[0][0]) / 1000;
+      var speed = span >= 1 && bytes > marks[0][1] ? (bytes - marks[0][1]) / span : 0;
+      var pct = Math.min(100, Math.floor((bytes / file.size) * 100));
+      $('upload-bar').style.width = pct + '%';
+      var more = '';
+      if (idle >= 4) more = ' · ' + (sent ? 'czekam na potwierdzenie serwera' : 'dane nie wychodzą z przeglądarki') + ' (' + idle + ' s)';
+      else if (speed && bytes < file.size) more = ' · ' + speedText(speed) + ' · ' + leftText((file.size - bytes) / speed);
+      $('upload-text').textContent = file.name + ' – ' + pct + '% (' + megabytes(bytes) + ' z ' + megabytes(file.size) + ')' + more;
+    }
     function next() {
-      showUpload(file, offset);
-      return sendPiece(file, offset).then(function (r) {
+      var length = Math.min(piece, file.size - offset);
+      var started = Date.now();
+      show(offset);
+      return sendPiece(file, offset, length, key, show).then(function (r) {
+        var took = Date.now() - started;
+        if (failures) uploadNote('');
         failures = 0;
-        if (r.done) { showUpload(file, file.size); return r; }
+        if (took < 4000) piece = Math.min(piece * 2, MAX_PIECE);
+        else if (took > 20000) piece = Math.max(Math.floor(piece / 2), MIN_PIECE);
+        if (r.done) { show(file.size); return r; }
         offset = r.offset;
         return next();
       }, function (err) {
         // Worth another try: no answer at all, a server or proxy hiccup, or the server being somewhere else in the file.
-        var again = !err.status || err.status >= 500 || err.status === 408 || err.status === 429 || (err.status === 409 && typeof err.offset === 'number');
+        var again = !err.status || (err.status >= 500 && err.status !== 507) || err.status === 408 || err.status === 429 || (err.status === 409 && typeof err.offset === 'number');
         failures += 1;
-        if (!again || failures >= TRIES) throw err;
         if (typeof err.offset === 'number') offset = Math.min(err.offset, file.size);
-        showUpload(file, offset, 'przerwa w połączeniu, ponawiam (' + failures + ' z ' + (TRIES - 1) + ')…');
+        if (!again || failures >= TRIES) { err.at = offset; throw err; }
+        piece = Math.max(Math.floor(piece / 2), MIN_PIECE);
+        marks = [];
+        uploadNote(err.message + ' Ponawiam mniejszym kawałkiem – próba ' + (failures + 1) + ' z ' + TRIES + '…');
         return new Promise(function (go) { setTimeout(go, Math.min(1000 * Math.pow(2, failures - 1), 15000)); }).then(next);
       });
     }
-    return next();
+    // The same file chosen again after an upload that broke off: the server still has its beginning.
+    return api('GET', 'releases/file?name=' + encodeURIComponent(file.name) + '&total=' + file.size + '&key=' + encodeURIComponent(key))
+      .catch(function () { return { offset: 0 }; })
+      .then(function (r) {
+        offset = Math.min(Number(r.offset) || 0, file.size);
+        if (offset) uploadNote('Serwer ma już ' + megabytes(offset) + ' tego pliku z poprzedniej próby – wysyłam resztę.');
+        return next();
+      });
   }
+
   $('release-files').addEventListener('change', function () {
     var files = Array.prototype.slice.call($('release-files').files);
     if (!files.length) return;
+    uploadError('');
+    uploadNote('');
+    var all = files.reduce(function (sum, f) { return sum + f.size; }, 0);
+    if (diskFree !== null && all > diskFree) {
+      uploadError('Na dysku serwera jest za mało miejsca: wolne ' + sizeText(diskFree) + ', a wybrane pliki mają ' + sizeText(all) + '. Usuń stare pliki albo zwiększ dysk.');
+      $('release-files').value = '';
+      return;
+    }
     $('upload-progress').hidden = false;
     $('release-files').disabled = true;
-    files.reduce(function (chain, file) { return chain.then(function () { $('upload-bar').style.width = '0'; return upload(file); }); }, Promise.resolve())
-      .then(function () { toast(files.length > 1 ? 'Pliki wgrane.' : 'Plik wgrany.'); })
-      .catch(oops)
+    files.reduce(function (chain, file) {
+      return chain.then(function () {
+        $('upload-bar').style.width = '0';
+        return upload(file).catch(function (err) { err.file = file; throw err; });
+      });
+    }, Promise.resolve())
+      .then(function () { uploadNote(''); toast(files.length > 1 ? 'Pliki wgrane.' : 'Plik wgrany.'); })
+      .catch(function (err) {
+        // What went wrong stays on the screen (a toast is gone in a few seconds) – with where it stopped and why.
+        var file = err.file || files[0];
+        uploadNote('');
+        uploadError('Nie udało się wgrać pliku ' + file.name + ' – stanęło na ' + megabytes(err.at || 0) + ' z ' + megabytes(file.size) + '. ' + err.message + (err.status && err.message.indexOf(String(err.status)) < 0 ? ' (kod ' + err.status + ')' : '')
+          + (err.at ? ' Wybierz ten sam plik jeszcze raz – wysyłanie ruszy od miejsca, w którym stanęło.' : ''));
+        toast('Wgrywanie nie powiodło się – szczegóły pod paskiem.', true);
+      })
       .then(function () { $('upload-progress').hidden = true; $('release-files').disabled = false; $('release-files').value = ''; return loaders.wersje(); });
   });
   $('release-form').addEventListener('submit', function (event) {

@@ -137,6 +137,9 @@ function orderRow(o) {
   };
 }
 
+/** name → when the console last said how far that upload is (one line every few seconds, not one per piece). */
+const uploadSaid = new Map();
+
 /**
  * /api/admin/… – h: the website's helpers { send, fail, jsonBody, userOf, limited, originOk } and the bot's side
  * { level, announce, log, plus { grant, recent, inspect, active }, featured { list, add, remove }, currency,
@@ -174,7 +177,12 @@ async function api(req, res, url, h) {
       const current = store.currentRelease()?.version ?? null;
       const list = store.releases();
       const used = new Set(list.flatMap((r) => [r.file, r.blockmap]).filter(Boolean));
-      return h.send(res, 200, { current, list: list.map((r) => releaseJson(r, current)), files: releases.filesOnDisk().filter((f) => !used.has(f.name)).map((f) => ({ name: f.name, size: f.size })), maxMb: Number(process.env.RELEASE_MAX_MB) || 700, canEdit: owner });
+      return h.send(res, 200, { current, list: list.map((r) => releaseJson(r, current)), files: releases.filesOnDisk().filter((f) => !used.has(f.name)).map((f) => ({ name: f.name, size: f.size })), maxMb: Number(process.env.RELEASE_MAX_MB) || 700, diskFree: releases.diskFree(), canEdit: owner });
+    }
+    // Where an upload that broke off goes on (the same file chosen again in the panel).
+    if (route === 'releases/file') {
+      ownerOnly();
+      return h.send(res, 200, { offset: releases.resumeAt(url.searchParams.get('name') ?? '', Number(url.searchParams.get('total')), url.searchParams.get('key')) });
     }
     if (route === 'plus') return h.send(res, 200, { ready: plusLib.ready(), publicKey: plusLib.ready() ? plusLib.publicKey() : null, plans: store.plusPlans(), grants: h.plus.recent(), currency: h.currency(), canEdit: owner });
     if (route === 'featured') return h.send(res, 200, { servers: h.featured.list() });
@@ -188,15 +196,30 @@ async function api(req, res, url, h) {
     const name = url.searchParams.get('name') ?? '';
     if (method === 'PUT') {
       // ?offset=&total= – one piece of the file (the panel sends big installers a few MB at a time).
-      const piece = url.searchParams.has('offset') || url.searchParams.has('total') ? { offset: Number(url.searchParams.get('offset') ?? NaN), total: Number(url.searchParams.get('total') ?? NaN) } : null;
+      const piece = url.searchParams.has('offset') || url.searchParams.has('total') ? { offset: Number(url.searchParams.get('offset') ?? NaN), total: Number(url.searchParams.get('total') ?? NaN), key: url.searchParams.get('key') } : null;
+      // The server's console tells the story of an upload: when it started, how far it is, why it stopped.
+      const say = releases.isFileName(name) ? (text, warn = false) => console[warn ? 'warn' : 'log'](`[web] wgrywanie ${name}: ${text}`) : () => {};
+      const mb = (n) => `${Math.round(n / 1024 / 1024)} MB`;
+      if (piece?.offset === 0) say(`start (${mb(piece.total)})`);
       let saved;
       try {
         saved = await releases.receive(req, name, piece);
       } catch (err) {
+        say(`${err.message}${piece ? ` (przy ${mb(piece.offset)})` : ''}`, true);
         if (err.offset === undefined) throw err;
         return h.send(res, 409, { error: err.message, offset: err.offset }); // the panel goes on from where the server is
       }
-      if (saved.done === false) return h.send(res, 200, saved);
+      if (saved.done === false) {
+        if (Date.now() - (uploadSaid.get(name) ?? 0) > 5000) {
+          uploadSaid.set(name, Date.now());
+          say(`${mb(saved.offset)} z ${mb(piece.total)}`);
+        }
+        return h.send(res, 200, saved);
+      }
+      // The last piece sent twice (its first answer got lost): the file was announced already.
+      if (saved.repeated) return h.send(res, 200, { name: saved.name, size: saved.size, done: true, republished: null });
+      uploadSaid.delete(name);
+      say(`gotowe (${mb(saved.size)})`);
       // A new build under the name of a published release: its record follows the file (an old signature no longer fits).
       const stale = store.releases().find((r) => r.file === saved.name);
       if (stale) await releases.publish({ ...stale, signature: null, makeCurrent: false });

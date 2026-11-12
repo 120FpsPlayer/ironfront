@@ -340,6 +340,27 @@ test('a big installer goes up in pieces: a lost answer, a repeated piece and a p
   for (const [query, status] of [['offset=-1&total=10', 400], ['offset=x&total=10', 400], ['offset=0', 400], ['offset=0&total=0', 400], ['offset=10&total=10', 400], [`offset=0&total=${701 * 1024 * 1024}`, 413]]) {
     assert.equal((await admin('PUT', `releases/file?name=${name}&${query}`, { raw: Buffer.from('x') })).status, status, query);
   }
+
+  // An upload that broke off goes on when the very same file is chosen again (the browser names it by size and date) –
+  // another build under the same name starts from the beginning.
+  const key = `${file.length}-1731400000000`;
+  const keyed = (offset, end, k = key) => admin('PUT', `releases/file?name=${name}&offset=${offset}&total=${file.length}&key=${k}`, { raw: file.subarray(offset, end) });
+  const where = (k, opts) => admin('GET', `releases/file?name=${name}&total=${file.length}&key=${k}`, opts);
+  assert.equal((await where(key)).body.offset, 0);
+  await keyed(0, 100_000);
+  assert.equal((await where(key)).body.offset, 100_000);
+  assert.equal((await where('inny-plik')).body.offset, 0);
+  assert.equal((await where(key, { who: 'admin' })).status, 403);
+  const stranger = await keyed(100_000, 200_000, 'inny-plik');
+  assert.deepEqual([stranger.status, stranger.body.offset], [409, 0]);
+  assert.equal((await keyed(100_000, 200_000, 'zły klucz')).status, 400);
+  assert.equal((await keyed(100_000, 200_000)).body.offset, 200_000);
+  assert.equal((await keyed(200_000, 300_000)).body.done, true);
+  assert.ok(fs.readFileSync(path.join(releases.DIR(), name)).equals(file));
+  assert.deepEqual(fs.readdirSync(releases.DIR()).filter((f) => f.startsWith('.')), [], 'no pieces or keys are left behind');
+  assert.equal((await where(key)).body.offset, 0);
+  assert.equal(typeof (await admin('GET', 'releases')).body.diskFree, 'number');
+
   assert.equal((await admin('DELETE', `releases/file?name=${name}`)).status, 200);
 });
 

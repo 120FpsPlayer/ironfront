@@ -85,6 +85,38 @@ const diskProblem = (err) => (err?.code === 'ENOSPC' || err?.code === 'EDQUOT' ?
 const partOf = (name) => path.join(DIR(), `.part-${name}`);
 /** name → stops the request that is writing that file's piece right now (a retry takes over from a stalled one). */
 const writing = new Map();
+/**
+ * What the browser calls the file it is sending ("<size>-<last modified>"), kept beside the pieces: an upload that
+ * broke off is picked up again only by the very same file – never by another build that happens to share its name.
+ */
+const KEY = /^[A-Za-z0-9._-]{1,80}$/;
+const keyFile = (name) => `${partOf(name)}.key`;
+function keyOf(name) {
+  try {
+    return fs.readFileSync(keyFile(name), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** Free room where the installers are kept, in bytes – null when the system will not say. */
+function diskFree() {
+  try {
+    fs.mkdirSync(DIR(), { recursive: true });
+    const st = fs.statfsSync(DIR());
+    const free = Number(st.bavail) * Number(st.bsize);
+    return Number.isFinite(free) ? free : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where an upload that broke off goes on: the bytes the server already has of this very file (0 – from the start). */
+function resumeAt(name, total, key) {
+  if (!isFileName(name) || !KEY.test(key ?? '') || !fs.existsSync(partOf(name)) || keyOf(name) !== key) return 0;
+  const have = fs.statSync(partOf(name)).size;
+  return have < total ? have : 0;
+}
 
 /** Unfinished uploads nobody came back to (older than a day) are swept when a new upload starts. */
 function sweepParts() {
@@ -111,9 +143,10 @@ const drain = (req) =>
   });
 
 /** What can be said about a piece before its body is read: an answer ({ done: true }), null (write it) or a thrown problem. */
-async function beforePart(req, name, offset, total) {
+async function beforePart(req, name, offset, total, key) {
   const limit = MAX_BYTES();
   if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(total) || offset < 0 || total < 0) throw problem(400, 'Nieprawidłowe położenie kawałka pliku.');
+  if (key !== null && !KEY.test(key)) throw problem(400, 'Nieprawidłowy znacznik pliku.');
   if (!total) throw problem(400, 'Plik jest pusty.');
   if (total > limit) throw tooBig(limit);
   const length = Number(req.headers['content-length']);
@@ -122,11 +155,19 @@ async function beforePart(req, name, offset, total) {
   await writing.get(name)?.(); // a piece of this file still being written (a stalled request the panel gave up on) stops first
   const part = partOf(name);
   const have = fs.existsSync(part) ? fs.statSync(part).size : 0;
-  if (!offset) sweepParts();
-  else if (have < offset) {
+  if (!offset) {
+    sweepParts();
+    const free = diskFree();
+    const mb = (n) => Math.floor(n / 1024 / 1024);
+    if (free !== null && free + have < total) throw problem(507, `Na dysku serwera jest za mało miejsca: wolne ${mb(free + have)} MB, a plik ma ${mb(total)} MB. Usuń stare pliki albo zwiększ dysk.`);
+    if (key) fs.writeFileSync(keyFile(name), key);
+    else fs.rmSync(keyFile(name), { force: true });
+  } else if (have < offset) {
     // The answer to the last piece got lost on the way, but the file is complete: nothing left to send.
-    if (!have && fs.existsSync(fileOf(name)) && fs.statSync(fileOf(name)).size === total) return { name, size: total, done: true };
+    if (!have && fs.existsSync(fileOf(name)) && fs.statSync(fileOf(name)).size === total) return { name, size: total, done: true, repeated: true };
     throw Object.assign(problem(409, 'Serwer ma mniej tego pliku, niż zakłada przeglądarka – wysyłanie wraca do tego miejsca.'), { offset: have });
+  } else if (key && keyOf(name) !== key) {
+    throw Object.assign(problem(409, 'Na serwerze leży początek innego pliku o tej nazwie – wysyłanie zaczyna od nowa.'), { offset: 0 });
   } else if (have > offset) fs.truncateSync(part, offset); // what a broken piece left behind
   return null;
 }
@@ -143,10 +184,10 @@ async function beforePart(req, name, offset, total) {
  * → { name, offset, done: false } while pieces are missing, { name, size, done: true } when the file is complete
  *   (only then does it get its real name – half an installer is never where the launcher could fetch it).
  */
-async function receivePart(req, name, offset, total) {
+async function receivePart(req, name, offset, total, key = null) {
   let early;
   try {
-    early = await beforePart(req, name, offset, total);
+    early = await beforePart(req, name, offset, total, key);
   } catch (err) {
     await drain(req);
     throw err;
@@ -194,7 +235,11 @@ async function receivePart(req, name, offset, total) {
       if (failed) return;
       if (!size) return fail(problem(400, 'Pusty kawałek pliku.'));
       if (offset + size < total) return settle(resolve, { name, offset: offset + size, done: false });
-      return fs.rename(part, fileOf(name), (err) => (err ? fail(err) : settle(resolve, { name, size: total, done: true })));
+      return fs.rename(part, fileOf(name), (err) => {
+        if (err) return fail(err);
+        fs.rmSync(keyFile(name), { force: true });
+        return settle(resolve, { name, size: total, done: true });
+      });
     });
     req.pipe(out);
   });
@@ -207,7 +252,7 @@ async function receivePart(req, name, offset, total) {
  */
 function receive(req, name, part = null) {
   if (!isFileName(name)) throw problem(400, 'Nazwa pliku może zawierać litery, cyfry, kropki, myślniki i podkreślenia, i musi kończyć się na .exe albo .blockmap.');
-  if (part) return receivePart(req, name, part.offset, part.total);
+  if (part) return receivePart(req, name, part.offset, part.total, part.key ?? null);
   const limit = MAX_BYTES();
   if (Number(req.headers['content-length']) > limit) throw tooBig(limit);
   fs.mkdirSync(DIR(), { recursive: true });
@@ -413,4 +458,4 @@ function serve(req, res, name, { send, fail, headers }) {
   return stream.pipe(res);
 }
 
-module.exports = { DIR, compareVersions, isVersion, isFileName, filesOnDisk, hashFile, receive, publish, remove, latestYml, publicInfo, parseRange, parseRanges, serve, fileOf };
+module.exports = { DIR, compareVersions, isVersion, isFileName, filesOnDisk, hashFile, receive, resumeAt, diskFree, publish, remove, latestYml, publicInfo, parseRange, parseRanges, serve, fileOf };
