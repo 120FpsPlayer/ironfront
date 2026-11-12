@@ -7,7 +7,9 @@
  *   GET /download              → the current installer (302 to /updates/<file>, counted)
  *   GET /updates/latest.yml    what electron-updater's "generic" provider reads: version, file, sha512, size
  *                              (+ signature when the owner signs releases – the launcher then refuses anything unsigned)
- *   GET /updates/<file>        the installer or its .blockmap (Range requests work: resumed and differential downloads)
+ *   GET /updates/<file>        the installer or its .blockmap. Range requests work – one range (a resumed download)
+ *                              and many at once (multipart/byteranges: electron-updater's differential download asks
+ *                              for just the blocks that changed since the installed version)
  *
  * A release is published from the admin panel: the installer is uploaded (or copied into data/releases/ by hand), this
  * module hashes it and writes the release into the website's database (src/web/store.js). latest.yml is made here,
@@ -195,6 +197,62 @@ function parseRange(header, size) {
   return start > end || start >= size ? false : { start, end };
 }
 
+const MAX_RANGES = 1500; // electron-updater asks for at most 1000 blocks per request
+
+/**
+ * "bytes=0-99, 200-299" → [{ start, end }] in the order asked, for a header with several ranges. null = not such a
+ * header, or one this server answers with the whole file instead (too many ranges, or ranges that together are longer
+ * than the file – nobody honest needs the same bytes twice).
+ */
+function parseRanges(header, size) {
+  const text = String(header ?? '').trim();
+  if (!/^bytes=/.test(text) || !text.includes(',')) return null;
+  const specs = text.slice(6).split(',').map((p) => p.trim()).filter(Boolean);
+  if (specs.length < 2 || specs.length > MAX_RANGES) return null;
+  const out = [];
+  let total = 0;
+  for (const spec of specs) {
+    const one = parseRange(`bytes=${spec}`, size);
+    if (one === null) return null; // not a range at all
+    if (one === false) continue; // beyond the file: left out
+    total += one.end - one.start + 1;
+    if (total > size) return null;
+    out.push(one);
+  }
+  return out.length ? out : null;
+}
+
+/** Sends the ranges as one multipart/byteranges body (RFC 7233) – read from one open file, never more than 64 KB in memory. */
+async function sendRanges(req, res, name, ranges, size, base) {
+  const boundary = `hs${crypto.randomBytes(12).toString('hex')}`;
+  const type = base['content-type'];
+  const head = (r, first) => `${first ? '' : '\r\n'}--${boundary}\r\nContent-Type: ${type}\r\nContent-Range: bytes ${r.start}-${r.end}/${size}\r\n\r\n`;
+  const tail = `\r\n--${boundary}--\r\n`;
+  const length = ranges.reduce((sum, r, i) => sum + Buffer.byteLength(head(r, i === 0)) + (r.end - r.start + 1), 0) + Buffer.byteLength(tail);
+  res.writeHead(206, { ...base, 'content-type': `multipart/byteranges; boundary=${boundary}`, 'content-length': length });
+  if (req.method === 'HEAD') return res.end();
+  const write = (data) => (res.write(data) || res.destroyed ? null : new Promise((resolve) => res.once('drain', resolve)));
+  const file = await fs.promises.open(fileOf(name), 'r');
+  try {
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    for (let i = 0; i < ranges.length && !res.destroyed; i += 1) {
+      await write(head(ranges[i], i === 0));
+      for (let at = ranges[i].start; at <= ranges[i].end && !res.destroyed; ) {
+        const { bytesRead } = await file.read(buffer, 0, Math.min(buffer.length, ranges[i].end - at + 1), at);
+        if (!bytesRead) throw new Error(`${name}: plik jest krótszy niż zapisano`);
+        await write(Buffer.from(buffer.subarray(0, bytesRead))); // a copy: the buffer is reused before the socket has sent it
+        at += bytesRead;
+      }
+    }
+    return res.end(tail);
+  } catch (err) {
+    console.warn('[web] wysyłanie fragmentów:', err.message);
+    return res.destroy();
+  } finally {
+    await file.close();
+  }
+}
+
 /**
  * GET /updates/<name> – only latest.yml and the files of published releases are ever served.
  * h: { send, fail, headers } (the website's own helpers and security headers).
@@ -207,7 +265,8 @@ function serve(req, res, name, { send, fail, headers }) {
   const known = store.releases().some((r) => r.file === name || r.blockmap === name);
   if (!known || !isFileName(name) || !fs.existsSync(fileOf(name))) return fail(res, 404, 'Nie znaleziono');
   const { size } = fs.statSync(fileOf(name));
-  const range = parseRange(req.headers.range, size);
+  const many = parseRanges(req.headers.range, size);
+  const range = many ? null : parseRange(req.headers.range, size);
   const base = {
     ...headers,
     'content-type': TYPES[path.extname(name)] ?? 'application/octet-stream',
@@ -215,6 +274,7 @@ function serve(req, res, name, { send, fail, headers }) {
     'cache-control': 'public, max-age=300',
     ...(name.endsWith('.exe') && { 'content-disposition': `attachment; filename="${name}"` }),
   };
+  if (many) return sendRanges(req, res, name, many, size, base);
   if (range === false) {
     res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
     return res.end();
@@ -228,4 +288,4 @@ function serve(req, res, name, { send, fail, headers }) {
   return stream.pipe(res);
 }
 
-module.exports = { DIR, compareVersions, isVersion, isFileName, filesOnDisk, hashFile, receive, publish, remove, latestYml, publicInfo, parseRange, serve, fileOf };
+module.exports = { DIR, compareVersions, isVersion, isFileName, filesOnDisk, hashFile, receive, publish, remove, latestYml, publicInfo, parseRange, parseRanges, serve, fileOf };

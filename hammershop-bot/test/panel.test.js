@@ -233,15 +233,25 @@ test('launcher releases: only the owner publishes; latest.yml, the download and 
   assert.match(whole.headers.get('content-disposition'), /attachment; filename="Hammer-Launcher-Setup-2\.6\.0\.exe"/);
   assert.equal(whole.headers.get('x-content-type-options'), 'nosniff');
   // Resumed and differential downloads.
-  const part = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: 'bytes=10-29' } });
-  assert.deepEqual([part.status, part.headers.get('content-range'), part.bytes.length], [206, `bytes 10-29/${v1.length}`, 20]);
-  assert.ok(part.bytes.equals(v1.subarray(10, 30)));
+  const piece = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: 'bytes=10-29' } });
+  assert.deepEqual([piece.status, piece.headers.get('content-range'), piece.bytes.length], [206, `bytes 10-29/${v1.length}`, 20]);
+  assert.ok(piece.bytes.equals(v1.subarray(10, 30)));
   const tail = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: 'bytes=-7' } });
   assert.ok(tail.bytes.equals(v1.subarray(v1.length - 7)));
   const open = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: `bytes=${v1.length - 3}-` } });
   assert.equal(open.bytes.length, 3);
   const beyond = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: `bytes=${v1.length}-` } });
   assert.deepEqual([beyond.status, beyond.headers.get('content-range')], [416, `bytes */${v1.length}`]);
+  // Several ranges at once (electron-updater's differential download): one multipart/byteranges answer, parts in the order asked.
+  const multi = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: 'bytes=100-149, 0-9, 3000-3003' } });
+  assert.equal(multi.status, 206);
+  const boundary = /^multipart\/byteranges; boundary=(\w+)$/.exec(multi.headers.get('content-type'))[1];
+  assert.equal(Number(multi.headers.get('content-length')), multi.bytes.length);
+  const part = (a, b, first) => Buffer.concat([Buffer.from(`${first ? '' : '\r\n'}--${boundary}\r\nContent-Type: application/vnd.microsoft.portable-executable\r\nContent-Range: bytes ${a}-${b}/${v1.length}\r\n\r\n`), v1.subarray(a, b + 1)]);
+  assert.ok(multi.bytes.equals(Buffer.concat([part(100, 149, true), part(0, 9), part(3000, 3003), Buffer.from(`\r\n--${boundary}--\r\n`)])));
+  // The same bytes many times over (to make the server send far more than the file) → just the file, once.
+  const greedy = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe', { headers: { range: `bytes=${Array(40).fill(`0-${v1.length - 1}`).join(',')}` } });
+  assert.deepEqual([greedy.status, greedy.bytes.length], [200, v1.length]);
   const head = await call('HEAD', '/updates/Hammer-Launcher-Setup-2.6.0.exe');
   assert.deepEqual([head.status, head.headers.get('content-length'), head.bytes.length], [200, String(v1.length), 0]);
   for (const nope of ['/updates/web.json', '/updates/..%2Fweb.json', '/updates/..%2F..%2Fdata%2Fdb.json', '/updates/nie-ma.exe']) assert.equal((await call('GET', nope)).status, 404, nope);
