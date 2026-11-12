@@ -2,10 +2,10 @@
   "name": "Hammer Launcher",
   "brand": "HammerShop",
   "channel": "beta",
-  "website": "https://hammerlauncher.freesrv.com:16456",
+  "website": "https://hammerlauncher.freesrv.com",
   "shopUrl": "https://hammershop.pl",
   "shopApi": "",
-  "discordInvite": "https://discord.gg/gRqFb6MmWX",
+  "discordInvite": "",
   "newsUrl": "",
   "server": {
     "name": "Serwer HammerShop",
