@@ -52,7 +52,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://hammershop.pl/updates"
+        "url": "https://hammerlauncher.freesrv.com:16456/updates"
       }
     ],
     "electronFuses": {
