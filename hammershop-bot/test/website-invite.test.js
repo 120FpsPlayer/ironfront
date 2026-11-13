@@ -50,11 +50,38 @@ test('a stale invite (a rebuild deleted its channel, it ran out) is replaced; a 
     await website.checkInvite(guild);
     assert.equal(made, 2);
 
+    // Invites paused on the server (Server settings → Invites, or a security action): no new invite – it would not
+    // work either – and the console says how to resume them.
+    const warned = [];
+    const warn = console.warn;
+    console.warn = (...a) => warned.push(a.join(' '));
+    try {
+      guild.features = ['INVITES_DISABLED'];
+      assert.equal(website.invitesPaused(guild), true);
+      await website.checkInvite(guild, { force: true });
+      guild.features = [];
+      guild.incidentsData = { invitesDisabledUntil: new Date(Date.now() + 3600_000) };
+      assert.equal(website.invitesPaused(guild), true);
+      await website.checkInvite(guild, { force: true });
+      guild.incidentsData = { invitesDisabledUntil: new Date(Date.now() - 1000) };
+      assert.equal(website.invitesPaused(guild), false, 'a pause that is over');
+      guild.incidentsData = null;
+    } finally {
+      console.warn = warn;
+    }
+    assert.equal(made, 2, 'nothing replaced while invites are paused');
+    assert.equal(warned.filter((w) => /WSTRZYMANE/.test(w)).length, 1, 'said once, not every half hour');
+    assert.match(warned[0], /Wznów zaproszenia/);
+
     // The owner's own invite from .env wins and is only reported, never replaced.
     env.web.invite = 'https://discord.gg/mojeNaZawsze';
     await website.checkInvite(guild, { force: true });
     assert.equal(website.inviteOf(), 'https://discord.gg/mojeNaZawsze');
     assert.equal(made, 2);
+    assert.equal(website.ownInviteFailing(), true, 'the admin panel says so');
+    guild.client.fetchInvite = async () => ({ guild: { id: guild.id }, expiresTimestamp: null });
+    await website.checkInvite(guild, { force: true });
+    assert.equal(website.ownInviteFailing(), false);
   } finally {
     env.web.invite = before;
   }

@@ -107,8 +107,12 @@
       if (!o.setup.payments) missing.push('STRIPE_SECRET_KEY (płatności)');
       else if (!o.setup.webhook) missing.push('STRIPE_WEBHOOK_SECRET (potwierdzanie płatności także wtedy, gdy kupujący zamknie kartę)');
       if (!o.plus.ready) missing.push('HAMMER_PLUS_PRIVATE_KEY (kody Hammer+)');
-      $('setup').hidden = !missing.length;
-      $('setup').textContent = missing.length ? 'Do uzupełnienia w pliku .env na serwerze: ' + missing.join(' · ') : '';
+      var problems = [];
+      if (o.setup.invitesPaused) problems.push('Zaproszenia na serwer Discord są wstrzymane – nikt nie może dołączyć, a karta Discorda na stronie i w launcherze nie działa. Wznów je w Discordzie: Ustawienia serwera → Zaproszenia → „Wznów zaproszenia”.');
+      else if (o.setup.inviteFailing) problems.push('Zaproszenie z DISCORD_INVITE_URL w pliku .env nie działa – Discord mówi, że wygasło albo zostało usunięte. Utwórz nowe (Wygasa po: Nigdy) i wpisz je w .env – albo usuń tę linię, a bot sam utworzy stałe zaproszenie.');
+      if (missing.length) problems.push('Do uzupełnienia w pliku .env na serwerze: ' + missing.join(' · '));
+      $('setup').hidden = !problems.length;
+      $('setup').textContent = problems.join(' ');
     });
   };
 

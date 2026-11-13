@@ -122,7 +122,7 @@ function overview(h) {
     plus: { ready: plusLib.ready(), active: h.plus.active(), plans: store.plusPlans().length },
     news: store.newsList().length,
     alert: publicAlert(store.getAlert(now)),
-    setup: { auth: h.authReady(), payments: h.paymentsReady(), webhook: h.webhookReady(), publicUrl: h.publicUrl() },
+    setup: { auth: h.authReady(), payments: h.paymentsReady(), webhook: h.webhookReady(), publicUrl: h.publicUrl(), invitesPaused: Boolean(h.invitesPaused?.()), inviteFailing: Boolean(h.ownInviteFailing?.()) },
   };
 }
 

@@ -463,7 +463,7 @@ async function handle(req, res) {
       send, fail, jsonBody, userOf, limited, originOk,
       level: (id) => hooks.level(id), announce: (a) => hooks.announce(a), log: (t) => hooks.log(t),
       plus: hooks.plus, featured: hooks.featuredAdmin, currency: () => hooks.currency(),
-      publicUrl: () => web().publicUrl, authReady, paymentsReady, webhookReady, playing: () => launcher.onlineNow(),
+      publicUrl: () => web().publicUrl, authReady, paymentsReady, webhookReady, playing: () => launcher.onlineNow(), invitesPaused: () => Boolean(hooks.invitesPaused?.()), ownInviteFailing: () => Boolean(hooks.ownInviteFailing?.()),
     });
   }
   if (!p.startsWith('/api/shop/')) {

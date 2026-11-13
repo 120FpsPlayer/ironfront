@@ -184,6 +184,22 @@ async function inviteWorks(guild, code) {
 
 const INVITE_CHECK_MS = 30 * 60_000;
 let inviteChecked = 0;
+let pauseWarned = false;
+let ownInviteBroken = false; // DISCORD_INVITE_URL is not taken by Discord (shown in the admin panel too)
+
+/**
+ * Nobody can join right now: the server's invites are paused – Server settings → Invites → „Pause invites”, or a
+ * security action (for up to a day). Every invite, however permanent, then answers „Invite is expired”.
+ */
+/** The invite from DISCORD_INVITE_URL was refused by Discord at the last check (and invites are not paused). */
+const ownInviteFailing = () => ownInviteBroken && !invitesPaused();
+
+function invitesPaused(guild = guildOf()) {
+  if (!guild) return false;
+  if (guild.features?.includes?.('INVITES_DISABLED')) return true;
+  const until = guild.incidentsData?.invitesDisabledUntil;
+  return Boolean(until && new Date(until).getTime() > Date.now());
+}
 
 /**
  * The invite the website and Hammer Launcher hand out must keep working. A channel deleted by a rebuild takes its
@@ -194,9 +210,18 @@ async function checkInvite(guild, { force = false } = {}) {
   if (!guild) return;
   if (!force && Date.now() - inviteChecked < INVITE_CHECK_MS) return;
   inviteChecked = Date.now();
+  // Paused invites: a new invite would not work either – the owner has to resume them in Discord.
+  if (invitesPaused(guild)) {
+    if (!pauseWarned) console.warn(`🌐 Zaproszenia na serwer „${guild.name}” są WSTRZYMANE w Discordzie – nikt nie może dołączyć, a karta Discorda na stronie i w Hammer Launcherze nie działa. Wznów je: Ustawienia serwera → Zaproszenia → „Wznów zaproszenia” (albo menu serwera → Działania bezpieczeństwa).`);
+    pauseWarned = true;
+    return;
+  }
+  pauseWarned = false;
   if (env.web.invite) {
     const code = /([\w-]{2,64})\/?$/.exec(env.web.invite)?.[1];
-    if (code && (await inviteWorks(guild, code)) === false) console.warn(`🌐 Zaproszenie z DISCORD_INVITE_URL (${env.web.invite}) nie działa – Discord mówi, że wygasło albo zostało usunięte. Wpisz w .env nowe, bezterminowe zaproszenie.`);
+    const works = code ? await inviteWorks(guild, code) : null;
+    if (works !== null) ownInviteBroken = works === false;
+    if (works === false) console.warn(`🌐 Zaproszenie z DISCORD_INVITE_URL (${env.web.invite}) nie działa – Discord mówi, że wygasło albo zostało usunięte. Wpisz w .env nowe, bezterminowe zaproszenie.`);
     return;
   }
   const stored = db.guild(guild.id).webInvite;
@@ -590,7 +615,7 @@ function start(c) {
     }
   });
   webAuth.setClientId(c.application?.id ?? c.user?.id);
-  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured });
+  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), invitesPaused: () => invitesPaused(), ownInviteFailing, onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured });
   server.on('error', (err) => {
     console.warn(`🌐 Strona: nie można użyć portu ${env.web.port} (${err.code ?? err.message}) – bot działa dalej bez niej.`);
     server = null;
@@ -619,5 +644,5 @@ hooks.on('inviteDelete', (invite) => {
 
 module.exports = {
   catalog, featuredServers, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c),
-  deliverPlus, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel, checkInvite, inviteOf,
+  deliverPlus, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel, checkInvite, inviteOf, invitesPaused, ownInviteFailing,
 };
