@@ -1148,7 +1148,7 @@ async function main() {
   await noToasts();
   await plusPill();
   await count('.tb-plus.on', 0);
-  await count('.perk', 7);
+  await count('.perk', 8);
   await shot('40-hammerplus-wylaczony');
   await fits('Hammer+ wyłączony');
   await small('40b-hammerplus-wylaczony-male-okno', () => fits('Hammer+ wyłączony, małe okno'));
