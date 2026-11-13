@@ -214,7 +214,7 @@
         );
 
     const links = [
-      info.shopUrl && { icon: 'store', title: `Sklep ${info.brand ?? 'HammerShop'}`, sub: 'Rangi, pluginy, usługi', url: info.shopUrl },
+      info.shopUrl && { icon: 'store', title: `Sklep ${info.brand ?? 'HammerShop'}`, sub: 'Pluginy, skrypty i wiele więcej', url: info.shopUrl },
       info.website && info.website !== info.shopUrl && { icon: 'globe', title: 'Strona', sub: new URL(info.website).host, url: info.website },
     ].filter(Boolean);
     const discordBox = h('div');

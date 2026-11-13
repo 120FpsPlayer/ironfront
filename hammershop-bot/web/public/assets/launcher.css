@@ -53,13 +53,43 @@
 .faq details[open] summary::before { content: "–"; }
 .faq p { color: var(--soft); margin: 10px 0 2px 26px; max-width: 46rem; }
 
+/* Hammer Launcher × HammerShop: the partner mark in the header, the chip in the hero and the section */
+.collab { display: inline-flex; align-items: center; gap: 6px; margin-left: -10px; font-size: 15px; font-weight: 800; letter-spacing: -0.5px; color: var(--soft); text-decoration: none; white-space: nowrap; }
+.collab > span { color: var(--muted); font-weight: 600; margin-right: 2px; }
+.collab img { border-radius: 5px; }
+.collab em, .collab-head .mark em { font-style: normal; }
+.collab b { color: var(--accent); font-weight: 800; }
+.collab:hover { color: var(--text); }
+.partner-chip { display: inline-flex; align-items: center; gap: 9px; margin-top: 18px; padding: 7px 14px 7px 8px; border-radius: 999px; border: 1px solid var(--line-2); background: #ffa94d10; color: var(--soft); font-size: 13px; text-decoration: none; }
+.partner-chip img { border-radius: 6px; }
+.partner-chip b { color: var(--text); }
+.partner-chip:hover { color: var(--text); border-color: #ffa94d66; }
+.collab-box { margin-top: 64px; padding: 34px; border-radius: 18px; border: 1px solid var(--line-2); background: linear-gradient(140deg, #22170f, #120d0a 60%); text-align: center; }
+.collab-head { display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap; }
+.collab-head .mark { display: inline-flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 900; letter-spacing: -1px; }
+.collab-head .mark img { border-radius: 12px; box-shadow: 0 8px 30px #ff8a2b33; }
+.collab-head .mark b { color: var(--accent); }
+.collab-head .x { font-size: 34px; font-weight: 300; color: var(--muted); }
+.collab-box h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 800; margin: 22px 0 10px; }
+.collab-box > p { max-width: 40rem; margin: 0 auto; }
+.collab-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 26px; text-align: left; }
+.collab-cards .card { display: grid; gap: 8px; align-content: start; justify-items: start; }
+.collab-cards h3 { font-size: 18px; }
+.collab-cards p { color: var(--muted); font-size: 14px; }
+
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; padding-top: 40px; }
   .hero-shot { transform: none; }
   .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .plus-box { grid-template-columns: 1fr; padding: 24px; }
 }
+@media (max-width: 760px) {
+  .collab { display: none; }
+}
 @media (max-width: 620px) {
-  .features, .shots { grid-template-columns: 1fr; }
+  .features, .shots, .collab-cards { grid-template-columns: 1fr; }
+  .collab-box { padding: 24px 18px; }
+  .collab-head { flex-direction: column; gap: 4px; }
+  .collab-head .mark { font-size: 24px; }
   .cta .btn { width: 100%; }
 }

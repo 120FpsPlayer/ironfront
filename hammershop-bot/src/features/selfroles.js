@@ -48,6 +48,7 @@ function rolesPanels(guild) {
         lines([
           ['loyal', `nadawana automatycznie po ${count(config.shop.loyalAfterOrders || 5, 'zrealizowanym zamówieniu', 'zrealizowanych zamówieniach', 'zrealizowanych zamówieniach')}`],
           ['customer', 'nadawana automatycznie po pierwszym zrealizowanym zamówieniu'],
+          ['hammerPlus', 'nadawana automatycznie, dopóki masz Hammer+ – kupisz go na stronie launchera'],
           ['tester', 'testuje nowe wersje przed wydaniem – nadaje ją zespół'],
           ['member', 'każdy po weryfikacji'],
         ]),

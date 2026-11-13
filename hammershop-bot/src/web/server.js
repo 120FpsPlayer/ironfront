@@ -222,7 +222,10 @@ function plusJson(order) {
       code = null;
     }
   }
-  return { nick: p.nick ?? null, days: p.days ?? null, until: p.exp == null ? null : p.exp * 1000, code };
+  // Not on the Discord server: the invite to it, where the 💎 Hammer+ role comes on joining.
+  const member = order.status === 'paid' ? hooks.isMember?.(order.userId) : null;
+  const invite = member === false ? hooks.info?.()?.invite ?? null : null;
+  return { nick: p.nick ?? null, days: p.days ?? null, until: p.exp == null ? null : p.exp * 1000, code, member: member ?? null, invite };
 }
 
 /** Stripe says paid (verify or webhook) → the order is paid once; the team is told once. */

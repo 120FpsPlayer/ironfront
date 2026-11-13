@@ -85,7 +85,8 @@ module.exports = {
         .setName('grant')
         .setDescription('Issue a Hammer+ code for a customer\'s Minecraft account')
         .addStringOption((o) => o.setName('nick').setDescription('The customer\'s Minecraft nick (premium account)').setRequired(true).setMinLength(1).setMaxLength(16))
-        .addIntegerOption((o) => o.setName('days').setDescription('Valid for this many days (0 = forever)').setRequired(true).setMinValue(0).setMaxValue(hammerplus.MAX_DAYS)),
+        .addIntegerOption((o) => o.setName('days').setDescription('Valid for this many days (0 = forever)').setRequired(true).setMinValue(0).setMaxValue(hammerplus.MAX_DAYS))
+        .addUserOption((o) => o.setName('user').setDescription('Their Discord account – gets the Hammer+ role while it runs (optional)')),
     )
     .addSubcommand((s) =>
       s
@@ -107,11 +108,13 @@ module.exports = {
 
     if (sub === 'grant') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // asking Mojang can take a few seconds
-      const { code, record } = await hammerplus.grant(guild.id, { nick: o.getString('nick'), days: o.getInteger('days') ?? 0, by: interaction.user.id });
+      const owner = o.getUser('user');
+      const { code, record } = await hammerplus.grant(guild.id, { nick: o.getString('nick'), days: o.getInteger('days') ?? 0, by: interaction.user.id, discordId: owner?.id ?? null });
       await reply(interaction, grantReply(code, record));
+      if (owner) await require('../features/plusrole').sync(guild, owner.id).catch(() => null); // 💎 Hammer+ role
       // The log says who got Hammer+ – the code itself is never written anywhere.
       return sendLog(guild, {
-        embeds: [logEmbed(COLORS.brand, '🔨 Kod Hammer+ wystawiony', interaction.user).setDescription(`Wystawiony przez ${interaction.user}: konto Minecraft ${accountText(record.nick, record.mc)} · ważny ${hammerplus.validity(record.exp)} · ID \`${record.id}\``)],
+        embeds: [logEmbed(COLORS.brand, '🔨 Kod Hammer+ wystawiony', interaction.user).setDescription(`Wystawiony przez ${interaction.user}: konto Minecraft ${accountText(record.nick, record.mc)} · ważny ${hammerplus.validity(record.exp)}${owner ? ` · dla ${owner} (ranga Hammer+)` : ''} · ID \`${record.id}\``)],
       });
     }
 

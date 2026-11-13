@@ -84,17 +84,19 @@ const recent = (guildId, limit = 15) => [...codes(guildId)].sort((a, b) => b.at 
  * Issues a Hammer+ code for the account behind nick and writes down who got it. → { code, record }.
  * days: 0 = never expires. by: the staff member's user ID.
  */
-async function grant(guildId, { nick, days, by, now = Date.now() }) {
+async function grant(guildId, { nick, days, by, now = Date.now(), discordId = null }) {
   requireKey();
   if (!Number.isInteger(days) || days < 0 || days > MAX_DAYS) throw new UserError(`Podaj liczbę dni od 0 (na zawsze) do ${MAX_DAYS}.`);
-  return grantKnown(guildId, { ...(await lookup(nick)), days, by, now });
+  return grantKnown(guildId, { ...(await lookup(nick)), days, by, now, discordId });
 }
 
 /**
  * The same for an account that was already looked up ({ mc, nick } from lookup) – nothing here needs the network, so
  * a code for a paid website order can always be issued. source: where it came from ('website' for a Stripe purchase).
+ * discordId: whose Discord account it is (the buyer on the website, or the user named in /hammerplus grant) – that
+ * account gets the 💎 Hammer+ role while the Hammer+ runs (src/features/plusrole.js).
  */
-function grantKnown(guildId, { mc, nick, days, by = null, now = Date.now(), source = null }) {
+function grantKnown(guildId, { mc, nick, days, by = null, now = Date.now(), source = null, discordId = null }) {
   requireKey();
   if (!Number.isInteger(days) || days < 0 || days > MAX_DAYS) throw new UserError(`Podaj liczbę dni od 0 (na zawsze) do ${MAX_DAYS}.`);
   const account = { mc, nick };
@@ -106,7 +108,7 @@ function grantKnown(guildId, { mc, nick, days, by = null, now = Date.now(), sour
   } catch (err) {
     throw err instanceof plus.PlusError ? new UserError(err.message) : err;
   }
-  const record = { id: payload.id, mc: payload.mc, nick: account.nick, exp: payload.exp, by: by ?? null, at: now, ...(source && { source }) };
+  const record = { id: payload.id, mc: payload.mc, nick: account.nick, exp: payload.exp, by: by ?? null, at: now, ...(source && { source }), ...(discordId && { discordId: String(discordId) }) };
   const g = db.guild(guildId);
   g.plusCodes = [...g.plusCodes, record].slice(-KEEP);
   db.save();

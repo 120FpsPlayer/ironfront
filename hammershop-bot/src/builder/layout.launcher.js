@@ -22,6 +22,8 @@ const ROLES = [
   { key: 'trialSupport', name: '🌱 Stażysta', color: 0xe46a12, perms: 'trial', hoist: true, icon: '🌱', staff: true },
   SEPARATOR('sepSpecial', 'SPOŁECZNOŚĆ'),
   { key: 'tester', name: '🧪 Tester', color: 0xffad66, perms: 'none', hoist: true, icon: '🧪' },
+  // Given and taken by the bot while someone's Hammer+ runs (src/features/plusrole.js) – nobody hands it out by hand.
+  { key: 'hammerPlus', name: '💎 Hammer+', color: 0xffd166, perms: 'none', hoist: true, icon: '💎' },
   SEPARATOR('sepMembers', 'CZŁONKOWIE'),
   { key: 'bots', name: '🤖 Boty', color: 0xd9894a, perms: 'bot', hoist: true, icon: '🤖' },
   { key: 'member', name: '✅ Członek', color: 0xf0c9a3, perms: 'member', hoist: true, icon: '✅' },

@@ -339,6 +339,7 @@ Bot, strona i Hammer Launcher to jeden system – wszystko stoi na **Twoim serwe
 - Przycisk **Pobierz na Windows** (`/download`) daje aktualny instalator z Twojego serwera i pokazuje wersję, rozmiar i datę. Dopóki nic nie opublikujesz, przycisk mówi *Już wkrótce*.
 - **Aktualności** z panelu admina, zrzuty ekranu, częste pytania.
 - **Hammer+ kupowany kartą (Stripe):** gracz loguje się przez Discorda, wybiera plan, wpisuje **nick Minecraft** (sprawdzany w Mojang, zanim cokolwiek zapłaci) i płaci. Zaraz po płatności bot wystawia kod dla tego konta – kupujący widzi go **na stronie** (także później, w *Twoje kody Hammer+*) i dostaje **na DM**. Kupno w trakcie trwającego Hammer+ dolicza czas na końcu. Sam kod nigdy nie jest zapisywany – strona podpisuje go od nowa z danych zamówienia. Każdy zakup trafia do logów i do `/hammerplus lista` („kupiony na stronie”).
+- **Ranga 💎 Hammer+ na Discordzie:** kto ma działający Hammer+, dostaje rangę **💎 Hammer+** – zaraz po zakupie (kupujący loguje się przez Discorda, więc bot wie, czyje to konto), po dołączeniu na serwer, przy logowaniu na stronie i przy sprawdzaniu co 30 minut. Gdy Hammer+ się skończy, ranga znika. Kogo nie ma na serwerze, dostaje w wiadomości prywatnej zaproszenie (a strona pokazuje przycisk *Dołącz do Discorda*). `/zbuduj` tworzy tę rangę; na serwerze zbudowanym wcześniej bot zrobi ją sam przy pierwszym zakupie (potrzebuje uprawnienia *Zarządzanie rolami*). Przy `/hammerplus nadaj` możesz podać `osoba:` – to konto Discord też dostanie rangę.
 - Link **Launcher** jest też w menu strony sklepu.
 
 ### Aktualizacje launchera – `PUBLIC_URL/updates/`
@@ -428,7 +429,7 @@ Trzymaj rolę integracji bota na samej górze w Ustawieniach serwera → Role �
 | `/kod utworz / lista / info / usun` | Kody rabatowe | Admini, sprzedawcy |
 | `/sklep otworz / zamknij / auto / status` | Ręczne otwarcie lub zamknięcie sklepu albo powrót do godzin pracy | Admini, sprzedawcy |
 | `/sprzedaz` | Statystyki sprzedaży | Admini, sprzedawcy |
-| `/hammerplus nadaj / sprawdz / lista / klucz` | Kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft (`nadaj nick: dni:`, `dni:0` = na zawsze) i klucz publiczny dla launchera | Admini, sprzedawcy |
+| `/hammerplus nadaj / sprawdz / lista / klucz` | Kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft (`nadaj nick: dni:`, `dni:0` = na zawsze, opcjonalnie `osoba:` – dostanie rangę 💎 Hammer+) i klucz publiczny dla launchera | Admini, sprzedawcy |
 | `/polecane dodaj / usun / lista` | Polecane serwery w Hammer Launcherze | Admini, sprzedawcy |
 | `/launcher` | Karta Hammer Launchera: co to jest, aktualna wersja z opisem zmian i przyciski *Pobierz launcher* / *Hammer+* | Wszyscy |
 | `/klient profil / notatka dodaj / notatka usun` | Profile klientów i prywatne notatki zespołu | Zespół |

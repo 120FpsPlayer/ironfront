@@ -81,7 +81,8 @@
       return;
     }
     plus.plans.forEach(function (plan) {
-      var buy = el('button', { class: 'btn gold', type: 'button', text: 'Kup' });
+      // Buying needs a Discord sign-in (the code comes by DM, the 💎 Hammer+ role on the server) – the button says so.
+      var buy = el('button', { class: 'btn gold', type: 'button', text: session.user ? 'Kup' : 'Zaloguj i kup', title: session.user ? '' : 'Najpierw zalogujesz się przez Discord' });
       buy.addEventListener('click', function () { choose(plan); });
       box.appendChild(el('div', { class: 'plan' }, [
         el('div', {}, [el('b', { text: plan.name }), el('div', { class: 'sub', text: plan.days ? plan.days + ' dni od zakupu' : 'Bez limitu czasu' })]),
@@ -133,6 +134,8 @@
       el('div', { class: 'row' }, [el('b', { text: (fresh ? 'Gotowe! ' : '') + 'Konto ' + (p.nick || '') }), until ? el('span', { class: 'pill gold', text: until }) : null, p.code ? copy : null]),
       p.code ? el('code', { class: 'code', text: p.code }) : el('p', { class: 'muted small', text: order.delivery || 'Kod wystawi nasz zespół – napisz do nas na Discordzie.' }),
       fresh ? el('p', { class: 'small soft', text: 'Otwórz Hammer Launcher → Hammer+ → „Mam kod” i wklej kod. Wysłaliśmy go też w wiadomości prywatnej na Discordzie.' }) : null,
+      p.member === true && fresh ? el('p', { class: 'small soft', text: 'Na naszym Discordzie masz już rangę 💎 Hammer+.' }) : null,
+      p.invite ? el('div', { class: 'row' }, [el('span', { class: 'small soft grow', text: 'Dołącz do naszego Discorda – po wejściu od razu dostaniesz rangę 💎 Hammer+.' }), el('a', { class: 'btn small', href: p.invite, target: '_blank', rel: 'noopener', text: 'Dołącz do Discorda' })]) : null,
     ]);
   }
   function showCodes(freshId) {

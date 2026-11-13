@@ -20,11 +20,12 @@
 <body>
 <header class="top">
   <div class="wrap">
-    <!--shop--><a class="logo" href="/" aria-label="HammerShop – strona główna"><i aria-hidden="true"></i>Hammer<b>Shop</b></a><!--/shop--><!--launcher--><a class="logo h" href="/" aria-label="Hammer Launcher – strona główna"><i aria-hidden="true"></i>Hammer<b>Launcher</b></a><!--/launcher-->
+    <!--shop--><a class="logo" href="/" aria-label="HammerShop – strona główna"><i aria-hidden="true"></i>Hammer<b>Shop</b></a><!--/shop--><!--launcher--><a class="logo h" href="/" aria-label="Hammer Launcher – strona główna"><i aria-hidden="true"></i>Hammer<b>Launcher</b></a><a class="collab" href="#hammershop" aria-label="Współpraca: Hammer Launcher × HammerShop"><span aria-hidden="true">×</span><img src="/assets/launcher-icon.png" width="20" height="20" alt=""><em>Hammer<b>Shop</b></em></a><!--/launcher-->
     <nav class="nav" aria-label="Główna nawigacja">
       <!--shop--><a href="/">Sklep</a>
       <a href="/launcher" aria-current="page">Launcher</a><!--/shop--><!--launcher--><a href="/" aria-current="page">Launcher</a>
-      <a href="#funkcje">Funkcje</a><!--/launcher-->
+      <a href="#funkcje">Funkcje</a>
+      <a href="#hammershop">HammerShop</a><!--/launcher-->
       <a href="#plus">Hammer+</a>
       <a id="nav-discord" href="#" target="_blank" rel="noopener" hidden>Discord</a>
     </nav>
@@ -50,6 +51,7 @@
         <li>Windows 10 i 11 (64-bit)</li>
         <li>Aktualizuje się sam</li>
       </ul>
+      <!--launcher--><a class="partner-chip" href="#hammershop"><img src="/assets/launcher-icon.png" width="22" height="22" alt="">We współpracy z <b>HammerShop</b></a><!--/launcher-->
     </div>
     <figure class="hero-shot"><img src="/assets/launcher/graj.jpg" width="1400" height="881" alt="Ekran główny Hammer Launchera: przycisk Graj, wybór instancji i aktualności"></figure>
   </section>
@@ -88,6 +90,7 @@
           <li>Własne tło menu w grze</li>
           <li>Peleryny Hammer+ widoczne dla graczy z Hammer Client</li>
           <li>Znaczek H+ przed nickiem na liście graczy (Tab)</li>
+          <li>Ranga 💎 Hammer+ na naszym Discordzie</li>
           <li>Automatyczne kopie światów</li>
           <li>Chmura: ustawienia launchera na każdym komputerze</li>
           <li>Biblioteka na 200 skórek i zestawy skórek</li>
@@ -96,7 +99,7 @@
       <div class="plus-buy">
         <div id="plus-result" hidden></div>
         <div class="plans" id="plans"></div>
-        <p class="muted small" id="plus-note">Kod Hammer+ jest przypisany do Twojego konta Minecraft. Płatność obsługuje Stripe (karta, Apple Pay, Google Pay).</p>
+        <p class="muted small" id="plus-note">Do zakupu zaloguj się przez Discord – kod Hammer+ trafi do Ciebie w wiadomości prywatnej, a na naszym serwerze dostaniesz rangę 💎 Hammer+. Kod jest przypisany do Twojego konta Minecraft. Płatność obsługuje Stripe (karta, Apple Pay, Google Pay).</p>
         <div id="my-codes" hidden>
           <h3>Twoje kody Hammer+</h3>
           <div class="stack" id="my-codes-list"></div>
@@ -105,19 +108,35 @@
     </div>
   </section>
 
+  <!--launcher--><section class="wrap" id="hammershop" aria-labelledby="collab-h">
+    <div class="collab-box">
+      <div class="collab-head" aria-hidden="true">
+        <span class="mark"><img src="/assets/launcher-icon.png" width="44" height="44" alt=""><em>Hammer<b>Launcher</b></em></span>
+        <span class="x">×</span>
+        <span class="mark"><img src="/assets/launcher-icon.png" width="44" height="44" alt=""><em>Hammer<b>Shop</b></em></span>
+      </div>
+      <h2 id="collab-h">Hammer Launcher × HammerShop</h2>
+      <p class="soft">Hammer Launcher to nasz własny, niezależny projekt. HammerShop jest naszym partnerem – wspieramy się nawzajem, ale każdy prowadzi swoje.</p>
+      <div class="collab-cards">
+        <article class="card"><span class="pill">Nasz projekt</span><h3>Hammer Launcher</h3><p>Launcher, Hammer Client i Hammer+ tworzymy i rozwijamy sami – od pierwszej linijki kodu.</p></article>
+        <article class="card"><span class="pill gold">Partner</span><h3>HammerShop</h3><p>Sklep z pluginami, skryptami i wiele więcej. W launcherze masz do niego skrót na ekranie Graj.</p><a class="btn small" href="https://hammershop.pl" target="_blank" rel="noopener">Odwiedź HammerShop</a></article>
+      </div>
+    </div>
+  </section><!--/launcher-->
+
   <section class="wrap faq" aria-labelledby="faq-h">
     <h2 class="section-title" id="faq-h">Częste pytania</h2>
     <details><summary>Windows ostrzega mnie przy instalacji. Czy to bezpieczne?</summary><p>Tak. W wersji beta instalator nie ma jeszcze płatnego certyfikatu wydawcy, dlatego Windows SmartScreen może pokazać okno „System Windows ochronił ten komputer”. Kliknij <b>Więcej informacji</b>, a potem <b>Uruchom mimo to</b>. Pobieraj launcher tylko z tej strony.</p></details>
     <details><summary>Czy potrzebuję oryginalnego Minecrafta?</summary><p>Tak – Minecraft: Java Edition na koncie Microsoft. Launcher loguje Cię oficjalną stroną Microsoftu i nie obsługuje kont nieoryginalnych.</p></details>
     <details><summary>Jak działają aktualizacje?</summary><p>Zainstalowany launcher sam sprawdza, czy jest nowa wersja, pobiera ją w tle i instaluje przy następnym uruchomieniu. Nie musisz niczego pobierać ponownie.</p></details>
     <details><summary>To wersja beta – co to znaczy?</summary><p>Launcher działa, ale wciąż go dopracowujemy. Jeśli coś nie działa albo masz pomysł, napisz do nas na Discordzie – każda uwaga pomaga.</p></details>
-    <details><summary>Jak aktywować Hammer+?</summary><p>Po zakupie od razu zobaczysz swój kod na tej stronie i dostaniesz go w wiadomości prywatnej na Discordzie. W launcherze otwórz <b>Hammer+ → „Mam kod”</b> i wklej go. Kod działa na koncie Minecraft, dla którego został kupiony.</p></details>
+    <details><summary>Jak aktywować Hammer+?</summary><p>Po zakupie od razu zobaczysz swój kod na tej stronie i dostaniesz go w wiadomości prywatnej na Discordzie. W launcherze otwórz <b>Hammer+ → „Mam kod”</b> i wklej go. Kod działa na koncie Minecraft, dla którego został kupiony. Na naszym Discordzie dostajesz też rangę 💎 Hammer+ – jeśli nie ma Cię jeszcze na serwerze, dostaniesz ją zaraz po dołączeniu.</p></details>
   </section>
 </main>
 
 <footer class="foot">
   <div class="wrap">
-    <span><!--shop-->© HammerShop · Hammer Launcher<!--/shop--><!--launcher-->© Hammer Launcher<!--/launcher--> <span class="pill beta">Beta</span></span>
+    <span><!--shop-->© HammerShop · Hammer Launcher<!--/shop--><!--launcher-->© Hammer Launcher · we współpracy z HammerShop<!--/launcher--> <span class="pill beta">Beta</span></span>
     <span>Nie jesteśmy powiązani z Mojang ani Microsoft.</span>
     <!--shop--><a class="right" href="/">Sklep HammerShop</a><!--/shop--><!--launcher--><a class="right" href="#plus">Hammer+</a><!--/launcher-->
   </div>

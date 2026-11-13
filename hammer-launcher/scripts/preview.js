@@ -352,7 +352,7 @@ function mock() {
   /* ── Aktualności and the message bar from the shop's admin panel, the launcher's own updates ── */
   // The shop's news (already sorted: pinned first, then newest); two of them are newer than the last visit.
   const NEWS = [
-    { id: 'n_4', title: 'Hammer+ taniej o 20% do niedzieli', body: 'Własne kolory, animowane tła, automatyczne kopie światów i chmura.\nKod rabatowy: HAMMER20', tag: 'Promocja', date: '12.11.2026', at: now - 2 * 3600e3, url: 'https://hammershop.pl/launcher#plus', image: shopArt('−20%', '#ffb36b', '#c2410c'), pinned: true },
+    { id: 'n_4', title: 'Hammer+ taniej o 20% do niedzieli', body: 'Własne kolory, animowane tła, automatyczne kopie światów i chmura.\nKod rabatowy: HAMMER20', tag: 'Promocja', date: '12.11.2026', at: now - 2 * 3600e3, url: 'https://hammerclient.com/launcher#plus', image: shopArt('−20%', '#ffb36b', '#c2410c'), pinned: true },
     { id: 'n_3', title: 'Launcher 2.6.0: aktualności i komunikaty prosto ze sklepu', body: 'Od tej wersji launcher aktualizuje się sam, a nowości ze sklepu widzisz od razu na ekranie Graj.', tag: 'Nowość', date: '11.11.2026', at: now - 26 * 3600e3, url: null, image: null, pinned: false },
     { id: 'n_2', title: 'Turniej PvP w sobotę o 18:00', body: 'Zapisy na Discordzie do piątku. Do wygrania rangi i Hammer+ na 3 miesiące.', tag: 'Event', date: '9.11.2026', at: now - 3 * 864e5, url: 'https://discord.gg/hammershop', image: null, pinned: false },
     { id: 'n_1', title: 'Nowe polecane serwery', body: 'W zakładce Serwery znajdziesz serwery, które polecamy – z liczbą graczy na żywo.', tag: null, date: '2.11.2026', at: now - 10 * 864e5, url: null, image: null, pinned: false },
@@ -393,7 +393,7 @@ function mock() {
     },
     i18n: { ...languageNow(), load: async () => languageNow() },
     pathForFile: (file) => (/\.hammerpack$/i.test(file?.name ?? '') ? `C:\\Users\\Gracz\\Downloads\\${file.name}` : null),
-    app: { info: async () => ({ plus: plusStatus(), version: '2.6.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', channel: window.__stable ? '' : 'beta', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true }, background: { tray: true, startWithSystem: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ plus: plusStatus(), version: '2.6.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', channel: window.__stable ? '' : 'beta', website: 'https://hammerclient.com', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true }, background: { tray: true, startWithSystem: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: {
       get: async () => ({ ...settings }),
@@ -681,7 +681,7 @@ function mock() {
         const server = servers.find((x) => x.address === address) ?? { name: address, address };
         const pack = i.modpack ? { name: i.modpack.name, included: opts?.pack !== false } : null;
         const q = new URLSearchParams({ server: server.address, ...(server.name !== server.address ? { name: server.name } : {}), mc: i.mcVersion, loader: i.loader, ...(pack?.included ? { pack: '1KVo5zza' } : {}) });
-        return { link: `https://hammershop.pl/join?${q}`, web: true, server: { name: server.name, address: server.address }, mc: i.mcVersion, loader: i.loader, pack };
+        return { link: `https://hammerclient.com/join?${q}`, web: true, server: { name: server.name, address: server.address }, mc: i.mcVersion, loader: i.loader, pack };
       },
     },
     featured: { list: async () => (await wait(100), (window.__featured ?? FEATURED).map((x) => ({ ...x, tags: [...x.tags] }))) },
@@ -1476,7 +1476,7 @@ async function main() {
   await modalBtn('Zamknij').click();
   await count('.server-row', 7); // the invitation's server is on the list (and the featured one added before)
   // No instance fits and the link asks for a modpack: its name and author first, then the usual modpack install.
-  await page.evaluate(() => window.__emit('invite:link', 'https://hammershop.pl/join?server=fo.example.pl:25570&name=Wsp%C3%B3lny%20%C5%9Bwiat&mc=1.20.4&loader=fabric&pack=fabulously-optimized'));
+  await page.evaluate(() => window.__emit('invite:link', 'https://hammerclient.com/join?server=fo.example.pl:25570&name=Wsp%C3%B3lny%20%C5%9Bwiat&mc=1.20.4&loader=fabric&pack=fabulously-optimized'));
   await page.waitForTimeout(500);
   await count('.modal .pick-row', 1);
   await shot('75-zaproszenie-z-paczka');
@@ -1501,7 +1501,7 @@ async function main() {
   await page.waitForTimeout(300);
   await count('.modal .warn', 1);
   await shot('78-mam-zaproszenie-zly-link');
-  await page.evaluate(() => (window.__clipboard = 'https://hammershop.pl/join?server=sky.hammershop.pl&name=Hammer+Skyblock'));
+  await page.evaluate(() => (window.__clipboard = 'https://hammerclient.com/join?server=sky.hammershop.pl&name=Hammer+Skyblock'));
   await modalBtn('Wklej').click();
   await modalBtn('Dalej').click();
   await page.waitForTimeout(400);
@@ -2177,7 +2177,7 @@ async function main() {
   await page.evaluate(() => (window.__selfNext = null));
 
   // A build that cannot replace itself (the portable exe): it only tells – the button opens the download page.
-  const RELEASE = { version: '2.6.1', notes: NOTES, url: 'https://hammershop.pl/launcher', size: 257000000, date: Date.now() - 3600e3 };
+  const RELEASE = { version: '2.6.1', notes: NOTES, url: 'https://hammerclient.com', size: 257000000, date: Date.now() - 3600e3 };
   await page.evaluate((release) => window.__self({ status: 'unsupported', supported: false, reason: 'portable', error: null, latest: null, notes: release.notes, release }), RELEASE);
   await count('.set-row:has-text("Aktualizuj automatycznie")', 0);
   await count('.card:has-text("Aktualizacje launchera") button:has-text("Pobierz ze strony")', 1);
@@ -2211,7 +2211,7 @@ async function main() {
 
   // „Wymagana aktualizacja”: nothing else can be done – but the window can still be minimised or closed.
   await nav('Graj');
-  await page.evaluate((notes) => window.__self({ status: 'available', supported: true, reason: null, latest: '2.6.1', notes, upToDate: false, required: { version: '2.6.1', minVersion: '2.6.1' }, release: { version: '2.6.1', notes, url: 'https://hammershop.pl/launcher', size: 257000000, date: Date.now() } }), NOTES);
+  await page.evaluate((notes) => window.__self({ status: 'available', supported: true, reason: null, latest: '2.6.1', notes, upToDate: false, required: { version: '2.6.1', minVersion: '2.6.1' }, release: { version: '2.6.1', notes, url: 'https://hammerclient.com', size: 257000000, date: Date.now() } }), NOTES);
   await count('.overlay.must .modal', 1);
   await count('.update-card', 0);
   await shot('167-wymagana-aktualizacja');
@@ -2259,7 +2259,7 @@ async function main() {
   await count('.plus-acts button:has-text("Mam kod")', 1);
   await page.evaluate(() => (window.__opened = []) && (window.hs.app.openExternal = async (url) => (window.__opened.push(url), true)));
   await page.locator('.plus-acts button', { hasText: 'Kup Hammer+' }).click();
-  if ((await page.evaluate(() => window.__opened.join())) !== 'https://hammershop.pl/launcher#plus') errors.push(`Hammer+: „Kup Hammer+” otwiera ${await page.evaluate(() => window.__opened.join())}`);
+  if ((await page.evaluate(() => window.__opened.join())) !== 'https://hammerclient.com/launcher#plus') errors.push(`Hammer+: „Kup Hammer+” otwiera ${await page.evaluate(() => window.__opened.join())}`);
   await shot('172-hammerplus-kup');
   await fits('Hammer+ – Kup Hammer+');
   await small('172b-hammerplus-kup-male-okno', () => fits('Hammer+ – Kup Hammer+, małe okno'));

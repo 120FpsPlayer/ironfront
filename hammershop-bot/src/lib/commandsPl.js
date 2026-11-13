@@ -115,6 +115,7 @@ const MAP = {
     grant: C('nadaj', 'Wystaw kod Hammer+ dla konta Minecraft klienta', {
       nick: C('nick', 'Nick Minecraft klienta (konto premium)'),
       days: C('dni', 'Na ile dni (0 = na zawsze)'),
+      user: user('Konto Discord klienta – dostanie rangę Hammer+, dopóki Hammer+ działa (opcjonalnie)'),
     }),
     check: C('sprawdz', 'Sprawdź kod: czyj jest i do kiedy działa', { code: C('kod', 'Kod Hammer+ (HP1.…)') }),
     list: C('lista', 'Ostatnio wystawione kody – nick, ważność i kto je wystawił (bez samych kodów)'),

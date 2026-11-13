@@ -250,6 +250,7 @@ async function onLogin(user, accessToken) {
       await member.roles.add(role, `Logowanie na stronie ${config.brand.name}`);
       await hooks.emit('verified', member);
     }
+    await require('./plusrole').sync(guild, user.id).catch(() => null); // 💎 Hammer+ role, when theirs is running
     return { added: false, member: true };
   }
   if (!accessToken) return { added: false, member: false };
@@ -264,6 +265,7 @@ async function onLogin(user, accessToken) {
   if (roleOk && !member.roles.cache.has(role.id)) await member.roles.add(role, `Logowanie na stronie ${config.brand.name}`).catch(() => null);
   await sendLog(guild, { embeds: [logEmbed(COLORS.success, '🌐 Dołączenie przez stronę', guild.client.user).setDescription(`<@${user.id}>${user.username ? ` (${user.username})` : ''} loguje się na stronie i trafia na serwer${roleOk ? ` z rolą ${role}` : ''}.`)] }).catch(() => null);
   if (roleOk) await hooks.emit('verified', member);
+  await require('./plusrole').sync(guild, user.id).catch(() => null);
   return { added: true, member: true };
 }
 
@@ -376,8 +378,11 @@ async function onPaid(order) {
 const DAY_MS = 86_400_000;
 const plusPage = () => require('./launcherinfo').page();
 
-/** The DM with the code: whose it is, how long it runs, where to type it in. */
-function plusDm(guild, order, code, record) {
+/**
+ * The DM with the code: whose it is, how long it runs, where to type it in – and the 💎 Hammer+ role: given already
+ * (on the server), or an invite to the server, where the role comes the moment they join.
+ */
+function plusDm(guild, order, code, record, roleState = null) {
   const hp = require('./hammerplus');
   const c = container(COLORS.success);
   header(c, `## ${e(guild, 'check')} Hammer+ kupiony – dziękujemy!\nTwoja płatność na stronie **${config.brand.name}** przeszła pomyślnie. Oto Twój kod do **Hammer Launchera**:`, guild?.iconURL?.({ size: 128 }));
@@ -390,7 +395,11 @@ function plusDm(guild, order, code, record) {
         `-# Numer zamówienia \`${order.id}\` · zapłacono ${money(order.amount / unit())} · kartą (Stripe). Kod znajdziesz też na stronie launchera po zalogowaniu.`,
     ),
   );
-  if (plusPage()) c.addActionRowComponents(row(linkBtn(plusPage(), 'Strona launchera', ce(guild, 'cart'))));
+  const invite = roleState === 'not-member' ? inviteOf() : null;
+  if (roleState === 'added' || roleState === 'kept') c.addTextDisplayComponents(text(`${e(guild, 'check')} Masz też rangę **💎 Hammer+** na naszym serwerze Discord – będzie Twoja, dopóki działa Hammer+.`));
+  else if (invite) c.addTextDisplayComponents(text(`**💎 Ranga Hammer+:** dołącz do naszego serwera Discord – zaraz po wejściu dostaniesz ją automatycznie.`));
+  const buttons = [invite && linkBtn(invite, 'Dołącz do serwera', ce(guild, 'group')), plusPage() && linkBtn(plusPage(), 'Strona launchera', ce(guild, 'cart'))].filter(Boolean);
+  if (buttons.length) c.addActionRowComponents(row(...buttons));
   return v2(c);
 }
 
@@ -413,7 +422,7 @@ async function deliverPlus(order) {
     let granted;
     try {
       granted = guild
-        ? hp.grantKnown(guild.id, { mc: p.mc, nick: p.nick, days, by: order.userId, now, source: 'website' })
+        ? hp.grantKnown(guild.id, { mc: p.mc, nick: p.nick, days, by: order.userId, now, source: 'website', discordId: order.userId })
         : (() => {
             const code = plusLib.issue({ mc: p.mc, days, now });
             return { code, record: { id: plusLib.verify(code, { now }).id, nick: p.nick, exp: days ? Math.floor(now / 1000) + days * 86_400 : 0 } };
@@ -430,9 +439,10 @@ async function deliverPlus(order) {
       delivered: true,
       delivery: `Kod Hammer+ dla konta ${record.nick} jest gotowy – znajdziesz go na stronie launchera (sekcja Hammer+) i w wiadomości prywatnej na Discordzie. Wpisz go w Hammer Launcherze: Hammer+ → „Mam kod”.`,
     });
+    const roleState = guild ? await require('./plusrole').sync(guild, order.userId).catch(() => 'failed') : null; // 💎 Hammer+ role
     const user = await client?.users?.fetch?.(order.userId).catch(() => null);
     const sent = await Promise.resolve()
-      .then(() => user.send(plusDm(guild, order, code, record)))
+      .then(() => user.send(plusDm(guild, order, code, record, roleState)))
       .then(() => true, () => false); // closed DMs, or not on the server: the website still shows the code
     if (guild) {
       await sendLog(guild, {
@@ -444,6 +454,7 @@ async function deliverPlus(order) {
             { name: 'Kwota', value: money(order.amount / unit()), inline: true },
             { name: 'Zamówienie', value: `\`${order.id}\``, inline: true },
             { name: 'Kod na DM', value: sent ? 'wysłany' : 'nie doszedł (zamknięte DM) – klient widzi go na stronie', inline: true },
+            { name: 'Ranga 💎 Hammer+', value: { added: 'nadana', kept: 'już ją miał', 'not-member': 'nie jest na serwerze – dostanie ją po dołączeniu', failed: 'nie udało się nadać – sprawdź uprawnienia bota (Zarządzanie rolami)' }[roleState] ?? '—', inline: true },
           ),
         ],
       }).catch(() => null);
@@ -644,5 +655,5 @@ hooks.on('inviteDelete', (invite) => {
 
 module.exports = {
   catalog, featuredServers, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c),
-  deliverPlus, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel, checkInvite, inviteOf, invitesPaused, ownInviteFailing,
+  deliverPlus, plusDm, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel, checkInvite, inviteOf, invitesPaused, ownInviteFailing,
 };

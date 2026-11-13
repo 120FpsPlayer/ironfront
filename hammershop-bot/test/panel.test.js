@@ -433,6 +433,13 @@ test('Hammer+ bought by card: the nick is checked first, the code comes right af
 
   const dm = guild.dms.filter((d) => d.to === BUYER.id).map((d) => textOf(d.payload)).join('\n');
   assert.match(dm, /Hammer\+ kupiony/);
+  // The buyer signed in with Discord (so is on the server): the 💎 Hammer+ role, made on the spot – and the DM says so.
+  const plusRole = guild.roles.cache.find((r) => r.name === '💎 Hammer+');
+  assert.ok(plusRole, 'the role was created');
+  assert.ok(guild.members.cache.get(BUYER.id).roles.cache.has(plusRole.id), 'the buyer has the role');
+  assert.match(dm, /rangę \*\*💎 Hammer\+\*\* na naszym serwerze/);
+  assert.equal(order.plus.member, true);
+  assert.equal(order.plus.invite, null);
   assert.match(dm, /HP1\.[\w-]+\.[\w-]+/);
   assert.equal(plus.verify(/HP1\.[\w-]+\.[\w-]+/.exec(dm)[0]).mc, MC.Steve);
   // One code: the page shows exactly the code from the DM – every time it is opened – and the panel knows whose it is.

@@ -189,7 +189,10 @@ test('the website: the front page is the launcher\'s, with the H and the name Ha
     assert.match(html, /<title>Hammer Launcher – nasz własny launcher Minecrafta<\/title>/, page);
     assert.match(html, /class="logo h"[^>]*>.*Hammer<b>Launcher<\/b>/, page);
     assert.match(html, /launcher-icon\.png/);
-    assert.doesNotMatch(html, /HammerShop|<!--|Sklep/, page);
+    // Nothing of the shop's own page – HammerShop appears only as the partner (Hammer Launcher × HammerShop).
+    assert.doesNotMatch(html, /<!--|Nowość od HammerShop|© HammerShop|aria-label="HammerShop – strona główna"|href="\/launcher" aria-current/, page);
+    assert.match(html, /id="hammershop"[\s\S]*Hammer Launcher × HammerShop[\s\S]*Partner/, page);
+    assert.match(html, /class="collab"[^>]*>.*Hammer<b>Shop<\/b>/, page);
     assert.match(res.headers.get('content-security-policy'), /script-src 'self'/);
   }
   for (const page of ['/admin', '/admin.html']) {
