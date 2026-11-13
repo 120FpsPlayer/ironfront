@@ -951,16 +951,21 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
        * „Co nowego” right after the launcher updated itself: { version, from, notes } once, then null. The notes are
        * the ones kept when the update was downloaded, else the shop's for this version. A fresh install has nothing to tell.
        */
-      whatsNew: () => {
+      whatsNew: async () => {
         const s = store.get();
         if (!s.seenVersion && !usedBefore) {
           store.set({ seenVersion: appVersion });
           return null;
         }
         if (s.seenVersion && !isNewer(appVersion, s.seenVersion)) return null;
-        const release = feed.peek().release;
-        const notes = (s.updateNotes?.version === appVersion ? s.updateNotes.notes : null) || (release?.version === appVersion ? release.notes : null) || null;
-        return { version: appVersion, from: s.seenVersion || null, notes };
+        let notes = s.updateNotes?.version === appVersion ? s.updateNotes.notes : null;
+        if (!notes) {
+          // Not kept from the download (an older launcher installed it): the shop's notes for this version – the
+          // first look at the shop is waited for a moment, so the window does not open before they are here.
+          const { release } = await feed.current().catch(() => feed.peek());
+          notes = release?.version === appVersion ? release.notes : null;
+        }
+        return { version: appVersion, from: s.seenVersion || null, notes: notes || null };
       },
       /** The window „Co nowego” was closed: not shown again for this version. */
       seen: () => {

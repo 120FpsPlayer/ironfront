@@ -765,14 +765,14 @@ test('services: „Co nowego” once after an update – the notes kept from the
   const offline = async () => Promise.reject(new TypeError('offline'));
   // A fresh install: nothing to tell, and the version counts as seen.
   const fresh = createServices({ root: tmpDir(), config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: offline, appVersion: '2.6.0' });
-  assert.equal(fresh.selfUpdate.whatsNew(), null);
+  assert.equal(await fresh.selfUpdate.whatsNew(), null);
   assert.equal(fresh.settings.get().seenVersion, '2.6.0');
 
   // 2.6.0 downloads 2.6.1 with notes, the player closes the launcher, the update installs.
   const root = tmpDir();
   const updater = fakeUpdater();
   const before = createServices({ root, config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: offline, appVersion: '2.6.0', updater, updateSupport: SUPPORTED });
-  assert.equal(before.selfUpdate.whatsNew(), null);
+  assert.equal(await before.selfUpdate.whatsNew(), null);
   const info = { ...latest('2.6.1'), releaseNotes: '– Znaczek H w Tab\n– Poprawki' };
   updater.answer = { info };
   await before.selfUpdate.check();
@@ -781,10 +781,10 @@ test('services: „Co nowego” once after an update – the notes kept from the
   assert.deepEqual(before.settings.get().updateNotes, { version: '2.6.1', notes: '– Znaczek H w Tab\n– Poprawki' });
 
   const after = createServices({ root, config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: offline, appVersion: '2.6.1' });
-  assert.deepEqual(after.selfUpdate.whatsNew(), { version: '2.6.1', from: '2.6.0', notes: '– Znaczek H w Tab\n– Poprawki' });
-  assert.deepEqual(after.selfUpdate.whatsNew(), { version: '2.6.1', from: '2.6.0', notes: '– Znaczek H w Tab\n– Poprawki' }, 'until it is closed');
+  assert.deepEqual(await after.selfUpdate.whatsNew(), { version: '2.6.1', from: '2.6.0', notes: '– Znaczek H w Tab\n– Poprawki' });
+  assert.deepEqual(await after.selfUpdate.whatsNew(), { version: '2.6.1', from: '2.6.0', notes: '– Znaczek H w Tab\n– Poprawki' }, 'until it is closed');
   assert.equal(after.selfUpdate.seen(), true);
-  assert.equal(after.selfUpdate.whatsNew(), null, 'once');
+  assert.equal(await after.selfUpdate.whatsNew(), null, 'once');
   assert.deepEqual([after.settings.get().seenVersion, after.settings.get().updateNotes], ['2.6.1', null]);
 
   // A launcher from before this feature (no seenVersion yet) that was updated: the window still comes, without notes.
@@ -795,5 +795,8 @@ test('services: „Co nowego” once after an update – the notes kept from the
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   delete raw.seenVersion;
   fs.writeFileSync(file, JSON.stringify(raw));
-  assert.deepEqual(createServices({ root: old, config: {}, accounts: {}, fetchFn: offline, appVersion: '2.7.0' }).selfUpdate.whatsNew(), { version: '2.7.0', from: null, notes: null });
+  assert.deepEqual(await createServices({ root: old, config: {}, accounts: {}, fetchFn: offline, appVersion: '2.7.0' }).selfUpdate.whatsNew(), { version: '2.7.0', from: null, notes: null });
+  // … and with the shop online, its notes for this version are in the window (the first look is waited for).
+  const shop = async (url) => (String(url).includes('/api/launcher/news') ? new Response(JSON.stringify({ news: [], alert: null, release: { version: '2.7.0', notes: '– Z serwera', date: '13.11.2026', minVersion: null, size: 1, url: 'https://hammershop.pl/download' } }), { status: 200, headers: { 'content-type': 'application/json' } }) : Promise.reject(new TypeError('offline')));
+  assert.deepEqual(await createServices({ root: old, config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: shop, appVersion: '2.7.0' }).selfUpdate.whatsNew(), { version: '2.7.0', from: null, notes: '– Z serwera' });
 });
