@@ -1,6 +1,7 @@
 'use strict';
-/* Skórka – the skin and cape of the signed-in Microsoft account, a library of skins used before, and with Hammer+:
-   Zestawy (a skin + model + cape under one name) and the Hammer+ capes that Hammer Client shows. */
+/* Skórka – the skin of the signed-in Microsoft account, a library of skins used before, Zestawy (Hammer+: a skin +
+   model + cape under one name) and Peleryny: one grid with the account's Mojang capes, the Hammer capes (two for
+   everybody, the rest with Hammer+ – dark, with a lock) and one's own cape (Hammer+), plus the on/off switch. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -127,8 +128,8 @@
   function render(root) {
     const body = h('div');
     let data = null;
-    let hammer = { capes: [], selected: '' }; // Peleryny Hammer+: the launcher's capes and the one picked
-    let capeNote = null; // why the picked Hammer+ cape is not visible to other players yet
+    let hammer = { capes: [], selected: '', on: true, lastMojang: '', custom: null, plus: false }; // Peleryny (api.plus.capes)
+    let capeNote = null; // why the picked cape is not visible to other players (yet)
     let run = 0;
     let alive = true;
 
@@ -165,9 +166,9 @@
         'section.card.skin-card',
         h('div.card-head', icon('shirt'), h('h2.grow', 'Twoja skórka'), HS.chip(data.account.name, 'accent', 'user')),
         src
-          ? h('div.skin-stage', HS.skinView(src, { slim, height: 272 }), HS.skinView(src, { slim, back: true, height: 272 }))
+          ? h('div.skin-stage', HS.skinView(src, { slim, height: 272 }), HS.skinView(src, { slim, back: true, height: 272, cape: worn()?.src ?? null }))
           : h('div.skin-stage.none', icon('user'), h('p', 'Masz domyślną skórkę Minecrafta.')),
-        h('div.skin-meta', src ? HS.chip(modelName(skin.variant), null, 'user') : null, h('span.dim', 'przód i tył')),
+        h('div.skin-meta', src ? HS.chip(modelName(skin.variant), null, 'user') : null, worn() ? HS.chip(worn().name, 'gold', 'crown') : null, h('span.dim', 'przód i tył')),
         h('div.skin-acts', upload, reset),
         h('p.hint', 'Przeciągnij tutaj plik PNG 64×64 albo kliknij „Wgraj skórkę”. Zmiana trafia na konto Microsoft – widzą ją wszyscy gracze.'),
       );
@@ -227,35 +228,6 @@
       );
     }
 
-    function capesCard() {
-      const capes = data.capes;
-      const active = capes.find((c) => c.active);
-      const set = (btn, capeId, okText) =>
-        HS.busy(btn, async () => {
-          const res = await attempt(() => api.skins.cape(capeId), okText);
-          if (res) show(res);
-        });
-      return h(
-        'section.card',
-        h('div.card-head', icon('crown'), h('h2.grow', 'Peleryny'), capes.length ? h('span.dim', { style: { fontSize: '12.5px' } }, active ? `Nosisz: ${active.name}` : 'Bez peleryny') : null),
-        capes.length
-          ? h(
-              'div.rows',
-              capes.map((c) =>
-                h(
-                  `div.installed-row.cape-row${c.active ? '.on' : ''}`,
-                  h('div.cape-pic', c.url ? HS.capeView(c.url, 48) : icon('crown')),
-                  h('div.grow', h('b.ellipsis', c.name), h('small', c.active ? 'Widoczna w grze' : 'Ukryta')),
-                  c.active
-                    ? [HS.chip('Na sobie', 'ok', 'check'), h('button.btn.sm', { onclick: (e) => set(e.currentTarget, null, 'Ukryto pelerynę.') }, icon('eye-off'), 'Ukryj')]
-                    : h('button.btn.sm.primary', { onclick: (e) => set(e.currentTarget, c.id, `Założono pelerynę „${c.name}”.`) }, icon('eye'), 'Pokaż'),
-                ),
-              ),
-            )
-          : h('p.muted', { style: { fontSize: '13px' } }, 'To konto nie ma jeszcze żadnej peleryny. Peleryny rozdaje Mojang – np. za udział w wydarzeniach albo migrację konta.'),
-      );
-    }
-
     /** Zestawy (Hammer+): looks saved under a name – put on with one click. */
     function outfitsCard() {
       const on = HS.plusOn();
@@ -305,49 +277,125 @@
       );
     }
 
-    /** Peleryny Hammer+: the launcher's own capes, drawn by Hammer Client in the game. */
-    function hammerCapesCard() {
-      const on = HS.plusOn();
-      const selected = on ? hammer.selected : '';
-      const picked = hammer.capes.find((c) => c.id === selected);
-      const pick = (el, id, okText) =>
+    /** The cape the player wears now: { kind: 'custom' | 'hammer' | 'mojang', src, name } or null (switched off / none). */
+    function worn() {
+      if (!data || !hammer.on) return null;
+      if (hammer.selected === 'custom' && hammer.custom) return { kind: 'custom', src: hammer.custom, name: 'Własna peleryna' };
+      const own = hammer.selected && hammer.capes.find((c) => c.id === hammer.selected);
+      if (own) return { kind: 'hammer', id: own.id, src: `assets/capes/${own.id}.png`, name: own.name };
+      const mojang = data.capes.find((c) => c.active);
+      return mojang ? { kind: 'mojang', id: mojang.id, src: mojang.url, name: mojang.name } : null;
+    }
+
+    /**
+     * Peleryny: one grid – the account's capes from Mojang (seen in plain Minecraft too), the Hammer capes (two for
+     * everybody; the rest dark with a lock until Hammer+) and one's own cape (Hammer+) – and the on/off switch.
+     */
+    function capesCard() {
+      const on = hammer.on;
+      const plus = hammer.plus;
+      const now = worn();
+      const after = (res, okText) => {
+        if (!res) return;
+        hammer = { ...hammer, ...res };
+        capeNote = res.note ?? null;
+        if (okText) HS.toast('ok', okText);
+        draw();
+      };
+      const mojangActive = () => data.capes.find((c) => c.active)?.id ?? '';
+      // A Hammer cape (or one's own): Hammer Client draws it over a Mojang cape, which plain Minecraft still shows.
+      const wearHammer = (el, id, okText) => HS.busy(el, async () => after(await attempt(() => api.plus.setCape(id)), okText));
+      // A Mojang cape: the Hammer cape comes off, so everybody sees the same one.
+      const wearMojang = (el, cape) =>
         HS.busy(el, async () => {
-          const res = await attempt(() => api.plus.setCape(id), okText);
-          if (!res) return;
-          hammer = { ...hammer, selected: res.selected };
-          capeNote = res.selected && !res.shared ? res.note : null;
-          draw();
+          if (hammer.selected) after(await attempt(() => api.plus.setCape(null)));
+          if (!hammer.on) after(await attempt(() => api.plus.setCapeOn(true, '')));
+          const res = await attempt(() => api.skins.cape(cape.id), `Założono pelerynę „${cape.name}”.`);
+          if (res) show(res);
         });
-      const tile = (c) => {
-        const mine = c.id === selected;
+      const sw = HS.toggle(on, async (value) => {
+        if (!value) {
+          const was = mojangActive();
+          if (was) {
+            const res = await attempt(() => api.skins.cape(null));
+            if (res) data = { outfits: [], ...res };
+          }
+          after(await attempt(() => api.plus.setCapeOn(false, was)), 'Peleryna wyłączona.');
+          return;
+        }
+        const res = await attempt(() => api.plus.setCapeOn(true));
+        after(res, 'Peleryna włączona.');
+        if (res && !res.selected && res.lastMojang && data.capes.some((c) => c.id === res.lastMojang)) {
+          const back = await attempt(() => api.skins.cape(res.lastMojang));
+          if (back) show(back);
+        }
+      });
+      sw.title = on ? 'Wyłącz pelerynę' : 'Włącz pelerynę';
+      const tile = ({ key, pic, name, sub, active, locked = false, title, onClick }) => {
         const el = h(
-          `button.hcape${mine ? '.on' : ''}`,
-          { type: 'button', 'aria-pressed': String(mine), title: mine ? `Nosisz pelerynę „${c.name}”` : `Załóż pelerynę „${c.name}”`, onclick: () => (on ? !mine && pick(el, c.id, `Założono pelerynę „${c.name}”.`) : HS.go('plus')) },
-          HS.capeView(`assets/capes/${c.id}.png`, 80),
-          h('b', c.name),
-          mine ? HS.chip('Na sobie', 'gold', 'check') : h('small', on ? 'Załóż' : 'Hammer+'),
+          `button.hcape${active ? '.on' : ''}${locked ? '.locked' : ''}${on ? '' : '.off'}`,
+          { type: 'button', 'aria-pressed': String(active), title, 'data-cape': key, onclick: () => onClick(el) },
+          h('div.hcape-pic', pic, locked ? h('span.hcape-lock', { 'aria-hidden': 'true' }, icon('lock')) : null),
+          h('b.ellipsis', name),
+          active ? HS.chip('Na sobie', 'gold', 'check') : h('small', locked ? 'Hammer+' : sub),
         );
         return el;
       };
-      const none = h(
-        `button.hcape${on && !selected ? '.on' : ''}`,
-        { type: 'button', 'aria-pressed': String(on && !selected), title: 'Graj bez peleryny Hammer+', onclick: () => (on ? selected && pick(none, null, 'Zdjęto pelerynę Hammer+.') : HS.go('plus')) },
-        h('div.none', icon('eye-off')),
-        h('b', 'Bez peleryny'),
-        on && !selected ? HS.chip('Wybrane', null, 'check') : h('small', on ? 'Zdejmij' : 'Hammer+'),
-      );
+      const tiles = [
+        ...data.capes.map((c) =>
+          tile({
+            key: `mojang:${c.id}`, pic: c.url ? HS.capeView(c.url, 80) : h('div.none', icon('crown')), name: c.name, sub: 'Mojang', title: `Peleryna „${c.name}” od Mojang – widać ją też w zwykłym Minecrafcie`,
+            active: now?.kind === 'mojang' && now.id === c.id,
+            onClick: (el) => !(now?.kind === 'mojang' && now.id === c.id) && wearMojang(el, c),
+          }),
+        ),
+        ...hammer.capes.map((c) => {
+          const locked = !c.free && !plus;
+          const active = now?.kind === 'hammer' && now.id === c.id;
+          return tile({
+            key: c.id, pic: HS.capeView(`assets/capes/${c.id}.png`, 80), name: c.name, sub: c.free ? 'Za darmo' : 'Załóż', locked, active,
+            title: locked ? `„${c.name}” – peleryna Hammer+` : active ? `Nosisz pelerynę „${c.name}”` : `Załóż pelerynę „${c.name}”`,
+            onClick: (el) => (locked ? HS.go('plus') : !active && wearHammer(el, c.id, `Założono pelerynę „${c.name}”.`)),
+          });
+        }),
+      ];
+      // One's own cape (Hammer+): a PNG in the cape layout – worn at once.
+      const ownActive = now?.kind === 'custom';
+      const own = !plus
+        ? tile({ key: 'custom', pic: h('div.none', icon('upload')), name: 'Własna', sub: 'Hammer+', locked: true, active: false, title: 'Własna peleryna z Twojego obrazka – część Hammer+', onClick: () => HS.go('plus') })
+        : hammer.custom
+          ? tile({ key: 'custom', pic: HS.capeView(hammer.custom, 80), name: 'Własna', sub: 'Załóż', active: ownActive, title: ownActive ? 'Nosisz własną pelerynę' : 'Załóż własną pelerynę', onClick: (el) => !ownActive && wearHammer(el, 'custom', 'Założono własną pelerynę.') })
+          : tile({ key: 'custom', pic: h('div.none', icon('upload')), name: 'Własna', sub: 'Wgraj PNG', active: false, title: 'Wgraj własną pelerynę (PNG 64×32)', onClick: (el) => HS.busy(el, async () => after(await attempt(() => api.plus.pickCape()), 'Twoja peleryna jest gotowa.')) });
+      const ownActs = plus && hammer.custom
+        ? h(
+            'div.row.cape-own-acts',
+            h('button.btn.sm', { type: 'button', onclick: (e) => HS.busy(e.currentTarget, async () => after(await attempt(() => api.plus.pickCape()), 'Twoja peleryna jest zmieniona.')) }, icon('upload'), 'Zmień własną'),
+            h('button.btn.sm.ghost.danger', { type: 'button', onclick: async (e) => {
+              const btn = e.currentTarget;
+              if (!(await HS.confirmDialog({ title: 'Usunąć własną pelerynę?', text: 'Obrazek peleryny zniknie z launchera. Zawsze możesz wgrać go ponownie.', confirm: 'Usuń', danger: true }))) return;
+              HS.busy(btn, async () => after(await attempt(() => api.plus.removeCape()), 'Usunięto własną pelerynę.'));
+            } }, icon('trash'), 'Usuń'),
+          )
+        : null;
       return h(
-        'section.card',
-        h('div.card-head', icon('crown'), h('h2.grow', 'Peleryny Hammer+'), on ? h('span.dim', { style: { fontSize: '12.5px' } }, picked ? `Nosisz: ${picked.name}` : 'Bez peleryny') : HS.plusUi.lockChip()),
-        h('div.hcape-grid', hammer.capes.map(tile), none),
-        capeNote ? h('p.cloud-note', icon('info'), `Peleryna jest zapisana. ${capeNote}`) : null,
-        h('p.hint', { style: { marginTop: '12px' } }, 'Pelerynę Hammer+ rysuje Hammer Client: widzisz ją Ty i gracze, którzy też mają Hammer Client. W zwykłym Minecrafcie (vanilla) jej nie widać – tam działają tylko peleryny od Mojang z karty powyżej.'),
+        'section.card.capes-card',
+        h(
+          'div.card-head',
+          icon('crown'),
+          h('h2.grow', 'Peleryny'),
+          h('span.dim', { style: { fontSize: '12.5px' } }, on ? (now ? `Nosisz: ${now.name}` : 'Bez peleryny') : 'Wyłączona'),
+          h('label.cape-switch', h('span', on ? 'Wł.' : 'Wył.'), sw),
+        ),
+        h('div.hcape-grid', tiles, own),
+        ownActs,
+        capeNote ? h('p.cloud-note', icon('info'), capeNote) : null,
+        h('p.hint', { style: { marginTop: '12px' } }, 'Peleryny Hammer rysuje Hammer Client – widzisz je Ty i gracze, którzy też mają Hammer Client. Peleryny od Mojang widać też w zwykłym Minecrafcie. Ciemne z kłódką odblokujesz z Hammer+.'),
       );
     }
 
     function draw() {
       if (!data) return;
-      const wrap = h('div.skin-page', skinCard(), h('div.grid', libraryCard(), outfitsCard(), capesCard(), hammer.capes.length ? hammerCapesCard() : null));
+      const wrap = h('div.skin-page', skinCard(), h('div.grid', capesCard(), libraryCard(), outfitsCard()));
       // A skin file dropped anywhere on the page.
       let depth = 0;
       wrap.addEventListener('dragenter', (e) => (e.preventDefault(), depth++, wrap.classList.add('dragging')));
@@ -379,10 +427,10 @@
       if (account.needsLogin) return needLogin('Sesja wygasła', `Zaloguj się ponownie na konto ${account.name}, żeby zobaczyć i zmienić skórkę.`);
       clear(body, h('div.skin-page', h('div.skeleton', { style: { height: '470px' } }), h('div.grid', h('div.skeleton', { style: { height: '250px' } }), h('div.skeleton', { style: { height: '140px' } }))));
       try {
-        const [res, capes] = await Promise.all([api.skins.get(), api.plus.capes().catch(() => ({ capes: [], selected: '' }))]);
+        const [res, capes] = await Promise.all([api.skins.get(), api.plus.capes().catch(() => ({ capes: [], selected: '', on: true, lastMojang: '', custom: null, plus: false }))]);
         if (my !== run || !alive) return undefined;
         data = { outfits: [], ...res };
-        hammer = capes;
+        hammer = { ...hammer, ...capes };
         draw();
         // The head in the sidebar follows a skin changed somewhere else (minecraft.net, the official launcher).
         if ((account.skinUrl ?? null) !== (res.skin?.url ?? null)) state.refreshAccounts().catch(() => {});

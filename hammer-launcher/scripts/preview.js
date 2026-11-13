@@ -206,7 +206,7 @@ function mock() {
   };
 
   // Hammer+: off until the preview switches it on with window.__plus(true); `why` sets another reason for "off".
-  const plus = { active: false, why: null, cape: 'gold', menuUrl: null, bgUrl: null, cloud: 'offline', last: null };
+  const plus = { active: false, why: null, cape: 'gold', capeOn: true, lastMojang: '', customCape: null, menuUrl: null, bgUrl: null, cloud: 'offline', last: null };
   const UNTIL = Math.floor(new Date(2026, 11, 11, 12).getTime() / 1000);
   const WHY = {
     none: 'Nie masz jeszcze Hammer+. Kod dostaniesz od bota HammerShop na Discordzie po zakupie w sklepie.',
@@ -222,7 +222,9 @@ function mock() {
     window.__emit('plus:status', plusStatus());
   };
   window.__cloud = (mode) => (plus.cloud = mode);
-  const CAPES = [['hammer', 'Hammer'], ['gold', 'Złota'], ['ember', 'Żar'], ['royal', 'Królewska'], ['frost', 'Mróz'], ['crimson', 'Karmazyn']].map(([id, name]) => ({ id, name }));
+  const CAPES = [['hammer', 'Hammer', true], ['gold', 'Złota'], ['ember', 'Żar', true], ['royal', 'Królewska'], ['frost', 'Mróz'], ['crimson', 'Karmazyn']].map(([id, name, free]) => ({ id, name, free: Boolean(free) }));
+  const capeOk = (id) => !id || CAPES.find((c) => c.id === id)?.free || (plus.active && (id !== 'custom' || Boolean(plus.customCape)));
+  const capeState = () => ({ capes: CAPES.map((c) => ({ ...c })), selected: capeOk(plus.cape) ? plus.cape : '', on: plus.capeOn, lastMojang: plus.lastMojang, custom: plus.customCape, plus: plus.active });
   const NOTE = 'Chmura zadziała, gdy sklep HammerShop będzie online.';
   const cloudAnswer = (direction) => {
     if (plus.cloud === 'offline') return { offline: true, note: NOTE };
@@ -728,8 +730,11 @@ function mock() {
       },
       remove: async () => (Object.assign(plus, { active: false, why: null }), plusStatus()),
       paste: async () => 'HP1.eyJpZCI6ImExYjJjM2Q0ZTVmNjA3MTgiLCJtYyI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwiZXhwIjoxNzk3MDczMjAwLCJpYXQiOjE3OTQ0ODEyMDB9.pX9mK2vQ7LwT4zRb8NcY1sHd6EfJ3uGa0oIhVtWqBnMxCkDlSyUjZeFrPgAi5T-_w8Q2',
-      capes: async () => ({ capes: CAPES.map((c) => ({ ...c })), selected: plus.active ? plus.cape : '' }),
-      setCape: async (id) => (await wait(150), (plus.cape = id ?? ''), { selected: plus.cape, shared: false, note: 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' }),
+      capes: async () => capeState(),
+      setCape: async (id) => (await wait(150), (plus.cape = id ?? ''), id && (plus.capeOn = true), { ...capeState(), shared: false, note: 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' }),
+      setCapeOn: async (on, last) => (await wait(120), (plus.capeOn = Boolean(on)), typeof last === 'string' && (plus.lastMojang = last), { ...capeState(), shared: true, note: null }),
+      pickCape: async () => (await wait(150), (plus.customCape = capeArt('#1d4ed8', '#93c5fd')), (plus.cape = 'custom'), (plus.capeOn = true), { ...capeState(), shared: true, note: 'Własną pelerynę widzisz tylko Ty – inni gracze z Hammer Client nie widzą wtedy żadnej peleryny Hammer.' }),
+      removeCape: async () => (await wait(120), (plus.customCape = null), plus.cape === 'custom' && (plus.cape = ''), { ...capeState(), shared: true, note: null }),
     },
     theme: {
       background: async () => ({ url: plus.active ? plus.bgUrl : null }),
@@ -1044,12 +1049,18 @@ async function main() {
   await shot('30-skorka-po-zmianie');
   await page.locator('.skin-tile', { hasText: 'Alex z lasu' }).locator('.btn.primary').click();
   await page.waitForTimeout(600);
-  await page.locator('.cape-row', { hasText: 'Vanilla' }).locator('.btn.primary').click();
+  // Peleryny: a Mojang cape is a tile of the one grid; the switch takes the cape off and puts the same one back.
+  await page.locator('.hcape[data-cape="mojang:vanilla"]').click();
   await page.waitForTimeout(500);
-  await count('.cape-row.on', 1);
-  await page.locator('.cape-row.on button', { hasText: 'Ukryj' }).click();
-  await page.waitForTimeout(500);
-  await count('.cape-row.on', 0);
+  await count('.hcape.on[data-cape="mojang:vanilla"]', 1);
+  await count('.skin-view[aria-label="Skórka od tyłu, z peleryną"]', 1);
+  await page.locator('.cape-switch .switch').click();
+  await page.waitForTimeout(600);
+  await count('.hcape.on', 0);
+  await count('.hcape.off', await page.locator('.hcape').count());
+  await page.locator('.cape-switch .switch').click();
+  await page.waitForTimeout(700);
+  await count('.hcape.on[data-cape="mojang:vanilla"]', 1);
   await page.locator('.skin-tile button[title="Usuń z biblioteki"]').last().click();
   await confirm();
   await count('.skin-tile', 5);
@@ -1195,8 +1206,15 @@ async function main() {
   await viewTop('h2', 'Zestawy');
   await shot('47-skorka-zestawy-bez-hammerplus');
   await bottom();
+  // Without Hammer+: the two free Hammer capes can be worn, the other four and one's own are dark with a lock.
+  await count('.hcape.locked', 5);
+  await page.locator('.hcape[data-cape="ember"]').click();
+  await page.waitForTimeout(400);
+  await count('.hcape.on[data-cape="ember"]', 1);
+  await noToasts();
+  await viewTop('h2', 'Peleryny');
   await shot('48-skorka-peleryny-bez-hammerplus');
-  await page.locator('.hcape').first().click();
+  await page.locator('.hcape.locked').first().click();
   await count('.plus-page', 1);
 
   // Paste + activate: everything unlocks, the pill turns gold, the account gets its "+".
@@ -1376,24 +1394,36 @@ async function main() {
   await page.locator('.outfit-tile button[title="Usuń zestaw"]').last().click();
   await confirm();
   await count('.outfit-tile', 3);
-  await bottom();
+  await viewTop('h2', 'Peleryny');
   await count('.hcape.on', 1);
   await shot('67-peleryny-hammerplus');
   await page.locator('.hcape', { hasText: 'Mróz' }).click();
   await page.waitForTimeout(400);
   await count('.hcape.on', 1);
   await noToasts();
-  await bottom();
+  await viewTop('h2', 'Peleryny');
   await shot('68-peleryna-hammerplus-wybrana');
   await fits('Skórka z Hammer+');
   await small('68b-peleryny-hammerplus-male-okno', async () => {
-    await bottom();
+    await viewTop('h2', 'Peleryny');
     await fits('Skórka z Hammer+, małe okno');
   });
   await small('64b-skorka-zestawy-male-okno', () => viewTop('h2', 'Zestawy'));
-  await page.locator('.hcape', { hasText: 'Bez peleryny' }).click();
+  // One's own cape (Hammer+): uploaded, worn at once, shown on the skin from behind – then the switch turns it off.
+  await page.locator('.hcape[data-cape="custom"]').click();
+  await page.waitForTimeout(500);
+  await count('.hcape.on[data-cape="custom"]', 1);
+  await count('.cape-own-acts', 1);
+  await noToasts();
+  await viewTop('h2', 'Peleryny');
+  await shot('69b-wlasna-peleryna');
+  await page.locator('.cape-switch .switch').click();
+  await page.waitForTimeout(500);
+  await count('.hcape.on', 0);
+  await page.locator('.hcape[data-cape="gold"]').click();
   await page.waitForTimeout(400);
-  await count('.hcape.on', 1);
+  await count('.hcape.on[data-cape="gold"]', 1);
+  await count('.cape-switch input:checked', 1);
 
   // Hammer+ runs out while the launcher is open: the look and the locks follow at once.
   await nav('Graj');
@@ -1516,11 +1546,11 @@ async function main() {
   await page.waitForTimeout(300);
   await shot('80-zapros');
   await modalFits('Zaproś');
-  if (!/^https:\/\/hammershop\.pl\/join\?/.test(await page.locator('.modal textarea').inputValue())) errors.push('Zaproś: w oknie nie widać linku');
+  if (!/^https:\/\/hammerclient\.com\/join\?/.test(await page.locator('.modal textarea').inputValue())) errors.push('Zaproś: w oknie nie widać linku');
   await modalBtn('Kopiuj link').click();
   await page.waitForTimeout(200);
   const copied = await page.evaluate(() => window.__clipboard);
-  if (!/^https:\/\/hammershop\.pl\/join\?server=mc\.hammershop\.pl&name=HammerShop&mc=1\.21\.1&loader=fabric$/.test(copied)) errors.push(`Zaproś: w schowku jest „${copied}”`);
+  if (!/^https:\/\/hammerclient\.com\/join\?server=mc\.hammershop\.pl&name=HammerShop&mc=1\.21\.1&loader=fabric$/.test(copied)) errors.push(`Zaproś: w schowku jest „${copied}”`);
   await closeModal();
   await noToasts();
   // The start screen: the compact strip.

@@ -151,6 +151,9 @@ const api = {
     paste: () => call('plus:paste'),
     capes: () => call('plus:capes'),
     setCape: (id) => call('plus:cape', id),
+    setCapeOn: (on, lastMojang) => call('plus:cape-on', on, lastMojang),
+    pickCape: () => call('plus:cape-pick'),
+    removeCape: () => call('plus:cape-remove'),
   },
   theme: {
     background: () => call('theme:background'),

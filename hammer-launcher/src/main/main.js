@@ -609,6 +609,9 @@ if (!app.requestSingleInstanceLock()) {
     handle('plus:paste', async () => String((await clipboard.readText()) ?? '').trim().slice(0, 2000));
     handle('plus:capes', () => s().plus.capes());
     handle('plus:cape', (id) => s().plus.setCape(typeof id === 'string' ? id : null));
+    handle('plus:cape-on', (on, lastMojang) => s().plus.setCapeOn(Boolean(on), typeof lastMojang === 'string' ? lastMojang : undefined));
+    handle('plus:cape-pick', () => s().plus.pickCape());
+    handle('plus:cape-remove', () => s().plus.removeCape());
     handle('theme:background', () => s().theme.background());
     handle('theme:pick-background', () => s().theme.pickBackground());
     handle('theme:clear-background', () => s().theme.clearBackground());

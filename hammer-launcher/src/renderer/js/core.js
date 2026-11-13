@@ -172,9 +172,10 @@
   /**
    * Draws a player from a skin image: head, body, arms and legs, with the second layer (hat, jacket, sleeves)
    * slightly bigger on top. slim = the 3-pixel "Alex" arms; back = seen from behind. Old 64×32 skins have no left
-   * arm and leg of their own – those mirror the right ones.
+   * arm and leg of their own – those mirror the right ones. cape: a loaded cape picture – seen from behind it hangs
+   * from the shoulders over the back (10×16 pixels of the cape's outer side), under the head.
    */
-  function paintSkin(canvas, img, { slim = false, back = false } = {}) {
+  function paintSkin(canvas, img, { slim = false, back = false, cape = null } = {}) {
     const g = canvas.getContext('2d');
     const u = canvas.width / 18; // the figure is 16×32 skin pixels, plus one pixel of room around for the second layer
     const legacy = img.naturalHeight === 32;
@@ -207,26 +208,39 @@
       g.restore();
     };
     const order = ['rightLeg', 'leftLeg', 'body', 'rightArm', 'leftArm', 'head'];
+    if (back && cape) {
+      const limbs = order.filter((n) => n !== 'head');
+      for (const name of limbs) draw(name, false);
+      if (!legacy) for (const name of limbs) draw(name, true);
+      const k = cape.naturalWidth / 64; // high-resolution capes keep the same layout
+      g.drawImage(cape, k, k, 10 * k, 16 * k, (1 + 3) * u, (1 + 8) * u, 10 * u, 16 * u);
+      draw('head', false);
+      draw('head', true);
+      return;
+    }
     for (const name of order) draw(name, false);
     // The second layer: old skins only have the hat.
     for (const name of legacy ? ['head'] : order) draw(name, true);
   }
 
-  /** A canvas with the player drawn from a skin (https or data URL). height = pixels on screen. */
-  function skinView(src, { slim = false, back = false, height = 256 } = {}) {
+  const CAPE_SRC = /^(https:\/\/|data:image\/png|assets\/capes\/[a-z0-9_-]+\.png$)/;
+  const loadImg = (src) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+  /** A canvas with the player drawn from a skin (https or data URL). height = pixels on screen. cape: the cape worn (seen from behind). */
+  function skinView(src, { slim = false, back = false, height = 256, cape = null } = {}) {
     const unit = Math.max(1, Math.round(height / 34));
-    const canvas = h('canvas.skin-view', { width: 18 * unit, height: 34 * unit, role: 'img', 'aria-label': back ? 'Skórka od tyłu' : 'Skórka od przodu' });
+    const canvas = h('canvas.skin-view', { width: 18 * unit, height: 34 * unit, role: 'img', 'aria-label': back ? (cape ? 'Skórka od tyłu, z peleryną' : 'Skórka od tyłu') : 'Skórka od przodu' });
     if (!src || !/^(https:\/\/|data:image\/png)/.test(src)) return canvas;
-    const img = new Image();
-    img.onload = () => {
-      try {
-        paintSkin(canvas, img, { slim, back });
-      } catch {
-        canvas.classList.add('broken');
-      }
-    };
-    img.onerror = () => canvas.classList.add('broken');
-    img.src = src;
+    const withCape = back && cape && CAPE_SRC.test(cape);
+    Promise.all([loadImg(src), withCape ? loadImg(cape).catch(() => null) : null])
+      .then(([img, capeImg]) => paintSkin(canvas, img, { slim, back, cape: capeImg }))
+      .catch(() => canvas.classList.add('broken'));
     return canvas;
   }
 
@@ -237,7 +251,7 @@
   function capeView(src, height = 64) {
     const unit = Math.max(1, Math.round(height / 16));
     const canvas = h('canvas.cape-view', { width: 10 * unit, height: 16 * unit, role: 'img', 'aria-label': 'Peleryna' });
-    if (!src || !/^(https:\/\/|data:image\/png|assets\/capes\/[a-z0-9_-]+\.png$)/.test(src)) return canvas;
+    if (!src || !CAPE_SRC.test(src)) return canvas;
     const img = new Image();
     img.onload = () => {
       const g = canvas.getContext('2d');

@@ -52,7 +52,7 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
    * `missing` is what a 404 with a JSON body means for this call: true = "nothing there yet", a normal answer.
    * `open` marks a public route: it is asked without a code (and no code is ever sent to it).
    */
-  async function call(method, pathname, code, json, { missing = false, open = false } = {}) {
+  async function call(method, pathname, code, json, { missing = false, open = false, headers = {} } = {}) {
     const root = base();
     if (!root || (!code && !open)) throw offline();
     let res;
@@ -60,7 +60,7 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     try {
       res = await fetchFn(root + pathname, {
         method,
-        headers: { ...(open ? {} : { authorization: `Bearer ${code}` }), accept: 'application/json', 'user-agent': agent, ...(json ? { 'content-type': 'application/json' } : {}) },
+        headers: { ...(open ? {} : { authorization: `Bearer ${code}` }), accept: 'application/json', 'user-agent': agent, ...(json ? { 'content-type': 'application/json' } : {}), ...headers },
         body: json ? JSON.stringify(json) : undefined,
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -115,6 +115,16 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
   }
 
   /**
+   * The same for a free cape, without Hammer+: the account proves who it is with its own Minecraft sign-in (the
+   * shop asks Mojang whose token it is and forgets the token right away).
+   */
+  async function putFreeCape(minecraftToken, cape) {
+    const { status, body } = await call('PUT', '/cape', null, { cape: cape || null }, { open: true, headers: { 'x-minecraft-token': String(minecraftToken ?? '') } });
+    if (status !== 200 && status !== 201) throw refusal(status, body, 'Nie udało się zapisać peleryny w sklepie');
+    return { cape: typeof body.cape === 'string' ? body.cape : null };
+  }
+
+  /**
    * The servers the shop recommends – the raw list of the answer (featured.js checks every field of it).
    * Public: asked without a code. Throws the "not online" ShopError when the shop does not answer with a list.
    */
@@ -134,7 +144,7 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     return body;
   }
 
-  return { base, getCloud, putCloud, putCape, getFeatured, getNews };
+  return { base, getCloud, putCloud, putCape, putFreeCape, getFeatured, getNews };
 }
 
 module.exports = { createShopApi, apiBase, ShopError, OFFLINE_NOTE, MAX_BODY };

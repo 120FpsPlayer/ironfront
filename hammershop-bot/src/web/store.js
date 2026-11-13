@@ -194,11 +194,15 @@ function saveCloud(mc, data) {
   return entry;
 }
 
-/** The account picks a cape (null takes it off). exp: when the Hammer+ code it was set with ends (0 = never). */
-function setCape(mc, cape, exp) {
+/**
+ * The account picks a cape (null takes it off). exp: when the Hammer+ code it was set with ends (0 = never).
+ * free: one of the capes for everybody – shown for as long as it is picked, Hammer+ or not.
+ */
+function setCape(mc, cape, exp, { free = false } = {}) {
   const before = own(state.capes, mc);
   if (cape == null) delete state.capes[mc];
-  else state.capes[mc] = { cape, exp: before && outlasts(before.exp, exp) ? before.exp : exp, updatedAt: Date.now() }; // a longer code seen earlier still counts
+  else if (free) state.capes[mc] = { cape, exp: 0, free: true, updatedAt: Date.now() };
+  else state.capes[mc] = { cape, exp: before && !before.free && outlasts(before.exp, exp) ? before.exp : exp, updatedAt: Date.now() }; // a longer code seen earlier still counts
   save();
   return cape ?? null;
 }
@@ -206,7 +210,7 @@ function setCape(mc, cape, exp) {
 /** The account showed a working Hammer+ code that ends at exp – a renewed code keeps its cape visible. */
 function seenPlus(mc, exp) {
   const entry = own(state.capes, mc);
-  if (entry && outlasts(exp, entry.exp)) {
+  if (entry && !entry.free && outlasts(exp, entry.exp)) {
     entry.exp = exp;
     save();
   }

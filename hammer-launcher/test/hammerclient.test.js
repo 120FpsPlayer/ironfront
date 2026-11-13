@@ -164,9 +164,10 @@ test('the launcher file tells the mod about Hammer+: active until when, the cape
   // A code that never ends: until 0. No cape picked: "".
   await syncHammerClient({ instance: i, client, content, links, plus: { active: true, until: 0 }, cape: '', api: 'https://hammershop.pl/api/launcher' });
   assert.deepEqual([read().plus, read().cape], [{ active: true, until: 0 }, '']);
-  // Without Hammer+ the cape the player once picked is not passed on, and `until` says nothing.
-  await syncHammerClient({ instance: i, client, content, links, plus: { active: false, until: 1765000000 }, cape: 'gold', api: 'https://hammershop.pl/api/launcher' });
-  assert.deepEqual([read().plus, read().cape, read().api], [{ active: false, until: 0 }, '', 'https://hammershop.pl/api/launcher']);
+  // Without Hammer+ `until` says nothing. The cape goes as the services decided (a free one is fine without Hammer+);
+  // the mod itself draws a Hammer+ cape only while its Hammer+ is active.
+  await syncHammerClient({ instance: i, client, content, links, plus: { active: false, until: 1765000000 }, cape: 'ember', api: 'https://hammershop.pl/api/launcher' });
+  assert.deepEqual([read().plus, read().cape, read().api], [{ active: false, until: 0 }, 'ember', 'https://hammershop.pl/api/launcher']);
   // Whatever arrives is checked: only a plain cape id, a whole number, a web address.
   assert.deepEqual(launcherFile({ plus: { active: 'yes', until: '2030' }, cape: '../../x', api: 'file:///etc/passwd' }), { discordUrl: '', shopUrl: '', brand: 'HammerShop', plus: { active: true, until: 0 }, cape: '', api: '' });
   assert.deepEqual(launcherFile(), { discordUrl: '', shopUrl: '', brand: 'HammerShop', plus: { active: false, until: 0 }, cape: '', api: '' });

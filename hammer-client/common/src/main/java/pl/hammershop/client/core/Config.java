@@ -135,6 +135,11 @@ public final class Config {
         return dir == null ? null : dir.resolve("hammerclient").resolve("menu.png");
     }
 
+    /** The player's own cape picture, put there by the launcher (Hammer+): config/hammerclient/cape.png. */
+    public java.nio.file.Path customCapeImage() {
+        return dir == null ? null : dir.resolve("hammerclient").resolve("cape.png");
+    }
+
     public float hudScaleInUse() {
         return Float.isNaN(hudScale) ? 1f : Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, hudScale));
     }

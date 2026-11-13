@@ -332,6 +332,52 @@ test('capes are shown only while the account\'s Hammer+ runs – and come back w
   }
 });
 
+test('the two free capes need no Hammer+: the account proves itself with its Minecraft sign-in, checked at Mojang', async () => {
+  reset();
+  const mc = account();
+  const asked = [];
+  launcher.setProfileFetch(async (url, init) => {
+    asked.push({ url, auth: init.headers.authorization });
+    if (init.headers.authorization === 'Bearer zly-token') return new Response('{}', { status: 401 });
+    return new Response(JSON.stringify({ id: mc, name: 'Darmowy' }), { status: 200, headers: { 'content-type': 'application/json' } });
+  });
+  try {
+    const put = (cape, token = 'dobry-token') => call('PUT', '/api/launcher/cape', { body: { cape }, headers: { 'x-minecraft-token': token } });
+    assert.deepEqual((await put('ember')).body, { cape: 'ember' });
+    assert.deepEqual([asked[0].url, asked[0].auth], ['https://api.minecraftservices.com/minecraft/profile', 'Bearer dobry-token']);
+    assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body.capes, { [mc]: 'ember' });
+    // A free cape stays visible – there is no Hammer+ to run out.
+    const clock = Date.now;
+    try {
+      Date.now = () => clock() + 400 * DAY;
+      assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body.capes, { [mc]: 'ember' });
+    } finally {
+      Date.now = clock;
+    }
+    // The other capes are Hammer+; a token Mojang does not take is refused; the same token is not asked about twice.
+    isError(await put('royal'), 403, /częścią Hammer\+/);
+    isError(await put('smok'), 400, /Nieznana peleryna/);
+    isError(await put('hammer', 'zly-token'), 401, /Mojang nie przyjął/);
+    const before = asked.length;
+    assert.deepEqual((await put('hammer')).body, { cape: 'hammer' });
+    assert.equal(asked.length, before, 'remembered for a while');
+    assert.deepEqual((await put(null)).body, { cape: null });
+    assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body.capes, {});
+    // With Hammer+ a free cape picked earlier does not stretch a Hammer+ cape past the code.
+    const month = plus.issue({ mc, days: 30 });
+    await put('ember');
+    await call('PUT', '/api/launcher/cape', { code: month, body: { cape: 'gold' } });
+    Date.now = () => clock() + 31 * DAY;
+    try {
+      assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body.capes, {}, 'the Hammer+ cape ends with the code');
+    } finally {
+      Date.now = clock;
+    }
+  } finally {
+    launcher.setProfileFetch(null);
+  }
+});
+
 test('cloud data and capes survive a restart (data/web.json)', async () => {
   reset();
   const mc = account();

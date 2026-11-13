@@ -223,7 +223,10 @@ test('services: every Hammer+ setting is refused in the main process until a cod
   assert.throws(() => s.settings.set({ heroStyle: 'stars' }), /Animowane tło/);
   const off = s.settings.set({ accent: 'orange', heroStyle: 'classic', autoBackup: false, hammerCape: '', cloudAuto: false, background: '' });
   assert.deepEqual([off.accent, off.heroStyle, off.autoBackup, off.hammerCape, off.cloudAuto], ['orange', 'classic', false, '', false]);
-  assert.deepEqual(await s.plus.setCape(null), { selected: '', shared: false, note: null }, 'taking the cape off is always allowed');
+  const off2 = await s.plus.setCape(null);
+  assert.deepEqual([off2.selected, off2.shared, off2.note], ['', false, null], 'taking the cape off is always allowed');
+  await assert.rejects(s.plus.setCape('gold'), /Peleryny Hammer\+/, 'a Hammer+ cape needs a code');
+  assert.equal((await s.plus.setCape('hammer')).selected, 'hammer', 'a free cape does not');
 });
 
 test('settings: the Hammer+ values are checked like every other setting', () => {

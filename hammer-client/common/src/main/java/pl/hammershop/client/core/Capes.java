@@ -18,13 +18,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Hammer capes. Your own comes from the launcher (Hammer+). Other players' capes are asked from the shop's server
+ * Hammer capes. Your own comes from the launcher: Hammer and Żar for everybody, the others – and a picture of your
+ * own (config/hammerclient/cape.png, seen only by you) – with Hammer+. Other players' capes are asked from the shop's server
  * by their account id – in small batches, in the background, remembered for a while – so players with Hammer Client
  * see each other's capes. Nothing here can ever stall or break the game: every failure just means "no cape".
  */
 public final class Capes {
     /** The capes that ship with the client (assets/hammerclient/textures/capes/&lt;id&gt;.png). */
     public static final Set<String> KNOWN = Set.of("hammer", "gold", "ember", "royal", "frost", "crimson");
+    /** The capes everybody may wear – no Hammer+ needed. */
+    public static final Set<String> FREE = Set.of("hammer", "ember");
+    /** The player's own picture (Hammer+), drawn as the texture textures/capes/custom.png. */
+    public static final String CUSTOM = "custom";
+
+    private static int[] customSize;
+    private static boolean customTried;
 
     private static final long KEEP_MS = 10 * 60_000L;
     private static final int BATCH = 80;
@@ -48,13 +56,41 @@ public final class Capes {
     public static String of(String uuid, boolean self) {
         Config c = Hammer.config();
         if (c == null || uuid == null) return null;
-        if (self) return Hammer.plus() && KNOWN.contains(c.cape) ? c.cape : null;
+        if (self) return own(c);
         if (!c.otherCapes || c.api.isEmpty()) return null;
         // Only real (online-mode) accounts can own a cape: their ids are version 4.
         if (uuid.length() != 32 || uuid.charAt(12) != '4') return null;
         Entry e = CACHE.get(uuid);
         if ((e == null || System.currentTimeMillis() - e.at > KEEP_MS) && QUEUE.size() < 400 && !PENDING.contains(uuid)) QUEUE.add(uuid);
         return e == null || e.cape.isEmpty() ? null : e.cape;
+    }
+
+    /** Your own cape: a free one always, the others and your own picture only while Hammer+ is active. null = none. */
+    public static String own(Config c) {
+        String id = c.cape;
+        if (id == null || id.isEmpty()) return null;
+        if (FREE.contains(id)) return id;
+        if (!Hammer.plus()) return null;
+        if (CUSTOM.equals(id)) return customReady() ? CUSTOM : null;
+        return KNOWN.contains(id) ? id : null;
+    }
+
+    /** Your own cape picture, loaded once (on the render thread, where capes are asked for) – it must be 2:1. */
+    private static boolean customReady() {
+        if (!customTried) {
+            customTried = true;
+            try {
+                java.nio.file.Path file = Hammer.config().customCapeImage();
+                if (file != null && java.nio.file.Files.isRegularFile(file)) {
+                    int[] size = Hammer.platform().loadImage("capes/" + CUSTOM, file);
+                    customSize = size != null && size[0] == size[1] * 2 ? size : null;
+                    if (size != null && customSize == null) Log.warn("Własna peleryna ma zły rozmiar " + size[0] + "×" + size[1] + " – potrzebny jest układ 2:1 (np. 64×32)", null);
+                }
+            } catch (RuntimeException e) {
+                Log.warn("Nie udało się wczytać własnej peleryny", e);
+            }
+        }
+        return customSize != null;
     }
 
     /** 20 times per second: every two seconds asks about the players seen since the last time. */

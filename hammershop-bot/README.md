@@ -313,7 +313,7 @@ tę listę ze strony bota – zmiany widać w nim najpóźniej po 5 minutach.
 | `GET featured` | Polecane serwery z `/polecane` |
 | `GET news` | Aktualności, komunikat na górze launchera i najnowsza wersja – to, co opublikujesz w [panelu admina](#-strona-launchera-aktualizacje-i-panel-admina). Każde zapytanie launchera liczy się jako jedno uruchomienie (same liczby na dzień i wersję) |
 | `GET cloud` · `PUT cloud` | Synchronizacja danych launchera w chmurze dla konta Hammer+ (do 256 KB; starszy zapis nie nadpisze nowszego) |
-| `GET capes?uuids=…` · `PUT cape` | Peleryny Hammer+ (`hammer`, `gold`, `ember`, `royal`, `frost`, `crimson`) – widoczne u innych graczy, dopóki Hammer+ konta jest ważny |
+| `GET capes?uuids=…` · `PUT cape` | Peleryny Hammer (`hammer`, `gold`, `ember`, `royal`, `frost`, `crimson`) – widoczne u innych graczy z Hammer Client. `hammer` i `ember` są **za darmo**: bez Hammer+ launcher potwierdza konto jego logowaniem Minecraft (nagłówek `X-Minecraft-Token`, sprawdzany w Mojang i niezapisywany) i takie peleryny nie wygasają. Pozostałe są widoczne, dopóki Hammer+ konta jest ważny. Własna peleryna z Hammer+ zostaje na komputerze gracza (widzi ją tylko on) |
 | `PUT presence` | Znaczek **H** / **H+** na liście graczy w grze: mod zgłasza „to konto gra teraz na Hammer Client” (`me`) i pyta o konta z listy (`uuids`, najwyżej 100) → `{ players: { "<uuid>": "h" \| "p" } }`; `p` = konto z aktywnym Hammer+. Kto gra, serwer pamięta 5 minut i tylko w pamięci; pulpit panelu pokazuje, ilu graczy gra teraz |
 
 Chmura i wybór peleryny wymagają kodu Hammer+ (nagłówek `Authorization: Bearer <kod>`) – kontem jest konto Minecraft zapisane

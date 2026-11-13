@@ -88,7 +88,8 @@ function supports(instance, client = NONE) {
  * What the launcher tells the mod in config/hammerclient-launcher.json: the links for its Discord / shop buttons
  * and where Hammer+ stands for the account that is about to play –
  *   plus: { active, until (unix seconds, 0 = never or not active) },
- *   cape: the Hammer+ cape the player picked ("" = none; always "" without Hammer+),
+ *   cape: the Hammer cape the player wears ("" = none) – the services decide what is allowed: the free capes for
+ *         everybody, the others and "custom" (config/hammerclient/cape.png) with Hammer+ (the mod checks again),
  *   api:  the shop API the mod asks about other players' capes ("" = none).
  */
 function launcherFile({ links = {}, plus = null, cape = '', api = '' } = {}) {
@@ -100,7 +101,7 @@ function launcherFile({ links = {}, plus = null, cape = '', api = '' } = {}) {
     shopUrl: https(links.shopUrl),
     brand: links.brand || 'HammerShop',
     plus: { active, until },
-    cape: active && typeof cape === 'string' && /^[a-z0-9_-]{1,32}$/.test(cape) ? cape : '',
+    cape: typeof cape === 'string' && /^[a-z0-9_-]{1,32}$/.test(cape) ? cape : '',
     api: typeof api === 'string' && /^https?:\/\//.test(api) ? api : '',
   };
 }

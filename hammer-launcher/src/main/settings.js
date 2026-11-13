@@ -3,6 +3,9 @@
 /** Launcher settings (settings.json). Every setting has a default, so new versions add settings safely. */
 
 const { readJson, writeJson } = require('./store');
+const { freeCapes } = require('./capes');
+/** Capes everybody may wear – picking one of them needs no Hammer+ (capes.json → free). */
+const FREE_CAPES = freeCapes();
 
 const DEFAULT_SETTINGS = Object.freeze({
   memoryMb: null, // null = picked automatically from the computer's RAM and the number of mods
@@ -37,7 +40,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   heroStyle: 'classic', // classic | aurora | forge | stars – the animated background
   autoBackup: false, // back up the worlds played after each game session
   autoBackupKeep: 5, // automatic backups kept per world (1–20)
-  hammerCape: '', // the Hammer+ cape shown by Hammer Client (an id from capes.json)
+  hammerCape: '', // the cape Hammer Client draws: an id from capes.json, or 'custom' (Hammer+: the player's own picture)
+  capeOn: true, // the cape switch: off = no cape at all (neither Hammer nor Mojang)
+  lastMojangCape: '', // the Mojang cape that was on when the switch went off – it comes back when it goes on
   cloudAuto: false, // cloud copy: fetch at start, send after each game session
 });
 
@@ -57,7 +62,7 @@ const PLUS_ONLY = {
   background: [(v) => !v, 'Własne tło launchera'],
   heroStyle: [(v) => v === 'classic', 'Animowane tło'],
   autoBackup: [(v) => !v, 'Automatyczne kopie światów'],
-  hammerCape: [(v) => !v, 'Peleryny Hammer+'],
+  hammerCape: [(v) => !v || FREE_CAPES.has(v), 'Peleryny Hammer+'],
   cloudAuto: [(v) => !v, 'Automatyczna synchronizacja z chmurą'],
 };
 
@@ -89,7 +94,8 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
   if (HERO_STYLES.includes(patch.heroStyle)) out.heroStyle = patch.heroStyle;
   if ('autoBackupKeep' in patch) out.autoBackupKeep = clampInt(patch.autoBackupKeep, 1, 20, base.autoBackupKeep);
   if (typeof patch.hammerCape === 'string' && /^[a-z0-9_-]{0,32}$/.test(patch.hammerCape)) out.hammerCape = patch.hammerCape;
-  for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto', 'playSummary', 'modUpdateCheck', 'screenshotShareAsk', 'autoUpdate', 'startWithSystem', 'closeToTray']) if (key in patch) out[key] = Boolean(patch[key]);
+  if (typeof patch.lastMojangCape === 'string' && /^[A-Za-z0-9_-]{0,64}$/.test(patch.lastMojangCape)) out.lastMojangCape = patch.lastMojangCape;
+  for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto', 'playSummary', 'modUpdateCheck', 'screenshotShareAsk', 'autoUpdate', 'startWithSystem', 'closeToTray', 'capeOn']) if (key in patch) out[key] = Boolean(patch[key]);
   if (typeof patch.seenVersion === 'string' && /^(\d{1,9}\.\d{1,9}\.\d{1,9}(-[0-9A-Za-z.-]{1,40})?)?$/.test(patch.seenVersion)) out.seenVersion = patch.seenVersion;
   if ('updateNotes' in patch) {
     const n = patch.updateNotes;

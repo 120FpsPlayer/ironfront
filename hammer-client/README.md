@@ -27,7 +27,8 @@ Dodatki dla osób z aktywnym Hammer+ (kod wpisuje się w Hammer Launcherze, któ
 - **style HUD**: Szkło, Neon, Kontur (zwykły „Klasyczny” jest dla wszystkich),
 - **tła menu**: Noc, Zorza, Lawa, Złoto oraz **własny obraz** (wybierany w launcherze),
 - **celownik**: trzy dodatkowe kształty (strzałka, litera T, romb) i animacje (pulsowanie, oddech, dynamiczny),
-- **peleryny Hammer** – widzi je każdy, kto gra na Hammer Client,
+- **peleryny Hammer** – widzi je każdy, kto gra na Hammer Client (Hammer i Żar są za darmo, pozostałe z Hammer+),
+- **własna peleryna** (Hammer+) – obrazek z launchera (`config/hammerclient/cape.png`), widzi ją tylko gracz,
 - **znaczek H+** przed nickiem na liście graczy (zamiast zwykłego H).
 
 Opcje Hammer+ są w panelu oznaczone plusem. Bez Hammer+ są widoczne, ale zablokowane (kłódka) i działają jak ustawienie domyślne; wybór zostaje zapamiętany na później.
@@ -94,7 +95,7 @@ W GitHub Actions mod buduje się sam, a każda wspierana wersja gry jest urucham
 ## Pliki ustawień w instancji
 
 - `config/hammerclient.json` – wybory gracza (moduły, układ HUD, profile, wygląd).
-- `config/hammerclient-launcher.json` – zapisuje go launcher: link do Discorda, sklep, nazwa marki, Hammer+ (`plus.active`, `plus.until`), wybrana peleryna (`cape`) i adres API sklepu (`api`).
+- `config/hammerclient-launcher.json` – zapisuje go launcher: link do Discorda, sklep, nazwa marki, Hammer+ (`plus.active`, `plus.until`), wybrana peleryna (`cape`: id peleryny Hammer albo `custom`) i adres API sklepu (`api`).
 - `config/hammerclient/waypoints.json` – waypointy gracza.
 - `config/hammerclient/menu.png` – własne tło menu (kopiuje je launcher, Hammer+).
 - `config/hammerclient/benchmark.json` – wynik ostatniego testu FPS.

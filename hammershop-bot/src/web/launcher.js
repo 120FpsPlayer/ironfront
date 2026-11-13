@@ -17,6 +17,8 @@
  *   GET capes?uuids=a,b   { capes: { "<uuid>": "<capeId>" } } – public, at most 100 accounts; only accounts whose
  *                         Hammer+ was running when they picked the cape and still is
  *   PUT cape              Bearer, { cape: "<capeId>" | null } → { cape }
+ *                         – or, for the capes everybody may wear (FREE_CAPES), without Hammer+: header
+ *                         X-Minecraft-Token = the account's own Minecraft sign-in, checked with Mojang (never stored)
  *   PUT presence          { me: "<uuid>" | null, uuids: ["<uuid>", …] } → { players: { "<uuid>": "h" | "p" } } – public,
  *                         at most 100 accounts. `me` says "this account is playing on Hammer Client right now" (kept in
  *                         memory for five minutes, never written down); the answer names those of `uuids` who play on
@@ -41,6 +43,8 @@ const releases = require('./releases');
 
 const PREFIX = '/api/launcher/';
 const CAPES = ['hammer', 'gold', 'ember', 'royal', 'frost', 'crimson'];
+const FREE_CAPES = ['hammer', 'ember']; // for everybody – the launcher's capes.json says the same
+const MOJANG_PROFILE = 'https://api.minecraftservices.com/minecraft/profile';
 const CLOUD_LIMIT = 256 * 1024;
 const CAPE_LIMIT = 4 * 1024;
 const DRAIN_LIMIT = 4 * 1024 * 1024; // how much of a too-big upload is still read (and thrown away) so the sender gets the answer
@@ -129,6 +133,29 @@ function account(req, res) {
   return payload;
 }
 
+// ── Free capes without Hammer+: whose Minecraft sign-in is it? Asked at Mojang; only a hash of the token is kept, for a while. ──
+const signedIn = new Map(); // sha256(token) → { mc, until }
+let profileFetch = (...a) => fetch(...a);
+const setProfileFetch = (fn) => (profileFetch = fn ?? ((...a) => fetch(...a)));
+async function minecraftAccount(token) {
+  const key = crypto.createHash('sha256').update(token).digest('hex');
+  const known = signedIn.get(key);
+  if (known && known.until > Date.now()) return known.mc;
+  let res;
+  try {
+    res = await profileFetch(MOJANG_PROFILE, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+  } catch {
+    throw problem(503, 'Nie udało się sprawdzić konta Minecraft – spróbuj ponownie za chwilę.');
+  }
+  if (res.status === 401 || res.status === 403) throw problem(401, 'Mojang nie przyjął logowania tego konta – zaloguj się ponownie w launcherze.');
+  const body = await res.json().catch(() => null);
+  const mc = res.ok ? plus.normalizeUuid(body?.id) : null;
+  if (!mc) throw problem(503, 'Nie udało się sprawdzić konta Minecraft – spróbuj ponownie za chwilę.');
+  if (signedIn.size > 5000) signedIn.clear();
+  signedIn.set(key, { mc, until: Date.now() + 10 * 60_000 });
+  return mc;
+}
+
 /** Which methods each path under /api/launcher/ takes. */
 const ROUTES = { health: ['GET'], featured: ['GET'], news: ['GET'], capes: ['GET'], presence: ['PUT'], cloud: ['GET', 'PUT'], cape: ['PUT'] };
 
@@ -191,7 +218,7 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
   // The launcher calls from its own window, not from a page of this site – and never with a cookie: the code is in a header.
   res.setHeader('access-control-allow-origin', '*');
   if (method === 'OPTIONS') {
-    return send(res, 204, '', { 'access-control-allow-methods': 'GET, PUT, OPTIONS', 'access-control-allow-headers': 'authorization, content-type', 'access-control-max-age': '86400' });
+    return send(res, 204, '', { 'access-control-allow-methods': 'GET, PUT, OPTIONS', 'access-control-allow-headers': 'authorization, content-type, x-minecraft-token', 'access-control-max-age': '86400' });
   }
   if (limited(req, 'launcher', 120)) return fail(res, 429, SLOW_DOWN);
   if (!Object.hasOwn(ROUTES, route)) return fail(res, 404, 'Nie znaleziono');
@@ -233,6 +260,18 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
     return send(res, 200, { players }, { 'cache-control': 'no-store' });
   }
 
+  // A free cape without Hammer+: the account's own Minecraft sign-in proves whose cape it is.
+  const minecraftToken = String(req.headers['x-minecraft-token'] ?? '').trim();
+  if (route === 'cape' && minecraftToken && !req.headers.authorization) {
+    if (limited(req, 'launcher-write', 30)) return fail(res, 429, SLOW_DOWN);
+    if (minecraftToken.length > 4096) return fail(res, 400, 'Nieprawidłowe logowanie Minecraft.');
+    const body = await jsonBody(req, CAPE_LIMIT);
+    if (body.cape !== null && !CAPES.includes(body.cape)) return fail(res, 400, `Nieznana peleryna. Do wyboru: ${CAPES.join(', ')} – albo null, żeby ją zdjąć.`);
+    if (body.cape !== null && !FREE_CAPES.includes(body.cape)) return fail(res, 403, 'Ta peleryna jest częścią Hammer+ – wpisz swój kod w Hammer Launcherze: Hammer+ → „Mam kod”.');
+    const mc = await minecraftAccount(minecraftToken);
+    return send(res, 200, { cape: store.setCape(mc, body.cape, 0, { free: true }) });
+  }
+
   // Everything below belongs to one Hammer+ account.
   const who = account(req, res);
 
@@ -247,7 +286,7 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
   if (route === 'cape') {
     const body = await jsonBody(req, CAPE_LIMIT);
     if (body.cape !== null && !CAPES.includes(body.cape)) return fail(res, 400, `Nieznana peleryna. Do wyboru: ${CAPES.join(', ')} – albo null, żeby ją zdjąć.`);
-    return send(res, 200, { cape: store.setCape(who.mc, body.cape, who.exp) });
+    return send(res, 200, { cape: store.setCape(who.mc, body.cape, who.exp, { free: FREE_CAPES.includes(body.cape) }) });
   }
 
   const body = await jsonBody(req, CLOUD_LIMIT);
@@ -341,4 +380,4 @@ function join(req, res, url, { send }) {
   return send(res, 200, joinHtml(url), { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': JOIN_CSP });
 }
 
-module.exports = { api, join, joinHtml, feed, launcherVersion, onlineNow, CAPES, CLOUD_LIMIT, MAX_UUIDS, PRESENCE_MS, PREFIX };
+module.exports = { api, join, joinHtml, feed, launcherVersion, onlineNow, setProfileFetch, CAPES, FREE_CAPES, CLOUD_LIMIT, MAX_UUIDS, PRESENCE_MS, PREFIX };

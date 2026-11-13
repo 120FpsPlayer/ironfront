@@ -659,6 +659,14 @@ button.chip.plus-chip:hover{background:rgba(var(--gold-glow),.2);border-color:rg
 .hcape b{font-size:12.5px;margin-top:3px}
 .hcape small{color:var(--dim);font-size:11px;height:24px;line-height:24px}
 .hcape .chip{height:24px}
+.hcape-pic{position:relative;display:grid;place-items:center}
+.hcape.locked .hcape-pic>:first-child{filter:brightness(.38) saturate(.5)}
+.hcape.locked b{color:var(--dim)}
+.hcape-lock{position:absolute;inset:0;display:grid;place-items:center;color:#ffd166;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8))}
+.hcape-lock svg{width:22px;height:22px}
+.hcape.off:not(.locked) .hcape-pic>:first-child{filter:saturate(.6) brightness(.8)}
+.cape-switch{display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12.5px;color:var(--dim);font-weight:600}
+.cape-own-acts{margin-top:10px;gap:8px}
 
 /* the long list of cards on the right scrolls past the skin, which stays in view */
 .skin-card{position:sticky;top:26px}

@@ -40,8 +40,8 @@ const { createSkins, MAX_LIBRARY, PLUS_LIBRARY } = require('./skins');
 const { createPlus, cleanUuid } = require('./plus');
 const { createShopApi } = require('./shopapi');
 const cloudSync = require('./cloud');
-const { createBackgrounds, createMenuBackground, EXTENSIONS } = require('./background');
-const { loadCapes } = require('./capes');
+const { createBackgrounds, createMenuBackground, EXTENSIONS, pngSize } = require('./background');
+const { loadCapes, CUSTOM: CUSTOM_CAPE } = require('./capes');
 const autoBackup = require('./autobackup');
 const officialGame = require('./official');
 const recipes = require('./recipe');
@@ -382,7 +382,13 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
   async function syncClient(instance) {
     const invite = await community.invite().catch(() => null);
     const st = plus.status();
-    const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand }, plus: { active: st.active, until: st.until }, cape: settings.get().hammerCape, api: shop.base() });
+    const cape = wornCape();
+    const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand }, plus: { active: st.active, until: st.until }, cape, api: shop.base() });
+    try {
+      deliverCustomCape(instance, cape === CUSTOM_CAPE && res.active);
+    } catch (err) {
+      emit('toast', { kind: 'warning', text: `Nie udało się przygotować Twojej peleryny (${err.code ?? err.message}). Gra uruchomi się bez niej.` });
+    }
     try {
       menuBackground.deliver(instance, { active: st.active && res.active });
     } catch (err) {
@@ -807,35 +813,134 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     await Promise.allSettled([...sessionWork]);
   }
 
+  /* ── Peleryny: the Hammer capes (two for everybody, the rest and one's own picture with Hammer+) and the switch ── */
+  const CUSTOM_FILE = path.join(root, 'capes', 'custom.png');
+  const CUSTOM_MAX = 512 * 1024;
+  const hasCustomCape = () => fs.existsSync(CUSTOM_FILE);
+  const capeInfo = (id) => capes.find((c) => c.id === id) ?? null;
+  /** May this cape be worn right now? Free capes always; the others and one's own picture while Hammer+ runs. */
+  function capeAllowed(id) {
+    if (!id) return true;
+    if (capeInfo(id)?.free) return true;
+    if (!plus.status().active) return false;
+    return id === CUSTOM_CAPE ? hasCustomCape() : Boolean(capeInfo(id));
+  }
+  /** The Hammer cape the game draws: '' when the switch is off or the cape is not allowed (any more). */
+  function wornCape() {
+    const s = settings.get();
+    if (s.capeOn === false) return '';
+    return capeAllowed(s.hammerCape) ? s.hammerCape : '';
+  }
+  /** One's own cape goes into the instance as config/hammerclient/cape.png – and out again when it is not worn. */
+  function deliverCustomCape(instance, on) {
+    const target = path.join(instance.dir, 'config', 'hammerclient', 'cape.png');
+    if (on && hasCustomCape()) {
+      const mine = fs.readFileSync(CUSTOM_FILE);
+      if (fs.existsSync(target) && fs.readFileSync(target).equals(mine)) return 'kept';
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, mine);
+      return 'copied';
+    }
+    if (!fs.existsSync(target)) return 'none';
+    fs.rmSync(target, { force: true });
+    return 'removed';
+  }
+  const customDataUrl = () => {
+    try {
+      return hasCustomCape() ? `data:image/png;base64,${fs.readFileSync(CUSTOM_FILE).toString('base64')}` : null;
+    } catch {
+      return null;
+    }
+  };
+  /** Everything the Peleryny card shows. */
+  function capeState() {
+    const s = settings.get();
+    return {
+      capes: capes.map((c) => ({ ...c })),
+      selected: capeAllowed(s.hammerCape) ? s.hammerCape : '',
+      on: s.capeOn !== false,
+      lastMojang: s.lastMojangCape || '',
+      custom: customDataUrl(),
+      plus: plus.status().active,
+    };
+  }
+
   /**
-   * Best effort: tells the shop which Hammer+ cape the player wears, so the games of other players can show it.
-   * { shared, note } – note says why not (the shop is not online yet). Never throws.
+   * Best effort: tells the shop which cape the player wears, so the games of other players can show it. With
+   * Hammer+ the code proves the account; a free cape without Hammer+ is proven with the account's own Minecraft
+   * sign-in. One's own picture is never sent (only the player sees it). { shared, note } – never throws.
    */
   async function shareCape() {
+    const cape = wornCape();
+    const sent = cape === CUSTOM_CAPE ? '' : cape;
+    const ownNote = cape === CUSTOM_CAPE ? 'Własną pelerynę widzisz tylko Ty – inni gracze z Hammer Client nie widzą wtedy żadnej peleryny Hammer.' : null;
     const st = plus.status();
     const code = st.active ? plus.token() : null;
-    if (!code) return { shared: false, note: null };
-    const mc = cleanUuid(st.account.id);
-    const cape = settings.get().hammerCape;
-    if (cloud.state(mc).capeSent === cape) return { shared: true, note: null };
     try {
-      await shop.putCape(code, cape || null);
-      cloud.remember(mc, { capeSent: cape });
-      return { shared: true, note: null };
+      if (code) {
+        const mc = cleanUuid(st.account.id);
+        if (cloud.state(mc).capeSent !== sent) {
+          await shop.putCape(code, sent || null);
+          cloud.remember(mc, { capeSent: sent });
+        }
+        return { shared: true, note: ownNote };
+      }
+      if (sent && !capeInfo(sent)?.free) return { shared: false, note: null };
+      // No Hammer+: the account's own sign-in instead – without one (not signed in, no connection) nothing is said.
+      const auth = await Promise.resolve()
+        .then(() => accounts.launchAuth?.(settings.get().selectedAccount))
+        .catch(() => null);
+      if (!auth?.accessToken || !auth?.id) return { shared: false, note: null };
+      const mc = cleanUuid(auth.id);
+      if (cloud.state(mc).capeSent === sent) return { shared: true, note: ownNote };
+      await shop.putFreeCape(auth.accessToken, sent || null);
+      cloud.remember(mc, { capeSent: sent });
+      return { shared: true, note: ownNote };
     } catch (err) {
       return { shared: false, note: err?.offline ? 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' : String(err?.message ?? err) };
     }
   }
 
-  /** Peleryny Hammer+: picks a cape from capes.json ('' or null = none). Taking it off is always allowed. */
+  /** Picks a cape: an id from capes.json, 'custom' (one's own picture) or ''/null for none. Picking one switches capes on. */
   async function setHammerCape(id) {
     const cape = id == null ? '' : String(id);
-    if (cape) {
-      plus.need('Peleryny Hammer+');
-      if (!capes.some((c) => c.id === cape)) throw new Error('Nie ma takiej peleryny – odśwież zakładkę.');
+    if (cape && !capeAllowed(cape)) {
+      if (cape === CUSTOM_CAPE && !hasCustomCape() && plus.status().active) throw new Error('Najpierw wgraj własną pelerynę.');
+      if (cape !== CUSTOM_CAPE && !capeInfo(cape)) throw new Error('Nie ma takiej peleryny – odśwież zakładkę.');
+      plus.need(cape === CUSTOM_CAPE ? 'Własna peleryna' : 'Peleryny Hammer+');
     }
-    settings.set({ hammerCape: cape });
-    return { selected: cape, ...(await shareCape()) };
+    settings.set({ hammerCape: cape, ...(cape ? { capeOn: true } : {}) });
+    return { ...capeState(), ...(await shareCape()) };
+  }
+
+  /** The cape switch. lastMojang: the Mojang cape to bring back when it goes on again ('' = none). */
+  async function setCapeOn(on, lastMojang) {
+    settings.set({ capeOn: Boolean(on), ...(typeof lastMojang === 'string' ? { lastMojangCape: lastMojang } : {}) });
+    return { ...capeState(), ...(await shareCape()) };
+  }
+
+  /** Hammer+: one's own cape – a PNG in the cape layout (2:1, 64×32 up to 2048×1024), at most 512 KB. null = cancelled. */
+  async function pickCustomCape() {
+    plus.need('Własna peleryna');
+    const file = await pickFile?.({ title: 'Wybierz obraz peleryny (PNG 64×32)', filters: [{ name: 'Peleryna (PNG)', extensions: ['png'] }] });
+    if (!file) return null;
+    const buf = fs.readFileSync(file);
+    if (buf.length > CUSTOM_MAX) throw new Error('Plik peleryny jest za duży – najwyżej 512 KB.');
+    const size = pngSize(buf);
+    if (!size) throw new Error('To nie jest obraz PNG. Peleryna musi być plikiem PNG w układzie peleryny Minecrafta (np. 64×32).');
+    const { width, height } = size;
+    if (width !== height * 2 || width < 64 || width > 2048 || width % 64 !== 0) throw new Error(`Peleryna musi mieć układ peleryny Minecrafta: 64×32 albo jego wielokrotność (np. 128×64, 512×256). Ten obraz ma ${width}×${height}.`);
+    fs.mkdirSync(path.dirname(CUSTOM_FILE), { recursive: true });
+    fs.writeFileSync(CUSTOM_FILE, buf);
+    settings.set({ hammerCape: CUSTOM_CAPE, capeOn: true });
+    return { ...capeState(), ...(await shareCape()) };
+  }
+
+  /** Removing one's own cape is always allowed; the copies in the instances go at their next start. */
+  async function removeCustomCape() {
+    fs.rmSync(CUSTOM_FILE, { force: true });
+    if (settings.get().hammerCape === CUSTOM_CAPE) settings.set({ hammerCape: '' });
+    return { ...capeState(), ...(await shareCape()) };
   }
 
   /**
@@ -1194,9 +1299,12 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       remove: () => (plus.remove(), plusChanged()),
       /** Looks again (an account was added or removed) and tells the window when something changed. */
       refresh: () => plusChanged(),
-      /** Peleryny Hammer+: { capes: [{ id, name }], selected } – selected is '' without Hammer+. */
-      capes: () => ({ capes: capes.map((c) => ({ ...c })), selected: plus.status().active ? settings.get().hammerCape : '' }),
+      /** Peleryny: { capes: [{ id, name, free }], selected, on, lastMojang, custom (data URL | null), plus }. */
+      capes: () => capeState(),
       setCape: (id) => setHammerCape(id),
+      setCapeOn: (on, lastMojang) => setCapeOn(on, lastMojang),
+      pickCape: () => pickCustomCape(),
+      removeCape: () => removeCustomCape(),
     },
     theme: {
       /** The player's own background picture as a file:// address – null without one (or without Hammer+). */

@@ -95,6 +95,7 @@
   "hammerclient.cape.royal": "Royal",
   "hammerclient.cape.frost": "Frost",
   "hammerclient.cape.crimson": "Crimson",
+  "hammerclient.cape.custom": "Your own",
   "hammerclient.waypoints.title": "Waypoints",
   "hammerclient.waypoints.sub": "%s  ·  %s  ·  %s of %s",
   "hammerclient.waypoints.name": "Name, e.g. Home",

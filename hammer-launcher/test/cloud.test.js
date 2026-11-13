@@ -24,12 +24,20 @@ function fakeShop({ codes = [] } = {}) {
   shop.fetch = async (url, init = {}) => {
     const method = init.method ?? 'GET';
     const code = String(init.headers?.authorization ?? '').replace('Bearer ', '');
-    shop.calls.push({ method, url: String(url), code, body: init.body ? JSON.parse(init.body) : undefined });
+    const minecraft = init.headers?.['x-minecraft-token'] ?? null;
+    shop.calls.push({ method, url: String(url), code, ...(minecraft ? { minecraft } : {}), body: init.body ? JSON.parse(init.body) : undefined });
     if (shop.mode === 'down') throw new TypeError('fetch failed');
     if (shop.mode === 'html') return new Response('<html><body>Domena zaparkowana</body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
     if (shop.mode === 'error') return json(500, { error: 'Błąd serwera.' });
     if (shop.mode === 'gone') return new Response('Cannot GET /api/launcher/cloud', { status: 404 });
     if (!String(url).startsWith(`${BASE}/`)) return new Response('?', { status: 404 });
+    if (minecraft && `${method} ${String(url).slice(BASE.length)}` === 'PUT /cape') {
+      // A free cape without Hammer+: the Minecraft sign-in proves the account.
+      const cape = JSON.parse(init.body).cape;
+      if (cape !== null && !['hammer', 'ember'].includes(cape)) return json(403, { error: 'Ta peleryna wymaga Hammer+.' });
+      shop.capes.set(`mc:${minecraft}`, cape);
+      return json(200, { cape });
+    }
     if (!shop.codes.has(code)) return json(401, { error: 'Ten kod Hammer+ został wycofany.' });
     const route = `${method} ${String(url).slice(BASE.length)}`;
     const stored = shop.copies.get(code);
@@ -481,23 +489,31 @@ test('services: automatic sync – at the start and after a game session – nev
 test('services: the Hammer+ cape is stored in the launcher and shared with the shop when it is online', async () => {
   const shop = fakeShop();
   const { s, code } = services(shop);
-  assert.deepEqual(s.plus.capes(), { capes: [{ id: 'hammer', name: 'Hammer' }, { id: 'gold', name: 'Złota' }, { id: 'ember', name: 'Żar' }, { id: 'royal', name: 'Królewska' }, { id: 'frost', name: 'Mróz' }, { id: 'crimson', name: 'Karmazyn' }], selected: '' });
+  const said = (r) => ({ selected: r.selected, shared: r.shared, note: r.note });
+  assert.deepEqual(s.plus.capes(), {
+    capes: [{ id: 'hammer', name: 'Hammer', free: true }, { id: 'gold', name: 'Złota', free: false }, { id: 'ember', name: 'Żar', free: true }, { id: 'royal', name: 'Królewska', free: false }, { id: 'frost', name: 'Mróz', free: false }, { id: 'crimson', name: 'Karmazyn', free: false }],
+    selected: '', on: true, lastMojang: '', custom: null, plus: true,
+  });
   await assert.rejects(s.plus.setCape('dragon'), /Nie ma takiej peleryny/);
   shop.mode = 'down';
-  assert.deepEqual(await s.plus.setCape('gold'), { selected: 'gold', shared: false, note: 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' });
+  assert.deepEqual(said(await s.plus.setCape('gold')), { selected: 'gold', shared: false, note: 'Inni gracze zobaczą ją, gdy sklep HammerShop będzie online.' });
   assert.equal(s.settings.get().hammerCape, 'gold', 'the choice is kept although the shop did not hear it');
   assert.equal(s.plus.capes().selected, 'gold');
   shop.mode = 'ok';
-  assert.deepEqual(await s.plus.setCape('frost'), { selected: 'frost', shared: true, note: null });
+  assert.deepEqual(said(await s.plus.setCape('frost')), { selected: 'frost', shared: true, note: null });
   assert.deepEqual([shop.calls.at(-1).method, shop.calls.at(-1).url, shop.calls.at(-1).code, shop.calls.at(-1).body], ['PUT', `${BASE}/cape`, code, { cape: 'frost' }]);
   const n = shop.calls.length;
-  assert.deepEqual(await s.plus.setCape('frost'), { selected: 'frost', shared: true, note: null });
+  assert.deepEqual(said(await s.plus.setCape('frost')), { selected: 'frost', shared: true, note: null });
   assert.equal(shop.calls.length, n, 'the shop is not told twice');
-  assert.deepEqual(await s.plus.setCape(null), { selected: '', shared: true, note: null });
+  assert.deepEqual(said(await s.plus.setCape(null)), { selected: '', shared: true, note: null });
   assert.equal(shop.capes.get(code), null);
-  // Without Hammer+ the picked cape counts as none.
-  await s.plus.setCape('ember');
+  // Without Hammer+ a Hammer+ cape counts as none – a free one stays on.
+  await s.plus.setCape('royal');
   s.plus.remove();
   assert.equal(s.plus.capes().selected, '');
-  assert.equal(s.settings.get().hammerCape, 'ember', 'it comes back with the next code');
+  assert.equal(s.settings.get().hammerCape, 'royal', 'it comes back with the next code');
+  s.plus.activate(code);
+  await s.plus.setCape('ember');
+  s.plus.remove();
+  assert.equal(s.plus.capes().selected, 'ember', 'Żar is free');
 });

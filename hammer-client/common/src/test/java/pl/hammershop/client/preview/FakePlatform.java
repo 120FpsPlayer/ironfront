@@ -58,7 +58,15 @@ public final class FakePlatform implements Platform, Game {
     public boolean inGameFocus() { return shown == null; }
     public boolean entityDead(int entityId) { return dead.contains(entityId); }
     public void turnPlayer(float yawDelta) { turned += yawDelta; }
-    public int[] loadImage(String name, Path file) { return null; }
+    /** What loadImage answers ({width, height}); null = no picture. The names asked for are kept in loaded. */
+    public int[] imageSize = null;
+    public final java.util.List<String> loaded = new java.util.ArrayList<>();
+
+    @Override
+    public int[] loadImage(String name, Path file) {
+        loaded.add(name);
+        return imageSize;
+    }
     public final java.util.Set<Integer> dead = new java.util.HashSet<>();
     public float turned;
     public float health = 18;

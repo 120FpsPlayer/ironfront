@@ -418,7 +418,15 @@ class PreviewTest {
         String offline = "cccccccccccc3ccccccccccccccccccc";
         cfg.cape = "gold";
         cfg.plusActive = false;
-        assertEquals(null, Hammer.cape(me, true), "no cape without Hammer+");
+        assertEquals(null, Hammer.cape(me, true), "a Hammer+ cape needs Hammer+");
+        cfg.cape = "ember";
+        assertEquals("ember", Hammer.cape(me, true), "Żar is for everybody");
+        cfg.cape = "hammer";
+        assertEquals("hammer", Hammer.cape(me, true), "and so is Hammer");
+        // One's own picture (Hammer+): loaded once from config/hammerclient/cape.png as textures/capes/custom.png.
+        cfg.cape = "custom";
+        assertEquals(null, Hammer.cape(me, true), "one's own cape needs Hammer+");
+        cfg.cape = "gold";
         cfg.plusActive = true;
         assertEquals("gold", Hammer.cape(me, true));
         cfg.plusUntil = System.currentTimeMillis() / 1000 - 10;
@@ -426,6 +434,21 @@ class PreviewTest {
         cfg.plusUntil = 0;
         cfg.cape = "nope";
         assertEquals(null, Hammer.cape(me, true), "unknown cape");
+        try {
+            java.nio.file.Path capeFile = cfg.customCapeImage();
+            java.nio.file.Files.createDirectories(capeFile.getParent());
+            java.nio.file.Files.write(capeFile, new byte[] {1, 2, 3});
+            platform.imageSize = new int[] {128, 64};
+            cfg.cape = "custom";
+            assertEquals("custom", Hammer.cape(me, true));
+            assertEquals("custom", Hammer.cape(me, true));
+            assertEquals(1, platform.loaded.stream().filter("capes/custom"::equals).count(), "the picture is loaded once");
+            java.nio.file.Files.delete(capeFile);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        } finally {
+            platform.imageSize = null;
+        }
         cfg.cape = "";
         cfg.plusActive = false;
 

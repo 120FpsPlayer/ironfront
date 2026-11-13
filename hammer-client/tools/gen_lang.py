@@ -85,6 +85,7 @@ T = {
     'plus.custom_missing': ('obraz wybierzesz w launcherze (Hammer+)', 'pick the picture in the launcher (Hammer+)'),
     'cape.hammer': ('Hammer', 'Hammer'), 'cape.gold': ('Złota', 'Gold'), 'cape.ember': ('Żar', 'Ember'),
     'cape.royal': ('Królewska', 'Royal'), 'cape.frost': ('Mróz', 'Frost'), 'cape.crimson': ('Karmazyn', 'Crimson'),
+    'cape.custom': ('Własna', 'Your own'),
 
     # waypoints
     'waypoints.title': ('Waypointy', 'Waypoints'),

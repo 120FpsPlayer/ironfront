@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Peleryny Hammer+ – the capes Hammer Client draws for players with Hammer+. The list and the pictures ship with
- * the launcher (src/renderer/assets/capes: capes.json = [{ id, name, nameEn }] and <id>.png, the standard cape
- * layout); the mod carries the same ones. The launcher only stores which one the player picked.
+ * Peleryny Hammer – the capes Hammer Client draws. The list and the pictures ship with the launcher
+ * (src/renderer/assets/capes: capes.json = [{ id, name, nameEn, free }] and <id>.png, the standard cape layout); the
+ * mod carries the same ones. `free` capes are for everybody, the rest (and a cape of one's own) need Hammer+.
+ * The launcher only stores which one the player picked.
  */
 
 const fs = require('node:fs');
@@ -11,7 +12,7 @@ const path = require('node:path');
 
 const FILE = path.join(__dirname, '..', 'renderer', 'assets', 'capes', 'capes.json');
 
-/** [{ id, name }] from capes.json – an empty list when the file is missing or broken. */
+/** [{ id, name, free }] from capes.json – an empty list when the file is missing or broken. */
 function loadCapes(file = FILE) {
   let raw;
   try {
@@ -26,9 +27,12 @@ function loadCapes(file = FILE) {
     const id = entry?.id;
     if (typeof id !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(id) || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 40) : id });
+    out.push({ id, name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 40) : id, free: entry.free === true });
   }
   return out;
 }
 
-module.exports = { loadCapes, FILE };
+/** The ids everybody may wear without Hammer+. */
+const freeCapes = (list = loadCapes()) => new Set(list.filter((c) => c.free).map((c) => c.id));
+
+module.exports = { loadCapes, freeCapes, FILE, CUSTOM: 'custom' };
