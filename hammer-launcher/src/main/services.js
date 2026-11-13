@@ -363,7 +363,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         details: `Minecraft ${instance.mcVersion}${instance.loader !== 'vanilla' ? ` · ${LOADER_NAMES[instance.loader]}` : ''}`,
         state: `Gra przez ${config.name ?? 'Hammer Launcher'}`,
         timestamps: { start: Date.now() },
-        assets: { large_image: 'logo', large_text: config.name ?? 'Hammer Launcher' },
+        // The launcher icon straight from the website – nothing has to be uploaded to the Discord application.
+        assets: { large_image: /^https:\/\//.test(config.website ?? '') ? `${config.website.replace(/\/+$/, '')}/assets/launcher-icon.png` : 'logo', large_text: config.name ?? 'Hammer Launcher' },
         ...(buttons.length ? { buttons } : {}),
       });
       return { ok: true, memoryMb: options.maxMemory, versionId: prepared.versionId, worldOpened: openWorld ? Boolean(options.quickPlaySingleplayer) : undefined };
