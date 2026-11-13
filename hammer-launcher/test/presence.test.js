@@ -43,3 +43,8 @@ test('Discord status: without a website the picture uploaded to the Discord appl
   const [activity] = await startWith({ name: 'Hammer Launcher', website: '' });
   assert.equal(activity.assets.large_image, 'logo');
 });
+
+test('launcher.config.json: the Discord application ID is a real one (otherwise Discord only shows "Minecraft")', () => {
+  const config = require('../launcher.config.json');
+  assert.match(config.discordClientId, /^\d{17,20}$/);
+});
