@@ -218,7 +218,7 @@ test('launcher releases: only the owner publishes; latest.yml, the download and 
   assert.match(channelText('launcher'), /Hammer Launcher 2\.6\.0[\s\S]*Pierwsza beta\./);
 
   const yml = (await call('GET', '/updates/latest.yml')).body;
-  assert.equal(yml, `version: 2.6.0\nfiles:\n  - url: Hammer-Launcher-Setup-2.6.0.exe\n    sha512: ${sha512(v1)}\n    size: ${v1.length}\npath: Hammer-Launcher-Setup-2.6.0.exe\nsha512: ${sha512(v1)}\nreleaseDate: '${new Date(webStore.currentRelease().at).toISOString()}'\n`);
+  assert.equal(yml, `version: 2.6.0\nfiles:\n  - url: Hammer-Launcher-Setup-2.6.0.exe\n    sha512: ${sha512(v1)}\n    size: ${v1.length}\npath: Hammer-Launcher-Setup-2.6.0.exe\nsha512: ${sha512(v1)}\nreleaseDate: '${new Date(webStore.currentRelease().at).toISOString()}'\nreleaseNotes: |2-\n  Pierwsza beta.\n  Auto-aktualizacje.\n`, '„Co nowego” travels with the update');
   const info = (await feed()).release;
   assert.deepEqual([info.version, info.notes, info.minVersion, info.size, info.url], ['2.6.0', 'Pierwsza beta.\nAuto-aktualizacje.', null, v1.length, `${base}/download`]);
 
@@ -435,6 +435,10 @@ test('Hammer+ bought by card: the nick is checked first, the code comes right af
   assert.match(dm, /Hammer\+ kupiony/);
   assert.match(dm, /HP1\.[\w-]+\.[\w-]+/);
   assert.equal(plus.verify(/HP1\.[\w-]+\.[\w-]+/.exec(dm)[0]).mc, MC.Steve);
+  // One code: the page shows exactly the code from the DM – every time it is opened – and the panel knows whose it is.
+  assert.equal(/HP1\.[\w-]+\.[\w-]+/.exec(dm)[0], order.plus.code);
+  assert.equal((await myOrder(order.id)).plus.code, order.plus.code);
+  assert.equal((await admin('POST', 'plus/check', { body: { code: order.plus.code } })).body.nick, 'Steve');
   const grants = (await admin('GET', 'plus')).body.grants;
   assert.deepEqual([grants[0].nick, grants[0].source, grants[0].by], ['Steve', 'website', BUYER.id]);
 
@@ -447,6 +451,10 @@ test('Hammer+ bought by card: the nick is checked first, the code comes right af
   assert.equal(plus.verify((await myOrder(forever.orderId)).plus.code).exp, 0);
   assert.equal((await myOrder(forever.orderId)).plus.until, 0);
   assert.equal((await admin('GET', 'overview')).body.plus.active, 2); // Notch (from the panel) and Steve
+  // With Hammer+ forever there is nothing more to buy: refused before any payment page.
+  const again = await buyPlus('p30', 'Steve');
+  assert.equal(again.status, 409);
+  assert.match(again.body.error, /ma już Hammer\+ na zawsze/);
 
   const rows = (await admin('GET', 'orders')).body.orders;
   assert.deepEqual([rows[0].kind, rows[0].plusNick, rows[0].user.name, rows[0].status], ['plus', 'Steve', 'Kupiec', 'paid']);

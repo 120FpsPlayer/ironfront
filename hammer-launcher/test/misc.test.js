@@ -113,11 +113,18 @@ test('accounts: login stores encrypted tokens, the game token is reused and refr
   const reloaded = createAccounts({ file, crypt, AuthClass: FakeAuth });
   assert.equal((await reloaded.launchAuth('uuid-1')).accessToken, 'mc-token-2');
   assert.deepEqual(FakeAuth.refreshed, ['refresh-1']);
-  FakeAuth.refreshFail = { ts: 'error.auth.xboxLive' };
   const d2 = JSON.parse(fs.readFileSync(file, 'utf8'));
   d2.accounts[0].exp = 0;
   fs.writeFileSync(file, JSON.stringify(d2));
   const expired = createAccounts({ file, crypt, AuthClass: FakeAuth });
+  // No internet, or Xbox Live busy for a moment: the login still holds – no new sign-in is demanded.
+  FakeAuth.refreshFail = new TypeError('fetch failed');
+  await assert.rejects(expired.launchAuth('uuid-1'), /sprawdź internet/);
+  FakeAuth.refreshFail = { ts: 'error.auth.xboxLive' };
+  await assert.rejects(expired.launchAuth('uuid-1'), /Nie udało się połączyć z Xbox Live/);
+  assert.equal(expired.list()[0].needsLogin, false);
+  // Microsoft refuses the stored login (it was revoked, the password changed): only then a new sign-in.
+  FakeAuth.refreshFail = { ts: 'error.auth.microsoft' };
   await assert.rejects(expired.launchAuth('uuid-1'), /wygasła – zaloguj się ponownie/);
   assert.equal(expired.list()[0].needsLogin, true);
   FakeAuth.refreshFail = null;

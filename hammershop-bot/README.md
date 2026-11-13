@@ -276,7 +276,7 @@ Bot prowadzi też stronę internetową Twojego sklepu HammerShop – w tym samym
 - Kupujący, którego jeszcze nie ma na serwerze, dostaje swój ticket, gdy tylko dołączy.
 - Karty produktów pokazują prawdziwy opis i czas dostawy (**⚡ Dostawa natychmiastowa** dla produktów z plikami albo tekstem). Strona płatności Stripe mówi, co dalej dzieje się z zamówieniem.
 - Po zapłacie kupujący widzi **potwierdzenie zakupu**: numer zamówienia (z przyciskiem Kopiuj), kupione produkty, kwotę, ticket z przyciskiem prowadzącym prosto do niego i informację, czy zamówienie jest już dostarczone. To samo potwierdzenie przychodzi **na DM** na Discordzie (z przyciskami *Otwórz ticket* i *Moje zamówienia*). **Moje zamówienia** pokazuje każde zamówienie.
-- Każda płatność trafia na kanał z logami. Przyciski Pomoc korzystają z `DISCORD_INVITE_URL` albo ze stałego zaproszenia, które bot tworzy sam.
+- Każda płatność trafia na kanał z logami. Przyciski Pomoc (i karta Discorda w Hammer Launcherze) korzystają z `DISCORD_INVITE_URL` albo ze stałego zaproszenia, które bot tworzy sam. To zaproszenie bot sprawdza przy starcie i co pół godziny – gdy Discord go już nie przyjmuje (np. przebudowa serwera usunęła jego kanał), tworzy nowe. Własne zaproszenie z `DISCORD_INVITE_URL` nigdy nie jest podmieniane; gdy przestanie działać, bot pisze o tym w konsoli.
 
 **Konfiguracja:**
 1. `.env`: ustaw `PUBLIC_URL` (adres, który otwierają ludzie) i `DISCORD_CLIENT_SECRET` (Developer Portal → OAuth2). W sekcji Redirects dodaj `<PUBLIC_URL>/api/shop/auth/callback`.

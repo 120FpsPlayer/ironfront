@@ -63,3 +63,27 @@ test('loader keys of the .mrpack format', () => {
   assert.deepEqual(loaderOf({ minecraft: '1.21.1', 'quilt-loader': '0.27.1' }), { loader: 'quilt', loaderVersion: '0.27.1' });
   assert.deepEqual(loaderOf({ minecraft: '1.21.1' }), { loader: 'vanilla', loaderVersion: null });
 });
+
+test('one pack file that cannot be fetched stops the rest: nothing more is downloaded and no folder is left behind', async () => {
+  const root = tmpDir();
+  const paths = createPaths(root);
+  fs.mkdirSync(paths.instances, { recursive: true });
+  const instances = createInstances(paths);
+  const files = Array.from({ length: 24 }, (_, i) => ({ path: `mods/m${i}.jar`, downloads: [`https://cdn.modrinth.com/m${i}.jar`], env: { client: 'required' } }));
+  const zip = new AdmZip();
+  zip.addFile('modrinth.index.json', Buffer.from(JSON.stringify({ game: 'minecraft', name: 'Pack', dependencies: { minecraft: '1.21.1', 'fabric-loader': '0.16.9' }, files })));
+  const file = path.join(root, 'p.mrpack');
+  zip.writeZip(file);
+  let calls = 0;
+  const fetchFn = async (url) => {
+    calls += 1;
+    if (url.includes('/m0.jar')) return { ok: false, status: 404, headers: new Headers() };
+    await new Promise((r) => setTimeout(r, 30));
+    return { ok: true, status: 200, headers: new Headers(), body: null, arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+  await assert.rejects(createModpacks({ modrinth: {}, instances, fetchFn }).installFile(file), /HTTP 404/);
+  await new Promise((r) => setTimeout(r, 200));
+  assert.ok(calls <= 6, `only the downloads already started (${calls})`);
+  assert.deepEqual(instances.list(), []);
+  assert.deepEqual(fs.readdirSync(paths.instances).filter((d) => !d.startsWith('.') && d !== 'instances.json'), [], 'no orphan folder');
+});

@@ -415,7 +415,7 @@
       rows.textContent = '';
       r.plans.forEach(function (p) { rows.appendChild(planRow(p)); });
       $('plans-form').querySelectorAll('input,button').forEach(function (n) { n.disabled = !r.canEdit; });
-      $('plans-note').textContent = r.canEdit ? (r.plans.length ? '' : 'Sprzedaż na stronie jest wyłączona – dodaj pierwszy plan.') : 'Cennik zmienia tylko właściciel sklepu.';
+      $('plans-note').textContent = r.canEdit ? (r.plans.length ? '' : 'Sprzedaż na stronie jest wyłączona – dodaj pierwszy plan.') : 'Cennik zmienia tylko właściciel serwera.';
       var list = $('grants-list');
       list.textContent = '';
       r.grants.forEach(function (g) {

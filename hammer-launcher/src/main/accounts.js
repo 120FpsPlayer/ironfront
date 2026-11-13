@@ -22,6 +22,20 @@ const ERRORS = {
   'error.auth.minecraft.entitlements': 'Nie udało się sprawdzić, czy konto ma Minecrafta.',
 };
 
+/** No connection (offline, DNS, a dropped line) – not a reason to sign in again: the stored login still holds. */
+const OFFLINE = 'Nie udało się połączyć z serwerami Microsoft – sprawdź internet i spróbuj ponownie.';
+function isNetworkError(err) {
+  if (err instanceof TypeError) return true; // fetch: "fetch failed"
+  const text = `${err?.message ?? ''} ${err?.code ?? ''} ${err?.cause?.code ?? ''} ${err?.cause?.message ?? ''}`;
+  return /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|UND_ERR|socket hang up|network/i.test(text);
+}
+/** Microsoft or Xbox said no to this account – only then must the player sign in again (a busy service is not that). */
+const AUTH_REJECTED = ['error.auth.microsoft', 'error.auth.xsts', 'error.auth.minecraft.profile'];
+const rejected = (err) => {
+  const code = typeof err === 'string' ? err : err?.ts ?? err?.name ?? '';
+  return typeof code === 'string' && AUTH_REJECTED.some((k) => code === k || code.startsWith(`${k}.`));
+};
+
 /** msmc errors are strings ("error.gui.closed") or { ts: 'error.auth…' } – Polish text for the window. */
 function loginError(err) {
   const code = typeof err === 'string' ? err : err?.ts ?? err?.name ?? err?.message;
@@ -127,9 +141,11 @@ function createAccounts({ file, crypt, config = {}, AuthClass, windowProperties 
         const info = store(mc, xbox.save());
         return { id: info.id, name: info.name, accessToken: mc.mcToken };
       } catch (err) {
+        // Offline or a busy Microsoft / Xbox service: the next try may just work – the account keeps its login.
+        if (isNetworkError(err) || !rejected(err)) throw new Error(isNetworkError(err) ? OFFLINE : loginError(err), { cause: err });
         account.needsLogin = true;
         save();
-        throw new Error(`Sesja konta ${account.name} wygasła – zaloguj się ponownie w zakładce Konta. (${loginError(err)})`);
+        throw new Error(`Sesja konta ${account.name} wygasła – zaloguj się ponownie w zakładce Konta.`, { cause: err });
       }
     },
   };
@@ -170,4 +186,4 @@ function createCrypt({ safeStorage, keyFile, readKey, writeKey }) {
   };
 }
 
-module.exports = { createAccounts, createCrypt, loginError, ERRORS };
+module.exports = { createAccounts, createCrypt, loginError, isNetworkError, ERRORS, OFFLINE };

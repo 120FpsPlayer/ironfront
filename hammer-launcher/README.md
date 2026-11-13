@@ -235,7 +235,11 @@ Jeśli strona nie odpowiada, launcher pokazuje wbudowane porady i działa dalej 
 
 ## Aktualizacje launchera
 
-Zainstalowany launcher (instalator Windows) **aktualizuje się sam – z serwera właściciela, nie z GitHuba**: kilka sekund po starcie i potem co 4 godziny sprawdza, czy jest nowa wersja, pobiera ją w tle (tylko to, co się zmieniło) i instaluje, gdy go zamkniesz. Na ekranie głównym i w *Ustawienia → Aktualizacje launchera* pojawia się wtedy „Aktualizacja … jest gotowa” z przyciskiem **Uruchom ponownie i zaktualizuj** i opisem zmian („Co nowego”). Launcher nigdy nie uruchamia się ponownie, gdy działa gra.
+Zainstalowany launcher (instalator Windows) **aktualizuje się sam – z serwera właściciela, nie z GitHuba**: kilka sekund po starcie i potem co godzinę sprawdza, czy jest nowa wersja, i pobiera ją w tle (tylko to, co się zmieniło). **Gra nigdy nie jest przerywana** – nic się nie instaluje, dopóki działa gra uruchomiona z launchera.
+
+- **W tle, nawet gdy launcher nie jest otwarty** (Windows): launcher startuje razem z systemem jako ikona w zasobniku obok zegara (bez okna), a krzyżyk okna chowa go do zasobnika zamiast zamykać. Gdy aktualizacja się pobierze, a okno jest zamknięte i nikt nie gra, instaluje się sama po cichu i launcher wraca do zasobnika. Grasz w coś innego (np. w Fortnite)? Aktualizacja i tak się zainstaluje. Całkiem zamkniesz launcher z menu ikony w zasobniku. Oba zachowania wyłączysz w *Ustawienia → Aktualizacje launchera* („Uruchamiaj razem z Windows”, „Zamknięcie okna zostawia launcher w tle”); deinstalacja usuwa wpis autostartu.
+- **Okno otwarte**: ekran *Graj* pokazuje „Nowa wersja … jest gotowa” z przyciskiem **Zaktualizuj teraz** i opisem zmian. Można też nic nie robić – zainstaluje się, gdy zamkniesz okno.
+- **Po aktualizacji**: przy pierwszym otwarciu okna na środku ekranu *Graj* pojawia się okno **Co nowego** z wersją i opisem zmian (jednorazowo). Opis to pole „Co nowego” z panelu admina – idzie w `latest.yml` razem z aktualizacją, więc launcher pokaże go nawet bez połączenia ze stroną.
 
 - *Ustawienia → Aktualizacje launchera*: przełącznik **Aktualizuj automatycznie** (wyłączony = launcher tylko mówi o nowej wersji i daje przycisk **Pobierz i zainstaluj**), aktualna wersja, stan i **Sprawdź teraz**.
 - **Wymagana aktualizacja**: gdy właściciel oznaczy starsze wersje jako niewspierane, launcher pokazuje okno „Wymagana aktualizacja” i nie pozwala grać, dopóki się nie zaktualizuje. Bez połączenia ze stroną nic nie jest blokowane.

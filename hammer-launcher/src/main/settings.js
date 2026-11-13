@@ -25,6 +25,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   screenshotShareAsk: true, // ask before a screenshot is uploaded for a link („Nie pytaj ponownie” switches it off)
   language: 'auto', // the launcher's language: auto (the system's: Polish for pl, English otherwise) | pl | en – see i18n.js
   autoUpdate: true, // „Aktualizuj automatycznie”: fetch a new launcher version in the background (off = only tell that there is one)
+  startWithSystem: true, // Windows: the launcher starts with the system, in the tray – updates arrive before it is even opened
+  closeToTray: true, // Windows: the window's close button leaves the launcher in the tray (it updates itself there)
+  seenVersion: '', // the launcher version whose „Co nowego” the player has seen ('' = not known yet)
+  updateNotes: null, // { version, notes }: „Co nowego” of the update that was downloaded – shown after it is installed
   closedAlert: '', // the id of the shop's message the player closed – it stays closed until the shop sends another one
   newsSeenAt: 0, // the time (`at`) of the newest news item the home screen has shown – newer ones get the „nowe” dot
   // Hammer+ (the values below only work while Hammer+ is active – see PLUS_ONLY)
@@ -85,7 +89,12 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
   if (HERO_STYLES.includes(patch.heroStyle)) out.heroStyle = patch.heroStyle;
   if ('autoBackupKeep' in patch) out.autoBackupKeep = clampInt(patch.autoBackupKeep, 1, 20, base.autoBackupKeep);
   if (typeof patch.hammerCape === 'string' && /^[a-z0-9_-]{0,32}$/.test(patch.hammerCape)) out.hammerCape = patch.hammerCape;
-  for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto', 'playSummary', 'modUpdateCheck', 'screenshotShareAsk', 'autoUpdate']) if (key in patch) out[key] = Boolean(patch[key]);
+  for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto', 'playSummary', 'modUpdateCheck', 'screenshotShareAsk', 'autoUpdate', 'startWithSystem', 'closeToTray']) if (key in patch) out[key] = Boolean(patch[key]);
+  if (typeof patch.seenVersion === 'string' && /^(\d{1,9}\.\d{1,9}\.\d{1,9}(-[0-9A-Za-z.-]{1,40})?)?$/.test(patch.seenVersion)) out.seenVersion = patch.seenVersion;
+  if ('updateNotes' in patch) {
+    const n = patch.updateNotes;
+    out.updateNotes = n && typeof n === 'object' && typeof n.version === 'string' && /^\d{1,9}\.\d{1,9}\.\d{1,9}(-[0-9A-Za-z.-]{1,40})?$/.test(n.version) ? { version: n.version, notes: typeof n.notes === 'string' ? n.notes.slice(0, 4000) : null } : null;
+  }
   if (typeof patch.closedAlert === 'string' && /^[A-Za-z0-9_.:-]{0,64}$/.test(patch.closedAlert)) out.closedAlert = patch.closedAlert;
   if ('newsSeenAt' in patch) out.newsSeenAt = clampInt(patch.newsSeenAt, 0, 1e14, base.newsSeenAt);
   if ('concurrentDownloads' in patch) out.concurrentDownloads = clampInt(patch.concurrentDownloads, 1, 64, base.concurrentDownloads);

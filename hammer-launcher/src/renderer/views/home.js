@@ -245,6 +245,7 @@
     const featured = HS.inviteUi.featuredStrip();
     // A new version of the launcher: found, downloading, ready to install (or, where it cannot update itself, where to get it).
     const selfUpdate = HS.updateUi.homeCard();
+    HS.updateUi.whatsNew(); // right after an update: „Co nowego” in a window, once
     const hero = h(
       'section.hero',
       HS.fxLayer(), // the animated background picked in Ustawienia → Wygląd (Hammer+); empty for the classic look

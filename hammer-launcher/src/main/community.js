@@ -11,6 +11,8 @@
 
 const UA = 'Hammer-Launcher/1.0 (hammershop.pl)';
 const TTL = 3 * 60 * 1000;
+/** The card's name until Discord says the server's own (and when it can't be asked): the launcher's server. */
+const SERVER_NAME = 'Hammer Launcher';
 
 /** "https://discord.gg/abc", "discord.com/invite/abc" or "abc" → "abc". */
 function inviteCode(value) {
@@ -78,7 +80,7 @@ function createCommunity({ config, fetchFn = (...a) => fetch(...a), now = () => 
         return {
           code,
           url,
-          name: g.name ?? config.brand ?? 'Discord',
+          name: g.name ?? SERVER_NAME,
           description: g.description ?? null,
           iconUrl: cdn('icons', g.id, g.icon, 128),
           bannerUrl: cdn('banners', g.id, g.banner, 600) ?? cdn('splashes', g.id, g.splash, 600),
@@ -89,8 +91,11 @@ function createCommunity({ config, fetchFn = (...a) => fetch(...a), now = () => 
         };
       });
     } catch (err) {
-      // 404 = the invite expired or was deleted – say so, so the owner can fix the config.
-      return { code, url, name: config.brand ?? 'Discord', description: null, iconUrl: null, bannerUrl: null, members: null, online: null, live: false, invalid: err.status === 404 };
+      // 404 = the invite expired or was deleted. The bot replaces a dead one on its own (it checks every half hour),
+      // so the website is asked again next time instead of keeping the dead invite for minutes.
+      const invalid = err.status === 404;
+      if (invalid && !inviteCode(config.discordInvite)) cache.delete('store');
+      return { code, url, name: SERVER_NAME, description: null, iconUrl: null, bannerUrl: null, members: null, online: null, live: false, invalid };
     }
   }
 

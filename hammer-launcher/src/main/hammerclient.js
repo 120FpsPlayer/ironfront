@@ -127,10 +127,18 @@ async function syncHammerClient({ instance, client = NONE, content, links = {}, 
     return { active: false, reason: 'missing' };
   }
   fs.mkdirSync(mods, { recursive: true });
-  if (!fs.existsSync(target) || sha1File(target) !== sha1File(jar)) fs.copyFileSync(jar, target);
-
+  // Fabric API first: the mod needs it, and Fabric refuses to start a game with a mod whose dependency is missing.
+  // When it cannot be fetched (Modrinth offline or busy), the game starts without Hammer Client instead.
   const hasApi = fs.readdirSync(mods).some((f) => /^fabric-api.*\.jar$/i.test(f) || /^qfapi.*\.jar$/i.test(f));
-  if (!hasApi) await content.install(instance, { projectId: 'fabric-api', type: 'mod' });
+  if (!hasApi) {
+    try {
+      await content.install(instance, { projectId: 'fabric-api', type: 'mod' });
+    } catch (err) {
+      fs.rmSync(target, { force: true });
+      throw new Error(`nie udało się pobrać Fabric API (${err?.message ?? err}) – gra uruchomi się bez Hammer Client`, { cause: err });
+    }
+  }
+  if (!fs.existsSync(target) || sha1File(target) !== sha1File(jar)) fs.copyFileSync(jar, target);
 
   const configDir = path.join(instance.dir, 'config');
   fs.mkdirSync(configDir, { recursive: true });

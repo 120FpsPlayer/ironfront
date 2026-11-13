@@ -26,6 +26,7 @@ function mockFetch(routes) {
     return new Response('not found', { status: 404 });
   };
   fn.calls = calls;
+  fn.routes = routes; // a test may add answers later (unshift → they win)
   return fn;
 }
 

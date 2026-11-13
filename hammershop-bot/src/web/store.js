@@ -69,18 +69,40 @@ function flush() {
   fs.writeFileSync(tmp, JSON.stringify(state, null, 1));
   fs.renameSync(tmp, FILE());
 }
+let failures = 0;
+/**
+ * The timed write. A file that cannot be written (a full disk, no permission) must not take the bot down: the data
+ * stays in memory, the console says why, and the write is tried again a little later.
+ */
+function flushSoon() {
+  try {
+    flush();
+    if (failures) console.log('💾 Baza strony (web.json) znowu się zapisuje.');
+    failures = 0;
+  } catch (err) {
+    failures += 1;
+    if (failures === 1 || failures % 20 === 0) console.warn(`💾 Nie udało się zapisać bazy strony (web.json): ${err.code ?? ''} ${err.message} – ${err.code === 'ENOSPC' ? 'na dysku serwera zabrakło miejsca' : 'sprawdź dysk i uprawnienia'}. Dane są w pamięci, próbuję ponownie.`);
+    try {
+      fs.rmSync(`${FILE()}.${process.pid}.tmp`, { force: true });
+    } catch {
+      // nothing to clean up
+    }
+    timer = setTimeout(flushSoon, Math.min(60_000, 2000 * failures));
+    timer.unref?.();
+  }
+}
 let slow = false; // the waiting write is one of the unhurried ones (counters)
 const save = () => {
   if (timer && !slow) return;
   clearTimeout(timer);
   slow = false;
-  timer = setTimeout(flush, 200);
+  timer = setTimeout(flushSoon, 200);
 };
 /** For counters that change with every launcher start: written within half a minute, not on every request. */
 const saveLater = () => {
   if (timer) return;
   slow = true;
-  timer = setTimeout(flush, 30_000);
+  timer = setTimeout(flushSoon, 30_000);
   timer.unref?.();
 };
 

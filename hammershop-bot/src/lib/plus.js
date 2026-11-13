@@ -42,7 +42,7 @@ class PlusError extends Error {
 
 const NO_KEY = 'Hammer+ nie jest jeszcze skonfigurowany – brakuje klucza podpisu (HAMMER_PLUS_PRIVATE_KEY).';
 const MALFORMED = 'To nie jest kod Hammer+. Kod zaczyna się od „HP1.” – wklej go w całości, bez spacji.';
-const BAD_SIGNATURE = 'Ten kod Hammer+ jest nieprawidłowy – podpis się nie zgadza (kod został zmieniony albo nie pochodzi z HammerShop).';
+const BAD_SIGNATURE = `Ten kod Hammer+ jest nieprawidłowy – podpis się nie zgadza (kod został zmieniony albo nie pochodzi z ${require('./config').brand?.name ?? 'HammerShop'}).`;
 const EXPIRED = 'Ten kod Hammer+ już wygasł.';
 
 // ───────────── The key ─────────────
@@ -85,7 +85,11 @@ function normalizeUuid(value) {
 }
 
 /** A new code for the Minecraft account mc, valid for days (0 = never expires). → the code. */
-function issue({ mc, days = 0, now = Date.now() } = {}) {
+/**
+ * A new code. `id` (16 hex digits) is given when an already issued code is shown again – the same id, account, times
+ * and key give exactly the same code (Ed25519 signatures do not change), so the website and the DM show one code.
+ */
+function issue({ mc, days = 0, now = Date.now(), id = null } = {}) {
   const pair = keys();
   if (!pair) throw new PlusError(NO_KEY, 'nokey');
   const uuid = normalizeUuid(mc);
@@ -93,7 +97,8 @@ function issue({ mc, days = 0, now = Date.now() } = {}) {
   if (!Number.isInteger(days) || days < 0 || days > MAX_DAYS) throw new PlusError(`Liczba dni musi być liczbą całkowitą od 0 (na zawsze) do ${MAX_DAYS}.`, 'input');
   const iat = Math.floor(now / 1000);
   // The key order is part of the format.
-  const json = JSON.stringify({ id: crypto.randomBytes(8).toString('hex'), mc: uuid, exp: days ? iat + days * DAY : 0, iat });
+  const codeId = typeof id === 'string' && /^[0-9a-f]{16}$/.test(id) ? id : crypto.randomBytes(8).toString('hex');
+  const json = JSON.stringify({ id: codeId, mc: uuid, exp: days ? iat + days * DAY : 0, iat });
   const signed = `${PREFIX}.${Buffer.from(json, 'utf8').toString('base64url')}`;
   return `${signed}.${crypto.sign(null, Buffer.from(signed, 'ascii'), pair.privateKey).toString('base64url')}`;
 }

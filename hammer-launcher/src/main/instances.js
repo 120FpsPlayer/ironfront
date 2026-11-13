@@ -47,7 +47,7 @@ function clean(data, base = {}) {
 }
 
 /** `t` puts the launcher's own words in names it makes up ("(kopia)") into the player's language – see i18n.js. */
-function createInstances(paths, { t = (text) => text } = {}) {
+function createInstances(paths, { t = (text) => text, lang = () => 'pl_pl' } = {}) {
   const dir = (id) => path.join(paths.instances, id);
   const file = (id) => path.join(dir(id), 'instance.json');
   const exists = (id) => /^[a-z0-9-]{1,48}$/.test(String(id)) && fs.existsSync(file(id));
@@ -80,9 +80,10 @@ function createInstances(paths, { t = (text) => text } = {}) {
     let id = slug(fields.name);
     while (fs.existsSync(dir(id))) id = `${slug(fields.name).slice(0, 25)}-${crypto.randomBytes(3).toString('hex')}`;
     for (const sub of Object.values(CONTENT_DIRS)) fs.mkdirSync(path.join(dir(id), sub), { recursive: true });
-    // New worlds start with the game in Polish (the player can change it in the game).
+    // The game starts in the launcher's language – Polish, or English in the English launcher (changeable in the game).
     // onboardAccessibility:false – no narrator onboarding screen before the main menu on the first start.
-    fs.writeFileSync(path.join(dir(id), 'options.txt'), 'lang:pl_pl\nonboardAccessibility:false\n');
+    const gameLang = /^[a-z]{2}_[a-z]{2}$/.test(String(lang?.() ?? '')) ? lang() : 'pl_pl';
+    fs.writeFileSync(path.join(dir(id), 'options.txt'), `lang:${gameLang}\nonboardAccessibility:false\n`);
     const instance = { ...fields, id, createdAt: Date.now(), lastPlayed: null, playTimeMs: 0, versionId: null, installedFor: null, ...(data.modpack ? { modpack: data.modpack } : {}) };
     return save(instance);
   }

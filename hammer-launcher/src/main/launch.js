@@ -160,7 +160,8 @@ function newestCrashReport(dir, since) {
 /**
  * Keeps track of running games. Events:
  *   log    { instanceId, line, stream }
- *   state  { instanceId, state: 'starting' | 'running' | 'exited' | 'crashed', crash?, code?, playedMs?, benchmark? }
+ *   state  { instanceId, state: 'starting' | 'running' | 'exited' | 'crashed', crash?, code?, playedMs?, benchmark?, stopped? }
+ *          (stopped: true – the player closed the game with ZATRZYMAJ; that is an ordinary end, not a crash)
  */
 class GameManager extends EventEmitter {
   constructor({ launchFn = launch, setPriority = os.setPriority } = {}) {
@@ -209,13 +210,15 @@ class GameManager extends EventEmitter {
     watcher.on('minecraft-window-ready', () => this.emit('state', { instanceId: instance.id, state: 'running', ...mark }));
     const finish = (code, signal, crashReport = '') => {
       if (!this.running.has(instance.id)) return;
+      const stopped = Boolean(this.running.get(instance.id).stopping);
       this.running.delete(instance.id);
       this.lastLogs ??= new Map();
       this.lastLogs.set(instance.id, logs);
       const report = crashReport || (code !== 0 ? newestCrashReport(instance.dir, startedAt) : '');
-      const crash = analyze({ code, signal, crashReport: report, log: logs.slice(-400).map((l) => l.line).join('\n') });
+      // A game the player stopped is killed (on Windows its exit code is 1): an ordinary end, not a crash.
+      const crash = stopped ? null : analyze({ code, signal, crashReport: report, log: logs.slice(-400).map((l) => l.line).join('\n') });
       const playedMs = Date.now() - startedAt;
-      this.emit('state', { instanceId: instance.id, state: crash && code !== 0 ? 'crashed' : 'exited', code, crash, playedMs, ...mark });
+      this.emit('state', { instanceId: instance.id, state: crash && code !== 0 ? 'crashed' : 'exited', code, crash, playedMs, ...(stopped ? { stopped: true } : {}), ...mark });
       onExit?.({ code, crash, playedMs });
     };
     watcher.on('minecraft-exit', ({ code, signal, crashReport }) => finish(code, signal, crashReport));
@@ -229,6 +232,7 @@ class GameManager extends EventEmitter {
   stop(instanceId) {
     const run = this.running.get(instanceId);
     if (!run) return false;
+    run.stopping = true;
     run.process.kill();
     return true;
   }

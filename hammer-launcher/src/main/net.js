@@ -70,6 +70,27 @@ async function download(url, dest, { sha1, fetchFn = fetch, maxBytes = 1024 * 10
   const tmp = `${dest}.part`;
   const hash = crypto.createHash('sha1');
   const out = fs.createWriteStream(tmp);
+  // A file that cannot be written (a full disk, an antivirus holding it, a folder in its place) is an error of this
+  // download – never an uncaught exception of the launcher, and never a wait for 'drain' that does not come.
+  let writeError = null;
+  const failed = new Promise((_, reject) => {
+    out.once('error', (err) => {
+      writeError = err;
+      reject(err);
+    });
+  });
+  failed.catch(() => {});
+  const diskError = (err) => {
+    const code = err?.code;
+    const name = path.basename(dest);
+    if (code === 'ENOSPC') return new Error(`Na dysku zabrakło miejsca – nie da się zapisać pliku ${name}. Zwolnij trochę miejsca i spróbuj ponownie.`, { cause: err });
+    if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') return new Error(`Nie da się zapisać pliku ${name} – używa go inny program (np. antywirus). Spróbuj ponownie za chwilę.`, { cause: err });
+    return new Error(`Nie udało się zapisać pliku ${name}: ${err?.message ?? err}`, { cause: err });
+  };
+  const write = async (chunk) => {
+    if (writeError) throw writeError;
+    if (!out.write(chunk)) await Promise.race([new Promise((r) => out.once('drain', r)), failed]);
+  };
   let bytes = 0;
   try {
     if (res.body?.getReader) {
@@ -80,25 +101,29 @@ async function download(url, dest, { sha1, fetchFn = fetch, maxBytes = 1024 * 10
         bytes += value.length;
         if (bytes > maxBytes) throw new Error(`Plik jest za duży: ${path.basename(dest)}`);
         hash.update(value);
-        if (!out.write(value)) await new Promise((r) => out.once('drain', r));
+        await write(value);
         onProgress?.(bytes, total);
       }
     } else {
       const buf = Buffer.from(await res.arrayBuffer());
       bytes = buf.length;
       hash.update(buf);
-      out.write(buf);
+      await write(buf);
       onProgress?.(bytes, total);
     }
-    await new Promise((resolve, reject) => out.end((err) => (err ? reject(err) : resolve())));
+    await Promise.race([new Promise((resolve, reject) => out.end((err) => (err ? reject(err) : resolve()))), failed]);
     const got = hash.digest('hex');
     if (sha1 && got !== sha1.toLowerCase()) throw new Error(`Uszkodzony plik (zła suma kontrolna): ${path.basename(dest)}`);
     fs.renameSync(tmp, dest);
     return { path: dest, bytes, sha1: got };
   } catch (err) {
     out.destroy();
-    fs.rmSync(tmp, { force: true });
-    throw err;
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // (a folder in its place – it stays; the error below says what happened)
+    }
+    throw err === writeError || (err?.code && writeError === null && ['ENOSPC', 'EPERM', 'EBUSY', 'EACCES', 'EISDIR'].includes(err.code)) ? diskError(err) : err;
   }
 }
 

@@ -182,7 +182,7 @@ test('tickets: a bug report opens like any ticket; the shop\'s commands are gone
 });
 
 test('the website: the front page is the launcher\'s, with the H and the name Hammer Launcher – no shop page', async () => {
-  for (const page of ['/', '/launcher', '/cokolwiek']) {
+  for (const page of ['/', '/launcher', '/cokolwiek', '/launcher.html', '/index.html']) {
     const res = await fetch(base + page);
     const html = await res.text();
     assert.equal(res.status, 200, page);
@@ -192,9 +192,16 @@ test('the website: the front page is the launcher\'s, with the H and the name Ha
     assert.doesNotMatch(html, /HammerShop|<!--|Sklep/, page);
     assert.match(res.headers.get('content-security-policy'), /script-src 'self'/);
   }
-  const adminPage = await (await fetch(`${base}/admin`)).text();
-  assert.match(adminPage, /<title>Panel admina – Hammer Launcher<\/title>/);
-  assert.doesNotMatch(adminPage, /HammerShop|<!--shop|<!--launcher/);
+  for (const page of ['/admin', '/admin.html']) {
+    const adminPage = await (await fetch(base + page)).text();
+    assert.match(adminPage, /<title>Panel admina – Hammer Launcher<\/title>/, page);
+    assert.doesNotMatch(adminPage, /HammerShop|<!--shop|<!--launcher/, page);
+  }
+  // „Join this server” links go out to people: the launcher's own name and H there too.
+  const join = await (await fetch(`${base}/join?server=mc.example.pl&name=Serwer`)).text();
+  assert.match(join, /class="logo h"[^>]*>.*Hammer<b>Launcher<\/b>/);
+  assert.match(join, /launcher-icon\.png/);
+  assert.doesNotMatch(join, /HammerShop|Hammer<b>Shop/);
   assert.equal((await fetch(`${base}/assets/launcher-h.png`)).status, 200);
   assert.equal((await fetch(`${base}/assets/nie-ma.png`)).status, 404);
   assert.deepEqual((await (await fetch(`${base}/api/shop/store`)).json()).products, [], 'nothing is sold as a shop product');

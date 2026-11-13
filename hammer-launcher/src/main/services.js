@@ -22,7 +22,7 @@ const { createOptimizer, writeOptionsPreset, setGpuPreference, recommend, perfor
 const { createProgress } = require('./progress');
 const { ping } = require('./serverping');
 const { createNewsFeed, alertVisible, closeAlert, newestAt } = require('./news');
-const { createSelfUpdate, updatesBase } = require('./selfupdate');
+const { createSelfUpdate, updatesBase, isNewer } = require('./selfupdate');
 const { APP_VERSION, userAgent } = require('./net');
 const { systemInfo } = require('./system');
 const { majorOf, javaMajorFor, detectJavaMajor } = require('./java');
@@ -67,11 +67,13 @@ const { createScreenshotShare } = require('./screenshare');
  * the updater only where it can; `updateLog(line)` writes the updater's log. Without them the launcher only
  * tells that a newer version exists.
  */
-function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance, t = (text) => text, appVersion = APP_VERSION, updater = null, updateSupport = { supported: false, reason: 'dev' }, updateLog = () => {} }) {
+function createServices({ root, config, accounts, emit = () => {}, fetchFn = (...a) => fetch(...a), presence = null, gpuInfo = () => null, launchFn, clientDir = null, clientJar = null, trash = null, versionsApi = versions, officialDir = null, pickFile = null, saveFile = null, convertImage = null, capes = loadCapes(), now = () => Date.now(), prepareFn = prepareInstance, t = (text) => text, gameLanguage = () => 'pl_pl', appVersion = APP_VERSION, updater = null, updateSupport = { supported: false, reason: 'dev' }, updateLog = () => {} }) {
   const paths = createPaths(root);
   fs.mkdirSync(paths.instances, { recursive: true });
+  // A launcher that has been used before (it has its settings) – told apart from a fresh install for „Co nowego”.
+  const usedBefore = fs.existsSync(paths.settings);
   const store = createSettings(paths.settings);
-  const instances = createInstances(paths, { t });
+  const instances = createInstances(paths, { t, lang: gameLanguage });
 
   /* ── Hammer+ ── */
   const allAccounts = () => accounts.list?.() ?? [];
@@ -172,7 +174,11 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     publicKey: config.updatePublicKey,
     gameRunning: () => games.running.size > 0 || busy.size > 0,
     autoUpdate: () => store.get().autoUpdate !== false,
-    onChange: (state) => emit('selfupdate:state', state),
+    onChange: (state) => {
+      // „Co nowego” of a downloaded update is kept: after it installs it is shown once, even when the shop is offline then.
+      if (state.status === 'ready' && state.latest && state.notes && store.get().updateNotes?.version !== state.latest) store.set({ updateNotes: { version: state.latest, notes: state.notes } });
+      emit('selfupdate:state', state);
+    },
     log: updateLog,
     now,
     userAgent: userAgent(appVersion),
@@ -423,7 +429,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         payload = { instanceId: instance.id, ok: true, run: fpsTest.cleanRun(run), previous: null, comparison: null }; // the history could not be saved – the result still counts
       }
     } else {
-      const stopped = e.state === 'crashed' && e.code == null; // stopped from the launcher
+      const stopped = Boolean(e.stopped) || (e.state === 'crashed' && e.code == null); // stopped from the launcher
       payload = { instanceId: instance.id, ok: false, reason: taken.reason, reasons: fpsTest.failureReasons(taken.reason, { crashed: e.state === 'crashed' && !stopped, stopped }) };
     }
     emit('benchmark:done', payload);
@@ -881,6 +887,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     paths,
     settings,
     instances,
+    /** A change that the game – running, or still being prepared – or a world backup would trip over is refused. */
+    whenIdle: (id, what) => idle(id, what),
     modrinth,
     content,
     modpacks,
@@ -934,6 +942,31 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         return selfUpdate.update();
       },
       installOnQuit: (exitCode) => selfUpdate.installOnQuit(exitCode),
+      /** The launcher sits in the tray with no window: the update installs quietly – after what the last game session left running. */
+      installQuietly: async () => {
+        await afterSessions();
+        return selfUpdate.installQuietly();
+      },
+      /**
+       * „Co nowego” right after the launcher updated itself: { version, from, notes } once, then null. The notes are
+       * the ones kept when the update was downloaded, else the shop's for this version. A fresh install has nothing to tell.
+       */
+      whatsNew: () => {
+        const s = store.get();
+        if (!s.seenVersion && !usedBefore) {
+          store.set({ seenVersion: appVersion });
+          return null;
+        }
+        if (s.seenVersion && !isNewer(appVersion, s.seenVersion)) return null;
+        const release = feed.peek().release;
+        const notes = (s.updateNotes?.version === appVersion ? s.updateNotes.notes : null) || (release?.version === appVersion ? release.notes : null) || null;
+        return { version: appVersion, from: s.seenVersion || null, notes };
+      },
+      /** The window „Co nowego” was closed: not shown again for this version. */
+      seen: () => {
+        store.set({ seenVersion: appVersion, updateNotes: null });
+        return true;
+      },
       start: () => selfUpdate.start(),
       stop: () => selfUpdate.stop(),
     },

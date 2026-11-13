@@ -43,6 +43,14 @@ test('without an invite in the config the one from the bot website is used; a de
   assert.equal(d.code, 'fromBot');
   assert.equal(d.live, false);
   assert.equal(d.invalid, true);
+  assert.equal(d.name, 'Hammer Launcher', 'the launcher\'s own server – not the shop brand');
+  // The bot replaces a dead invite on its own: the website is asked again right away, and the new invite is used.
+  const before = fetchFn.calls.length;
+  fetchFn.routes.unshift({ match: /hammershop\.pl\/api\/shop\/store$/, json: { discordUrl: 'https://discord.gg/fresh', products: [], currency: 'pln' } });
+  fetchFn.routes.unshift({ match: /invites\/fresh/, json: { guild: { id: '111', name: 'Hammer Launcher' }, approximate_member_count: 5, approximate_presence_count: 2 } });
+  const again = await c.discord();
+  assert.deepEqual([again.code, again.live, again.invalid ?? false], ['fresh', true, false]);
+  assert.ok(fetchFn.calls.length > before);
   assert.equal(await createCommunity({ config: { discordInvite: '', website: '' }, fetchFn: mockFetch([]) }).discord(), null);
 });
 

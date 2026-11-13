@@ -336,6 +336,8 @@ function latestYml(release = store.currentRelease()) {
     `path: ${release.file}`,
     `sha512: ${release.sha512}`,
     `releaseDate: ${yamlString(new Date(release.at).toISOString())}`,
+    // „Co nowego” travels with the update: the launcher keeps it and shows it once the new version is installed.
+    ...(release.notes ? ['releaseNotes: |2-', ...String(release.notes).replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').split(/\r?\n/).map((line) => `  ${line}`.trimEnd() || '  ')] : []),
     ...(release.signature ? [`signature: ${yamlString(release.signature)}`] : []),
     '',
   ].join('\n');
@@ -441,7 +443,9 @@ function serve(req, res, name, { send, fail, headers }) {
     ...headers,
     'content-type': TYPES[path.extname(name)] ?? 'application/octet-stream',
     'accept-ranges': 'bytes',
-    'cache-control': 'public, max-age=300',
+    // Always checked with this server: a build uploaded again under the same name must never come from a cache
+    // with its old bytes (the updater compares the file with the checksum in latest.yml).
+    'cache-control': 'no-cache',
     ...(name.endsWith('.exe') && { 'content-disposition': `attachment; filename="${name}"` }),
   };
   if (many) return sendRanges(req, res, name, many, size, base);

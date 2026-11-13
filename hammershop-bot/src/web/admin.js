@@ -29,6 +29,7 @@
  * written to the bot's log channel with who did it.
  */
 
+const config = require('../lib/config');
 const store = require('./store');
 const releases = require('./releases');
 const plusLib = require('../lib/plus');
@@ -153,10 +154,10 @@ async function api(req, res, url, h) {
   const user = h.userOf(req);
   if (!user) return h.fail(res, 401, 'Zaloguj się przez Discord.');
   const level = await h.level(user.id);
-  if (!level) return h.fail(res, 403, 'To konto nie ma dostępu do panelu. Panel jest dla właściciela i administratorów serwera HammerShop.');
+  if (!level) return h.fail(res, 403, `To konto nie ma dostępu do panelu. Panel jest dla właściciela i administratorów serwera ${config.brand.name}.`);
   const owner = level === 'owner';
   const ownerOnly = () => {
-    if (!owner) throw problem(403, 'To może zrobić tylko właściciel sklepu.');
+    if (!owner) throw problem(403, 'To może zrobić tylko właściciel serwera.');
   };
   if (method !== 'GET' && !h.originOk(req)) return h.fail(res, 403, 'Żądanie odrzucone.');
   const who = `<@${user.id}>`;

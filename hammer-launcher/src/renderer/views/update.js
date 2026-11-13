@@ -34,7 +34,7 @@
   /* ── buttons ── */
   const run = (call) => (e) => HS.busy(e.currentTarget, async () => take(await attempt(call)));
   /** „Uruchom ponownie i zaktualizuj” – grey, with the reason, while a game runs. */
-  const restartBtn = (s, cls = 'btn.primary') => h(`button.${cls}`, { type: 'button', disabled: playing(s), title: playing(s) ? GAME : null, onclick: run(() => api.selfUpdate.install()) }, icon('refresh'), h('span', 'Uruchom ponownie i zaktualizuj'));
+  const restartBtn = (s, cls = 'btn.primary', text = 'Uruchom ponownie i zaktualizuj') => h(`button.${cls}`, { type: 'button', disabled: playing(s), title: playing(s) ? GAME : null, onclick: run(() => api.selfUpdate.install()) }, icon('refresh'), h('span', text));
   const downloadBtn = (cls = 'btn.primary') => h(`button.${cls}`, { type: 'button', onclick: run(() => api.selfUpdate.download()) }, icon('download'), h('span', 'Pobierz i zainstaluj'));
   /** For builds that cannot replace themselves: the page with the new version, in the browser. */
   const pageBtn = (s, cls = 'btn.primary', text = 'Pobierz ze strony') => (s.release?.url ? h(`button.${cls}`, { type: 'button', onclick: () => HS.open(s.release.url) }, icon('external'), h('span', text)) : null);
@@ -50,7 +50,7 @@
       const card = (title, sub, actions, more) =>
         clear(el, h('section.card.update-card', h('div.update-top', h('div.why-icon', icon('arrow-up')), h('div.grow', h('b', title), sub ? h('small', sub) : null), actions ? h('div.update-acts', actions) : null), more ?? null, notesBox(s.notes)));
       if (s.required) return clear(el); // the window „Wymagana aktualizacja” says it all
-      if (s.status === 'ready') return card(`Aktualizacja ${s.latest} jest gotowa`, playing(s) ? GAME : 'Zainstaluje się też sama, gdy zamkniesz launcher.', restartBtn(s));
+      if (s.status === 'ready') return card(`Nowa wersja ${s.latest} jest gotowa`, playing(s) ? 'Zainstaluje się, gdy skończysz grać – gra nigdy nie zostanie przerwana.' : 'Pobrała się w tle. Zaktualizuj teraz albo zostaw – zainstaluje się sama, gdy zamkniesz okno launchera.', restartBtn(s, 'btn.primary', 'Zaktualizuj teraz'));
       if (s.status === 'downloading') return card(`Pobieram aktualizację ${s.latest}`, `${s.percent ?? 0}% – możesz normalnie grać, pobieranie idzie w tle.`, null, bar(s.percent ?? 0));
       if (s.status === 'available' && !s.auto) return card(`Dostępna jest wersja ${s.latest}`, `Masz wersję ${s.current}. Automatyczne aktualizacje są wyłączone.`, downloadBtn());
       // A build that cannot replace itself only tells – the button leads to the download page.
@@ -76,6 +76,14 @@
         if (!(await attempt(() => state.setSettings({ autoUpdate: v })))) toggle.querySelector('input').checked = !v;
         take(await api.selfUpdate.status().catch(() => null));
       });
+      // Windows: the launcher can live in the tray and start with the system – that is where it updates itself.
+      const bg = state.info?.background ?? {};
+      const flag = (key) => {
+        const t = HS.toggle(state.settings?.[key] !== false, async (v) => {
+          if (!(await attempt(() => state.setSettings({ [key]: v })))) t.querySelector('input').checked = !v;
+        });
+        return t;
+      };
       clear(
         card,
         h('div.card-head', icon('arrow-up'), h('h2', 'Aktualizacje launchera')),
@@ -84,7 +92,9 @@
         s.status === 'downloading' ? bar(s.percent ?? 0) : null,
         s.status === 'ready' && playing(s) ? h('p.hint', GAME) : null,
         !active && s.release ? h('p.hint', whyNot(s)) : null,
-        active ? row('Aktualizuj automatycznie', 'Launcher sam pobiera nową wersję w tle i instaluje ją, gdy go zamkniesz. Wyłączone: tylko powie, że jest nowa wersja.', toggle) : null,
+        active ? row('Aktualizuj automatycznie', 'Launcher sam pobiera nową wersję w tle i instaluje ją, gdy nie grasz, a jego okno jest zamknięte – nigdy w trakcie gry. Wyłączone: tylko powie, że jest nowa wersja.', toggle) : null,
+        bg.startWithSystem ? row('Uruchamiaj razem z Windows', 'Launcher startuje w tle – ikona obok zegara – i pobiera aktualizacje, zanim go otworzysz. Okno pojawi się dopiero po kliknięciu ikony.', flag('startWithSystem')) : null,
+        bg.tray ? row('Zamknięcie okna zostawia launcher w tle', 'Krzyżyk chowa launcher do zasobnika obok zegara – tam sam się aktualizuje, gdy nie grasz. Całkiem zamkniesz go z menu tej ikony.', flag('closeToTray')) : null,
       );
     }
     draw();
@@ -143,5 +153,25 @@
     drawRequired(s);
   }
 
-  HS.updateUi = { homeCard, settingsCard, syncRequired, stateText };
+  /* ── „Co nowego”: once, the first time the window opens after the launcher updated itself ── */
+  async function whatsNew() {
+    if (state.whatsNewAsked) return; // once per window
+    state.whatsNewAsked = true;
+    const news = await api.selfUpdate.whatsNew().catch(() => null);
+    if (!news?.version || must) return;
+    const ok = h('button.btn.primary', { type: 'button' }, icon('check'), h('span', 'Super, gramy!'));
+    const m = HS.modal({
+      title: 'Co nowego',
+      icon: 'sparkles',
+      body: [
+        h('div.whats-new-top', h('div.why-icon', icon('rocket')), h('div', h('b', `Hammer Launcher ${news.version}`), h('small', news.from ? `Launcher zaktualizował się z wersji ${news.from}.` : 'Launcher zaktualizował się do nowej wersji.'))),
+        news.notes ? h('div.whats-new-notes', HS.raw(h('p', news.notes))) : h('p.muted', 'Szczegóły znajdziesz w aktualnościach i na naszym Discordzie.'),
+      ],
+      foot: ok,
+      onClose: () => api.selfUpdate.seen().catch(() => null),
+    });
+    ok.onclick = () => m.close();
+  }
+
+  HS.updateUi = { homeCard, settingsCard, syncRequired, stateText, whatsNew };
 })();

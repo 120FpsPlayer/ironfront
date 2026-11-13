@@ -626,7 +626,7 @@
               d.members != null ? h('span', h('i.dot.idle'), h('b', fmt.num(d.members)), fmt.plural(d.members, 'członek', 'członków', 'członków')) : null,
             )
           : d.invalid
-            ? h('p.warn', { style: { fontSize: '12.5px', marginBottom: '12px' } }, 'Zaproszenie wygasło – ustaw nowe w launcher.config.json albo /zbuduj w bocie.')
+            ? h('p.warn', { style: { fontSize: '12.5px', marginBottom: '12px' } }, 'Zaproszenie na Discorda chwilowo nie działa – zajrzyj tu za kilka minut.')
             : null,
         d.description ? raw(h('p.muted', { style: { fontSize: '12.5px', marginBottom: '12px' } }, d.description)) : null,
         h('div.perks', chip('Pomoc i tickety', null, 'heart'), chip('Giveawaye', null, 'star'), chip('Nowości i promocje', null, 'bolt')),

@@ -44,6 +44,7 @@ const admin = require('./admin');
 const releases = require('./releases');
 const plusLib = require('../lib/plus');
 const profile = require('../lib/profile');
+const config = require('../lib/config');
 
 const PUBLIC = path.join(__dirname, '..', '..', 'web', 'public');
 const STRIPE_MIN = 50; // Stripe's smallest charge in EUR cents
@@ -97,7 +98,15 @@ function cookies(req) {
       .split(';')
       .map((c) => c.trim().split('='))
       .filter(([k, v]) => k && v !== undefined)
-      .map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]),
+      .map(([k, ...v]) => {
+        // One broken cookie of some other page on this domain ("x=100%") must not break every request.
+        try {
+          return [k, decodeURIComponent(v.join('='))];
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean),
   );
 }
 const cookie = (name, value, maxAge) => `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure() ? '; Secure' : ''}`;
@@ -142,7 +151,20 @@ function originOk(req) {
   return Boolean(origin) && [web().publicUrl, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean).includes(origin);
 }
 
-const clientIp = (req) => String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+/**
+ * Who is asking – for the per-address limits and counters. Behind Cloudflare it says so itself (CF-Connecting-IP).
+ * Otherwise the last X-Forwarded-For entry is the one the own proxy (Caddy, nginx) added: the first one is whatever the
+ * client wrote there, so it could dodge every limit with a made-up address.
+ */
+const clientIp = (req) => {
+  const cf = String(req.headers['cf-connecting-ip'] ?? '').trim();
+  if (cf && cf.length <= 64) return cf;
+  const hops = String(req.headers['x-forwarded-for'] ?? '')
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+  return hops.at(-1) || req.socket.remoteAddress || '?';
+};
 
 // Simple per-IP limits: { key → [timestamps] }
 const hits = new Map();
@@ -195,7 +217,7 @@ function plusJson(order) {
   let code = null;
   if (order.status === 'paid' && p.grantedAt && plusLib.ready()) {
     try {
-      code = plusLib.issue({ mc: p.mc, days: p.grantDays ?? p.days, now: p.grantedAt });
+      code = plusLib.issue({ mc: p.mc, days: p.grantDays ?? p.days, now: p.grantedAt, id: p.codeId ?? null }); // the code from the DM
     } catch {
       code = null;
     }
@@ -264,7 +286,7 @@ async function checkout(req, res, user) {
   } catch (err) {
     store.updateOrder(order.id, { status: 'failed', note: err.message });
     console.warn(`[web] płatność ${order.id}:`, err.message);
-    return fail(res, 502, err.status === 401 ? 'Płatności nie są jeszcze poprawnie skonfigurowane – skontaktuj się z HammerShop.' : 'Nie udało się otworzyć strony płatności. Spróbuj ponownie.');
+    return fail(res, 502, err.status === 401 ? `Płatności nie są jeszcze poprawnie skonfigurowane – skontaktuj się z ${config.brand.name}.` : 'Nie udało się otworzyć strony płatności. Spróbuj ponownie.');
   }
 }
 
@@ -280,6 +302,8 @@ async function checkoutPlus(res, user, body, requestId) {
     if (!isUserError(err) && !err.status) throw err;
     return fail(res, err.status ?? 400, plainMessage(err));
   }
+  // Hammer+ forever already: another plan would add nothing – nobody pays for that.
+  if (hooks.plus.until?.(account.mc) === 0) return fail(res, 409, `Konto ${account.nick} ma już Hammer+ na zawsze – nie musisz go kupować ponownie. Nic nie zostało pobrane.`);
   const currency = hooks.currency();
   const name = `${plan.name} – ${account.nick}`;
   const items = [{ id: `plus:${plan.id}`, name, price: plan.price, quantity: 1, productId: null, variant: null, eta: 'Kod od razu po płatności' }];
@@ -295,7 +319,7 @@ async function checkoutPlus(res, user, body, requestId) {
   } catch (err) {
     store.updateOrder(order.id, { status: 'failed', note: err.message });
     console.warn(`[web] płatność ${order.id}:`, err.message);
-    return fail(res, 502, err.status === 401 ? 'Płatności nie są jeszcze poprawnie skonfigurowane – skontaktuj się z HammerShop.' : 'Nie udało się otworzyć strony płatności. Spróbuj ponownie.');
+    return fail(res, 502, err.status === 401 ? `Płatności nie są jeszcze poprawnie skonfigurowane – skontaktuj się z ${config.brand.name}.` : 'Nie udało się otworzyć strony płatności. Spróbuj ponownie.');
   }
 }
 
@@ -373,7 +397,8 @@ async function authCallback(req, res, url) {
 const TYPES = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.css': 'text/css', '.js': 'text/javascript' };
 /** The launcher page and the admin panel load nothing but their own files (and pictures over https). */
 const PAGE_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; media-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
-const PAGES = { '/launcher': 'launcher.html', '/admin': 'admin.html' };
+// (also under their file names – never the raw file, which has both sites' parts and no CSP)
+const PAGES = { '/launcher': 'launcher.html', '/admin': 'admin.html', '/launcher.html': 'launcher.html', '/admin.html': 'admin.html' };
 /**
  * A page as this site shows it. The same files serve both sites: what is between <!--shop--> … <!--/shop--> is only
  * for HammerShop's site, <!--launcher--> … <!--/launcher--> only for Hammer Launcher's own (BOT_PROFILE=launcher) –

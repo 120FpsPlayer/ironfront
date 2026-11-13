@@ -28,7 +28,7 @@ const { publicKey } = require('./plus');
 const { block } = require('./text');
 
 const FIRST_CHECK = 6000; // after the window is shown
-const CHECK_EVERY = 4 * 60 * 60 * 1000;
+const CHECK_EVERY = 60 * 60 * 1000; // the launcher may sit in the tray all day: one small latest.yml an hour
 const MAX_NOTES = 2000;
 
 /* ── versions ── */
@@ -553,6 +553,25 @@ function createSelfUpdate({
     }
   }
 
+  /**
+   * The launcher is in the background – no window open – and the update that is here installs quietly; the launcher
+   * starts again in the tray (main.js decides when: no window, after the last game session's work). Never while a
+   * game started by the launcher runs, never with automatic updates switched off. false = not now.
+   */
+  function installQuietly() {
+    if (!active() || status !== 'ready' || installing || playing() || !auto()) return false;
+    installing = true;
+    log(`installing ${latest} in the background (no window, no game)`);
+    try {
+      updater.quitAndInstall(true, true);
+      return true;
+    } catch (err) {
+      installing = false;
+      log(`the installer could not be started: ${String(err?.message ?? err).slice(0, 200)}`);
+      return false;
+    }
+  }
+
   /** What the shop's /news says about the newest version (`ok`: the shop answered just now). */
   function setRelease(next, ok) {
     release = next && typeof next === 'object' && parseVersion(next.version) ? next : null;
@@ -587,9 +606,10 @@ function createSelfUpdate({
     install,
     update,
     installOnQuit,
+    installQuietly,
     setRelease,
     refresh,
-    /** The first look a few seconds from now, then one every four hours. Nothing happens on builds that cannot update. */
+    /** The first look a few seconds from now, then one every hour. Nothing happens on builds that cannot update. */
     start() {
       if (!active() || started) return;
       started = true;

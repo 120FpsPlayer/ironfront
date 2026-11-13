@@ -145,6 +145,14 @@ test('sync puts the jar for the instance version and Fabric API in place and wri
   assert.equal(fs.statSync(modJar(i)).mtimeMs, before);
 });
 
+test('Fabric API cannot be fetched (Modrinth offline): no Hammer Client either – Fabric would refuse to start the game', async () => {
+  const { instances, client } = setup();
+  const i = instances.create({ name: 'A', mcVersion: '1.21.1', loader: 'fabric' });
+  const offline = { install: async () => Promise.reject(new Error('fetch failed')) };
+  await assert.rejects(syncHammerClient({ instance: i, client, content: offline }), /Fabric API.*bez Hammer Client/);
+  assert.equal(fs.existsSync(modJar(i)), false, 'the mod is not left without its dependency');
+});
+
 test('the launcher file tells the mod about Hammer+: active until when, the cape and the shop API', async () => {
   const { instances, client, content } = setup();
   const i = instances.create({ name: 'A', mcVersion: '1.21.1', loader: 'fabric' });

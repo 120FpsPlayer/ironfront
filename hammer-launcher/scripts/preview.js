@@ -393,7 +393,7 @@ function mock() {
     },
     i18n: { ...languageNow(), load: async () => languageNow() },
     pathForFile: (file) => (/\.hammerpack$/i.test(file?.name ?? '') ? `C:\\Users\\Gracz\\Downloads\\${file.name}` : null),
-    app: { info: async () => ({ plus: plusStatus(), version: '2.6.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', channel: window.__stable ? '' : 'beta', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true } }), openExternal: async () => true, openFolder: async () => '' },
+    app: { info: async () => ({ plus: plusStatus(), version: '2.6.0', platform: 'win32', config: { name: 'Hammer Launcher', brand: 'HammerShop', channel: window.__stable ? '' : 'beta', website: 'https://hammershop.pl', shopUrl: 'https://hammershop.pl', discordInvite: '', server: { name: '', address: '' } }, root: 'C:\\Users\\Gracz\\AppData\\Roaming\\.hammer-launcher', secureStorage: true, hammerClient: { versions: ['1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11', '26.1', '26.1.1', '26.1.2', '26.2', '26.3'], version: '2.2.1', available: true }, background: { tray: true, startWithSystem: true } }), openExternal: async () => true, openFolder: async () => '' },
     window: { minimize: async () => {}, maximize: async () => {}, close: async () => {} },
     settings: {
       get: async () => ({ ...settings }),
@@ -429,6 +429,9 @@ function mock() {
         window.__installed = (window.__installed ?? 0) + 1;
         return selfState();
       },
+      // „Co nowego” after an update: what the preview prepared in window.__whatsNew, until it is closed.
+      whatsNew: async () => window.__whatsNew ?? null,
+      seen: async () => ((window.__seen = (window.__seen ?? 0) + 1), (window.__whatsNew = null), true),
       update: async () => {
         if (self.gameRunning) throw new Error('Najpierw zamknij grę – aktualizacja uruchamia launcher ponownie.');
         if (self.status === 'ready') window.__installed = (window.__installed ?? 0) + 1;
@@ -2093,8 +2096,8 @@ async function main() {
   if (!(await page.locator('.update-card').innerText()).includes('42%')) errors.push('Aktualizacja: nie widać postępu pobierania');
   await shot('156-aktualizacja-pobieranie');
   await page.evaluate(() => window.__self({ status: 'ready', percent: null }));
-  await count('.update-card button:has-text("Uruchom ponownie i zaktualizuj"):not([disabled])', 1);
-  if (!(await page.locator('.update-card').innerText()).includes(T('Aktualizacja 2.6.1 jest gotowa'))) errors.push('Aktualizacja: nie widać „Aktualizacja 2.6.1 jest gotowa”');
+  await count('.update-card button:has-text("Zaktualizuj teraz"):not([disabled])', 1);
+  if (!(await page.locator('.update-card').innerText()).includes(T('Nowa wersja 2.6.1 jest gotowa'))) errors.push('Aktualizacja: nie widać „Nowa wersja 2.6.1 jest gotowa”');
   await shot('157-aktualizacja-gotowa');
   await fits('Aktualizacja gotowa');
   await small('157b-aktualizacja-gotowa-male-okno', () => fits('Aktualizacja gotowa, małe okno'));
@@ -2104,17 +2107,32 @@ async function main() {
     HS.bus.emit('game');
     window.__self({ gameRunning: true });
   });
-  await count('.update-card button:has-text("Uruchom ponownie i zaktualizuj")[disabled]', 1);
-  if (!(await page.locator('.update-card').innerText()).includes(T('Najpierw zamknij grę – aktualizacja uruchamia launcher ponownie.'))) errors.push('Aktualizacja: nie widać, dlaczego przycisk jest wyłączony');
+  await count('.update-card button:has-text("Zaktualizuj teraz")[disabled]', 1);
+  if (!(await page.locator('.update-card').innerText()).includes(T('Zainstaluje się, gdy skończysz grać – gra nigdy nie zostanie przerwana.'))) errors.push('Aktualizacja: nie widać, że gra nie zostanie przerwana');
   await shot('158-aktualizacja-gotowa-gra-dziala');
   await page.evaluate(() => {
     HS.state.running.clear();
     HS.bus.emit('game');
     window.__self({ gameRunning: false });
   });
-  await page.locator('.update-card button', { hasText: 'Uruchom ponownie i zaktualizuj' }).click();
+  await page.locator('.update-card button', { hasText: 'Zaktualizuj teraz' }).click();
   await page.waitForTimeout(200);
-  if ((await page.evaluate(() => window.__installed)) !== 1) errors.push('Aktualizacja: „Uruchom ponownie i zaktualizuj” nie uruchomiło instalacji');
+  if ((await page.evaluate(() => window.__installed)) !== 1) errors.push('Aktualizacja: „Zaktualizuj teraz” nie uruchomiło instalacji');
+
+  // Right after an update: „Co nowego” in a window in the middle of the Graj screen – once, until it is closed.
+  await page.evaluate((notes) => ((window.__whatsNew = { version: '2.6.1', from: '2.6.0', notes }), (HS.state.whatsNewAsked = false)), NOTES);
+  await nav('Instancje');
+  await nav('Graj');
+  await count('.modal .whats-new-top', 1);
+  if (!(await page.locator('.modal').innerText()).includes(T('Launcher zaktualizował się z wersji 2.6.0.'))) errors.push('Co nowego: nie widać, z jakiej wersji launcher się zaktualizował');
+  await shot('173-co-nowego');
+  await small('173b-co-nowego-male-okno');
+  await page.locator('.modal button', { hasText: 'Super, gramy!' }).click();
+  await count('.modal .whats-new-top', 0);
+  if ((await page.evaluate(() => window.__seen)) !== 1) errors.push('Co nowego: po zamknięciu okno nie zapamiętało, że je widziano');
+  await nav('Instancje');
+  await nav('Graj');
+  await count('.modal .whats-new-top', 0);
 
   // Ustawienia → Aktualizacje launchera: the version, the state, „Sprawdź teraz” and the switch.
   await nav('Ustawienia');
@@ -2122,6 +2140,8 @@ async function main() {
   await viewTop('h2', 'Aktualizacje launchera');
   await count('.set-row:has-text("Aktualizuj automatycznie") input:checked', 0);
   await count('.card:has-text("Aktualizacje launchera") button:has-text("Uruchom ponownie i zaktualizuj")', 1);
+  await count('.set-row:has-text("Uruchamiaj razem z Windows") input:checked', 1);
+  await count('.set-row:has-text("Zamknięcie okna zostawia launcher w tle") input:checked', 1);
   await shot('159-ustawienia-aktualizacja-gotowa');
   await fits('Ustawienia – aktualizacja gotowa');
   await page.evaluate(() => window.__self({ status: 'idle', latest: null, notes: null, upToDate: true }));

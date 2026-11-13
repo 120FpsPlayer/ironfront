@@ -43,10 +43,12 @@ function createModpacks({ modrinth, instances, fetchFn }) {
       const files = (index.files ?? []).filter((f) => f.env?.client !== 'unsupported');
       let done = 0;
       onProgress?.({ label: `Pobieranie plików paczki (0/${files.length})`, done, total: files.length });
-      // A few downloads at a time.
+      // A few downloads at a time. One file that cannot be fetched stops the others too: the pack is removed anyway,
+      // so nothing more should be downloaded into it.
       const queue = [...files];
+      let stopped = false;
       const worker = async () => {
-        for (let f = queue.shift(); f; f = queue.shift()) {
+        for (let f = queue.shift(); f && !stopped; f = queue.shift()) {
           const target = insideDir(instance.dir, f.path);
           let lastError;
           for (const url of f.downloads ?? []) {
@@ -58,12 +60,19 @@ function createModpacks({ modrinth, instances, fetchFn }) {
               lastError = err;
             }
           }
-          if (lastError || !(f.downloads ?? []).length) throw lastError ?? new Error(`Brak adresu pobierania: ${f.path}`);
+          if (lastError || !(f.downloads ?? []).length) {
+            stopped = true;
+            queue.length = 0;
+            throw lastError ?? new Error(`Brak adresu pobierania: ${f.path}`);
+          }
           done += 1;
           onProgress?.({ label: `Pobieranie plików paczki (${done}/${files.length})`, done, total: files.length });
         }
       };
-      await Promise.all(Array.from({ length: Math.min(6, files.length) }, worker));
+      // Every worker is waited for (a download still running would write into the folder after it was removed).
+      const results = await Promise.allSettled(Array.from({ length: Math.min(6, files.length) }, worker));
+      const failed = results.find((r) => r.status === 'rejected');
+      if (failed) throw failed.reason;
       // overrides/ then client-overrides/ (the client ones win).
       for (const prefix of ['overrides/', 'client-overrides/']) {
         for (const entry of zip.getEntries()) {

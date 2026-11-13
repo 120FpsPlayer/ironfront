@@ -214,10 +214,10 @@ test('the usual round: first look after a few seconds, the update downloads in t
   assert.equal(await timers.run(), FIRST_CHECK);
   assert.deepEqual(statuses(), ['checking', 'idle']);
   assert.deepEqual([self.status().upToDate, self.status().checkedAt], [true, 1_800_000_000_000]);
-  assert.deepEqual(timers.waiting.map((t) => t.ms), [CHECK_EVERY], 'the next look is four hours away');
-  assert.equal(CHECK_EVERY, 4 * 60 * 60 * 1000);
+  assert.deepEqual(timers.waiting.map((t) => t.ms), [CHECK_EVERY], 'the next look is an hour away');
+  assert.equal(CHECK_EVERY, 60 * 60 * 1000);
 
-  // Four hours later there is 2.6.1.
+  // An hour later there is 2.6.1.
   const info = latest('2.6.1', { notes: 'Nowy ekran aktualności.\n\n<b>Poprawki</b> w Skórce.' });
   updater.answer = { info };
   states.length = 0;
@@ -724,4 +724,76 @@ test('services: the switch „Aktualizuj automatycznie” and a running game rea
   s.games.emit('state', { instanceId: instance.id, state: 'exited', playedMs: 0 });
   await s.selfUpdate.install();
   assert.deepEqual(updater.quits, [[true, true]]);
+});
+
+test('in the background: the update installs quietly and the launcher starts again – never under a game, never with automatic updates off', async () => {
+  const { self, updater, world, logs } = setup();
+  const info = { ...latest('2.6.1'), releaseNotes: '– Nowa zakładka\n– Poprawki' };
+  assert.equal(self.installQuietly(), false, 'nothing is here yet');
+  updater.answer = { info };
+  await self.check();
+  updater.finish(info);
+  await tick();
+  assert.equal(self.status().notes, '– Nowa zakładka\n– Poprawki', 'the notes travel with latest.yml');
+
+  world.game = true;
+  assert.equal(self.installQuietly(), false, 'a game runs: the update waits');
+  world.game = false;
+  world.auto = false;
+  assert.equal(self.installQuietly(), false, 'automatic updates are off: the player decides');
+  world.auto = true;
+  assert.deepEqual(updater.quits, []);
+  assert.equal(self.installQuietly(), true);
+  assert.deepEqual(updater.quits, [[true, true]], 'quietly, and the launcher starts again');
+  assert.ok(logs.some((l) => /in the background/.test(l)));
+  assert.equal(self.installQuietly(), false, 'once');
+  assert.equal(self.installOnQuit(0), false, 'the installer is already on its way');
+});
+
+test('the launcher looks for its own update every hour – it may sit in the tray all day', async () => {
+  const { self, timers, updater } = setup();
+  self.start();
+  assert.equal(timers.waiting[0].ms, FIRST_CHECK);
+  assert.equal(await timers.run(), FIRST_CHECK);
+  assert.equal(updater.checks, 1);
+  assert.equal(timers.waiting[0].ms, 60 * 60 * 1000);
+  assert.equal(CHECK_EVERY, 60 * 60 * 1000);
+  self.stop();
+});
+
+test('services: „Co nowego” once after an update – the notes kept from the download, else the shop’s; nothing after a fresh install', async () => {
+  const offline = async () => Promise.reject(new TypeError('offline'));
+  // A fresh install: nothing to tell, and the version counts as seen.
+  const fresh = createServices({ root: tmpDir(), config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: offline, appVersion: '2.6.0' });
+  assert.equal(fresh.selfUpdate.whatsNew(), null);
+  assert.equal(fresh.settings.get().seenVersion, '2.6.0');
+
+  // 2.6.0 downloads 2.6.1 with notes, the player closes the launcher, the update installs.
+  const root = tmpDir();
+  const updater = fakeUpdater();
+  const before = createServices({ root, config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: offline, appVersion: '2.6.0', updater, updateSupport: SUPPORTED });
+  assert.equal(before.selfUpdate.whatsNew(), null);
+  const info = { ...latest('2.6.1'), releaseNotes: '– Znaczek H w Tab\n– Poprawki' };
+  updater.answer = { info };
+  await before.selfUpdate.check();
+  updater.finish(info);
+  await tick();
+  assert.deepEqual(before.settings.get().updateNotes, { version: '2.6.1', notes: '– Znaczek H w Tab\n– Poprawki' });
+
+  const after = createServices({ root, config: { website: 'https://hammershop.pl' }, accounts: {}, fetchFn: offline, appVersion: '2.6.1' });
+  assert.deepEqual(after.selfUpdate.whatsNew(), { version: '2.6.1', from: '2.6.0', notes: '– Znaczek H w Tab\n– Poprawki' });
+  assert.deepEqual(after.selfUpdate.whatsNew(), { version: '2.6.1', from: '2.6.0', notes: '– Znaczek H w Tab\n– Poprawki' }, 'until it is closed');
+  assert.equal(after.selfUpdate.seen(), true);
+  assert.equal(after.selfUpdate.whatsNew(), null, 'once');
+  assert.deepEqual([after.settings.get().seenVersion, after.settings.get().updateNotes], ['2.6.1', null]);
+
+  // A launcher from before this feature (no seenVersion yet) that was updated: the window still comes, without notes.
+  const old = tmpDir();
+  createServices({ root: old, config: {}, accounts: {}, fetchFn: offline, appVersion: '2.6.0' }).settings.set({ closeOnExit: false });
+  const fs = require('node:fs');
+  const file = require('node:path').join(old, 'settings.json');
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  delete raw.seenVersion;
+  fs.writeFileSync(file, JSON.stringify(raw));
+  assert.deepEqual(createServices({ root: old, config: {}, accounts: {}, fetchFn: offline, appVersion: '2.7.0' }).selfUpdate.whatsNew(), { version: '2.7.0', from: null, notes: null });
 });

@@ -43,29 +43,96 @@ if (!app.requestSingleInstanceLock()) {
   const T = (text) => tr(text, language());
   const filtersIn = (filters) => filters?.map((f) => ({ ...f, name: T(f.name) }));
 
-  /** While the game runs with the launcher hidden, a tray icon brings it back (or stops the game). */
-  function showTray() {
-    if (tray) return;
-    tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: process.platform === 'darwin' ? 18 : 32 }));
-    tray.setToolTip(`${config.name} – ${T('gra działa')}`);
-    const showWin = () => {
-      if (!win || win.isDestroyed()) return;
-      win.show();
-      win.focus();
-    };
-    tray.on('click', showWin);
+  /* ── the background: the tray, starting with Windows, the window that comes and goes ── */
+  // Windows only: there the tray is always available. The launcher then lives on after its window is closed and
+  // installs its own updates while nobody plays (see quietInstall below).
+  const TRAY_OS = process.platform === 'win32';
+  // Starting with the system: only the installed build – the portable exe unpacks itself into a temporary folder.
+  const loginItems = () => TRAY_OS && app.isPackaged && !process.env.PORTABLE_EXECUTABLE_FILE;
+  /** The close button leaves the launcher in the tray (Ustawienia → „Zamknięcie okna zostawia launcher w tle”). */
+  const residentTray = () => TRAY_OS && services?.settings.get().closeToTray !== false;
+  const gameRunning = () => Boolean(services?.games.running.size);
+  let gameHidden = false; // the window steps aside while the game runs (Ustawienia → „Po uruchomieniu gry”)
+  let quitting = false;
+
+  /** Brings the launcher in front – it opens a new window when the old one was closed to the tray. */
+  function showWindow() {
+    if (!win || win.isDestroyed()) {
+      createWindow();
+      return;
+    }
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+
+  /** The tray icon: while the launcher lives in the background, and while the game runs with the window hidden. */
+  function syncTray() {
+    const wanted = !quitting && (residentTray() || (gameHidden && gameRunning()));
+    if (!wanted) {
+      tray?.destroy();
+      tray = null;
+      return;
+    }
+    if (!tray) {
+      tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: process.platform === 'darwin' ? 18 : 32 }));
+      tray.on('click', showWindow);
+    }
+    tray.setToolTip(gameRunning() ? `${config.name} – ${T('gra działa')}` : config.name);
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: T('Pokaż launcher'), click: showWin },
-        { label: T('Zatrzymaj grę'), click: () => [...(services?.games.running.keys() ?? [])].forEach((id) => services.games.stop(id)) },
+        { label: T('Pokaż launcher'), click: showWindow },
+        ...(gameRunning() ? [{ label: T('Zatrzymaj grę'), click: () => [...(services?.games.running.keys() ?? [])].forEach((id) => services.games.stop(id)) }] : []),
         { type: 'separator' },
         { label: T('Zamknij launcher'), click: () => app.quit() },
       ]),
     );
   }
-  function hideTray() {
-    tray?.destroy();
-    tray = null;
+
+  /** Ustawienia → „Uruchamiaj razem z Windows”: the launcher starts in the tray (--background), with no window. */
+  function applyLoginItem() {
+    if (!loginItems() || !services) return;
+    try {
+      // (The name is the uninstaller's too: build/installer.nsh removes this entry when the launcher is uninstalled.)
+      app.setLoginItemSettings({ openAtLogin: services.settings.get().startWithSystem !== false, path: process.execPath, args: ['--background'], name: 'Hammer Launcher' });
+    } catch {
+      // not allowed on this system – the launcher simply starts when the player opens it
+    }
+  }
+
+  // A quiet update restarts the launcher; this note says it should come back to the tray, not open its window.
+  const hiddenNote = () => path.join(defaultRoot(app.getPath('appData')), '.start-hidden');
+  function takeHiddenNote() {
+    try {
+      const at = Number(fs.readFileSync(hiddenNote(), 'utf8'));
+      fs.rmSync(hiddenNote(), { force: true });
+      return Number.isFinite(at) && Date.now() - at < 15 * 60 * 1000;
+    } catch {
+      return false;
+    }
+  }
+
+  let quietTimer = null;
+  /**
+   * The update that is here installs on its own – but only while the launcher is in the background: no window
+   * open (the player is not using it), no game running, the last session's backups done, automatic updates on.
+   * It waits a little first, so a window that is closed and opened again right away is not cut short. The
+   * launcher then starts again in the tray, and „Co nowego” waits for the next time the window opens.
+   */
+  function quietInstall(delay = 45 * 1000) {
+    clearTimeout(quietTimer);
+    if (!services || quitting) return;
+    quietTimer = setTimeout(async () => {
+      if (quitting || (win && !win.isDestroyed()) || gameRunning()) return;
+      if (services.selfUpdate.status().status !== 'ready') return;
+      try {
+        fs.writeFileSync(hiddenNote(), String(Date.now()));
+      } catch {
+        // without the note the launcher opens its window after the update – no harm
+      }
+      const started = await services.selfUpdate.installQuietly().catch(() => false);
+      if (!started) fs.rmSync(hiddenNote(), { force: true });
+    }, delay);
   }
 
   const send = (channel, payload) => {
@@ -101,11 +168,7 @@ if (!app.requestSingleInstanceLock()) {
    * the window checks it through the services and asks the player before anything happens.
    */
   function openInvite(link) {
-    if (win && !win.isDestroyed()) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-    }
+    showWindow();
     if (!link) return;
     if (windowAsked && win && !win.isDestroyed()) send('invite:link', link);
     else pendingInvite = link;
@@ -134,9 +197,10 @@ if (!app.requestSingleInstanceLock()) {
       webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
     });
     Menu.setApplicationMenu(null);
-    win.once('ready-to-show', () => {
-      win.show();
-      services?.selfUpdate.start(); // the launcher's own update: a first look a few seconds from now, then every four hours
+    const opened = win;
+    win.once('ready-to-show', () => opened.show());
+    win.on('closed', () => {
+      if (win === opened) win = null;
     });
     // Back in front of the player: a quiet look at the shop's news and messages (never more often than once a minute).
     win.on('focus', () => services?.news.refresh().catch(() => null));
@@ -204,8 +268,24 @@ if (!app.requestSingleInstanceLock()) {
       file: path.join(root, 'accounts.json'),
       crypt,
       config,
-      // (the title is read when the login window opens, so it follows the language chosen by then)
-      windowProperties: { width: 520, height: 680, resizable: false, get title() { return T('Logowanie Microsoft'); }, icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'), parent: win ?? undefined, modal: Boolean(win), autoHideMenuBar: true },
+      // (Read when the login window opens: the title follows the language chosen by then, and the window belongs to
+      // the launcher window open at that moment – it is created after the services.)
+      windowProperties: {
+        width: 520,
+        height: 680,
+        resizable: false,
+        get title() {
+          return T('Logowanie Microsoft');
+        },
+        icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
+        get parent() {
+          return win && !win.isDestroyed() ? win : undefined;
+        },
+        get modal() {
+          return Boolean(win && !win.isDestroyed());
+        },
+        autoHideMenuBar: true,
+      },
     });
     presence = createPresence(config.discordClientId);
     // Hammer Client: versions.json and one jar per Minecraft version (built by `./gradlew dist` in hammer-client/).
@@ -216,8 +296,12 @@ if (!app.requestSingleInstanceLock()) {
       accounts,
       clientDir,
       officialDir: officialMinecraftDir(),
-      emit: send,
+      emit: (channel, payload) => {
+        send(channel, payload);
+        if (channel === 'selfupdate:state' && payload?.status === 'ready') quietInstall();
+      },
       t: T, // the names the launcher makes up itself (a copied instance, a skin taken from the account)
+      gameLanguage: () => (language() === 'en' ? 'en_us' : 'pl_pl'), // the language a new instance starts the game in
       // The launcher's own version and updates (selfupdate.js).
       appVersion: app.getVersion(),
       updater,
@@ -252,21 +336,31 @@ if (!app.requestSingleInstanceLock()) {
     // The launcher window steps aside while the game runs and comes back when it closes.
     services.games.on('state', ({ state, benchmark }) => {
       const after = services.settings.get().afterLaunch;
-      if (!win || win.isDestroyed()) return;
-      if (state === 'running') {
+      const ended = state === 'exited' || state === 'crashed';
+      const hasWindow = Boolean(win && !win.isDestroyed());
+      if (state === 'running' && hasWindow) {
         if (after === 'hide') {
-          showTray();
+          gameHidden = true;
           win.hide();
         } else if (after === 'minimize') win.minimize();
       }
-      if (state === 'exited' || state === 'crashed') {
-        if (!services.games.running.size) hideTray();
-        if (!win.isVisible()) win.show();
-        if (win.isMinimized()) win.restore();
-        // Automatic world backups and the cloud copy finish first – quitting would cut them off.
-        // (Not after an FPS test: its result is what the player is waiting for.)
-        if (state === 'exited' && !benchmark && services.settings.get().closeOnExit && !services.games.running.size) services.afterSessions().finally(() => !services.games.running.size && app.quit());
+      if (ended && !gameRunning()) gameHidden = false;
+      syncTray();
+      if (!ended) return;
+      // Automatic world backups and the cloud copy finish first – quitting would cut them off.
+      // (Not after an FPS test: its result is what the player is waiting for.)
+      const closeAfter = state === 'exited' && !benchmark && services.settings.get().closeOnExit;
+      if (!hasWindow) {
+        // The window was closed while the game ran. In the tray: an update waiting for the game can install now.
+        // Without the tray nothing would ever close the launcher – it goes once the session's work is done.
+        if (gameRunning()) return;
+        if (residentTray() && !closeAfter) quietInstall();
+        else services.afterSessions().finally(() => !gameRunning() && app.quit());
+        return;
       }
+      if (!win.isVisible()) win.show();
+      if (win.isMinimized()) win.restore();
+      if (closeAfter && !gameRunning()) services.afterSessions().finally(() => !gameRunning() && app.quit());
     });
   }
 
@@ -303,6 +397,7 @@ if (!app.requestSingleInstanceLock()) {
       secureStorage: safeStorage.isEncryptionAvailable(),
       hammerClient: s().hammerClient.info(),
       plus: s().plus.status(),
+      background: { tray: TRAY_OS, startWithSystem: loginItems() },
     }));
     handle('app:open-external', (url) => openExternal(url));
     handle('app:open-folder', (instanceId, sub) => {
@@ -316,7 +411,12 @@ if (!app.requestSingleInstanceLock()) {
     handle('window:close', () => win?.close());
 
     handle('settings:get', () => s().settings.get());
-    handle('settings:set', (patch) => s().settings.set(patch));
+    handle('settings:set', (patch) => {
+      const saved = s().settings.set(patch);
+      if (patch && 'startWithSystem' in patch) applyLoginItem();
+      if (patch && 'closeToTray' in patch) syncTray();
+      return saved;
+    });
     handle('system:info', () => s().system());
     // Aktualności and the message bar (the shop's /news), and the launcher's own updates.
     handle('news:feed', () => s().news.feed());
@@ -328,6 +428,8 @@ if (!app.requestSingleInstanceLock()) {
     handle('selfupdate:download', () => s().selfUpdate.download());
     handle('selfupdate:install', () => s().selfUpdate.install());
     handle('selfupdate:update', () => s().selfUpdate.update());
+    handle('selfupdate:whats-new', () => s().selfUpdate.whatsNew());
+    handle('selfupdate:seen', () => s().selfUpdate.seen());
     handle('server:ping', (address) => s().ping(address || config.server?.address));
 
     handle('accounts:list', () => s().accounts.list());
@@ -357,7 +459,8 @@ if (!app.requestSingleInstanceLock()) {
     });
     handle('instances:update', (id, patch) => s().instances.update(id, patch));
     handle('instances:remove', (id) => {
-      if (s().games.isRunning(id)) throw new Error('Najpierw zamknij grę.');
+      // Not while the game runs or is still being prepared (its downloads would recreate the folder), nor during a world backup.
+      s().whenIdle(id, 'instancja jest właśnie w użyciu');
       return s().instances.remove(id);
     });
     handle('instances:duplicate', (id) => s().instances.duplicate(id));
@@ -556,7 +659,8 @@ if (!app.requestSingleInstanceLock()) {
   }
 
   // A second start (a click on a hammer:// link while the launcher is open, or its icon): this window comes to the front.
-  app.on('second-instance', (_event, argv) => openInvite(inviteFromArgs(argv)));
+  // (A start with Windows while the launcher already runs changes nothing.)
+  app.on('second-instance', (_event, argv) => !argv.includes('--background') && openInvite(inviteFromArgs(argv)));
   // macOS hands a clicked link over this way – also before the window exists.
   app.on('open-url', (event, url) => {
     event.preventDefault();
@@ -577,15 +681,32 @@ if (!app.requestSingleInstanceLock()) {
     registerProtocol();
     setupServices();
     registerIpc();
-    createWindow();
+    applyLoginItem();
+    // Started with Windows (--background) or by a quiet update: only the tray. A click on the icon opens the window.
+    const afterQuietUpdate = takeHiddenNote(); // (always read, so an old note never lingers)
+    const hidden = TRAY_OS && residentTray() && (process.argv.includes('--background') || afterQuietUpdate);
+    if (!hidden) createWindow();
+    syncTray();
+    services.selfUpdate.start(); // the launcher's own update: a first look a few seconds from now, then every hour
     services.updates.start(); // mod updates: a quiet look shortly after the start, then every six hours
     services.news.start(); // the shop's news and messages: a quiet look every ten minutes
+  });
+
+  app.on('before-quit', () => {
+    quitting = true;
+    clearTimeout(quietTimer);
   });
 
   // The launcher is closing: an update that was downloaded installs now – never under a running game (selfupdate.js).
   app.on('quit', (_event, exitCode) => services?.selfUpdate.installOnQuit(exitCode));
 
   app.on('window-all-closed', () => {
+    // In the tray the launcher lives on: it updates itself there while nobody plays (quietInstall).
+    if (residentTray() && !quitting) {
+      syncTray();
+      quietInstall();
+      return;
+    }
     // A running game keeps the launcher alive (play time, logs); it quits when the game ends.
     if (services?.games.running.size) return;
     // An automatic world backup that is still being packed is finished first – half a zip helps nobody.

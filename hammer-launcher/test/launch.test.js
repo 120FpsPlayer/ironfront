@@ -114,6 +114,21 @@ test('the game manager streams the log, reports running/exited and explains a cr
   assert.ok(games.logs('hs').length >= 3, 'the log stays readable after the game closed');
 });
 
+test('ZATRZYMAJ: a game the player stopped ends normally – no crash, also with Windows\' exit code 1 for a killed process', async () => {
+  for (const kill of [(c) => c.emit('exit', null, 'SIGTERM'), (c) => c.emit('exit', 1, null)]) {
+    const child = fakeChild();
+    child.kill = () => kill(child);
+    const games = new GameManager({ launchFn: async () => child });
+    const states = [];
+    games.on('state', (s) => states.push(s));
+    await games.start({ instance: { id: 'hs', dir: tmpDir() }, options: {} });
+    assert.equal(games.stop('hs'), true);
+    await new Promise((r) => setTimeout(r, 20));
+    const end = states.at(-1);
+    assert.deepEqual([end.state, end.crash, end.stopped], ['exited', null, true]);
+  }
+});
+
 test('crash hints in Polish for the usual problems', () => {
   assert.equal(analyze({ code: 0 }), null);
   assert.equal(analyze({ code: 1, log: 'Exception in thread "main" java.lang.UnsupportedClassVersionError: x has been compiled by a more recent version of the Java Runtime' }).title, 'Zła wersja Javy');

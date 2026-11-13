@@ -33,6 +33,8 @@
 
 const crypto = require('node:crypto');
 const plus = require('../lib/plus');
+const profile = require('../lib/profile');
+const config = require('../lib/config');
 const store = require('./store');
 const admin = require('./admin');
 const releases = require('./releases');
@@ -110,7 +112,7 @@ async function jsonBody(req, limit) {
 
 /** The Hammer+ account behind the request → the code's payload { id, mc, exp, iat }. Throws 503 / 401. */
 function account(req, res) {
-  if (!plus.ready()) throw problem(503, 'Hammer+ nie jest jeszcze uruchomiony po stronie HammerShop. Spróbuj ponownie później.');
+  if (!plus.ready()) throw problem(503, `Hammer+ nie jest jeszcze uruchomiony po stronie ${config.brand.name}. Spróbuj ponownie później.`);
   const unauthorized = (message) => {
     res.setHeader('www-authenticate', 'Bearer');
     return problem(401, message);
@@ -277,6 +279,8 @@ const JOIN_STYLE = [
   '.logo{display:inline-flex;align-items:center;font-size:24px;font-weight:900;letter-spacing:-1.2px;line-height:1;color:inherit;text-decoration:none}',
   '.logo i{width:1.15em;height:1.15em;margin-right:.3em;background:url(/assets/hammershop-mark.svg) center/contain no-repeat;filter:drop-shadow(0 0 10px #ff8a2b55)}',
   '.logo b{font-weight:900;color:#ffa94d}',
+  // Hammer Launcher's own site (BOT_PROFILE=launcher): the big H instead of the hammer.
+  '.logo.h i{width:1.1em;height:1.25em;background-image:url(/assets/launcher-h.png);filter:drop-shadow(0 0 10px #ffc23355)}',
   '.eyebrow{margin-top:26px;letter-spacing:2px;color:#d2b69f;font-size:10px;font-weight:500}',
   'h1{margin-top:10px;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.4px;overflow-wrap:anywhere}',
   'h1 span{color:#ffa94d}',
@@ -313,20 +317,21 @@ function joinHtml(url) {
   const loader = LOADER_NAMES[param(url, 'loader', 12).toLowerCase()];
   const chips = [MC_VERSION.test(mc) && `Minecraft ${mc}`, loader].filter(Boolean);
   const heading = name ? `Dołącz do serwera <span>${esc(name)}</span>` : address ? 'Dołącz do serwera' : 'Otwórz Hammer Launcher';
-  const title = name || address ? `Dołącz do serwera ${name || address} – Hammer Launcher` : 'Hammer Launcher – HammerShop';
+  const own = profile.launcher; // Hammer Launcher's own site: its name and the H, no shop
+  const title = name || address ? `Dołącz do serwera ${name || address} – Hammer Launcher` : own ? 'Hammer Launcher' : 'Hammer Launcher – HammerShop';
   return (
     '<!doctype html>\n<html lang="pl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="robots" content="noindex"><meta name="theme-color" content="#0e0b09"><meta name="color-scheme" content="dark">' +
-    `<title>${esc(title)}</title><link rel="icon" href="/assets/hammershop-icon.png"><style>${JOIN_STYLE}</style></head>` +
+    `<title>${esc(title)}</title><link rel="icon" href="/assets/${own ? 'launcher-icon' : 'hammershop-icon'}.png"><style>${JOIN_STYLE}</style></head>` +
     '<body><main class="card">' +
-    '<a class="logo" href="/" aria-label="HammerShop – strona główna"><i aria-hidden="true"></i>Hammer<b>Shop</b></a>' +
+    (own ? '<a class="logo h" href="/" aria-label="Hammer Launcher – strona główna"><i aria-hidden="true"></i>Hammer<b>Launcher</b></a>' : '<a class="logo" href="/" aria-label="HammerShop – strona główna"><i aria-hidden="true"></i>Hammer<b>Shop</b></a>') +
     '<p class="eyebrow">HAMMER LAUNCHER</p>' +
     `<h1>${heading}</h1>` +
     (address ? `<p class="address"><code>${esc(address)}</code></p>` : '') +
     (chips.length ? `<p class="chips">${chips.map((c) => `<span>${esc(c)}</span>`).join('')}</p>` : '') +
     '<p class="status" id="status" role="status">Otwieramy Hammer Launcher…</p>' +
     `<a class="button primary" id="open" href="${esc(link)}">Otwórz w Hammer Launcherze</a>` +
-    '<p class="hint">Nie masz launchera? <a href="/">Przejdź na stronę HammerShop</a></p>' +
+    (own ? '<p class="hint">Nie masz launchera? <a href="/">Pobierz go za darmo</a></p>' : '<p class="hint">Nie masz launchera? <a href="/">Przejdź na stronę HammerShop</a></p>') +
     `</main><script>${JOIN_SCRIPT}</script></body></html>\n`
   );
 }

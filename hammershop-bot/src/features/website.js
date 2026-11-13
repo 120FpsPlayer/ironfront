@@ -157,13 +157,55 @@ async function ensureInvite(guild) {
     (c) => c && c.type === ChannelType.GuildText && c.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.CreateInstantInvite),
   );
   for (const channel of candidates) {
-    const invite = await channel.createInvite({ maxAge: 0, maxUses: 0, unique: false, reason: 'Strona HammerShop – przycisk Pomoc / społeczność' }).catch(() => null);
+    const invite = await channel.createInvite({ maxAge: 0, maxUses: 0, unique: false, reason: `Strona ${config.brand.name} – przycisk Pomoc / społeczność` }).catch(() => null);
     if (invite) {
       db.guild(guild.id).webInvite = { code: invite.code, url: `https://discord.gg/${invite.code}` };
       db.save();
+      console.log(`🌐 Zaproszenie na Discorda dla strony i launchera: discord.gg/${invite.code}`);
       return;
     }
   }
+}
+
+/**
+ * Whether Discord still takes an invite: false when it is gone or has run out (Discord answers 404 – "Unknown Invite"
+ * or "Invite is expired"), or leads to another server; null when Discord could not be asked (no verdict).
+ */
+async function inviteWorks(guild, code) {
+  try {
+    const invite = await guild.client.fetchInvite(code);
+    if (invite?.guild?.id && invite.guild.id !== guild.id) return false;
+    if (invite?.expiresTimestamp && invite.expiresTimestamp <= Date.now()) return false;
+    return true;
+  } catch (err) {
+    return err?.status === 404 || err?.code === 10006 || err?.code === 50270 ? false : null;
+  }
+}
+
+const INVITE_CHECK_MS = 30 * 60_000;
+let inviteChecked = 0;
+
+/**
+ * The invite the website and Hammer Launcher hand out must keep working. A channel deleted by a rebuild takes its
+ * invites with it – and Discord says nothing about that – so the stored one is checked now and then and replaced
+ * when Discord no longer takes it. DISCORD_INVITE_URL from .env is the owner's own and is never replaced.
+ */
+async function checkInvite(guild, { force = false } = {}) {
+  if (!guild) return;
+  if (!force && Date.now() - inviteChecked < INVITE_CHECK_MS) return;
+  inviteChecked = Date.now();
+  if (env.web.invite) {
+    const code = /([\w-]{2,64})\/?$/.exec(env.web.invite)?.[1];
+    if (code && (await inviteWorks(guild, code)) === false) console.warn(`🌐 Zaproszenie z DISCORD_INVITE_URL (${env.web.invite}) nie działa – Discord mówi, że wygasło albo zostało usunięte. Wpisz w .env nowe, bezterminowe zaproszenie.`);
+    return;
+  }
+  const stored = db.guild(guild.id).webInvite;
+  if (stored?.code && (await inviteWorks(guild, stored.code)) === false) {
+    console.warn(`🌐 Zaproszenie strony discord.gg/${stored.code} przestało działać – tworzę nowe.`);
+    delete db.guild(guild.id).webInvite;
+    db.save();
+  }
+  await ensureInvite(guild);
 }
 
 // ───────────── Sign-in → on the server, with the Member role ─────────────
@@ -180,7 +222,7 @@ async function onLogin(user, accessToken) {
   let member = await guild.members.fetch(user.id).catch(() => null);
   if (member) {
     if (roleOk && !member.roles.cache.has(role.id)) {
-      await member.roles.add(role, 'Logowanie na stronie HammerShop');
+      await member.roles.add(role, `Logowanie na stronie ${config.brand.name}`);
       await hooks.emit('verified', member);
     }
     return { added: false, member: true };
@@ -194,7 +236,7 @@ async function onLogin(user, accessToken) {
   }
   member ??= await guild.members.fetch(user.id).catch(() => null);
   if (!member) return { added: false, member: false };
-  if (roleOk && !member.roles.cache.has(role.id)) await member.roles.add(role, 'Logowanie na stronie HammerShop').catch(() => null);
+  if (roleOk && !member.roles.cache.has(role.id)) await member.roles.add(role, `Logowanie na stronie ${config.brand.name}`).catch(() => null);
   await sendLog(guild, { embeds: [logEmbed(COLORS.success, '🌐 Dołączenie przez stronę', guild.client.user).setDescription(`<@${user.id}>${user.username ? ` (${user.username})` : ''} loguje się na stronie i trafia na serwer${roleOk ? ` z rolą ${role}` : ''}.`)] }).catch(() => null);
   if (roleOk) await hooks.emit('verified', member);
   return { added: true, member: true };
@@ -313,7 +355,7 @@ const plusPage = () => require('./launcherinfo').page();
 function plusDm(guild, order, code, record) {
   const hp = require('./hammerplus');
   const c = container(COLORS.success);
-  header(c, `## ${e(guild, 'check')} Hammer+ kupiony – dziękujemy!\nTwoja płatność na stronie **HammerShop** przeszła pomyślnie. Oto Twój kod do **Hammer Launchera**:`, guild?.iconURL?.({ size: 128 }));
+  header(c, `## ${e(guild, 'check')} Hammer+ kupiony – dziękujemy!\nTwoja płatność na stronie **${config.brand.name}** przeszła pomyślnie. Oto Twój kod do **Hammer Launchera**:`, guild?.iconURL?.({ size: 128 }));
   c.addSeparatorComponents(divider());
   c.addTextDisplayComponents(text(`\`\`\`\n${code}\n\`\`\``));
   c.addTextDisplayComponents(
@@ -347,16 +389,19 @@ async function deliverPlus(order) {
     try {
       granted = guild
         ? hp.grantKnown(guild.id, { mc: p.mc, nick: p.nick, days, by: order.userId, now, source: 'website' })
-        : { code: plusLib.issue({ mc: p.mc, days, now }), record: { nick: p.nick, exp: days ? Math.floor(now / 1000) + days * 86_400 : 0 } };
+        : (() => {
+            const code = plusLib.issue({ mc: p.mc, days, now });
+            return { code, record: { id: plusLib.verify(code, { now }).id, nick: p.nick, exp: days ? Math.floor(now / 1000) + days * 86_400 : 0 } };
+          })();
     } catch (err) {
       console.warn(`[website] Hammer+ dla ${order.id}:`, err.message);
-      setDelivery(order, { delivery: `Płatność przeszła – kod Hammer+ dla konta ${p.nick} wystawi zespół HammerShop. Napisz do nas na Discordzie i podaj numer zamówienia ${order.id}.` });
+      setDelivery(order, { delivery: `Płatność przeszła – kod Hammer+ dla konta ${p.nick} wystawi zespół ${config.brand.name}. Napisz do nas na Discordzie i podaj numer zamówienia ${order.id}.` });
       if (guild) await sendLog(guild, { embeds: [logEmbed(COLORS.danger ?? COLORS.warning, '🌐 Hammer+ ze strony – brak kodu', guild.client.user).setDescription(`Zamówienie \`${order.id}\` od <@${order.userId}> jest **opłacone** (${money(order.amount / unit())}), ale kod dla \`${p.nick}\` nie został wystawiony: ${truncate(err.message, 300)}\nWystaw go ręcznie: \`/hammerplus nadaj nick:${p.nick} dni:${p.days}\`.`)] }).catch(() => null);
       return;
     }
     const { code, record } = granted;
     setDelivery(order, {
-      plus: { ...p, grantDays: days, grantedAt: now, exp: record.exp },
+      plus: { ...p, grantDays: days, grantedAt: now, exp: record.exp, codeId: record.id }, // the website shows this same code again
       delivered: true,
       delivery: `Kod Hammer+ dla konta ${record.nick} jest gotowy – znajdziesz go na stronie launchera (sekcja Hammer+) i w wiadomości prywatnej na Discordzie. Wpisz go w Hammer Launcherze: Hammer+ → „Mam kod”.`,
     });
@@ -476,6 +521,11 @@ const panelPlus = {
     const guild = guildOf();
     return Boolean(guild) && require('./hammerplus').runningUntil(guild.id, mc) !== null;
   },
+  /** When the account's Hammer+ ends: unix seconds, 0 = never, null = none running. */
+  until: (mc) => {
+    const guild = guildOf();
+    return guild ? require('./hammerplus').runningUntil(guild.id, mc) : null;
+  },
 };
 
 /** The featured servers for the panel – the same list /featured edits. */
@@ -532,7 +582,13 @@ function start(c) {
   client = c;
   if (!env.web.enabled || server) return;
   webStore.load();
-  process.once('exit', () => webStore.flush());
+  process.once('exit', () => {
+    try {
+      webStore.flush();
+    } catch (err) {
+      console.warn('💾 Nie udało się zapisać bazy strony przy zamykaniu:', err.message);
+    }
+  });
   webAuth.setClientId(c.application?.id ?? c.user?.id);
   server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured });
   server.on('error', (err) => {
@@ -545,7 +601,8 @@ function start(c) {
     else if (!authReady()) console.warn('🌐 Strona: logowanie przez Discord jest wyłączone – ustaw DISCORD_CLIENT_SECRET (Developer Portal → OAuth2) i dodaj przekierowanie …/api/shop/auth/callback.');
     if (env.web.publicUrl && !paymentsReady()) console.warn('🌐 Strona: płatności są wyłączone – ustaw STRIPE_SECRET_KEY.');
   });
-  ensureInvite(guildOf()).catch(() => null);
+  checkInvite(guildOf(), { force: true }).catch(() => null);
+  setInterval(() => checkInvite(guildOf()).catch(() => null), INVITE_CHECK_MS).unref?.();
 }
 
 hooks.on('ready', start);
@@ -562,5 +619,5 @@ hooks.on('inviteDelete', (invite) => {
 
 module.exports = {
   catalog, featuredServers, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c),
-  deliverPlus, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel,
+  deliverPlus, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel, checkInvite, inviteOf,
 };
