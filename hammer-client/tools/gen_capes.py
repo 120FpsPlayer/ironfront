@@ -17,6 +17,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.dont_write_bytecode = True  # the two generators import each other – no __pycache__ in the repository
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 MOD = os.path.join(ROOT, 'common/src/main/resources/assets/hammerclient')
 LAUNCHER = os.path.join(ROOT, '..', 'hammer-launcher', 'src', 'renderer', 'assets', 'capes')

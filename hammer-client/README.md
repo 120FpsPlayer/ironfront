@@ -28,12 +28,16 @@ Dodatki dla osób z aktywnym Hammer+ (kod wpisuje się w Hammer Launcherze, któ
 - **tła menu**: Noc, Zorza, Lawa, Złoto oraz **własny obraz** (wybierany w launcherze),
 - **celownik**: trzy dodatkowe kształty (strzałka, litera T, romb) i animacje (pulsowanie, oddech, dynamiczny),
 - **peleryny Hammer** – widzi je każdy, kto gra na Hammer Client (Hammer i Żar są za darmo, pozostałe z Hammer+),
+- **ruchome peleryny**: Płomień, Iskry i Fale (16 klatek, 10 na sekundę; na elytrze też się ruszają),
+- **dodatki na postać**: skrzydła (Anielskie, Smocze), aureola i czapka (Korona, Cylinder, Czapka Mikołaja) – wybierane w launcherze obok peleryn, widzą je inni gracze Hammer Client. Skrzydła machają (w powietrzu szybciej i szerzej), aureola unosi się nad głową (nad czapką też), wszystko idzie za modelem (skradanie, patrzenie w górę i w dół, podgląd w ekwipunku). Nie są rysowane u niewidzialnych graczy ani w pierwszej osobie; czapka znika pod hełmem, skrzydła pod elytrą,
 - **własna peleryna** (Hammer+) – obrazek z launchera (`config/hammerclient/cape.png`), widzi ją tylko gracz,
 - **znaczek H+** przed nickiem na liście graczy (zamiast zwykłego H).
 
 Opcje Hammer+ są w panelu oznaczone plusem. Bez Hammer+ są widoczne, ale zablokowane (kłódka) i działają jak ustawienie domyślne; wybór zostaje zapamiętany na później.
 
-Peleryny innych graczy: mod pyta serwer sklepu o graczy, których właśnie widzisz (wysyła tylko ich identyfikatory kont, paczkami, w tle). Można to wyłączyć w panelu: Ustawienia → „Pokazuj peleryny Hammer innych graczy”.
+Peleryny innych graczy: mod pyta serwer sklepu o graczy, których właśnie widzisz (wysyła tylko ich identyfikatory kont, paczkami, w tle). Można to wyłączyć w panelu: Ustawienia → „Pokazuj peleryny Hammer innych graczy” (i osobno „Pokazuj dodatki innych graczy”). Odpowiedź `GET …/capes?uuids=` ma pole `capes` (to, co czytają starsze wersje moda – zamiast ruchomej peleryny jej nieruchomy odpowiednik) i – gdy ktoś ma ruchomą pelerynę albo dodatki – `looks: { "<uuid>": { cape, wings, halo, hat } }`.
+
+Jak zbudowane są dodatki: `tools/gen_cosmetics.py` (Python + Pillow) rysuje tekstury i zapisuje `assets/hammerclient/cosmetics.json` – kilka pudełek na głowie albo tułowiu na każdy dodatek, w układzie modeli Minecrafta (ściany pudełka z rozłożonego obszaru tekstury), z animacją części (`flapL`, `flapR`, `bob`). `core/Cosmetics.java` zamienia je raz na gotowe czworokąty, a warstwa gracza (`fabric/CosmeticsLayer.java`, dodawana przez `PlayerLayersMixin`) co klatkę tylko je przesuwa za kośćmi i wypisuje wierzchołki – w każdej wersji gry przez jej własne API (≤1.21.1 encja, 1.21.2+ stan renderowania, 1.21.9+ `SubmitNodeCollector`). Ruchoma peleryna to pionowy pasek klatek (`textures/capes/<id>.png`, pierwsza na górze) – mod tnie go raz na osobne tekstury i podaje grze klatkę według czasu. Ten sam skrypt daje launcherowi pasek peleryny i płaskie obrazki dodatków do podglądu.
 
 Znaczek na liście graczy działa podobnie: na serwerze (nie w grze jednoosobowej) mod co półtorej minuty zgłasza serwerowi sklepu „to konto gra teraz na Hammer Client” i pyta o konta z listy graczy – wysyła same identyfikatory kont, paczkami, w tle. Serwer trzyma tę informację tylko w pamięci, przez 5 minut, i niczego nie zapisuje. H+ dostaje konto, które ma aktywny Hammer+ według serwera sklepu. Moduł **Znaczek Hammer w Tab** (Wygląd) ma dwa przełączniki: „Pokazuj innym, że gram na Hammer Client” i „Znaczek przy moim nicku”; wyłączenie całego modułu wyłącza też te zapytania. Znaczki to dwa znaki własnej czcionki gry (`assets/hammerclient/font/badge.json`), rysowane przez `tools/gen_badges.py` z logo.
 
@@ -55,7 +59,7 @@ common/              kod wspólny dla wszystkich wersji gry – bez żadnej klas
 versions/src/main/   warstwa gry: Platform i Game dla Minecrafta, rysowanie, ekran-most, mixiny
 versions/targets.json  lista wersji: z czym się kompiluje i dla jakich wydań jest dany jar
 versions/renames.txt   nazwy, które Mojang zmienił między wersjami
-tools/               generatory grafik (czcionka, ikony) i plików językowych
+tools/               generatory grafik (czcionka, ikony, peleryny, dodatki) i plików językowych
 ```
 
 Warstwa gry jest napisana **raz**. Różnice między wersjami Minecrafta są oznaczone w kodzie:
@@ -95,7 +99,7 @@ W GitHub Actions mod buduje się sam, a każda wspierana wersja gry jest urucham
 ## Pliki ustawień w instancji
 
 - `config/hammerclient.json` – wybory gracza (moduły, układ HUD, profile, wygląd).
-- `config/hammerclient-launcher.json` – zapisuje go launcher: link do Discorda, sklep, nazwa marki, Hammer+ (`plus.active`, `plus.until`), wybrana peleryna (`cape`: id peleryny Hammer albo `custom`) i adres API sklepu (`api`).
+- `config/hammerclient-launcher.json` – zapisuje go launcher: link do Discorda, sklep, nazwa marki, Hammer+ (`plus.active`, `plus.until`), wybrana peleryna (`cape`: id peleryny Hammer albo `custom`), dodatki (`cosmetics: { wings, halo, hat }`, tylko gdy coś jest założone) i adres API sklepu (`api`).
 - `config/hammerclient/waypoints.json` – waypointy gracza.
 - `config/hammerclient/menu.png` – własne tło menu (kopiuje je launcher, Hammer+).
 - `config/hammerclient/benchmark.json` – wynik ostatniego testu FPS.

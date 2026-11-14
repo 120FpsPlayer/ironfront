@@ -1562,6 +1562,7 @@ async function main() {
   await page.locator('.hcos[data-cosmetic="tophat"]').click();
   await page.waitForTimeout(500);
   await count('.hcos.on', 3);
+  await noToasts();
   await page.locator('.view').evaluate((v) => (v.scrollTop = 0));
   await shot('68e-skorka-smocze-cylinder');
   await small('68f-skorka-dodatki-male-okno', () => viewTop('h2', 'Dodatki'));

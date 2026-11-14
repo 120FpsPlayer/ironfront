@@ -602,7 +602,8 @@ def project_hat(item, tex, areas, view):
     y1 = max(b[4] for b in boxes)
     width, height = math.ceil((x1 - x0) * PX), math.ceil((y1 - y0) * PX)
     out = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    order = sorted(boxes, key=lambda b: -b[5] if view == 'front' else b[2])
+    # far faces first: seen from the front a box's face is at its smallest z, seen from behind at its largest
+    order = sorted(boxes, key=lambda b: -b[2] if view == 'front' else b[5])
     for bx0, by0, bz0, bx1, by1, bz1, b in order:
         f = faces(*areas[b['tex']]['uv'], b['size'], k)['front' if view == 'front' else 'back']
         face = tex.crop(tuple(round(v) for v in f))
@@ -710,6 +711,7 @@ def main():
     print(f'{len(ANIMATED)} moving capes ({FRAMES} frames, {FPS} fps), {len(ITEMS)} cosmetics → mod and launcher')
 
     # the cape lists (still and moving) for the mod and the launcher
+    sys.dont_write_bytecode = True  # the two generators import each other – no __pycache__ in the repository
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import gen_capes  # noqa: E402 – the same folder
     gen_capes.write_lists()
