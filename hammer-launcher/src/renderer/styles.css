@@ -411,6 +411,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 .world-row .title{gap:8px;min-width:0;margin-bottom:2px}
 .world-row .title b{min-width:0}
 .world-row .title .chip{flex:none;height:21px;font-size:11px}
+/* Kopia zapasowa światów: „Przywróć wczorajszą wersję” / „Inna wersja…” under a world, and the version picker */
+.world-versions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:8px}
+.world-versions .btn.sm{height:28px;font-size:12px}
+.world-versions .plus-locked{display:inline-flex}
+.world-versions-hint{display:flex;align-items:center;gap:8px;margin-top:10px}
+.world-versions-hint svg.i{width:12px;height:12px;color:var(--gold);flex:none}
+.ver-day+.ver-day{margin-top:14px}
+.ver-day-head{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;font-size:13px}
+.ver-day-head .dim{font-size:11.5px}
+.ver-row{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 14px;border-radius:var(--r2);background:var(--bg2);border:1px solid var(--line)}
+.ver-row+.ver-row{margin-top:6px}
+.ver-row .ver-time{font-size:14px;min-width:48px;font-variant-numeric:tabular-nums}
+.ver-row .chip{flex:none;height:21px;font-size:11px}
+.ver-row .dim{font-size:12px;white-space:nowrap}
 
 /* ── disk usage and clean-up (settings) ── */
 .disk-bar{display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.07)}
@@ -648,6 +662,51 @@ button.chip.plus-chip:hover{background:rgba(var(--gold-glow),.2);border-color:rg
 :root[data-fx=stars] .hero canvas.embers{display:none}
 :root[data-fx=aurora] .hero canvas.embers{opacity:.5}
 @media (prefers-reduced-motion:reduce){.fx:before,.fx:after{animation:none!important}}
+
+/* ── Motywy launchera (Hammer+): the whole window in a theme's colours (CSS variables set by js/themefx.js), with
+   its moving background behind everything – one canvas and a few CSS lights, moved by the script at ≤ 30 fps ── */
+.theme-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:var(--bg)}
+.theme-bg>*{position:absolute;inset:0}
+.theme-bg .drift{inset:-12%;will-change:transform}
+.theme-bg .pulse{will-change:opacity}
+.theme-bg canvas{width:100%;height:100%}
+:root[data-theme] #app{position:relative;z-index:1}
+/* the side bar and the title bar let the background through a little, the cards just a touch (test/themes.test.js
+   checks the text on all of them against the brightest spot of the background) */
+:where(:root[data-theme]) .titlebar,:where(:root[data-theme]) .sidebar{background:var(--theme-side)}
+:where(:root[data-theme]) .card,:where(:root[data-theme]) .inst-card,:where(:root[data-theme]) .project{background:var(--theme-card)}
+:where(:root[data-theme]) .backdrop{display:none}
+:where(:root[data-theme]) .hero{background:var(--theme-hero)}
+:where(:root[data-theme]) .hero canvas.embers{display:none}
+/* the few warm colours written straight into the rules above follow the theme */
+:where(:root[data-theme]) .btn:hover,:where(:root[data-theme]) .fx-tile:hover{border-color:var(--line2)}
+:where(:root[data-theme]) .view::-webkit-scrollbar-thumb,:where(:root[data-theme]) .scroll::-webkit-scrollbar-thumb{background-color:var(--line2)}
+:where(:root[data-theme]) .play-btn.running{background:linear-gradient(180deg,var(--panel3),var(--panel2))}
+:where(:root[data-theme]) .product .img{background:linear-gradient(135deg,var(--panel3),var(--panel))}
+/* the picker in Ustawienia → Wygląd: tiles with a live preview, in the language of the cape grid */
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;padding:0 0 14px}
+.theme-tile{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:6px 6px 8px;border-radius:var(--r2);background:var(--bg2);border:1px solid var(--line);text-align:center;min-width:0;transition:border-color .15s,background .15s}
+.theme-tile:hover{border-color:var(--line2)}
+.theme-tile.on{border-color:rgba(var(--gold-glow),.6);background:rgba(var(--gold-glow),.06)}
+.theme-tile b{font-size:12.5px;margin-top:3px}
+.theme-tile small{color:var(--dim);font-size:11px;height:24px;line-height:24px}
+.theme-tile .chip{height:24px;align-self:center}
+.theme-tile.locked b{color:var(--dim)}
+.theme-pic{position:relative;height:74px;border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.theme-pic>*{position:absolute}
+.theme-pic .sky,.theme-pic canvas{inset:0;width:100%;height:100%}
+.theme-pic .m-side{left:0;top:0;bottom:0;width:22%;padding-top:8px;background:var(--t-side);border-right:1px solid var(--t-line)}
+.theme-pic .m-side i{display:block;height:3px;margin:0 5px 5px;border-radius:2px;background:var(--t-muted);opacity:.55}
+.theme-pic .m-side i:first-child{background:var(--t-accent);opacity:1}
+.theme-pic .m-card{right:8px;bottom:8px;width:54%;padding:6px 7px 7px;border-radius:5px;background:var(--t-panel);border:1px solid var(--t-line);box-shadow:0 4px 10px rgba(0,0,0,.35);text-align:left}
+.theme-pic .m-card i{display:block;height:3px;width:72%;border-radius:2px;background:var(--t-text)}
+.theme-pic .m-card i+i{width:48%;margin-top:3px;background:var(--t-muted)}
+.theme-pic .m-card u{display:block;width:50%;height:7px;margin-top:6px;border-radius:3px;background:linear-gradient(180deg,var(--t-accent2),var(--t-accent3))}
+.theme-lock{inset:0;display:grid;place-items:center;color:#ffd166;background:rgba(6,4,8,.5)}
+.theme-lock svg.i{width:22px;height:22px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8))}
+/* under a theme the accent colour and the animated banner have no say: their controls rest, dimmed */
+.theme-off{opacity:.42;filter:saturate(.5);pointer-events:none}
+.theme-note{margin:-2px 0 14px}
 
 /* Zestawy and Peleryny Hammer+ (Skórka) */
 .hcape-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:10px}

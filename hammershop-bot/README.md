@@ -33,7 +33,7 @@ Ten sam bot prowadzi dwa różne serwery – który, wybierasz jedną linią w `
 - **Role:** 🔨 Hammer Launcher (rola bota), CEO, Co-CEO, **Developer**, Manager, Administrator, Moderator, Support, Stażysta, **Tester**, Boty, Członek oraz powiadomienia: Ogłoszenia, **Aktualizacje** (ping przy nowej wersji) i Giveawaye.
 - **Tickety:** *Pomoc z launcherem*, *Zgłoś błąd*, *Hammer+ i płatności*, *Odbierz nagrodę*, *Zgłoś użytkownika*, *Rekrutacja*, *Odwołanie od kary* – z pytaniami o wersję launchera, Minecrafta i log.
 - **Połączenie ze stroną i launcherem:** nowa wersja opublikowana w panelu admina pojawia się na **#aktualizacje** (z pingiem roli Aktualizacje), aktualność – na **#aktualności**, a kanały statystyk pokazują aktualną wersję i liczbę pobrań. `/launcher` pokazuje kartę launchera z aktualną wersją.
-- **Strona:** adres główny (`PUBLIC_URL`) to **strona launchera** z logo H i nazwą Hammer Launcher – pobieranie, aktualności, Hammer+ przez Stripe; panel admina jest pod `/admin`.
+- **Strona:** adres główny (`PUBLIC_URL`) to **strona launchera** z logo H i nazwą Hammer Launcher – pobieranie (po zalogowaniu przez Discorda), aktualności, Hammer+ przez Stripe, program poleceń *Zaproś znajomego*; panel admina jest pod `/admin`.
 - **Te same emotki** co w HammerShop (jedyny wyjątek: emotka logo to H). Komend sklepu (`/produkt`, `/sklep`, `/promocja`, `/opinia`…) na tym serwerze nie ma, a `/pomoc` mówi o launcherze.
 - **Gdzie zmienić teksty:** `config.launcher.json` (nazwa, opisy, rodzaje ticketów, gotowe odpowiedzi – nakładane na `config.json`), `regulamin-launcher.md`, układ kanałów i ról w `src/builder/layout.launcher.js`, karty kanałów w `src/builder/content.launcher.js`. Grafiki: `assets/banners-launcher/`, `assets/brand/logo-launcher.png`, `assets/brand/server-banner-launcher.png` (`npm run render-assets -- launcher` rysuje je od nowa).
 - **Oba serwery naraz:** uruchom dwie kopie bota w osobnych folderach – każda ze swoim `.env` (osobny token bota i `BOT_PROFILE`), portem strony i folderem `data/`.
@@ -311,7 +311,7 @@ tę listę ze strony bota – zmiany widać w nim najpóźniej po 5 minutach.
 |---|---|
 | `GET health` | Czy API działa i czy klucz Hammer+ jest ustawiony |
 | `GET featured` | Polecane serwery z `/polecane` |
-| `GET news` | Aktualności, komunikat na górze launchera i najnowsza wersja – to, co opublikujesz w [panelu admina](#-strona-launchera-aktualizacje-i-panel-admina). Każde zapytanie launchera liczy się jako jedno uruchomienie (same liczby na dzień i wersję) |
+| `GET news` | Aktualności, komunikat na górze launchera i najnowsza wersja (z bezpośrednim adresem instalatora w `/updates/`) – to, co opublikujesz w [panelu admina](#-strona-launchera-aktualizacje-i-panel-admina). Każde zapytanie launchera liczy się jako jedno uruchomienie (same liczby na dzień i wersję) |
 | `GET cloud` · `PUT cloud` | Synchronizacja danych launchera w chmurze dla konta Hammer+ (do 256 KB; starszy zapis nie nadpisze nowszego) |
 | `GET capes?uuids=…` · `PUT cape` | Peleryny Hammer (`hammer`, `gold`, `ember`, `royal`, `frost`, `crimson`) – widoczne u innych graczy z Hammer Client. `hammer` i `ember` są **za darmo**: bez Hammer+ launcher potwierdza konto jego logowaniem Minecraft (nagłówek `X-Minecraft-Token`, sprawdzany w Mojang i niezapisywany) i takie peleryny nie wygasają. Pozostałe są widoczne, dopóki Hammer+ konta jest ważny. Własna peleryna z Hammer+ zostaje na komputerze gracza (widzi ją tylko on) |
 | `PUT presence` | Znaczek **H** / **H+** na liście graczy w grze: mod zgłasza „to konto gra teraz na Hammer Client” (`me`) i pyta o konta z listy (`uuids`, najwyżej 100) → `{ players: { "<uuid>": "h" \| "p" } }`; `p` = konto z aktywnym Hammer+. Kto gra, serwer pamięta 5 minut i tylko w pamięci; pulpit panelu pokazuje, ilu graczy gra teraz |
@@ -337,6 +337,8 @@ Bot, strona i Hammer Launcher to jeden system – wszystko stoi na **Twoim serwe
 
 ### Strona launchera – `PUBLIC_URL/launcher`
 - Przycisk **Pobierz na Windows** (`/download`) daje aktualny instalator z Twojego serwera i pokazuje wersję, rozmiar i datę. Dopóki nic nie opublikujesz, przycisk mówi *Już wkrótce*.
+- **Pobieranie wymaga zalogowania przez Discorda** (tak jak zakup Hammer+): niezalogowany widzi przycisk *Zaloguj przez Discord i pobierz*, przechodzi przez Discorda (i przy okazji trafia na serwer), wraca na stronę, a ta sama zaczyna pobieranie – z napisem „Pobieranie się zaczęło…” i linkiem na wypadek, gdyby nie ruszyło. Pobrania zalogowanych liczą się też na ich konto (statystyki poleceń). Dopóki logowanie przez Discorda nie jest skonfigurowane, przycisk pobiera od razu. Aktualizacje (`/updates/`) i przycisk „Pobierz ze strony” w samym launcherze (prowadzi wprost do instalatora) nigdy nie wymagają logowania.
+- **Zaproś znajomego** (sekcja `#polecaj`): każdy zalogowany ma swój link `PUBLIC_URL/r/<kod>` (8 znaków, zawsze ten sam). Wejście z linku zapamiętuje polecającego na 30 dni i prowadzi na stronę launchera. Polecenie liczy się, gdy znajomy **pierwszy raz** loguje się na stronie przez Discorda z tym linkiem – nie siebie, tylko nowe osoby (kto logował się wcześniej, nie może zostać polecony później), konto Discord znajomego starsze niż 7 dni, jeden polecający na zawsze. Gdy polecony znajomy **pierwszy raz** kupi Hammer+, polecający dostaje **+7 dni Hammer+**: jeśli ma działający Hammer+ na koncie powiązanym z Discordem (kupiony na stronie albo `/hammerplus nadaj … osoba:`), bot od razu wystawia nowy kod z doliczonymi 7 dniami (jak przy drugim zakupie – kod wkleja się w launcherze, zastępuje stary), wysyła go na DM i pilnuje rangi 💎 Hammer+; jeśli nie – dni czekają na stronie, a polecający odbiera je, wpisując nick Minecraft (kod pokazuje się na stronie i przychodzi na DM). Sekcja pokazuje link z przyciskiem *Kopiuj*, ile osób przyszło z linku, ile pobrało launcher, ile kupiło Hammer+ i ile dni zdobył.
 - **Aktualności** z panelu admina, zrzuty ekranu, częste pytania.
 - **Hammer+ kupowany kartą (Stripe):** gracz loguje się przez Discorda, wybiera plan, wpisuje **nick Minecraft** (sprawdzany w Mojang, zanim cokolwiek zapłaci) i płaci. Zaraz po płatności bot wystawia kod dla tego konta – kupujący widzi go **na stronie** (także później, w *Twoje kody Hammer+*) i dostaje **na DM**. Kupno w trakcie trwającego Hammer+ dolicza czas na końcu. Sam kod nigdy nie jest zapisywany – strona podpisuje go od nowa z danych zamówienia. Każdy zakup trafia do logów i do `/hammerplus lista` („kupiony na stronie”).
 - **Ranga 💎 Hammer+ na Discordzie:** kto ma działający Hammer+, dostaje rangę **💎 Hammer+** – zaraz po zakupie (kupujący loguje się przez Discorda, więc bot wie, czyje to konto), po dołączeniu na serwer, przy logowaniu na stronie i przy sprawdzaniu co 30 minut. Gdy Hammer+ się skończy, ranga znika. Kogo nie ma na serwerze, dostaje w wiadomości prywatnej zaproszenie (a strona pokazuje przycisk *Dołącz do Discorda*). `/zbuduj` tworzy tę rangę; na serwerze zbudowanym wcześniej bot zrobi ją sam przy pierwszym zakupie (potrzebuje uprawnienia *Zarządzanie rolami*). Przy `/hammerplus nadaj` możesz podać `osoba:` – to konto Discord też dostanie rangę.
@@ -363,7 +365,7 @@ Logujesz się przez Discorda. Dostęp mają tylko: **właściciel** (właścicie
 | **Aktualności** | Wiadomości na ekranie głównym launchera („Aktualności”) i na stronie launchera: tytuł, treść, etykieta, link, obrazek, przypięcie. Opcjonalnie od razu także na Discordzie (**#launcher**). U graczy pojawiają się najpóźniej po 10 minutach |
 | **Komunikat** | Pasek na samej górze launchera (informacja / ostrzeżenie / ważne), z linkiem i czasem wyświetlania – np. przerwa techniczna |
 | **Wersje launchera** | Wgrywanie instalatora, publikacja, wymagana wersja, podpis, powrót do starszej wersji, liczba pobrań *(tylko właściciel)* |
-| **Hammer+** | Wystawianie kodu dla nicku, sprawdzanie kodu, lista wystawionych i **cennik na stronie** – plany (nazwa, dni, cena) sprzedawane przez Stripe *(cennik: tylko właściciel)*. Pusty cennik = sprzedaż wyłączona |
+| **Hammer+** | Wystawianie kodu dla nicku, sprawdzanie kodu, lista wystawionych i **cennik na stronie** – plany (nazwa, dni, cena) sprzedawane przez Stripe *(cennik: tylko właściciel)*. Pusty cennik = sprzedaż wyłączona. Na dole **Zaproś znajomego**: liczba linków, poleconych, pobrań, zakupów i dni w nagrodach oraz kto polecił najwięcej osób |
 | **Polecane serwery** | Lista „Polecane serwery” w launcherze (to samo co `/polecane`) |
 | **Zamówienia** | Ostatnie 100 płatności ze strony ze statusem i linkiem do ticketu |
 
@@ -630,15 +632,16 @@ src/
 │                            Powiadom mnie, zaproszenia, blokada serwera, alerty o podszywaniu się, porządki, promocje
 │                            błyskawiczne, odznaki, Zapłać, status zamówienia, Moje zamówienia, przypomnienia dla zespołu,
 │                            karty płatności, Stripe, PayPal, własna rola bota HammerShop (brandrole.js), kody Hammer+
-│                            (hammerplus.js), polecane serwery launchera (featured.js)
+│                            (hammerplus.js), polecane serwery launchera (featured.js), nagrody Zaproś znajomego (referrals.js)
 ├── tickets/                 system ticketów, karty, transkrypcje HTML
 ├── commands/                komendy (polskie nazwy dla Discorda: lib/commandsPl.js)
 ├── handlers/interactions.js przyciski, menu i formularze
 ├── lib/                     konfiguracja, baza danych, motyw, uprawnienia, funkcje pomocnicze, kody Hammer+ (plus.js)
 └── web/                     strona sklepu i API dla Hammer Launchera (launcher.js: /api/launcher/*, /join), panel admina
-                             (admin.js: /api/admin/*), instalatory i aktualizacje launchera (releases.js: /download, /updates/)
+                             (admin.js: /api/admin/*), instalatory i aktualizacje launchera (releases.js: /download, /updates/),
+                             Zaproś znajomego (referrals.js: /r/<kod>, /api/shop/referrals)
 web/public/                  strony: index.html (sklep), launcher.html (/launcher), admin.html (/admin) i ich pliki w assets/
-data/web.json                konta i zamówienia ze strony, aktualności, komunikat, wersje launchera, cennik Hammer+
+data/web.json                konta i zamówienia ze strony, aktualności, komunikat, wersje launchera, cennik Hammer+, polecenia
 data/releases/               instalatory launchera wgrane w panelu admina
 DEPLOY.md                    uruchomienie na własnym serwerze 24/7 (deploy/: usługa systemd, Caddy)
 config.launcher.json         ustawienia serwera Hammer Launcher (BOT_PROFILE=launcher) – nakładane na config.json

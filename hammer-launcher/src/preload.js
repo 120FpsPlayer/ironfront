@@ -116,6 +116,7 @@ const api = {
     backups: (id) => call('worlds:backups', id),
     restore: (id, file) => call('worlds:restore', id, file),
     removeBackup: (id, file) => call('worlds:remove-backup', id, file),
+    restoreInPlace: (id, folder, file) => call('worlds:restore-in-place', id, folder, file),
   },
   official: { info: () => call('official:info'), worlds: (id) => call('official:worlds', id), importWorlds: (id, folders) => call('official:import-worlds', id, folders), importOptions: (id) => call('official:import-options', id) },
   share: {
@@ -154,6 +155,8 @@ const api = {
     setCapeOn: (on, lastMojang) => call('plus:cape-on', on, lastMojang),
     pickCape: () => call('plus:cape-pick'),
     removeCape: () => call('plus:cape-remove'),
+    cosmetics: () => call('plus:cosmetics'),
+    setCosmetic: (slot, value) => call('plus:cosmetic', slot, value),
   },
   theme: {
     background: () => call('theme:background'),

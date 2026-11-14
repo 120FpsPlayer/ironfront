@@ -24,6 +24,7 @@
  *   PUT    plus/plans            (owner) { plans: [{ id?, name, days, price }] }
  *   GET    featured              POST featured        DELETE featured/<id>
  *   GET    orders                → the newest website orders
+ *   GET    referrals             → „Zaproś znajomego”: the totals and the accounts that brought the most people
  *
  * Every change must come from the panel itself (the Origin header is required and must be this site), and each one is
  * written to the bot's log channel with who did it.
@@ -189,6 +190,7 @@ async function api(req, res, url, h) {
     if (route === 'plus') return h.send(res, 200, { ready: plusLib.ready(), publicKey: plusLib.ready() ? plusLib.publicKey() : null, plans: store.plusPlans(), grants: h.plus.recent(), currency: h.currency(), canEdit: owner });
     if (route === 'featured') return h.send(res, 200, { servers: h.featured.list() });
     if (route === 'orders') return h.send(res, 200, { orders: store.allOrders().filter((o) => o.stripe_id || o.status === 'paid').slice(0, 100).map(orderRow) });
+    if (route === 'referrals') return h.send(res, 200, store.referralOverview(10));
     return h.fail(res, 404, 'Nie znaleziono');
   }
 

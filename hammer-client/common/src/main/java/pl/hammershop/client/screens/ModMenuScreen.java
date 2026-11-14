@@ -402,7 +402,15 @@ public class ModMenuScreen extends UiScreen {
             row(ui, Hammer.t("plus.cape", cape), x, y, w, rowH - 4);
             d.textRight(Hammer.t("plus.in_launcher"), x + w - 12, y + (rowH - 4 - d.lineHeight(7.5f, Font.MEDIUM)) / 2f, 7.5f, Theme.DIM, Font.MEDIUM);
             y += rowH;
+            // Dodatki (Hammer+): wings, halo and hat – picked in the launcher, next to the capes
+            pl.hammershop.client.core.Cosmetics.Look look = pl.hammershop.client.core.Cosmetics.own(cfg);
+            java.util.List<String> extras = new java.util.ArrayList<>();
+            for (String id : new String[] {look.wings(), look.halo() ? pl.hammershop.client.core.Cosmetics.HALO : null, look.hat()}) if (id != null) extras.add(Hammer.t("cosmetic." + id));
+            row(ui, Hammer.t("plus.cosmetics", extras.isEmpty() ? Hammer.t("plus.cape_none") : String.join(", ", extras)), x, y, w, rowH - 4);
+            d.textRight(Hammer.t("plus.in_launcher"), x + w - 12, y + (rowH - 4 - d.lineHeight(7.5f, Font.MEDIUM)) / 2f, 7.5f, Theme.DIM, Font.MEDIUM);
+            y += rowH;
             y = toggleRow(ui, "capes", Hammer.t("settings.other_capes"), cfg.otherCapes, x, y, w, rowH, v -> cfg.otherCapes = v);
+            y = toggleRow(ui, "cosmetics", Hammer.t("settings.other_cosmetics"), cfg.otherCosmetics, x, y, w, rowH, v -> cfg.otherCosmetics = v);
         }
 
         y = section(d, Hammer.t("settings.profiles"), x, y + 6);

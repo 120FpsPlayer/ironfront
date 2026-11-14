@@ -491,7 +491,8 @@ test('services: the Hammer+ cape is stored in the launcher and shared with the s
   const { s, code } = services(shop);
   const said = (r) => ({ selected: r.selected, shared: r.shared, note: r.note });
   assert.deepEqual(s.plus.capes(), {
-    capes: [{ id: 'hammer', name: 'Hammer', free: true }, { id: 'gold', name: 'Złota', free: false }, { id: 'ember', name: 'Żar', free: true }, { id: 'royal', name: 'Królewska', free: false }, { id: 'frost', name: 'Mróz', free: false }, { id: 'crimson', name: 'Karmazyn', free: false }],
+    capes: [{ id: 'hammer', name: 'Hammer', free: true }, { id: 'gold', name: 'Złota', free: false }, { id: 'ember', name: 'Żar', free: true }, { id: 'royal', name: 'Królewska', free: false }, { id: 'frost', name: 'Mróz', free: false }, { id: 'crimson', name: 'Karmazyn', free: false },
+      { id: 'flame', name: 'Płomień', free: false, frames: 16, fps: 10 }, { id: 'sparks', name: 'Iskry', free: false, frames: 16, fps: 10 }, { id: 'waves', name: 'Fale', free: false, frames: 16, fps: 10 }],
     selected: '', on: true, lastMojang: '', custom: null, plus: true,
   });
   await assert.rejects(s.plus.setCape('dragon'), /Nie ma takiej peleryny/);

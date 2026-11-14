@@ -2,7 +2,8 @@
   {
     "id": "hammer",
     "name": "Hammer",
-    "nameEn": "Hammer"
+    "nameEn": "Hammer",
+    "free": true
   },
   {
     "id": "gold",
@@ -12,7 +13,8 @@
   {
     "id": "ember",
     "name": "Żar",
-    "nameEn": "Ember"
+    "nameEn": "Ember",
+    "free": true
   },
   {
     "id": "royal",
@@ -28,5 +30,26 @@
     "id": "crimson",
     "name": "Karmazyn",
     "nameEn": "Crimson"
+  },
+  {
+    "id": "flame",
+    "name": "Płomień",
+    "nameEn": "Flame",
+    "frames": 16,
+    "fps": 10
+  },
+  {
+    "id": "sparks",
+    "name": "Iskry",
+    "nameEn": "Sparks",
+    "frames": 16,
+    "fps": 10
+  },
+  {
+    "id": "waves",
+    "name": "Fale",
+    "nameEn": "Waves",
+    "frames": 16,
+    "fps": 10
   }
 ]

@@ -51,6 +51,7 @@ function card(guild, { live = false } = {}) {
   c.addTextDisplayComponents(
     text(
       `${E('star')} **Hammer+** – dodatek dla chętnych: własne kolory i tła, peleryny, kopie światów i chmura. Sam wygląd i wygoda, żadnej przewagi w grze.\n` +
+        `${E('gift')} **Zaproś znajomego** – +7 dni Hammer+ za każdego, kto z Twojego linku kupi Hammer+. Pobierasz launcher i bierzesz link na stronie, po zalogowaniu przez Discorda.\n` +
         `-# Potrzebujesz oryginalnego Minecrafta: Java Edition (konto Microsoft). Coś nie działa? Napisz na ${channel(guild, 'tickets', 'kanale z ticketami')}.`,
     ),
   );

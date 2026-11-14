@@ -303,8 +303,11 @@
   ];
   const ACCENT_VARS = { accent: '--accent', accent2: '--accent2', accent3: '--accent3', accentHi: '--accent-hi', ink: '--accent-ink', glow: '--glow' };
   const plusOn = () => Boolean(state.plus?.active);
-  /** The animated background that is on right now – null for the classic one (always without Hammer+). */
-  const fxNow = () => (plusOn() && FX.some((f) => f.value === state.settings.heroStyle && f.value !== 'classic') ? state.settings.heroStyle : null);
+  /* Motywy launchera (Hammer+): a theme sets every colour and its own moving background (js/themes.js, js/themefx.js). */
+  /** The theme that is on right now – 'default' (the look of the settings below) without Hammer+ or without a theme. */
+  const themeNow = () => (plusOn() && window.HS_THEMES?.IDS.includes(state.settings?.theme) ? state.settings.theme : 'default');
+  /** The animated background that is on right now – null for the classic one (always without Hammer+, and under a theme). */
+  const fxNow = () => (plusOn() && themeNow() === 'default' && FX.some((f) => f.value === state.settings.heroStyle && f.value !== 'classic') ? state.settings.heroStyle : null);
   /** The layer the animated backgrounds are drawn in (pure CSS). `style` fixes one for a preview; without it the layer follows the settings. */
   function fxLayer(style) {
     return h('div', { class: `fx${style ? ` ${style}` : ` live${fxNow() ? ` ${fxNow()}` : ''}`}`, 'aria-hidden': 'true' });
@@ -316,7 +319,7 @@
   function applyTheme(previewColor) {
     const root = document.documentElement;
     const s = state.settings ?? {};
-    const custom = plusOn() ? previewColor ?? (s.accent === 'custom' ? s.accentColor : null) : null;
+    const custom = plusOn() && themeNow() === 'default' ? previewColor ?? (s.accent === 'custom' ? s.accentColor : null) : null;
     const colours = custom ? window.HS_THEME.palette(custom) : null;
     for (const name of Object.values(ACCENT_VARS)) root.style.removeProperty(name);
     if (colours) {
@@ -328,11 +331,12 @@
     else delete root.dataset.fx;
     for (const layer of document.querySelectorAll('.fx.live')) layer.className = `fx live${fx ? ` ${fx}` : ''}`;
     const backdrop = document.getElementById('backdrop');
-    const picture = plusOn() ? state.backgroundUrl : null;
+    const picture = plusOn() && themeNow() === 'default' ? state.backgroundUrl : null; // a theme brings its own background
     if (backdrop) {
       backdrop.style.backgroundImage = picture ? `url("${picture}")` : '';
       backdrop.classList.toggle('on', Boolean(picture));
     }
+    window.HS_THEME_FX?.apply(themeNow(), { motion: s.themeMotion !== false }); // after the accent: a theme's colours win
   }
 
   /* ── tiny event bus + app state ── */
@@ -685,7 +689,7 @@
     };
     const tick = (now) => {
       raf = requestAnimationFrame(tick);
-      if (now - last < 33 || document.hidden) return;
+      if (now - last < 33 || document.hidden || !w) return; // !w: hidden by CSS (a theme or the stars draw their own)
       last = now;
       for (const p of parts) {
         p.t += 0.03;
@@ -738,4 +742,5 @@
   }
 
   window.HS = { views: {}, api, t: i18n.t, locale, h, append, clear, raw, icon, fmt, LOADERS, TILES, tile, head, bus, state, toast, copyText, taskBar, attempt, busy, modal, confirmDialog, menu, toggle, select, seg, range, field, empty, chip, debounce, open, instancePicker, community, money, discordCard, embers, hammerClientOn, hammerClientFits, hammerClientRange, hammerClientVersions, skinView, capeView, paintSkin, looksSlim, ACCENTS, applyAccent, FX, plusOn, fxLayer, applyTheme, isBeta, betaPill };
+  window.HS.themeNow = themeNow; // Motywy launchera
 })();

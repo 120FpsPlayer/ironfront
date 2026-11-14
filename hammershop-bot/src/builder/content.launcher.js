@@ -165,6 +165,7 @@ function plus(x) {
         '> **2.** Zaloguj się przez Discorda i wpisz swój **nick w Minecraft**\n' +
         '> **3.** Zapłać kartą (Stripe) – kod pojawi się od razu na stronie i w wiadomości prywatnej od bota\n' +
         '> **4.** W launcherze: **Hammer+ → „Mam kod”** → wklej kod\n' +
+        `> ${x.E('gift')} **Zaproś znajomego** – +7 dni Hammer+ za każdego, kto z Twojego linku kupi Hammer+ (link masz na stronie launchera)\n` +
         `-# Kod działa na koncie Minecraft, dla którego go kupisz. Coś poszło nie tak? Ticket **Hammer+ i płatności** na ${x.ch('tickets')}.`,
     ),
   );
@@ -174,13 +175,14 @@ function plus(x) {
 
 function faq(x) {
   const qa = [
-    ['Skąd pobrać launcher?', `Tylko z naszej strony – przycisk jest na ${x.ch('launcher')}. Nie uruchamiaj „launchera”, którego ktoś wysłał Ci prywatnie.`],
+    ['Skąd pobrać launcher?', `Tylko z naszej strony – przycisk jest na ${x.ch('launcher')}. Zaloguj się przez Discorda, a pobieranie ruszy samo. Nie uruchamiaj „launchera”, którego ktoś wysłał Ci prywatnie.`],
     ['Windows ostrzega przy instalacji. Czy to bezpieczne?', 'Tak. W wersji beta instalator nie ma jeszcze płatnego certyfikatu wydawcy, dlatego SmartScreen pokazuje okno „System Windows ochronił ten komputer”. Kliknij **Więcej informacji → Uruchom mimo to**.'],
     ['Czy potrzebuję oryginalnego Minecrafta?', 'Tak – Minecraft: Java Edition na koncie Microsoft. Logujesz się oficjalną stroną Microsoftu w oknie launchera. Kont nieoryginalnych nie obsługujemy.'],
     ['Jak działają aktualizacje?', `Launcher sam pobiera nową wersję w tle i instaluje ją, gdy go zamkniesz. O każdej wersji piszemy na ${x.ch('updates')}.`],
     ['Gra nie startuje albo się wysypuje', `Otwórz w launcherze **Konsola → Udostępnij log** i wyślij nam link w tickecie **Pomoc z launcherem** na ${x.ch('tickets')}. Podaj wersję Minecrafta i listę modów.`],
     ['Jak zwiększyć FPS?', 'Zakładka **Optymalizacja** → **Zoptymalizuj wszystko**. Launcher dobierze pamięć, ustawienia Javy i mody wydajnościowe. Wynik sprawdzisz **Testem FPS**.'],
     ['Co daje Hammer+ i jak go aktywować?', `Wygląd i wygodę – bez przewagi w grze. Wszystko opisaliśmy na ${x.ch('plus')}. Kod wpisujesz w launcherze: **Hammer+ → „Mam kod”**.`],
+    ['Jak dostać Hammer+ za darmo?', 'Zaproś znajomych: na stronie launchera (sekcja **Zaproś znajomego**) masz swój link. Za każdego znajomego, który pobierze z niego launcher i kupi Hammer+, dostajesz **+7 dni Hammer+**.'],
     ['Mam pomysł na nową funkcję', `Super – napisz go na ${x.ch('suggestions')}. Czytamy wszystkie.`],
     ['Czy mogę dołączyć do zespołu?', `Jasne – otwórz ticket **Rekrutacja** na ${x.ch('tickets')}.`],
   ];

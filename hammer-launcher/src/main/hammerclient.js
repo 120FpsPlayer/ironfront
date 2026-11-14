@@ -90,9 +90,11 @@ function supports(instance, client = NONE) {
  *   plus: { active, until (unix seconds, 0 = never or not active) },
  *   cape: the Hammer cape the player wears ("" = none) – the services decide what is allowed: the free capes for
  *         everybody, the others and "custom" (config/hammerclient/cape.png) with Hammer+ (the mod checks again),
- *   api:  the shop API the mod asks about other players' capes ("" = none).
+ *   api:  the shop API the mod asks about other players' capes ("" = none),
+ *   cosmetics: { wings, halo, hat } – Dodatki na postać (Hammer+, the services decide; the mod checks Hammer+ again).
+ *         Only there when something is worn, so the file stays as it was for everybody else.
  */
-function launcherFile({ links = {}, plus = null, cape = '', api = '' } = {}) {
+function launcherFile({ links = {}, plus = null, cape = '', api = '', cosmetics = null } = {}) {
   const https = (u) => (typeof u === 'string' && u.startsWith('https://') ? u : '');
   const active = Boolean(plus?.active);
   const until = active && Number.isInteger(plus.until) && plus.until > 0 ? plus.until : 0;
@@ -103,7 +105,15 @@ function launcherFile({ links = {}, plus = null, cape = '', api = '' } = {}) {
     plus: { active, until },
     cape: typeof cape === 'string' && /^[a-z0-9_-]{1,32}$/.test(cape) ? cape : '',
     api: typeof api === 'string' && /^https?:\/\//.test(api) ? api : '',
+    ...lookOf(cosmetics),
   };
+}
+
+/** { cosmetics: { wings, halo, hat } } when anything is worn – plain ids only – otherwise nothing. */
+function lookOf(look) {
+  const id = (v) => (typeof v === 'string' && /^[a-z0-9_-]{1,32}$/.test(v) ? v : '');
+  const clean = { wings: id(look?.wings), halo: look?.halo === true, hat: id(look?.hat) };
+  return clean.wings || clean.halo || clean.hat ? { cosmetics: clean } : {};
 }
 
 /**
@@ -111,7 +121,7 @@ function launcherFile({ links = {}, plus = null, cape = '', api = '' } = {}) {
  * client: the result of loadHammerClient(). links, plus, cape and api go into config/hammerclient-launcher.json
  * (see launcherFile above).
  */
-async function syncHammerClient({ instance, client = NONE, content, links = {}, plus = null, cape = '', api = '' }) {
+async function syncHammerClient({ instance, client = NONE, content, links = {}, plus = null, cape = '', api = '', cosmetics = null }) {
   const mods = path.join(instance.dir, 'mods');
   const target = path.join(mods, FILE);
   const supported = supports(instance, client);
@@ -143,7 +153,7 @@ async function syncHammerClient({ instance, client = NONE, content, links = {}, 
 
   const configDir = path.join(instance.dir, 'config');
   fs.mkdirSync(configDir, { recursive: true });
-  fs.writeFileSync(path.join(configDir, 'hammerclient-launcher.json'), JSON.stringify(launcherFile({ links, plus, cape, api }), null, 2));
+  fs.writeFileSync(path.join(configDir, 'hammerclient-launcher.json'), JSON.stringify(launcherFile({ links, plus, cape, api, cosmetics }), null, 2));
   return { active: true };
 }
 

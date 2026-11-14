@@ -370,8 +370,10 @@ async function handOver(order) {
 /** Website → bot: a paid order (once per order). */
 async function onPaid(order) {
   const current = webStore.getOrder(order.id) ?? order;
-  if (current.kind === 'plus') await deliverPlus(current);
-  else await handOver(current);
+  if (current.kind === 'plus') {
+    await deliverPlus(current);
+    await require('./referrals').onPurchase(webStore.getOrder(order.id) ?? current); // „Zaproś znajomego”: +7 days for whoever referred the buyer
+  } else await handOver(current);
 }
 
 // ───────────── Hammer+ bought on the website ─────────────
@@ -564,6 +566,9 @@ const panelPlus = {
   },
 };
 
+/** „Zaproś znajomego” on the website: the days kept as a balance become a code (src/features/referrals.js). */
+const panelReferrals = { claim: (user, nick) => require('./referrals').claim(user, nick) };
+
 /** The featured servers for the panel – the same list /featured edits. */
 const panelFeatured = {
   list: () => featuredServers(),
@@ -626,7 +631,7 @@ function start(c) {
     }
   });
   webAuth.setClientId(c.application?.id ?? c.user?.id);
-  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), invitesPaused: () => invitesPaused(), ownInviteFailing, onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured });
+  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), invitesPaused: () => invitesPaused(), ownInviteFailing, onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured, referrals: panelReferrals });
   server.on('error', (err) => {
     console.warn(`🌐 Strona: nie można użyć portu ${env.web.port} (${err.code ?? err.message}) – bot działa dalej bez niej.`);
     server = null;
@@ -655,5 +660,5 @@ hooks.on('inviteDelete', (invite) => {
 
 module.exports = {
   catalog, featuredServers, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c),
-  deliverPlus, plusDm, panelLevel, announce, panelLog, panelPlus, panelFeatured, launcherChannel, checkInvite, inviteOf, invitesPaused, ownInviteFailing,
+  deliverPlus, plusDm, panelLevel, announce, panelLog, panelPlus, panelFeatured, panelReferrals, launcherChannel, checkInvite, inviteOf, invitesPaused, ownInviteFailing,
 };

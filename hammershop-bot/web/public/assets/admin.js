@@ -423,11 +423,28 @@
       var list = $('grants-list');
       list.textContent = '';
       r.grants.forEach(function (g) {
-        list.appendChild(el('tr', {}, [el('td', { class: 'mono', text: g.nick }), el('td', { text: validity(g.exp) }), el('td', { class: 'muted', text: g.source === 'website' ? 'kupiony na stronie' : 'wystawiony ręcznie' }), el('td', { class: 'nowrap muted', text: when(g.at) })]));
+        list.appendChild(el('tr', {}, [el('td', { class: 'mono', text: g.nick }), el('td', { text: validity(g.exp) }), el('td', { class: 'muted', text: g.source === 'website' ? 'kupiony na stronie' : g.source === 'referral' ? 'nagroda za polecenie' : 'wystawiony ręcznie' }), el('td', { class: 'nowrap muted', text: when(g.at) })]));
       });
       if (!r.grants.length) list.appendChild(el('tr', {}, [el('td', { colspan: '4', class: 'empty', text: 'Nie wystawiono jeszcze żadnego kodu.' })]));
+      return loadReferrals();
     });
   };
+  // „Zaproś znajomego”: the totals and who brought the most people.
+  function loadReferrals() {
+    return api('GET', 'referrals').then(function (r) {
+      var totals = $('ref-totals');
+      totals.textContent = '';
+      [[r.links, 'linków polecających'], [r.invited, 'poleconych osób'], [r.downloaded, 'z nich pobrało launcher'], [r.bought, 'z nich kupiło Hammer+'], [r.earned, 'dni Hammer+ w nagrodach', r.balance ? 'czeka na odebranie: ' + r.balance : null]].forEach(function (x) {
+        totals.appendChild(el('div', { class: 'stat' }, [el('b', { text: String(x[0]) }), el('span', { text: x[1] }), x[2] ? el('small', { text: x[2] }) : null]));
+      });
+      var top = $('ref-top');
+      top.textContent = '';
+      r.top.forEach(function (t) {
+        top.appendChild(el('tr', {}, [el('td', {}, [t.name || '—', el('div', { class: 'muted small mono', text: t.id })]), el('td', { text: String(t.invited) }), el('td', { text: String(t.downloaded) }), el('td', { text: String(t.bought) }), el('td', { text: String(t.earned) }), el('td', { text: String(t.balance) })]));
+      });
+      if (!r.top.length) top.appendChild(el('tr', {}, [el('td', { colspan: '6', class: 'empty', text: 'Nikt jeszcze nie przyszedł z linku polecającego.' })]));
+    });
+  }
   $('plan-add').addEventListener('click', function () { $('plans-rows').appendChild(planRow({})); });
   $('plans-form').addEventListener('submit', function (event) {
     event.preventDefault();

@@ -573,6 +573,8 @@ if (!app.requestSingleInstanceLock()) {
     handle('worlds:backups', (id) => s().worlds.listBackups(id));
     handle('worlds:restore', (id, file) => s().worlds.restoreBackup(id, file));
     handle('worlds:remove-backup', (id, file) => s().worlds.removeBackup(id, file));
+    // Kopia zapasowa światów: a backup put in place of the world („Przywróć wczorajszą wersję”, „Inna wersja…”, „Cofnij”).
+    handle('worlds:restore-in-place', (id, folder, file) => s().worlds.restoreInPlace(id, folder, file));
 
     handle('cleanup:usage', () => s().cleanup.usage());
     handle('cleanup:plan', () => s().cleanup.plan());
@@ -612,6 +614,8 @@ if (!app.requestSingleInstanceLock()) {
     handle('plus:cape-on', (on, lastMojang) => s().plus.setCapeOn(Boolean(on), typeof lastMojang === 'string' ? lastMojang : undefined));
     handle('plus:cape-pick', () => s().plus.pickCape());
     handle('plus:cape-remove', () => s().plus.removeCape());
+    handle('plus:cosmetics', () => s().plus.cosmetics());
+    handle('plus:cosmetic', (slot, value) => s().plus.setCosmetic(typeof slot === 'string' ? slot : '', typeof value === 'string' || typeof value === 'boolean' ? value : null));
     handle('theme:background', () => s().theme.background());
     handle('theme:pick-background', () => s().theme.pickBackground());
     handle('theme:clear-background', () => s().theme.clearBackground());

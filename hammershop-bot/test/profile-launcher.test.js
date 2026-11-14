@@ -224,12 +224,12 @@ test('the admin panel posts where the launcher server expects it, and the stat c
   assert.match(news.body.discord, /^https:\/\/discord\.com\/channels\//);
   assert.match(textOf(channel('news').messageList.at(-1).body), /Nowy sezon[\s\S]*Start w piątek\./);
 
-  await fetch(`${base}/download`, { redirect: 'manual' });
+  await fetch(`${base}/download`, { redirect: 'manual', headers: { cookie: ownerSid } }); // downloading needs a Discord sign-in
   const names = stats.statNames(guild);
   assert.deepEqual([names.statVersion, names.statDownloads], [stats.STAT_NAMES.statVersion('2.6.0'), stats.STAT_NAMES.statDownloads(1)]);
   assert.match(names.statVersion, /2\.6\.0$/);
   assert.equal('statShop' in names, false);
 
   const feed = await (await fetch(`${base}/api/launcher/news`)).json();
-  assert.deepEqual([feed.release.version, feed.release.url, feed.news[0].title], ['2.6.0', `${base}/download`, 'Nowy sezon']);
+  assert.deepEqual([feed.release.version, feed.release.url, feed.news[0].title], ['2.6.0', `${base}/updates/Hammer-Launcher-Setup-2.6.0.exe`, 'Nowy sezon']);
 });

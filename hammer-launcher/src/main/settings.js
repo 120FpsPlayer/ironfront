@@ -6,6 +6,10 @@ const { readJson, writeJson } = require('./store');
 const { freeCapes } = require('./capes');
 /** Capes everybody may wear – picking one of them needs no Hammer+ (capes.json → free). */
 const FREE_CAPES = freeCapes();
+const { idsOf } = require('./cosmetics');
+/** Dodatki na postać: the wings and hats that exist (cosmetics.json). */
+const WINGS = idsOf('wings');
+const HATS = idsOf('hat');
 
 const DEFAULT_SETTINGS = Object.freeze({
   memoryMb: null, // null = picked automatically from the computer's RAM and the number of mods
@@ -38,12 +42,18 @@ const DEFAULT_SETTINGS = Object.freeze({
   accentColor: '', // "#rrggbb" for accent: 'custom'
   background: '', // the player's own background picture: a file name in <launcher folder>/theme/
   heroStyle: 'classic', // classic | aurora | forge | stars – the animated background
-  autoBackup: false, // back up the worlds played after each game session
+  autoBackup: true, // back up the worlds played after each game session – on by default since 2.10 (see migrate)
   autoBackupKeep: 5, // automatic backups kept per world (1–20)
   hammerCape: '', // the cape Hammer Client draws: an id from capes.json, or 'custom' (Hammer+: the player's own picture)
   capeOn: true, // the cape switch: off = no cape at all (neither Hammer nor Mojang)
   lastMojangCape: '', // the Mojang cape that was on when the switch went off – it comes back when it goes on
+  cosmeticWings: '', // Dodatki na postać (Hammer Client): wings from cosmetics.json ('' = none)
+  cosmeticHalo: false, // … the halo
+  cosmeticHat: '', // … a hat ('' = none)
   cloudAuto: false, // cloud copy: fetch at start, send after each game session
+  // Motywy launchera: the colours of the whole window and a moving background behind it (src/renderer/js/themes.js)
+  theme: 'default', // default (the look above: accent + heroStyle) | nether | end | ocean | cherry | deepdark – Hammer+
+  themeMotion: true, // „Ruchome tło”: the theme's background moves (off = only its colours) – free, it only matters with a theme
 });
 
 const PRESETS = ['recommended', 'zgc', 'vanilla', 'custom'];
@@ -52,6 +62,7 @@ const PRIORITY = ['normal', 'above_normal', 'high'];
 const ACCENTS = ['orange', 'gold', 'red', 'blue', 'green', 'purple'];
 const HERO_STYLES = ['classic', 'aurora', 'forge', 'stars'];
 const LANGUAGES = ['auto', 'pl', 'en'];
+const THEMES = ['default', 'nether', 'end', 'ocean', 'cherry', 'deepdark']; // the ids of src/renderer/js/themes.js (a test keeps them equal)
 
 /**
  * Settings only Hammer+ may switch on: key → [is this the free value?, what the feature is called in a message].
@@ -63,7 +74,11 @@ const PLUS_ONLY = {
   heroStyle: [(v) => v === 'classic', 'Animowane tło'],
   autoBackup: [(v) => !v, 'Automatyczne kopie światów'],
   hammerCape: [(v) => !v || FREE_CAPES.has(v), 'Peleryny Hammer+'],
+  cosmeticWings: [(v) => !v, 'Dodatki na postać'],
+  cosmeticHalo: [(v) => !v, 'Dodatki na postać'],
+  cosmeticHat: [(v) => !v, 'Dodatki na postać'],
   cloudAuto: [(v) => !v, 'Automatyczna synchronizacja z chmurą'],
+  theme: [(v) => v === 'default', 'Motywy launchera'],
 };
 
 function clampInt(v, min, max, fallback) {
@@ -95,6 +110,10 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
   if ('autoBackupKeep' in patch) out.autoBackupKeep = clampInt(patch.autoBackupKeep, 1, 20, base.autoBackupKeep);
   if (typeof patch.hammerCape === 'string' && /^[a-z0-9_-]{0,32}$/.test(patch.hammerCape)) out.hammerCape = patch.hammerCape;
   if (typeof patch.lastMojangCape === 'string' && /^[A-Za-z0-9_-]{0,64}$/.test(patch.lastMojangCape)) out.lastMojangCape = patch.lastMojangCape;
+  // Dodatki na postać: only the ids that exist
+  if (typeof patch.cosmeticWings === 'string' && (!patch.cosmeticWings || WINGS.has(patch.cosmeticWings))) out.cosmeticWings = patch.cosmeticWings;
+  if (typeof patch.cosmeticHat === 'string' && (!patch.cosmeticHat || HATS.has(patch.cosmeticHat))) out.cosmeticHat = patch.cosmeticHat;
+  if ('cosmeticHalo' in patch) out.cosmeticHalo = Boolean(patch.cosmeticHalo);
   for (const key of ['showSnapshots', 'discordRpc', 'gpuPreference', 'closeOnExit', 'autoBackup', 'cloudAuto', 'playSummary', 'modUpdateCheck', 'screenshotShareAsk', 'autoUpdate', 'startWithSystem', 'closeToTray', 'capeOn']) if (key in patch) out[key] = Boolean(patch[key]);
   if (typeof patch.seenVersion === 'string' && /^(\d{1,9}\.\d{1,9}\.\d{1,9}(-[0-9A-Za-z.-]{1,40})?)?$/.test(patch.seenVersion)) out.seenVersion = patch.seenVersion;
   if ('updateNotes' in patch) {
@@ -105,6 +124,9 @@ function sanitize(patch, base = DEFAULT_SETTINGS) {
   if ('newsSeenAt' in patch) out.newsSeenAt = clampInt(patch.newsSeenAt, 0, 1e14, base.newsSeenAt);
   if ('concurrentDownloads' in patch) out.concurrentDownloads = clampInt(patch.concurrentDownloads, 1, 64, base.concurrentDownloads);
   for (const key of ['selectedInstance', 'selectedAccount']) if (key in patch) out[key] = patch[key] ? String(patch[key]) : null;
+  // Motywy launchera
+  if (THEMES.includes(patch.theme)) out.theme = patch.theme;
+  if ('themeMotion' in patch) out.themeMotion = Boolean(patch.themeMotion);
   return out;
 }
 
@@ -115,16 +137,29 @@ function plusOnly(before, next) {
     .map(([, [, label]]) => label);
 }
 
+/* ── Kopia zapasowa światów: one-time change of a stored default ── */
+/**
+ * The version of the settings file. Files without it (before 2.10) hold `autoBackup: false` only because that
+ * was the default then – automatic world backups are on by default for Hammer+ now, so such a file gets them
+ * switched on once. A player who switches them off after that keeps them off: the file says version 2 by then.
+ */
+const SETTINGS_VERSION = 2;
+function migrate(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  if ((Number(raw.settingsVersion) || 1) >= SETTINGS_VERSION) return raw;
+  return { ...raw, autoBackup: true };
+}
+
 function createSettings(file) {
-  let current = sanitize(readJson(file, {}));
+  let current = { ...sanitize(migrate(readJson(file, {}))), settingsVersion: SETTINGS_VERSION };
   return {
     get: () => structuredClone(current),
     set(patch) {
-      current = sanitize(patch ?? {}, current);
+      current = { ...sanitize(patch ?? {}, current), settingsVersion: SETTINGS_VERSION };
       writeJson(file, current);
       return structuredClone(current);
     },
   };
 }
 
-module.exports = { createSettings, sanitize, plusOnly, DEFAULT_SETTINGS, ACCENTS, HERO_STYLES, LANGUAGES, PLUS_ONLY };
+module.exports = { createSettings, sanitize, plusOnly, migrate, DEFAULT_SETTINGS, ACCENTS, HERO_STYLES, LANGUAGES, THEMES, PLUS_ONLY, SETTINGS_VERSION };

@@ -18,10 +18,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Hammer capes. Your own comes from the launcher: Hammer and Żar for everybody, the others – and a picture of your
- * own (config/hammerclient/cape.png, seen only by you) – with Hammer+. Other players' capes are asked from the shop's server
- * by their account id – in small batches, in the background, remembered for a while – so players with Hammer Client
- * see each other's capes. Nothing here can ever stall or break the game: every failure just means "no cape".
+ * Hammer capes. Your own comes from the launcher: Hammer and Żar for everybody, the others – the moving ones too – and
+ * a picture of your own (config/hammerclient/cape.png, seen only by you) – with Hammer+. Other players' capes and
+ * cosmetics ({@link Cosmetics}) are asked from the shop's server by their account id – in small batches, in the
+ * background, remembered for a while – so players with Hammer Client see each other's. Nothing here can ever stall or
+ * break the game: every failure just means "no cape".
  */
 public final class Capes {
     /** The capes that ship with the client (assets/hammerclient/textures/capes/&lt;id&gt;.png). */
@@ -37,7 +38,7 @@ public final class Capes {
     private static final long KEEP_MS = 10 * 60_000L;
     private static final int BATCH = 80;
 
-    private record Entry(String cape, long at) {
+    private record Entry(String cape, Cosmetics.Look look, long at) {
     }
 
     private static final Map<String, Entry> CACHE = new ConcurrentHashMap<>();
@@ -57,12 +58,36 @@ public final class Capes {
         Config c = Hammer.config();
         if (c == null || uuid == null) return null;
         if (self) return own(c);
-        if (!c.otherCapes || c.api.isEmpty()) return null;
+        if (!c.otherCapes) return null;
+        Entry e = known(c, uuid);
+        return e == null || e.cape.isEmpty() ? null : e.cape;
+    }
+
+    /** The wings, halo and hat of a player, or null for none. Called for every drawn player – it never waits. */
+    public static Cosmetics.Look look(String uuid, boolean self) {
+        Config c = Hammer.config();
+        if (c == null || uuid == null) return null;
+        Cosmetics.Look look = self ? Cosmetics.own(c) : c.otherCosmetics ? lookOf(known(c, uuid)) : null;
+        return look == null || look.bare() ? null : look;
+    }
+
+    private static Cosmetics.Look lookOf(Entry e) {
+        return e == null ? null : e.look;
+    }
+
+    /** What the shop said about another player – asked about (again) in the background when it is not known (any more). */
+    private static Entry known(Config c, String uuid) {
+        if (c.api.isEmpty()) return null;
         // Only real (online-mode) accounts can own a cape: their ids are version 4.
         if (uuid.length() != 32 || uuid.charAt(12) != '4') return null;
         Entry e = CACHE.get(uuid);
         if ((e == null || System.currentTimeMillis() - e.at > KEEP_MS) && QUEUE.size() < 400 && !PENDING.contains(uuid)) QUEUE.add(uuid);
-        return e == null || e.cape.isEmpty() ? null : e.cape;
+        return e;
+    }
+
+    /** A cape the client can draw: one of the still ones or a moving one. */
+    public static boolean known(String id) {
+        return KNOWN.contains(id) || Cosmetics.movingCape(id) != null;
     }
 
     /** Your own cape: a free one always, the others and your own picture only while Hammer+ is active. null = none. */
@@ -72,7 +97,7 @@ public final class Capes {
         if (FREE.contains(id)) return id;
         if (!Hammer.plus()) return null;
         if (CUSTOM.equals(id)) return customReady() ? CUSTOM : null;
-        return KNOWN.contains(id) ? id : null;
+        return known(id) ? id : null;
     }
 
     /** Your own cape picture, loaded once (on the render thread, where capes are asked for) – it must be 2:1. */
@@ -97,7 +122,7 @@ public final class Capes {
     public static void tick() {
         if (++ticks % 40 != 0 || busy || QUEUE.isEmpty()) return;
         Config c = Hammer.config();
-        if (c == null || c.api.isEmpty() || !c.otherCapes) {
+        if (c == null || c.api.isEmpty() || !(c.otherCapes || c.otherCosmetics)) {
             QUEUE.clear();
             return;
         }
@@ -141,17 +166,29 @@ public final class Capes {
         }
     }
 
-    /** Stores an answer {"capes": {"&lt;uuid&gt;": "&lt;cape&gt;"}}; everyone asked about and not in it has no cape. */
+    /**
+     * Stores an answer {"capes": {"&lt;uuid&gt;": "&lt;cape&gt;"}, "looks": {"&lt;uuid&gt;": {"cape", "wings", "halo", "hat"}}};
+     * everyone asked about and not in it has nothing. "capes" is what older clients read (a still cape in place of a
+     * moving one); "looks" – when the server sends it – says everything, moving capes included.
+     */
     public static void accept(List<String> asked, String body) {
         JsonObject capes = null;
+        JsonObject looks = null;
         JsonElement root = JsonParser.parseString(body);
         if (root.isJsonObject() && root.getAsJsonObject().get("capes") instanceof JsonObject o) capes = o;
+        if (root.isJsonObject() && root.getAsJsonObject().get("looks") instanceof JsonObject o) looks = o;
         if (capes == null) throw new IllegalStateException("bad answer");
         long now = System.currentTimeMillis();
         for (String id : asked) {
-            JsonElement v = capes.get(id);
-            String cape = v != null && v.isJsonPrimitive() && KNOWN.contains(v.getAsString()) ? v.getAsString() : "";
-            CACHE.put(id, new Entry(cape, now));
+            boolean full = looks != null && looks.has(id);
+            Cosmetics.Look look = full ? Cosmetics.parseLook(looks.get(id)) : Cosmetics.Look.NONE;
+            String cape;
+            if (full) cape = look.cape() != null ? look.cape() : "";
+            else {
+                JsonElement v = capes.get(id);
+                cape = v != null && v.isJsonPrimitive() && KNOWN.contains(v.getAsString()) ? v.getAsString() : "";
+            }
+            CACHE.put(id, new Entry(cape, look, now));
         }
     }
 }

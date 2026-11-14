@@ -469,6 +469,184 @@ class PreviewTest {
     }
 
     @Test
+    void cosmeticsAreBuiltFromTheirFile() throws Exception {
+        // every cosmetic of the file: quads with texture coordinates inside its texture, on the head or the body
+        var items = pl.hammershop.client.core.Cosmetics.items();
+        assertEquals(java.util.List.of("angel", "dragon", "halo", "crown", "tophat", "santa"), items.stream().map(i -> i.id).toList());
+        for (var item : items) {
+            assertTrue(getClass().getResource("/assets/hammerclient/" + item.texture()) != null, item.id + " has a texture");
+            for (var part : item.parts) {
+                assertTrue(part.vertices() > 0 && part.vertices() % 4 == 0, item.id);
+                for (int i = 0; i < part.quads.length; i += pl.hammershop.client.core.Cosmetics.STRIDE) {
+                    float u = part.quads[i + 3];
+                    float v = part.quads[i + 4];
+                    assertTrue(u >= 0 && u <= 1 && v >= 0 && v <= 1, item.id + " uv " + u + "," + v);
+                    float n = part.quads[i + 5] * part.quads[i + 5] + part.quads[i + 6] * part.quads[i + 6] + part.quads[i + 7] * part.quads[i + 7];
+                    assertEquals(1f, n, 1e-4f, item.id + " normal");
+                }
+            }
+        }
+        // a flat wing is two faces (front and back), not six
+        var angel = pl.hammershop.client.core.Cosmetics.item("angel");
+        assertEquals(2, angel.parts.size());
+        assertEquals(8, angel.parts.get(0).vertices());
+        assertEquals(pl.hammershop.client.core.Cosmetics.Bone.BODY, angel.parts.get(0).bone);
+        // the halo: a closed golden ring above the head that glows
+        var halo = pl.hammershop.client.core.Cosmetics.item("halo");
+        assertTrue(halo.glow);
+        float minX = 9, maxX = -9, minZ = 9, maxZ = -9;
+        for (var part : halo.parts) {
+            assertEquals(pl.hammershop.client.core.Cosmetics.Bone.HEAD, part.bone);
+            assertTrue(part.py < -0.7f, "above the head (the head's top is at -0.5)");
+            for (int i = 0; i < part.quads.length; i += pl.hammershop.client.core.Cosmetics.STRIDE) {
+                minX = Math.min(minX, part.quads[i]);
+                maxX = Math.max(maxX, part.quads[i]);
+                minZ = Math.min(minZ, part.quads[i + 2]);
+                maxZ = Math.max(maxZ, part.quads[i + 2]);
+            }
+        }
+        assertEquals(minX, -maxX, 0.01f, "round");
+        assertEquals(minZ, -maxZ, 0.01f, "round");
+        // hats sit on the head, outside the second skin layer (which is 0.5 pixel bigger than the head)
+        for (String id : new String[] {"crown", "tophat", "santa"}) {
+            var hat = pl.hammershop.client.core.Cosmetics.item(id);
+            assertEquals("hat", hat.slot);
+            float lowest = -9;
+            for (var part : hat.parts) for (int i = 0; i < part.quads.length; i += pl.hammershop.client.core.Cosmetics.STRIDE) lowest = Math.max(lowest, part.quads[i + 1]);
+            assertTrue(lowest <= 0, id + " stays on the head");
+            float lift = pl.hammershop.client.core.Cosmetics.haloLift(hat);
+            assertTrue(halo.bottom + lift + 0.7f / 16 < hat.top, "the halo floats above the " + id + " (even when it bobs down)");
+        }
+        assertEquals(0f, pl.hammershop.client.core.Cosmetics.haloLift(null), "without a hat the halo stays where it is");
+        // the same box layout as Minecraft's: a 8×8×8 head box at texture 0,0 has its face at 8,8–16,16 (64×64)
+        var quads = new java.util.ArrayList<float[]>();
+        java.lang.reflect.Method box = pl.hammershop.client.core.Cosmetics.class.getDeclaredMethod("box", java.util.List.class, float[].class, float[].class, float[].class, float.class, boolean.class, float.class, float.class, float.class);
+        box.setAccessible(true);
+        box.invoke(null, quads, new float[] {-4, -8, -4}, new float[] {8, 8, 8}, new float[] {0, 0}, 0f, false, 1f, 64f, 64f);
+        assertEquals(6, quads.size());
+        float[] front = quads.get(3); // north: the face
+        assertEquals(-1f, front[22]);
+        java.util.Set<String> corners = new java.util.TreeSet<>();
+        for (int v = 0; v < 4; v++) corners.add(front[v * 5 + 3] * 64 + "," + front[v * 5 + 4] * 64);
+        assertEquals(java.util.Set.of("8.0,8.0", "16.0,8.0", "8.0,16.0", "16.0,16.0"), corners);
+
+        // moving capes: strips of frames, known to the client and shown in turn
+        for (String id : new String[] {"flame", "sparks", "waves"}) {
+            var cape = pl.hammershop.client.core.Cosmetics.movingCape(id);
+            assertTrue(cape != null && cape.frames() >= 8 && cape.frames() <= 16 && cape.fps() == 10, id);
+            assertTrue(pl.hammershop.client.core.Capes.known(id));
+            var strip = javax.imageio.ImageIO.read(getClass().getResource("/assets/hammerclient/textures/capes/" + id + ".png"));
+            assertEquals(strip.getWidth() / 2 * cape.frames(), strip.getHeight(), id + " is a strip of " + cape.frames() + " cape pictures");
+            assertEquals(0, cape.frameAt(0));
+            assertEquals(1, cape.frameAt(100));
+            assertEquals(0, cape.frameAt(1000L * cape.frames() / cape.fps()), "a loop");
+        }
+        assertEquals(null, pl.hammershop.client.core.Cosmetics.movingCape("gold"), "a still cape");
+        // the cape lists name the same moving capes
+        String list = new String(getClass().getResourceAsStream("/assets/hammerclient/capes.json").readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        for (String id : new String[] {"flame", "sparks", "waves"}) assertTrue(list.contains("\"id\": \"" + id + "\""), id);
+    }
+
+    @Test
+    void wingsBeatFasterWhenFlying() {
+        var wing = pl.hammershop.client.core.Cosmetics.item("angel").parts.get(0);
+        var other = pl.hammershop.client.core.Cosmetics.item("angel").parts.get(1);
+        float[] a = new float[6];
+        float[] b = new float[6];
+        double idleMin = 9, idleMax = -9, flyMin = 9, flyMax = -9;
+        for (float t = 0; t < 120; t += 0.5f) {
+            pl.hammershop.client.core.Cosmetics.animate(wing, t, 0, a);
+            pl.hammershop.client.core.Cosmetics.animate(other, t, 0, b);
+            assertEquals(a[4], -b[4], 1e-6f, "the wings move as mirror images");
+            assertTrue(a[4] < 0, "folded backwards (+z) – the left wing turns the other way round the y axis");
+            idleMin = Math.min(idleMin, a[5]);
+            idleMax = Math.max(idleMax, a[5]);
+            pl.hammershop.client.core.Cosmetics.animate(wing, t, 1, a);
+            flyMin = Math.min(flyMin, a[5]);
+            flyMax = Math.max(flyMax, a[5]);
+        }
+        assertTrue(flyMax - flyMin > 3 * (idleMax - idleMin), "big beats while flying, gentle ones on the ground");
+        // the halo floats up and down, less than a pixel
+        var halo = pl.hammershop.client.core.Cosmetics.item("halo").parts.get(0);
+        float lo = 9, hi = -9;
+        for (float t = 0; t < 64; t++) {
+            pl.hammershop.client.core.Cosmetics.animate(halo, t, 0, a);
+            lo = Math.min(lo, a[1]);
+            hi = Math.max(hi, a[1]);
+            assertEquals(0f, a[4]);
+        }
+        assertTrue(hi - lo > 0.05f && hi - lo < 0.1f);
+    }
+
+    @Test
+    void cosmeticsNeedHammerPlusAndComeFromTheShop() throws Exception {
+        var cfg = Hammer.config();
+        String me = "0123456789ab4def0123456789abcdef";
+        String other = "abababababab4abababababababababa";
+        String old = "acacacacacac4acacacacacacacacaca";
+        // your own: from the launcher's file, only with Hammer+
+        Files.writeString(platform.dir.resolve("hammerclient-launcher.json"), "{\"plus\":{\"active\":true,\"until\":0},\"cape\":\"flame\",\"cosmetics\":{\"wings\":\"angel\",\"halo\":true,\"hat\":\"<b>\"}}");
+        var fresh = pl.hammershop.client.core.Config.load(platform.dir);
+        assertEquals("angel", fresh.wings);
+        assertTrue(fresh.halo);
+        assertEquals("", fresh.hat, "not an id");
+        Files.writeString(platform.dir.resolve("hammerclient-launcher.json"), "{\"discordUrl\":\"https://discord.gg/gRqFb6MmWX\",\"shopUrl\":\"https://hammershop.pl\",\"brand\":\"HammerShop\"}");
+        cfg.wings = "dragon";
+        cfg.halo = true;
+        cfg.hat = "crown";
+        cfg.cape = "flame";
+        cfg.plusActive = false;
+        assertEquals(null, Hammer.look(me, true), "cosmetics are Hammer+");
+        assertEquals(null, Hammer.cape(me, true), "and so are moving capes");
+        cfg.plusActive = true;
+        cfg.plusUntil = 0;
+        assertEquals(new pl.hammershop.client.core.Cosmetics.Look(null, "dragon", true, "crown"), Hammer.look(me, true));
+        assertEquals("flame", Hammer.cape(me, true));
+        cfg.hat = "angel";
+        assertEquals(null, Hammer.look(me, true).hat(), "wings are not a hat");
+        ModMenuScreen scrolled = settingsTab();
+        for (String field : new String[] {"scroll", "scrollTarget"}) {
+            java.lang.reflect.Field f = pl.hammershop.client.ui.UiState.class.getDeclaredField(field);
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Float> m = (java.util.Map<String, Float>) f.get(scrolled.state);
+            m.put("client", 520f);
+        }
+        shot("06b-client-settings-cosmetics", scrolled, 1920, 1080, 3, true, 0, 0);
+        cfg.wings = "";
+        cfg.halo = false;
+        cfg.hat = "";
+        cfg.cape = "";
+        cfg.plusActive = false;
+
+        // other players: the server's "looks" (newer servers) say everything, "capes" alone is what older ones send
+        cfg.api = "https://shop.invalid/api/launcher";
+        cfg.otherCapes = true;
+        cfg.otherCosmetics = true;
+        pl.hammershop.client.core.Capes.accept(java.util.List.of(other, old), "{\"capes\":{\"" + other + "\":\"ember\",\"" + old + "\":\"gold\"},\"looks\":{\"" + other
+                + "\":{\"cape\":\"flame\",\"wings\":\"angel\",\"halo\":true,\"hat\":\"tophat\"}}}");
+        assertEquals("flame", Hammer.cape(other, false), "the moving cape, not the still one older clients get");
+        assertEquals(new pl.hammershop.client.core.Cosmetics.Look("flame", "angel", true, "tophat"), Hammer.look(other, false));
+        assertEquals("gold", Hammer.cape(old, false), "not in looks: the cape list counts");
+        assertEquals(null, Hammer.look(old, false));
+        pl.hammershop.client.core.Capes.accept(java.util.List.of(other), "{\"capes\":{},\"looks\":{\"" + other + "\":{\"cape\":\"<x>\",\"wings\":\"tophat\",\"halo\":\"yes\",\"hat\":\"santa\"}}}");
+        assertEquals(null, Hammer.cape(other, false), "unknown ids are dropped");
+        assertEquals(new pl.hammershop.client.core.Cosmetics.Look(null, null, false, "santa"), Hammer.look(other, false));
+        cfg.otherCosmetics = false;
+        assertEquals(null, Hammer.look(other, false), "the player turned them off");
+        cfg.otherCosmetics = true;
+        cfg.api = "";
+    }
+
+    private static ModMenuScreen settingsTab() throws Exception {
+        ModMenuScreen settings = new ModMenuScreen();
+        java.lang.reflect.Field tab = ModMenuScreen.class.getDeclaredField("tab");
+        tab.setAccessible(true);
+        tab.set(settings, "settings");
+        return settings;
+    }
+
+    @Test
     void capesOfOtherPlayersComeFromTheShop() throws Exception {
         var cfg = Hammer.config();
         String withCape = "dddddddddddd4ddddddddddddddddddd";

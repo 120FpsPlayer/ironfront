@@ -46,6 +46,7 @@ const FOREIGN = [
   'HammerGracz', 'Kowal', 'Gracz', // account and Windows user names
   'nowy.example.pl', 'nowy.example.com', 'Testy 26', 'Hardcore z Kuba', '“Budowanie”', // a server address, world folders and an instance name of the sample data
   'options.txt.przed-importem', '.hammer/przywracanie', // file and folder names the launcher really uses (they are not translated)
+  '-przed-przywroceniem', // the end of the name of a backup made before a world is restored in place (Kopia zapasowa światów)
 ];
 
 // Short Polish words no English text has – they give away a Polish text whose longer words the dictionary has never seen.

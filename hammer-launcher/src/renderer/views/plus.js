@@ -139,7 +139,7 @@
     const sw = HS.toggle(HS.plusOn() && s.autoBackup, async (v) => {
       if (!(await attempt(() => state.setSettings({ autoBackup: v })))) sw.querySelector('input').checked = !v;
     });
-    return row('Automatyczne kopie światów', 'Po każdej grze launcher sam pakuje światy, w których grałeś. Starsze automatyczne kopie znikają, zrobione ręcznie zostają.', h('div.row', h('span.dim', { style: { fontSize: '12.5px' } }, 'Zostaw'), keep, sw));
+    return row('Automatyczne kopie światów', 'Po każdej grze launcher sam pakuje światy, w których grałeś. Zostają najnowsze kopie i po jednej z każdego z ostatnich 7 dni, a zrobione ręcznie – zawsze.', h('div.row', h('span.dim', { style: { fontSize: '12.5px' } }, 'Zostaw'), keep, sw));
   }
 
   /* ── the cloud ── */
@@ -249,6 +249,19 @@
     load();
     const off = bus.on('cloud', () => (box.isConnected ? load() : off()));
     return box;
+  }
+
+  /* ── „Zaproś znajomego”: the referral programme lives on the launcher's page of the website (its #polecaj card) ── */
+  /** The card for everybody, with Hammer+ or without: the link and the numbers are on the website. Only for an https site. */
+  function referralCard(website) {
+    if (!/^https:\/\/[^\s/]+/.test(website)) return null;
+    return h(
+      'section.card.refer-card',
+      h('div.card-head', icon('user-plus'), h('h2', 'Zaproś znajomego')),
+      h('p', { style: { fontSize: '13.5px', fontWeight: '600', marginBottom: '6px' } }, '+7 dni Hammer+ za każdego znajomego, który kupi Hammer+.'),
+      h('p.muted', { style: { fontSize: '12.5px', marginBottom: '12px' } }, 'Twój link znajdziesz na stronie launchera. Znajomy pobiera z niego launcher, a gdy kupi Hammer+, dostajesz 7 dni za darmo.'),
+      h('button.btn', { type: 'button', onclick: () => HS.open(`${website}/launcher#polecaj`) }, icon('external'), 'Mój link polecający'),
+    );
   }
 
   /* ── the page ── */
@@ -372,13 +385,14 @@
           `div.plus-cols${on ? '.on' : ''}`,
           h(
             'div.grid',
-            h('section.card', h('div.card-head', icon('star'), h('h2', 'Co dostajesz')), perksBox, h('p.hint', { style: { marginTop: '12px' } }, 'Wszystko, co do tej pory było w launcherze za darmo, zostaje za darmo. Rangi na Discordzie i wcześniejszy dostęp nie są częścią Hammer+.')),
+            h('section.card', h('div.card-head', icon('star'), h('h2', 'Co dostajesz')), perksBox, h('p.hint', { style: { marginTop: '12px' } }, 'Wszystko, co do tej pory było w launcherze za darmo, zostaje za darmo. Wcześniejszy dostęp nie jest częścią Hammer+.')),
           ),
           h(
             'div.grid',
             codeCard,
             on ? h('section.card', h('div.card-head', icon('images'), h('h2', 'Twoje tła')), backgroundRows()) : null,
             on ? h('section.card', h('div.card-head', icon('cloud'), h('h2', 'Chmura')), cloudBox()) : null,
+            referralCard(website),
           ),
         ),
       ),

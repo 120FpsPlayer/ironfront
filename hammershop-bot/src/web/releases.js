@@ -4,7 +4,8 @@
  * Hammer Launcher's installers, kept on this server (data/releases/) – the download button of the website and the
  * launcher's own updater read them from here, nothing goes through GitHub:
  *
- *   GET /download              → the current installer (302 to /updates/<file>, counted)
+ *   GET /download              → the current installer (302 to /updates/<file>, counted) – after a Discord sign-in
+ *                              when the site has one (src/web/server.js)
  *   GET /updates/latest.yml    what electron-updater's "generic" provider reads: version, file, sha512, size
  *                              (+ signature when the owner signs releases – the launcher then refuses anything unsigned)
  *   GET /updates/<file>        the installer or its .blockmap. Range requests work – one range (a resumed download)
@@ -343,11 +344,15 @@ function latestYml(release = store.currentRelease()) {
   ].join('\n');
 }
 
-/** What the launcher and the download page are told about the current release. */
+/**
+ * What the launcher and the download page are told about the current release. url: the installer itself – the launcher
+ * opens it when it cannot update by itself, and somebody who already has the launcher is not sent through the website's
+ * Discord sign-in (/download) for that.
+ */
 function publicInfo(publicUrl = '') {
   const r = store.currentRelease();
   if (!r) return null;
-  return { version: r.version, notes: r.notes || '', date: new Date(r.at).toISOString(), minVersion: r.minVersion ?? null, size: r.size, url: `${publicUrl}/download` };
+  return { version: r.version, notes: r.notes || '', date: new Date(r.at).toISOString(), minVersion: r.minVersion ?? null, size: r.size, url: `${publicUrl}/updates/${encodeURIComponent(r.file)}` };
 }
 
 /** "bytes=0-99" → { start, end } within size; null = the whole file; false = cannot be satisfied. */

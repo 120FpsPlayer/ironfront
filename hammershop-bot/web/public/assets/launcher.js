@@ -1,4 +1,5 @@
-/* The launcher page: the download button, the news the admin panel published, and Hammer+ bought by card. */
+/* The launcher page: the download button (after a Discord sign-in), the news the admin panel published, Hammer+ bought
+   by card and „Zaproś znajomego” – the referral card. */
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
@@ -39,11 +40,19 @@
   var session = { user: null };
   var plus = { ready: false, plans: [], currency: 'eur', authReady: false };
   var chosen = null;
+  var release; // the current installer: undefined until the feed answers, null when there is none yet
+  var signedKnown = false; // the session has been asked
+  /** Polish plural: 1 osoba, 2 osoby, 5 osób. */
+  var pl = function (n, one, few, many) { return n === 1 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many; };
+  var dayWord = function (n) { return n === 1 ? 'dzień' : 'dni'; };
 
   // ── The download button and the news ──
-  function showRelease(release) {
+  // Downloading from the website needs a Discord sign-in (where the site has it set up) – the button says so; the
+  // server sends a signed-out click through Discord and back here with ?download=1, and the page starts the download.
+  function showRelease() {
     var button = $('download');
     var meta = $('download-meta');
+    if (release === undefined) return;
     if (!release) {
       button.textContent = 'Już wkrótce';
       button.setAttribute('aria-disabled', 'true');
@@ -51,8 +60,27 @@
       return;
     }
     button.removeAttribute('aria-disabled');
-    button.textContent = 'Pobierz na Windows';
+    button.textContent = signedKnown && !session.user && plus.authReady ? 'Zaloguj przez Discord i pobierz' : 'Pobierz na Windows';
     meta.textContent = 'Wersja ' + release.version + ' (beta) · ' + megabytes(release.size) + ' · ' + new Date(release.date).toLocaleDateString('pl-PL');
+  }
+  // Signed in (or no sign-in on this site): the click downloads right away – the page says it started.
+  $('download').addEventListener('click', function () {
+    if (release && signedKnown && (session.user || !plus.authReady)) $('download-started').hidden = false;
+  });
+  /** Back from the Discord sign-in the download button asked for: the download starts by itself. */
+  var downloadHandled = false;
+  function downloadAfterSignIn() {
+    if (downloadHandled || params.get('download') !== '1' || release === undefined || !signedKnown) return;
+    downloadHandled = true;
+    var clean = function () { history.replaceState(null, '', location.pathname + location.hash); };
+    if (params.get('auth')) {
+      if (params.get('auth') === 'cancelled') toast('Logowanie anulowane – launcher pobierzesz ze strony po zalogowaniu przez Discord.', true);
+      return clean();
+    }
+    if (!release || (!session.user && plus.authReady)) return clean();
+    $('download-started').hidden = false;
+    clean();
+    location.href = '/download';
   }
   function showNews(news) {
     var box = $('news');
@@ -181,6 +209,61 @@
     history.replaceState(null, '', '/launcher#plus');
   }
 
+  // ── „Zaproś znajomego”: the personal link, the numbers, the days to claim ──
+  function rewardCard(reward, fresh) {
+    var card = codeCard({ plus: { nick: reward.nick, until: reward.until, code: reward.code } }, fresh);
+    card.insertBefore(el('span', { class: 'pill gold', text: fresh ? 'Odebrane z poleceń' : 'Kod z nagrody za polecenie' }), card.firstChild);
+    return card;
+  }
+  function showReferrals(fresh) {
+    return api('/api/shop/referrals').then(function (r) {
+      $('ref-out').hidden = r.signedIn;
+      $('ref-in').hidden = !r.signedIn;
+      if (!r.signedIn) {
+        $('ref-login').hidden = !r.authReady;
+        if (!r.authReady) $('ref-out-text').textContent = 'Logowanie przez Discord nie jest jeszcze uruchomione – link polecający pojawi się tutaj wkrótce.';
+        return;
+      }
+      $('ref-link').value = new URL(r.link, location.origin).href;
+      var st = r.stats;
+      [['invited', pl(st.invited, 'osoba', 'osoby', 'osób') + ' z Twojego linku'], ['downloaded', pl(st.downloaded, 'pobrała', 'pobrały', 'pobrało') + ' launcher'], ['bought', pl(st.bought, 'kupiła', 'kupiły', 'kupiło') + ' Hammer+'], ['earned', pl(st.earned, 'dzień zdobyty', 'dni zdobyte', 'dni zdobytych')]].forEach(function (x) {
+        $('ref-' + x[0]).textContent = String(st[x[0]]);
+        $('ref-' + x[0] + '-l').textContent = x[1];
+      });
+      $('ref-claim').hidden = !(st.balance > 0 && r.claimReady);
+      $('ref-balance').textContent = 'Masz ' + st.balance + ' ' + dayWord(st.balance) + ' Hammer+ do odebrania! Wpisz swój nick z Minecrafta – kod zadziała na tym koncie.';
+      var box = $('ref-result');
+      if (fresh) return;
+      box.textContent = '';
+      if (r.latest && r.latest.code) box.appendChild(rewardCard(r.latest, false));
+      box.hidden = !box.children.length;
+    }).catch(function () { /* the card stays as it is */ });
+  }
+  $('ref-copy').addEventListener('click', function () {
+    var link = $('ref-link').value;
+    navigator.clipboard.writeText(link).then(function () { toast('Link skopiowany – wyślij go znajomemu.'); }, function () { $('ref-link').select(); toast('Zaznaczyliśmy link – skopiuj go (Ctrl+C).', true); });
+  });
+  $('ref-claim').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var button = $('ref-claim-btn');
+    var error = $('ref-error');
+    button.disabled = true;
+    button.textContent = 'Sprawdzam nick…';
+    error.hidden = true;
+    post('/api/shop/referrals/claim', { nick: $('ref-nick').value.trim() })
+      .then(function (r) {
+        var box = $('ref-result');
+        box.textContent = '';
+        box.appendChild(rewardCard(r, true));
+        box.hidden = false;
+        $('ref-nick').value = '';
+        toast('Gotowe! Kod Hammer+ dla konta ' + r.nick + ' jest poniżej i na Discordzie.');
+        return showReferrals(true);
+      })
+      .catch(function (err) { error.textContent = err.message; error.hidden = false; })
+      .then(function () { button.disabled = false; button.textContent = 'Odbierz'; });
+  });
+
   // ── Start ──
   function showUser() {
     var who = $('who');
@@ -195,8 +278,12 @@
   if (params.get('auth') === 'failed') toast('Logowanie przez Discord nie powiodło się. Spróbuj ponownie.', true);
   if (params.get('auth') === 'unavailable') toast('Logowanie przez Discord nie jest jeszcze uruchomione.', true);
   if (params.get('download') === 'none') toast('Launcher nie jest jeszcze dostępny do pobrania – już wkrótce!');
+  if (params.get('invited')) {
+    $('invited').hidden = false;
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
 
-  api('/api/launcher/news').then(function (feed) { showRelease(feed.release); showNews(feed.news); }).catch(function () { showRelease(null); });
+  api('/api/launcher/news').then(function (feed) { release = feed.release || null; showRelease(); downloadAfterSignIn(); showNews(feed.news); }).catch(function () { release = null; showRelease(); });
   api('/api/shop/store').then(function (store) {
     var invite = httpsOnly(store.discordUrl);
     if (invite) { $('nav-discord').href = invite; $('nav-discord').hidden = false; }
@@ -204,6 +291,10 @@
   Promise.all([api('/api/shop/session').catch(function () { return { user: null }; }), api('/api/shop/plus').catch(function () { return plus; })]).then(function (r) {
     session = r[0];
     plus = r[1];
+    signedKnown = true;
+    showRelease();
+    downloadAfterSignIn();
+    showReferrals();
     showUser();
     showPlans();
     afterPayment();

@@ -27,6 +27,7 @@
       <a href="#funkcje">Funkcje</a>
       <a href="#hammershop">HammerShop</a><!--/launcher-->
       <a href="#plus">Hammer+</a>
+      <a href="#polecaj">Polecaj</a>
       <a id="nav-discord" href="#" target="_blank" rel="noopener" hidden>Discord</a>
     </nav>
     <div class="right who" id="who">
@@ -41,11 +42,13 @@
       <p class="eyebrow"><!--shop-->Nowość od HammerShop<!--/shop--><!--launcher-->Launcher Minecrafta<!--/launcher--> <span class="pill beta">Beta</span></p>
       <h1>Hammer <span>Launcher</span></h1>
       <p class="lead">Nasz własny, autorski launcher Minecrafta. Instancje, ponad tysiąc modów, FPS boost jednym kliknięciem i własny klient w grze – wszystko w jednym miejscu.</p>
+      <p class="invite-note" id="invited" hidden>🎁 Znajomy zaprasza Cię do Hammer Launchera! Zaloguj się przez Discord i pobierz go za darmo.</p>
       <div class="cta">
         <a class="btn primary big" id="download" href="/download" aria-disabled="true">Pobierz na Windows</a>
         <a class="btn big" href="#funkcje">Zobacz, co potrafi</a>
       </div>
       <p class="meta" id="download-meta" role="status">Sprawdzam najnowszą wersję…</p>
+      <p class="notice ok small" id="download-started" role="status" hidden>Pobieranie się zaczęło… Nic się nie dzieje? <a href="/download">Kliknij tutaj</a>.</p>
       <ul class="ticks">
         <li>Za darmo</li>
         <li>Windows 10 i 11 (64-bit)</li>
@@ -86,15 +89,17 @@
         <h2 id="plus-h">Launcher po Twojemu</h2>
         <p class="soft">Hammer+ to dodatek dla tych, którzy chcą więcej wyglądu i wygody. Nie daje żadnej przewagi w grze – a wszystko, co w launcherze jest za darmo, zostaje za darmo.</p>
         <ul class="perks">
-          <li>Własne kolory i tła launchera</li>
+          <li>Motywy launchera z ruchomym tłem (np. Nether i End), własne kolory i tła</li>
           <li>Własne tło menu w grze</li>
-          <li>Peleryny Hammer+ widoczne dla graczy z Hammer Client</li>
+          <li>Ruchome peleryny (np. płomień, iskry, fale) widoczne dla graczy z Hammer Client</li>
+          <li>Dodatki na postać: skrzydła, aureola i czapki</li>
           <li>Znaczek H+ przed nickiem na liście graczy (Tab)</li>
           <li>Ranga 💎 Hammer+ na naszym Discordzie</li>
-          <li>Automatyczne kopie światów</li>
+          <li>Kopie światów: launcher robi je sam, a wczorajszą wersję przywracasz jednym kliknięciem</li>
           <li>Chmura: ustawienia launchera na każdym komputerze</li>
           <li>Biblioteka na 200 skórek i zestawy skórek</li>
         </ul>
+        <p class="small soft gap-top">🎁 Chcesz Hammer+ za darmo? <a href="#polecaj">Zaproś znajomego</a> – dostajesz 7 dni za każdego, kto kupi Hammer+.</p>
       </div>
       <div class="plus-buy">
         <div id="plus-result" hidden></div>
@@ -103,6 +108,47 @@
         <div id="my-codes" hidden>
           <h3>Twoje kody Hammer+</h3>
           <div class="stack" id="my-codes-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" id="polecaj" aria-labelledby="ref-h">
+    <div class="ref-box">
+      <div class="ref-copy">
+        <p class="eyebrow gold">Zaproś znajomego</p>
+        <h2 id="ref-h">+7 dni Hammer+ za każdego znajomego</h2>
+        <p class="soft">Wyślij znajomemu swój link. Gdy pobierze Hammer Launchera i kupi Hammer+, dostajesz 7 dni Hammer+ za darmo – za każdą taką osobę.</p>
+        <ol class="ref-steps">
+          <li><b>Skopiuj swój link</b><span>Dostaniesz go po zalogowaniu przez Discord.</span></li>
+          <li><b>Wyślij go znajomemu</b><span>Znajomy loguje się przez Discord i pobiera launcher.</span></li>
+          <li><b>Zgarnij +7 dni</b><span>Gdy znajomy kupi Hammer+, dostajesz 7 dni – kod przyjdzie na Discordzie.</span></li>
+        </ol>
+        <p class="muted small">Liczą się osoby, które pierwszy raz logują się na naszej stronie i mają konto Discord starsze niż 7 dni. Siebie nie da się polecić.</p>
+      </div>
+      <div class="ref-panel">
+        <div class="stack" id="ref-out">
+          <h3>Twój link polecający</h3>
+          <p class="soft small" id="ref-out-text">Zaloguj się przez Discord – pokażemy Ci Twój link i to, ile osób już z niego skorzystało.</p>
+          <div><a class="btn primary" id="ref-login" href="/api/shop/auth/start?next=polecaj">Zaloguj się przez Discord</a></div>
+        </div>
+        <div class="stack" id="ref-in" hidden>
+          <div class="stack tight">
+            <h3>Twój link polecający</h3>
+            <div class="ref-link share"><input type="text" id="ref-link" readonly spellcheck="false" aria-label="Twój link polecający"><button class="btn gold" type="button" id="ref-copy">Kopiuj</button></div>
+          </div>
+          <div class="ref-stats">
+            <div><b id="ref-invited">0</b><span id="ref-invited-l">osób z Twojego linku</span></div>
+            <div><b id="ref-downloaded">0</b><span id="ref-downloaded-l">pobrało launcher</span></div>
+            <div><b id="ref-bought">0</b><span id="ref-bought-l">kupiło Hammer+</span></div>
+            <div class="gold"><b id="ref-earned">0</b><span id="ref-earned-l">dni zdobytych</span></div>
+          </div>
+          <form class="stack tight" id="ref-claim" hidden>
+            <p class="notice ok" id="ref-balance"></p>
+            <div class="ref-link"><input type="text" id="ref-nick" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Twój nick w Minecraft" required pattern="[A-Za-z0-9_]{1,16}" aria-label="Twój nick w Minecraft (Java Edition)"><button class="btn gold" type="submit" id="ref-claim-btn">Odbierz</button></div>
+            <p class="notice bad" id="ref-error" role="alert" hidden></p>
+          </form>
+          <div id="ref-result" hidden></div>
         </div>
       </div>
     </div>
@@ -126,11 +172,13 @@
 
   <section class="wrap faq" aria-labelledby="faq-h">
     <h2 class="section-title" id="faq-h">Częste pytania</h2>
+    <details><summary>Dlaczego do pobrania trzeba zalogować się przez Discord?</summary><p>Dzięki temu dostajesz swój link polecający, a my wiemy, że launcher pobierasz od nas. Logowanie trwa chwilę i nie widzimy Twojego hasła. Po zalogowaniu dołączasz też do naszego Discorda – tam jest pomoc i aktualności. W samym launcherze i tak logujesz się kontem Microsoft.</p></details>
     <details><summary>Windows ostrzega mnie przy instalacji. Czy to bezpieczne?</summary><p>Tak. W wersji beta instalator nie ma jeszcze płatnego certyfikatu wydawcy, dlatego Windows SmartScreen może pokazać okno „System Windows ochronił ten komputer”. Kliknij <b>Więcej informacji</b>, a potem <b>Uruchom mimo to</b>. Pobieraj launcher tylko z tej strony.</p></details>
     <details><summary>Czy potrzebuję oryginalnego Minecrafta?</summary><p>Tak – Minecraft: Java Edition na koncie Microsoft. Launcher loguje Cię oficjalną stroną Microsoftu i nie obsługuje kont nieoryginalnych.</p></details>
     <details><summary>Jak działają aktualizacje?</summary><p>Zainstalowany launcher sam sprawdza, czy jest nowa wersja, pobiera ją w tle i instaluje przy następnym uruchomieniu. Nie musisz niczego pobierać ponownie.</p></details>
     <details><summary>To wersja beta – co to znaczy?</summary><p>Launcher działa, ale wciąż go dopracowujemy. Jeśli coś nie działa albo masz pomysł, napisz do nas na Discordzie – każda uwaga pomaga.</p></details>
     <details><summary>Jak aktywować Hammer+?</summary><p>Po zakupie od razu zobaczysz swój kod na tej stronie i dostaniesz go w wiadomości prywatnej na Discordzie. W launcherze otwórz <b>Hammer+ → „Mam kod”</b> i wklej go. Kod działa na koncie Minecraft, dla którego został kupiony. Na naszym Discordzie dostajesz też rangę 💎 Hammer+ – jeśli nie ma Cię jeszcze na serwerze, dostaniesz ją zaraz po dołączeniu.</p></details>
+    <details><summary>Jak dostać Hammer+ za darmo?</summary><p>Zaproś znajomych. W sekcji <a href="#polecaj">Zaproś znajomego</a> masz swój link – gdy znajomy pobierze z niego launcher i kupi Hammer+, dostajesz 7 dni Hammer+. Masz już Hammer+? Dni doliczą się same, a nowy kod przyjdzie na Discordzie. Nie masz? Odbierzesz je tutaj, wpisując swój nick z Minecrafta.</p></details>
   </section>
 </main>
 

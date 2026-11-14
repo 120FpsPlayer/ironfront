@@ -51,6 +51,8 @@ public final class Config {
     public String menuBackground = "default";
     /** Show the Hammer+ capes of other players (their UUIDs are looked up at the shop's server). */
     public boolean otherCapes = true;
+    /** Show the wings, halos and hats of other players (asked together with their capes). */
+    public boolean otherCosmetics = true;
 
     // From the launcher – read on start, never saved here.
     public transient String discordUrl = "";
@@ -60,6 +62,10 @@ public final class Config {
     public transient boolean plusActive;
     public transient long plusUntil;
     public transient String cape = "";
+    /** Cosmetics picked in the launcher (Hammer+): wings and hat ids ("" = none) and the halo – see Cosmetics.own. */
+    public transient String wings = "";
+    public transient boolean halo;
+    public transient String hat = "";
     /** Base of the shop's launcher API ("https://…/api/launcher") – capes of other players come from there; "" = none. */
     public transient String api = "";
     private transient Path dir;
@@ -116,9 +122,18 @@ public final class Config {
             JsonElement c = o.get("cape");
             if (c != null && c.isJsonPrimitive() && c.getAsString().matches("[a-z0-9_-]{1,32}")) cape = c.getAsString();
             api = httpsOrEmpty(o.get("api")).replaceAll("/+$", "");
+            if (o.get("cosmetics") instanceof JsonObject look) {
+                wings = id(look.get("wings"));
+                hat = id(look.get("hat"));
+                halo = look.get("halo") instanceof JsonElement h && h.isJsonPrimitive() && h.getAsJsonPrimitive().isBoolean() && h.getAsBoolean();
+            }
         } catch (Exception e) {
             Log.warn("Nieprawidłowy plik od launchera", e);
         }
+    }
+
+    private static String id(JsonElement e) {
+        return e != null && e.isJsonPrimitive() && e.getAsString().matches("[a-z0-9_-]{1,32}") ? e.getAsString() : "";
     }
 
     private static String httpsOrEmpty(JsonElement e) {

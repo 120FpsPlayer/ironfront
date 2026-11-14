@@ -181,6 +181,7 @@ function services({ keys = plusKeys(), selected = GRACZ.id, now } = {}) {
 
 test('services: every Hammer+ setting is refused in the main process until a code is active', async () => {
   const { s, keys, root } = services();
+  s.settings.set({ autoBackup: false }); // on by default (it only works with Hammer+) – switching off is always allowed
   const PAID = [
     [{ accent: 'custom', accentColor: '#12ab9f' }, /Własny kolor launchera to funkcja Hammer\+/],
     [{ heroStyle: 'aurora' }, /Animowane tło to funkcja Hammer\+/],
@@ -188,8 +189,9 @@ test('services: every Hammer+ setting is refused in the main process until a cod
     [{ hammerCape: 'gold' }, /Peleryny Hammer\+ to funkcja Hammer\+/],
     [{ cloudAuto: true }, /Automatyczna synchronizacja z chmurą to funkcja Hammer\+/],
     [{ background: 'background-0a1b2c3d.png' }, /Własne tło launchera to funkcja Hammer\+/],
+    [{ theme: 'nether' }, /Motywy launchera to funkcja Hammer\+/],
   ];
-  assert.deepEqual(Object.keys(PLUS_ONLY).sort(), ['accent', 'autoBackup', 'background', 'cloudAuto', 'hammerCape', 'heroStyle'], 'a new paid setting needs a line in this test');
+  assert.deepEqual(Object.keys(PLUS_ONLY).sort(), ['accent', 'autoBackup', 'background', 'cloudAuto', 'hammerCape', 'heroStyle', 'theme'], 'a new paid setting needs a line in this test');
   for (const [patch, error] of PAID) assert.throws(() => s.settings.set(patch), error);
   assert.throws(() => s.settings.set({ memoryMb: 4096, heroStyle: 'stars' }), /Animowane tło/, 'a paid key refuses the whole change');
   assert.equal(s.settings.get().memoryMb, null);
@@ -234,7 +236,7 @@ test('settings: the Hammer+ values are checked like every other setting', () => 
   assert.deepEqual([s.accent, s.accentColor, s.heroStyle, s.autoBackup, s.autoBackupKeep, s.hammerCape, s.cloudAuto, s.background], ['custom', '#abcdef', 'forge', true, 20, 'frost', true, 'background-0a1b2c3d.webp']);
   const bad = sanitize({ accentColor: 'red; background:url(x)', heroStyle: 'matrix', autoBackupKeep: 0, hammerCape: '../x', background: '../../etc/passwd' });
   assert.deepEqual([bad.accentColor, bad.heroStyle, bad.autoBackupKeep, bad.hammerCape, bad.background], ['', 'classic', 1, '', '']);
-  assert.deepEqual([DEFAULT_SETTINGS.autoBackup, DEFAULT_SETTINGS.autoBackupKeep, DEFAULT_SETTINGS.cloudAuto, DEFAULT_SETTINGS.heroStyle], [false, 5, false, 'classic']);
+  assert.deepEqual([DEFAULT_SETTINGS.autoBackup, DEFAULT_SETTINGS.autoBackupKeep, DEFAULT_SETTINGS.cloudAuto, DEFAULT_SETTINGS.heroStyle], [true, 5, false, 'classic']);
 });
 
 test('services: the window hears when Hammer+ changes – a code, another account, the end of the code', async () => {

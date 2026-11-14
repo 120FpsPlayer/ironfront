@@ -1,7 +1,7 @@
 'use strict';
-/* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's look (colour; with Hammer+ any colour,
-   animated and own backgrounds), automatic world backups and the cloud (Hammer+), folders, disk space and clean-up,
-   the launcher's own updates, about (with the „BETA” mark and where to report problems).
+/* Ustawienia – accounts, game window, Java, downloads, Discord, the launcher's look (colour; with Hammer+ themes with a
+   moving background for the whole window, any colour, animated and own backgrounds), automatic world backups and the
+   cloud (Hammer+), folders, disk space and clean-up, the launcher's own updates, about (with the „BETA” mark and where to report problems).
    Also the switches of the summary after a game, the background check for mod updates and the question before a
    screenshot is uploaded for a link. */
 
@@ -72,6 +72,45 @@
     return row('Język / Language', 'Język launchera. Automatycznie: polski, gdy system jest po polsku – w pozostałych przypadkach angielski.', HS.select(LANGUAGES, state.settings.language ?? 'auto', change));
   }
 
+  /* ── Motyw launchera (Hammer+): the themes as tiles with a live preview, and the „Ruchome tło” switch ── */
+  /**
+   * Every theme as a tile with a small moving preview: the theme's background and a tiny window in its colours.
+   * Without Hammer+ only „Domyślny” can be picked – the others are dimmed with a padlock and a click on one opens
+   * the Hammer+ page, like the capes. `redraw` draws the card again after a pick.
+   */
+  function themeRows(redraw) {
+    const T = window.HS_THEMES;
+    const on = HS.plusOn();
+    const now = HS.themeNow();
+    const pick = (theme) => {
+      if (theme.id !== 'default' && !on) return HS.go('plus');
+      if (theme.id !== now) attempt(() => state.setSettings({ theme: theme.id })).then(redraw);
+    };
+    const tile = (theme) => {
+      const c = theme.colors;
+      const locked = theme.id !== 'default' && !on;
+      const active = theme.id === now;
+      const canvas = h('canvas');
+      const colours = { '--t-side': T.rgba(c.side, Math.max(0.88, theme.scene.side)), '--t-panel': c.panel, '--t-line': T.rgba(c.line, 0.16), '--t-text': c.text, '--t-muted': c.muted, '--t-accent': c.accent, '--t-accent2': c.accent2, '--t-accent3': c.accent3 };
+      const el = h(
+        `button.theme-tile${active ? '.on' : ''}${locked ? '.locked' : ''}`,
+        { type: 'button', 'data-theme': theme.id, 'aria-pressed': String(active), title: locked ? `„${theme.label}” – motyw Hammer+` : active ? `Motyw „${theme.label}” jest włączony` : `Włącz motyw „${theme.label}”`, onclick: () => pick(theme) },
+        h('div.theme-pic', { 'aria-hidden': 'true', style: colours }, h('div.sky', { style: { background: T.previewCss(theme) } }), canvas, h('div.m-side', h('i'), h('i'), h('i')), h('div.m-card', h('i'), h('i'), h('u')), locked ? h('span.theme-lock', icon('lock')) : null),
+        h('b.ellipsis', theme.label),
+        active ? HS.chip('Włączony', 'gold', 'check') : h('small.ellipsis', locked ? 'Hammer+' : theme.hint),
+      );
+      window.HS_THEME_FX.preview(canvas, theme.id);
+      return el;
+    };
+    return [
+      h('div.set-row', h('div.txt', h('b', 'Motyw', on ? null : HS.plusUi.lockChip()), h('small', 'Kolory całego launchera i ruchome tło za wszystkimi stronami. „Domyślny” to zwykły wygląd z Twoim kolorem.'))),
+      h('div.theme-grid', T.THEMES.map(tile)),
+      now === 'default'
+        ? null
+        : row('Ruchome tło', 'Cząsteczki w tle motywu. Wyłącz, a zostaną same kolory. Tło stoi też samo, gdy grasz, gdy okno jest schowane i gdy system ma ograniczone animacje.', HS.toggle(state.settings.themeMotion !== false, (v) => attempt(() => state.setSettings({ themeMotion: v })))),
+    ];
+  }
+
   /**
    * Wygląd: the accent colour of the whole launcher (buttons, highlights, progress bars) – six free colours, and
    * with Hammer+ any colour, an animated background, the player's own picture behind the pages and in the game's menus.
@@ -82,6 +121,7 @@
     const draw = () => {
       const on = HS.plusOn();
       const s = state.settings;
+      const themed = HS.themeNow() !== 'default'; // a theme sets its own colours and background (Motywy launchera)
       const custom = on && s.accent === 'custom' ? window.HS_THEME.palette(s.accentColor) : null;
       const current = custom ? { value: 'custom', label: 'Własny' } : (HS.ACCENTS.find((a) => a.value === s.accent) ?? HS.ACCENTS[0]);
       const setAccent = (patch) => attempt(() => state.setSettings(patch)).then(draw);
@@ -113,9 +153,10 @@
         card,
         h('div.card-head', icon('palette'), h('h2', 'Wygląd')),
         languageRow(),
+        themeRows(draw),
         row(
           'Kolor launchera',
-          on ? 'Przyciski, podświetlenia i paski postępu w Twoim kolorze. Ostatnie kółko to dowolny kolor.' : 'Przyciski, podświetlenia i paski postępu w Twoim kolorze.',
+          themed ? 'Motyw ustala własne kolory. Wybierz motyw „Domyślny”, żeby wrócić do swojego koloru.' : on ? 'Przyciski, podświetlenia i paski postępu w Twoim kolorze. Ostatnie kółko to dowolny kolor.' : 'Przyciski, podświetlenia i paski postępu w Twoim kolorze.',
           h(
             'div.swatches',
             h('span.dim', current.label),
@@ -126,9 +167,12 @@
           ),
         ),
         custom && note ? h('p.hint.look-note', note) : null,
-        HS.plusUi.row('Animowane tło', 'Ruchome tło ekranu Graj i delikatnie za pozostałymi stronami. Wyłącza się samo, gdy system ma ograniczone animacje.', fxPick),
+        HS.plusUi.row('Animowane tło', themed ? 'Motyw ma własne ruchome tło.' : 'Ruchome tło ekranu Graj i delikatnie za pozostałymi stronami. Wyłącza się samo, gdy system ma ograniczone animacje.', fxPick),
+        themed && state.backgroundUrl ? h('p.cloud-note.theme-note', icon('info'), 'Twoje tło launchera czeka – wróci, gdy wybierzesz motyw „Domyślny”.') : null,
         HS.plusUi.backgroundRows(),
       );
+      // under a theme the colour and the animated banner rest, dimmed (the theme decides)
+      if (themed) for (const ctl of card.querySelectorAll('.swatches, .fx-pick')) (ctl.classList.add('theme-off'), (ctl.inert = true));
     };
     draw();
     return { el: card, draw };

@@ -302,7 +302,11 @@ public final class FabricPlatform implements Platform, Game {
         final String uuid;
         Object skin;
         String cape;
-        Object result;
+        /** The skin with the cape – one per frame for a moving cape. */
+        Object[] results;
+        /** Cosmetics: how far the wings are spread for flying (0–1, eased) and when that was worked out (ticks). */
+        float flight;
+        float flightAt = -1;
 
         CapeEntry(String uuid) {
             this.uuid = uuid;
@@ -311,9 +315,19 @@ public final class FabricPlatform implements Platform, Game {
 
     private static final Map<Object, CapeEntry> CAPES = new java.util.WeakHashMap<>();
 
+    private static CapeEntry entry(net.minecraft.client.player.AbstractClientPlayer player) {
+        CapeEntry e = CAPES.get(player);
+        if (e == null) {
+            e = new CapeEntry(player.getUUID().toString().replace("-", ""));
+            CAPES.put(player, e);
+        }
+        return e;
+    }
+
     /**
      * The skin a player is drawn with: the same one with a Hammer cape, or null to leave it alone. Asked many times
-     * per frame, so the answer is kept until the player's skin or cape changes.
+     * per frame, so the answer is kept until the player's skin or cape changes. A moving cape is a different
+     * texture every frame of its animation (prepared once, see movingCape).
      */
     //#if MC >= 1.21.9
     public static net.minecraft.world.entity.player.PlayerSkin cape(net.minecraft.client.player.AbstractClientPlayer player, net.minecraft.world.entity.player.PlayerSkin skin) {
@@ -322,31 +336,106 @@ public final class FabricPlatform implements Platform, Game {
     //#endif
         if (!ready || skin == null || player == null) return null;
         try {
-            CapeEntry e = CAPES.get(player);
-            if (e == null) {
-                e = new CapeEntry(player.getUUID().toString().replace("-", ""));
-                CAPES.put(player, e);
-            }
+            CapeEntry e = entry(player);
             String id = Hammer.cape(e.uuid, player == mc().player);
             if (id == null) return null;
+            pl.hammershop.client.core.Cosmetics.MovingCape moving = pl.hammershop.client.core.Cosmetics.movingCape(id);
+            if (moving != null && !movingCape(moving)) return null;
+            int frame = moving != null ? moving.frameAt(System.currentTimeMillis()) : 0;
             if (e.skin != skin || !id.equals(e.cape)) {
                 e.skin = skin;
                 e.cape = id;
-                Identifier texture = Identifier.fromNamespaceAndPath("hammerclient", "textures/capes/" + id + ".png");
+                e.results = new Object[moving != null ? moving.frames() : 1];
+            }
+            if (e.results[frame] == null) {
+                String name = moving != null ? "capes/" + id + "/" + frame : "capes/" + id;
+                Identifier texture = Identifier.fromNamespaceAndPath("hammerclient", "textures/" + name + ".png");
                 //#if MC >= 1.21.9
-                net.minecraft.core.ClientAsset.Texture asset = new net.minecraft.core.ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath("hammerclient", "capes/" + id), texture);
-                e.result = new net.minecraft.world.entity.player.PlayerSkin(skin.body(), asset, skin.elytra(), skin.model(), skin.secure());
+                net.minecraft.core.ClientAsset.Texture asset = new net.minecraft.core.ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath("hammerclient", name), texture);
+                e.results[frame] = new net.minecraft.world.entity.player.PlayerSkin(skin.body(), asset, skin.elytra(), skin.model(), skin.secure());
                 //#else
-                e.result = new net.minecraft.client.resources.PlayerSkin(skin.texture(), skin.textureUrl(), texture, skin.elytraTexture(), skin.model(), skin.secure());
+                e.results[frame] = new net.minecraft.client.resources.PlayerSkin(skin.texture(), skin.textureUrl(), texture, skin.elytraTexture(), skin.model(), skin.secure());
                 //#endif
             }
             //#if MC >= 1.21.9
-            return (net.minecraft.world.entity.player.PlayerSkin) e.result;
+            return (net.minecraft.world.entity.player.PlayerSkin) e.results[frame];
             //#else
-            return (net.minecraft.client.resources.PlayerSkin) e.result;
+            return (net.minecraft.client.resources.PlayerSkin) e.results[frame];
             //#endif
         } catch (RuntimeException e) {
             return null;
+        }
+    }
+
+    /** Moving capes whose frames are textures already (true) or could not be made (false). */
+    private static final Map<String, Boolean> MOVING = new HashMap<>();
+
+    /**
+     * Cuts a moving cape's strip (assets/hammerclient/textures/capes/&lt;id&gt;.png: its frames one under the other) into
+     * one texture per frame, hammerclient:textures/capes/&lt;id&gt;/&lt;frame&gt;.png – once, on the render thread.
+     */
+    private static boolean movingCape(pl.hammershop.client.core.Cosmetics.MovingCape cape) {
+        Boolean known = MOVING.get(cape.id());
+        if (known != null) return known;
+        boolean ok = false;
+        try (java.io.InputStream in = FabricPlatform.class.getResourceAsStream("/assets/hammerclient/textures/capes/" + cape.id() + ".png")) {
+            if (in == null) throw new java.io.FileNotFoundException(cape.id());
+            com.mojang.blaze3d.platform.NativeImage strip = com.mojang.blaze3d.platform.NativeImage.read(in);
+            try {
+                int w = strip.getWidth();
+                int h = w / 2;
+                if (h < 1 || strip.getHeight() != h * cape.frames()) throw new IllegalStateException("zły rozmiar " + w + "×" + strip.getHeight());
+                for (int f = 0; f < cape.frames(); f++) {
+                    com.mojang.blaze3d.platform.NativeImage frame = new com.mojang.blaze3d.platform.NativeImage(w, h, false);
+                    strip.copyRect(frame, 0, f * h, 0, 0, w, h, false, false);
+                    String name = "capes/" + cape.id() + "/" + f;
+                    //#if MC >= 1.21.5
+                    net.minecraft.client.renderer.texture.DynamicTexture texture = new net.minecraft.client.renderer.texture.DynamicTexture(() -> "hammerclient " + name, frame);
+                    //#else
+                    net.minecraft.client.renderer.texture.DynamicTexture texture = new net.minecraft.client.renderer.texture.DynamicTexture(frame);
+                    //#endif
+                    mc().getTextureManager().register(Identifier.fromNamespaceAndPath("hammerclient", "textures/" + name + ".png"), texture);
+                }
+                ok = true;
+            } finally {
+                strip.close();
+            }
+        } catch (Exception e) {
+            Log.warn("Nie udało się przygotować ruchomej peleryny " + cape.id(), e);
+        }
+        MOVING.put(cape.id(), ok);
+        return ok;
+    }
+
+    // ───────────── cosmetics (Dodatki) ─────────────
+
+    /** What a player wears on the model now, and how far their wings are spread for flying (0–1). */
+    public record Worn(pl.hammershop.client.core.Cosmetics.Look look, float flight) {
+    }
+
+    /**
+     * The cosmetics of a player for this frame, or null. ticks: the player's age with the partial tick. In the air
+     * (flying with an elytra, falling, jumping, flying in creative) the wings ease open and beat fast.
+     */
+    public static Worn worn(net.minecraft.client.player.AbstractClientPlayer player, float ticks) {
+        if (!ready) return null;
+        CapeEntry e = entry(player);
+        pl.hammershop.client.core.Cosmetics.Look look = Hammer.look(e.uuid, player == mc().player);
+        if (look == null) return null;
+        boolean air = player.isFallFlying() || (!player.onGround() && !player.isInWater() && !player.isPassenger());
+        float dt = e.flightAt < 0 ? 100 : Math.max(0, Math.min(10, ticks - e.flightAt));
+        e.flight += ((air ? 1 : 0) - e.flight) * Math.min(1, dt * 0.15f);
+        e.flightAt = ticks;
+        return new Worn(look, e.flight);
+    }
+
+    /** Called by the player renderer's constructor (PlayerLayersMixin): one more layer for the cosmetics. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static void addCosmeticsLayer(Object renderer) {
+        try {
+            ((pl.hammershop.client.fabric.mixin.LivingRendererAccessor) renderer).hammer$addLayer(new CosmeticsLayer((net.minecraft.client.renderer.entity.RenderLayerParent) renderer));
+        } catch (RuntimeException | LinkageError e) {
+            Log.warn("Nie udało się dodać warstwy dodatków", e);
         }
     }
 

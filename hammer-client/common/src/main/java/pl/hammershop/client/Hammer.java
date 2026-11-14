@@ -300,6 +300,11 @@ public final class Hammer {
         return Capes.of(uuid, self);
     }
 
+    /** Wings, halo and hat of a player (UUID without dashes): your own (Hammer+) or another player's from the shop's server; null = none. */
+    public static pl.hammershop.client.core.Cosmetics.Look look(String uuid, boolean self) {
+        return Capes.look(uuid, self);
+    }
+
     /**
      * The badge in front of a name in the player list (Tab): 0 = none, 1 = H (plays on Hammer Client), 2 = H+ (with
      * Hammer+). `uuid` is the account id without dashes.

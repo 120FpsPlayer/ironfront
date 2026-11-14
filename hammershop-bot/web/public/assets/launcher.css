@@ -6,6 +6,7 @@
 .hero h1 span { color: var(--accent); }
 .lead { font-size: 18px; color: var(--soft); max-width: 34rem; }
 .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.cta .btn.big { padding-inline: 24px; }
 .meta { margin-top: 12px; font-size: 13px; color: var(--muted); min-height: 1.5em; }
 .ticks { list-style: none; display: flex; gap: 8px 18px; flex-wrap: wrap; margin-top: 18px; font-size: 13px; color: var(--soft); }
 .ticks li::before { content: "✓"; color: var(--accent); font-weight: 700; margin-right: 6px; }
@@ -92,4 +93,37 @@
   .collab-head { flex-direction: column; gap: 4px; }
   .collab-head .mark { font-size: 24px; }
   .cta .btn { width: 100%; }
+}
+
+/* „Zaproś znajomego”: the note for an invited visitor, the referral card (#polecaj) */
+.invite-note { margin-top: 18px; padding: 10px 14px; border-radius: 10px; border: 1px solid #ffd16655; background: #ffd16612; color: #ffe7a8; font-size: 14px; max-width: 34rem; }
+#download-started { margin-top: 10px; max-width: 34rem; }
+.ref-box { margin-top: 64px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 34px; padding: 34px; border-radius: 18px; border: 1px solid var(--line-2); background: linear-gradient(140deg, #221a10, #120d0a 60%); }
+.ref-copy h2 { font-size: clamp(26px, 3.2vw, 36px); font-weight: 800; margin: 10px 0 12px; }
+.ref-steps { list-style: none; counter-reset: step; display: grid; gap: 14px; margin: 22px 0 18px; }
+.ref-steps li { counter-increment: step; display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; align-items: center; }
+.ref-steps li::before { content: counter(step); grid-row: span 2; align-self: start; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #ffd1661c; border: 1px solid #ffd16655; color: var(--gold); font-weight: 800; }
+.ref-steps b { font-size: 15px; }
+.ref-steps span { color: var(--muted); font-size: 14px; }
+.ref-panel { align-self: start; display: grid; gap: 14px; padding: 22px; border-radius: 14px; border: 1px solid #ffd16633; background: #0f0b08aa; }
+.ref-panel h3 { font-size: 17px; }
+.stack.tight { gap: 8px; }
+.ref-link { display: flex; gap: 8px; }
+.ref-link input { flex: 1 1 auto; min-width: 0; }
+#ref-link { color: var(--gold); font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.ref-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ref-stats > div { display: grid; gap: 2px; align-content: start; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+.ref-stats b { font-size: 26px; font-weight: 800; line-height: 1.15; }
+.ref-stats span { font-size: 13px; color: var(--muted); }
+.ref-stats .gold { border-color: #ffd16644; }
+.ref-stats .gold b { color: var(--gold); }
+#ref-result .code-card > .pill { justify-self: start; }
+@media (max-width: 900px) {
+  .ref-box { grid-template-columns: 1fr; padding: 24px; }
+}
+@media (max-width: 620px) {
+  .ref-box { padding: 22px 16px; }
+  .ref-panel { padding: 16px; }
+  .ref-link.share { flex-direction: column; }
+  #ref-link { font-size: 12px; padding-inline: 10px; }
 }

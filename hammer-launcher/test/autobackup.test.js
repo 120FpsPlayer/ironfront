@@ -14,6 +14,7 @@ const { tmpDir, plusKeys } = require('./helpers');
 const GRACZ = { id: '0123456789abcdef0123456789abcdef', name: 'HammerGracz' };
 const MIN = 60_000;
 const T0 = Date.UTC(2026, 10, 11, 18, 0); // when the game session started
+const LATER = Date.UTC(2026, 11, 31, 12, 0); // the clock of the clean-up: weeks after these backups (no day of theirs is among the last seven)
 
 function makeWorld(instance, folder, { savedAt, openedAt = null, files = { 'region/r.0.0.mca': Buffer.alloc(4000, 7) } } = {}) {
   const dir = path.join(instance.dir, 'saves', folder);
@@ -82,20 +83,20 @@ test('automatic backups: the newest N per world stay; manual backups and the gam
   assert.equal(worlds.backupWorldName('Nasz świat-2026-11-01_20-15-auto (2).zip'), 'Nasz świat');
   assert.deepEqual([worlds.isAutoBackup('Nasz świat-2026-11-01_20-15-auto (2).zip'), worlds.isAutoBackup('auto-2026-11-01_20-15.zip'), worlds.isAutoBackup('Mój-auto-2026-11-01_20-15.zip')], [true, false, false]);
 
-  assert.deepEqual((await autoBackup.prune(instance, 'Nasz świat', 5)).sort(), made.slice(0, 2));
+  assert.deepEqual((await autoBackup.prune(instance, 'Nasz świat', 5, { now: LATER })).sort(), made.slice(0, 2));
   assert.deepEqual(names(instance), ['2026-09-01_10-00-00_Nasz świat.zip', other.file, manual.file, ...made.slice(2)].sort(), 'the five newest automatic ones, and everything made by hand');
-  assert.deepEqual(await autoBackup.prune(instance, 'Nasz świat', 5), [], 'nothing more to remove');
-  assert.deepEqual(await autoBackup.prune(instance, 'Nasz świat', 1), made.slice(2, 6).reverse());
-  assert.deepEqual(await autoBackup.prune(instance, 'Nasz świat', 0), [], 'a nonsense number means the default, never "remove all"');
-  assert.deepEqual(await autoBackup.prune(instance, 'Nie ma', 1), []);
+  assert.deepEqual(await autoBackup.prune(instance, 'Nasz świat', 5, { now: LATER }), [], 'nothing more to remove');
+  assert.deepEqual(await autoBackup.prune(instance, 'Nasz świat', 1, { now: LATER }), made.slice(2, 6).reverse());
+  assert.deepEqual(await autoBackup.prune(instance, 'Nasz świat', 0, { now: LATER }), [], 'a nonsense number means the default, never "remove all"');
+  assert.deepEqual(await autoBackup.prune(instance, 'Nie ma', 1, { now: LATER }), []);
   assert.ok(names(instance).includes(other.file), 'another world\'s backups are its own');
 
   // A full run: one more backup, the list trimmed to what the player asked for.
-  const run = await autoBackup.run(instance, { since: T0, keep: 2 });
+  const run = await autoBackup.run(instance, { since: T0, keep: 2, now: () => LATER });
   assert.deepEqual(run.made.map((b) => b.world), ['Inny', 'Nasz świat']);
   assert.equal((await worlds.listBackups(instance)).filter((b) => b.auto && b.world === 'Nasz świat').length, 2);
   assert.deepEqual(run.removed, []);
-  const again = await autoBackup.run(instance, { since: T0, keep: 2 });
+  const again = await autoBackup.run(instance, { since: T0, keep: 2, now: () => LATER });
   assert.deepEqual(again.removed.map((file) => worlds.backupWorldName(file)), ['Inny', 'Nasz świat'], 'the oldest automatic backup of each world made room');
   assert.ok(!names(instance).includes(other.file) && !names(instance).includes(made[6]));
   assert.equal((await worlds.listBackups(instance)).filter((b) => b.auto && b.world === 'Nasz świat').length, 2);
@@ -134,10 +135,12 @@ test('services: after a game session the worlds played are backed up – with Ha
     await s.afterSessions();
   };
 
-  // Off by default.
+  // Switched off: nothing happens.
+  s.settings.set({ autoBackup: false });
   await session('Nasz świat');
   assert.deepEqual(await s.worlds.listBackups(instance.id), []);
 
+  // On by default for Hammer+ – here switched on again, with two kept per world.
   s.settings.set({ autoBackup: true, autoBackupKeep: 2 });
   await session('Nasz świat');
   const first = await s.worlds.listBackups(instance.id);
@@ -197,6 +200,9 @@ test('services: an automatic backup holds the instance like a manual one and nev
 
 test('services: without Hammer+ nothing is backed up by itself – manual backups keep working', async () => {
   const { s, instance, start, keys } = setup({ plus: false });
+  // On by default, but it does nothing without Hammer+; once off, only Hammer+ switches it on again.
+  assert.equal(s.settings.get().autoBackup, true);
+  s.settings.set({ autoBackup: false });
   assert.throws(() => s.settings.set({ autoBackup: true }), /Automatyczne kopie światów to funkcja Hammer\+/);
   // Hammer+ ended after the option was switched on: the option stays stored but does nothing.
   s.plus.activate(keys.code({ mc: GRACZ.id }));

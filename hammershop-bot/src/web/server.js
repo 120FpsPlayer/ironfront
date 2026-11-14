@@ -28,6 +28,12 @@
  *   POST checkout         { kind: 'plus', plan, nick, requestId } → { url } – the nick is checked at Mojang first; once
  *                         paid, the bot issues the code for that Minecraft account (onPaid) and the order shows it
  *
+ * Downloading the launcher from the website needs a Discord sign-in, like buying Hammer+: /download without a session
+ * goes through Discord and back to /launcher?download=1, where the page starts the download itself (the sign-in never
+ * ends on a file – the browser would stay on Discord's page). Where sign-in is not set up, /download just downloads.
+ * /updates/* – the launcher's own updater – never asks for anything. „Zaproś znajomego” (/r/<code>, GET referrals,
+ * POST referrals/claim) is in src/web/referrals.js.
+ *
  * The admin panel is /admin (web/public/admin.html) with its API under /api/admin/ – see src/web/admin.js.
  */
 
@@ -42,6 +48,7 @@ const discord = require('./discord');
 const launcher = require('./launcher');
 const admin = require('./admin');
 const releases = require('./releases');
+const referrals = require('./referrals');
 const plusLib = require('../lib/plus');
 const profile = require('../lib/profile');
 const config = require('../lib/config');
@@ -72,6 +79,7 @@ let hooks = {
   log: async () => null, // (text) → the bot's log channel
   plus: { lookup: notConnected, grant: notConnected, recent: () => [], inspect: () => ({ valid: false, message: 'Bot nie jest połączony.' }), active: () => 0 },
   featuredAdmin: { list: () => [], add: notConnected, remove: notConnected },
+  referrals: { claim: notConnected }, // (user, nick) → { code, nick, until, days } – the referral balance as a code
 };
 const products = () => hooks.catalog();
 const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, eta: p.eta ?? null, instant: Boolean(p.instant), published: true });
@@ -361,12 +369,20 @@ async function webhook(req, res) {
 }
 
 // ───────────── Discord sign-in ─────────────
-/** Where sign-in may send people back to – only pages of this site that ask for it. */
-const NEXT = { launcher: '/launcher', admin: '/admin' };
+/**
+ * Where sign-in may send people back to – only pages of this site that ask for it. download: the launcher page, which
+ * then starts the download itself; polecaj: the „Zaproś znajomego” card of the launcher page.
+ */
+const NEXT = { launcher: '/launcher', admin: '/admin', download: '/launcher?download=1', polecaj: '/launcher#polecaj' };
+/** "/launcher#polecaj" + "connected=1" → "/launcher?connected=1#polecaj" (and & when there is a query already). */
+function withQuery(target, query) {
+  const [pathAndQuery, hash] = target.split('#');
+  return `${pathAndQuery}${pathAndQuery.includes('?') ? '&' : '?'}${query}${hash ? `#${hash}` : ''}`;
+}
 
 function authStart(req, res, url) {
   const next = NEXT[url.searchParams.get('next')] ?? null;
-  if (!authReady()) return redirect(res, `${next ?? '/'}?auth=unavailable`);
+  if (!authReady()) return redirect(res, withQuery(next ?? '/', 'auth=unavailable'));
   const state = crypto.randomBytes(16).toString('base64url');
   return redirect(res, discord.authorizeUrl(state), [cookie('hs_oauth', state, 600), cookie('hs_next', next ?? '', next ? 600 : 0)]);
 }
@@ -374,26 +390,47 @@ function authStart(req, res, url) {
 async function authCallback(req, res, url) {
   const back = Object.values(NEXT).includes(cookies(req).hs_next) ? cookies(req).hs_next : '/';
   const clear = [cookie('hs_oauth', '', 0), cookie('hs_next', '', 0)];
-  if (url.searchParams.get('error')) return redirect(res, `${back}?auth=cancelled`, clear);
+  if (url.searchParams.get('error')) return redirect(res, withQuery(back, 'auth=cancelled'), clear);
   const state = url.searchParams.get('state');
   const expected = cookies(req).hs_oauth;
   if (!state || !expected || state.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
-    return redirect(res, `${back}?auth=failed`, clear);
+    return redirect(res, withQuery(back, 'auth=failed'), clear);
   }
   try {
     const { me, accessToken } = await discord.userFromCode(String(url.searchParams.get('code') ?? ''));
+    // „Zaproś znajomego”: a friend's link counts only at the very first sign-in on the site (src/web/referrals.js).
+    const firstTime = !store.siteUserExists(me.id);
+    const refCode = cookies(req)[referrals.COOKIE];
+    if (refCode) clear.push(cookie(referrals.COOKIE, '', 0));
     const user = store.upsertUser(me);
+    if (firstTime && refCode) referrals.onFirstSignIn(user, refCode);
     // Not on the HammerShop Discord yet → the bot adds them (Member role included). Signing in never fails because of it.
     const joined = await Promise.resolve(hooks.onLogin(user, accessToken)).catch((err) => {
       console.warn(`[web] dodawanie ${user.id} do serwera:`, err.message);
       return null;
     });
     const token = store.createSession(user.id);
-    return redirect(res, `${back}?connected=1${joined?.added ? '&joined=1' : ''}`, [...clear, cookie('hs_sid', token, 30 * 86_400)]);
+    return redirect(res, withQuery(back, `connected=1${joined?.added ? '&joined=1' : ''}`), [...clear, cookie('hs_sid', token, 30 * 86_400)]);
   } catch (err) {
     console.warn('[web] logowanie:', err.message);
-    return redirect(res, `${back}?auth=failed`, clear);
+    return redirect(res, withQuery(back, 'auth=failed'), clear);
   }
+}
+
+/**
+ * The download button. Signed in (or no Discord sign-in set up on this server) → the installer, counted – also for the
+ * signed-in account (the referral card shows how many of your friends downloaded it). Not signed in → Discord first.
+ */
+function download(req, res) {
+  const release = store.currentRelease();
+  if (!release) return redirect(res, '/launcher?download=none');
+  const user = userOf(req);
+  if (!user && authReady()) return authStart(req, res, new URL('/?next=download', 'http://local'));
+  if (req.method === 'GET' && !limited(req, 'download', 20)) {
+    store.countDownload(release.version);
+    if (user) store.countUserDownload(user.id);
+  }
+  return redirect(res, `/updates/${encodeURIComponent(release.file)}`);
 }
 
 // ───────────── Static files ─────────────
@@ -473,11 +510,12 @@ async function handle(req, res) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'Niedozwolona metoda');
     if (p === '/join' || p === '/join/') return launcher.join(req, res, url, { send }); // "join this server" links → the launcher
     // Hammer Launcher's installer: the download button, and the feed its own updater reads (src/web/releases.js).
-    if (p === '/download' || p === '/download/') {
-      const release = store.currentRelease();
-      if (!release) return redirect(res, '/launcher?download=none');
-      if (req.method === 'GET' && !limited(req, 'download', 20)) store.countDownload(release.version);
-      return redirect(res, `/updates/${encodeURIComponent(release.file)}`);
+    if (p === '/download' || p === '/download/') return download(req, res);
+    // „Zaproś znajomego”: a personal link (src/web/referrals.js).
+    const ref = /^\/r\/([A-Za-z0-9]{1,32})\/?$/.exec(p);
+    if (ref) {
+      if (limited(req, 'referral-link', 60)) return fail(res, 429, 'Zwolnij trochę i spróbuj ponownie.');
+      return referrals.visit(res, ref[1], { redirect, cookie });
     }
     if (p.startsWith('/updates/')) {
       if (limited(req, 'updates', 600)) return fail(res, 429, 'Zwolnij trochę i spróbuj ponownie.');
@@ -511,6 +549,7 @@ async function handle(req, res) {
     }
     if (route === 'session') return send(res, 200, sessionJson(userOf(req)));
     if (route === 'plus') return send(res, 200, { ready: plusOnSale(), plans: plusOnSale() ? store.plusPlans() : [], currency: hooks.currency(), authReady: authReady() });
+    if (route === 'referrals') return send(res, 200, { ...referrals.pageJson(userOf(req), web().publicUrl), authReady: authReady() });
     if (route === 'auth/start') return authStart(req, res, url);
     if (route === 'auth/callback') return authCallback(req, res, url);
     if (route.startsWith('image/')) {
@@ -538,6 +577,7 @@ async function handle(req, res) {
     if (!user) return fail(res, 401, 'Najpierw zaloguj się przez Discord.');
     if (route === 'checkout') return checkout(req, res, user);
     if (route === 'verify') return verify(req, res, user);
+    if (route === 'referrals/claim') return referrals.claim(req, res, user, { send, fail, jsonBody, limited, claim: (u, nick) => hooks.referrals.claim(u, nick) });
     return fail(res, 404, 'Nie znaleziono');
   }
   return fail(res, 405, 'Niedozwolona metoda');

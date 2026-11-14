@@ -37,7 +37,7 @@ T = {
     'news.0': ('Znaczek H w Tab: widać, kto gra na Hammer Client', 'An H in Tab shows who plays on Hammer Client'),
     'news.1': ('11 nowych modułów HUD: wykres FPS, XP, portal…', '11 new HUD modules: FPS graph, XP, portal…'),
     'news.2': ('Waypointy, ping w liczbach w Tab, godzina na czacie', 'Waypoints, ping numbers in Tab, the time in chat'),
-    'news.3': ('Hammer+: peleryny, style HUD, tła menu', 'Hammer+: capes, HUD styles, menu backgrounds'),
+    'news.3': ('Hammer+: ruchome peleryny, skrzydła, aureola, czapki', 'Hammer+: moving capes, wings, a halo, hats'),
     'news.4': ('Działa od Minecrafta 1.21 do 26.3', 'Works from Minecraft 1.21 to 26.3'),
     'tip.0': ('Prawy Shift otwiera panel modułów Hammer.', 'Right Shift opens the Hammer module panel.'),
     'tip.1': ('Przytrzymaj C, aby przybliżyć. Kółko myszy zmienia zoom.', 'Hold C to zoom in. The mouse wheel changes the zoom.'),
@@ -74,6 +74,7 @@ T = {
     'settings.menu_background': ('Tło menu', 'Menu background'), 'settings.hud_style': ('Styl HUD', 'HUD style'),
     'settings.hud_scale': ('Rozmiar całego HUD', 'Size of the whole HUD'),
     'settings.other_capes': ('Pokazuj peleryny Hammer innych graczy', "Show other players' Hammer capes"),
+    'settings.other_cosmetics': ('Pokazuj dodatki innych graczy (skrzydła, aureole, czapki)', "Show other players' cosmetics (wings, halos, hats)"),
 
     # Hammer+
     'plus.locked': ('To opcja Hammer+ – kod wpiszesz w Hammer Launcherze', 'This is a Hammer+ option – enter your code in Hammer Launcher'),
@@ -86,6 +87,11 @@ T = {
     'cape.hammer': ('Hammer', 'Hammer'), 'cape.gold': ('Złota', 'Gold'), 'cape.ember': ('Żar', 'Ember'),
     'cape.royal': ('Królewska', 'Royal'), 'cape.frost': ('Mróz', 'Frost'), 'cape.crimson': ('Karmazyn', 'Crimson'),
     'cape.custom': ('Własna', 'Your own'),
+    'cape.flame': ('Płomień', 'Flame'), 'cape.sparks': ('Iskry', 'Sparks'), 'cape.waves': ('Fale', 'Waves'),
+    'plus.cosmetics': ('Twoje dodatki: %s', 'Your cosmetics: %s'),
+    'cosmetic.angel': ('Anielskie skrzydła', 'Angel wings'), 'cosmetic.dragon': ('Smocze skrzydła', 'Dragon wings'),
+    'cosmetic.halo': ('Aureola', 'Halo'), 'cosmetic.crown': ('Korona', 'Crown'), 'cosmetic.tophat': ('Cylinder', 'Top hat'),
+    'cosmetic.santa': ('Czapka Mikołaja', 'Santa hat'),
 
     # waypoints
     'waypoints.title': ('Waypointy', 'Waypoints'),

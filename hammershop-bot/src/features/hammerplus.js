@@ -146,7 +146,10 @@ const activeAccounts = (guildId, now = Date.now()) => new Set(codes(guildId).fil
 /** One line of /hammerplus list: "🟢 `Notch` · na zawsze · wystawiony przez <@1> · 2 dni temu". */
 function line(record, now = Date.now()) {
   const gone = expired(record.exp, now);
-  const from = record.source === 'website' ? `kupiony na stronie${record.by ? ` przez <@${record.by}>` : ''}` : `wystawiony przez ${record.by ? `<@${record.by}>` : 'bota'}`;
+  const from =
+    record.source === 'website' ? `kupiony na stronie${record.by ? ` przez <@${record.by}>` : ''}`
+      : record.source === 'referral' ? `nagroda za polecenie${record.discordId ? ` dla <@${record.discordId}>` : ''}` // „Zaproś znajomego”
+        : `wystawiony przez ${record.by ? `<@${record.by}>` : 'bota'}`;
   return `${gone ? '⌛' : '🟢'} \`${truncate(record.nick, 20)}\` · ${gone ? `wygasł ${ts(record.exp * 1000, 'R')}` : validity(record.exp)} · ${from} · ${ts(record.at, 'R')}`;
 }
 

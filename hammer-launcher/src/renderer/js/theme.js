@@ -28,8 +28,11 @@
   /** The shades the launcher needs around one accent colour. */
   const shades = (accent) => ({ accent, accent2: mix(accent, '#ffffff', 0.38), accent3: mix(accent, '#000000', 0.2), accentHi: mix(accent, '#ffffff', 0.66), ink: mix(accent, '#000000', 0.88) });
 
-  /** Readable both ways: the colour as text and icons on the dark cards, and the dark label on a button in that colour. */
-  const readable = (s) => contrast(s.accent, PANEL) >= MIN_CONTRAST && contrast(s.ink, s.accent3) >= MIN_CONTRAST;
+  /**
+   * Readable both ways: the colour as text and icons on the dark cards, and the dark label on a button in that colour.
+   * `panel` is the card colour (a theme of js/themes.js has its own).
+   */
+  const readable = (s, panel = PANEL) => contrast(s.accent, panel) >= MIN_CONTRAST && contrast(s.ink, s.accent3) >= MIN_CONTRAST;
 
   /**
    * The palette for a colour the player picked: { accent, accent2, accent3, accentHi, ink, glow ("r,g,b"), adjusted }.
@@ -44,7 +47,7 @@
     return { ...found, glow: rgb(found.accent).join(','), adjusted: found.accent !== picked };
   }
 
-  const api = { palette, contrast, luminance, isHex, mix, PANEL, MIN_CONTRAST };
+  const api = { palette, readable, contrast, luminance, isHex, mix, PANEL, MIN_CONTRAST };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else window.HS_THEME = api;
 })();

@@ -95,7 +95,7 @@ function mock() {
   }
 
   const now = Date.now();
-  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, language: 'auto', accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: false, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true, autoUpdate: true, closedAlert: '', newsSeenAt: now - 30 * 3600e3 };
+  const settings = { memoryMb: null, jvmPreset: 'recommended', customJvmArgs: '', javaPath: '', afterLaunch: 'hide', processPriority: 'above_normal', resolution: { width: 1280, height: 720, fullscreen: false }, showSnapshots: false, discordRpc: true, gpuPreference: true, concurrentDownloads: 16, selectedInstance: 'hammershop', selectedAccount: 'acc1', closeOnExit: false, language: 'auto', accent: 'orange', accentColor: '', background: '', heroStyle: 'classic', autoBackup: true, autoBackupKeep: 5, hammerCape: '', cloudAuto: false, playSummary: true, modUpdateCheck: true, screenshotShareAsk: true, autoUpdate: true, closedAlert: '', newsSeenAt: now - 30 * 3600e3 };
   const instances = [
     { id: 'hammershop', name: 'Hammer', mcVersion: '1.21.1', loader: 'fabric', icon: 'hammer', optimized: true, hammerClient: true, memoryMb: null, playTimeMs: 46 * 3600e3 + 25 * 60e3, lastPlayed: now - 3 * 3600e3, createdAt: now - 40 * 864e5 },
     { id: 'survival', name: 'Survival z ekipą', mcVersion: '1.20.1', loader: 'forge', icon: 'grass', optimized: true, memoryMb: 6144, playTimeMs: 12 * 3600e3, lastPlayed: now - 2 * 864e5, createdAt: now - 20 * 864e5 },
@@ -173,7 +173,29 @@ function mock() {
     { file: '2026-10-28_18-02-51_New World.zip', size: 121e6, createdAt: now - 13 * 864e5, world: 'New World', auto: false },
   ];
   // What the launcher makes by itself after game sessions (Hammer+) – added by window.__autoBackups().
-  window.__autoBackups = () => backups.unshift({ file: 'Nasz survival-2026-11-11_19-42-auto.zip', size: 702e6, createdAt: now - 2 * 3600e3, world: 'Nasz survival', auto: true }, { file: 'Nasz survival-2026-11-10_22-07-auto.zip', size: 695e6, createdAt: now - 23 * 3600e3, world: 'Nasz survival', auto: true });
+  // Kopia zapasowa światów: dated on real days around "now" – today, yesterday evening and three days ago.
+  const midnight = (n = 0) => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d.setDate(d.getDate() - n);
+  };
+  const pad = (n) => String(n).padStart(2, '0');
+  const fileStamp = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`; };
+  const autoBackup = (ms, size, world = 'Nasz survival') => ({ file: `${world}-${fileStamp(ms)}-auto.zip`, size, createdAt: ms, world, auto: true, safety: false });
+  window.__autoBackups = () =>
+    backups.unshift(
+      autoBackup(Math.max(midnight(0) + 4 * 60e3, now - 2 * 3600e3), 702e6),
+      autoBackup(Math.max(midnight(0) + 2 * 60e3, now - 4 * 3600e3), 699e6),
+      autoBackup(midnight(1) + (21 * 60 + 40) * 60e3, 695e6),
+      autoBackup(midnight(1) + (16 * 60 + 5) * 60e3, 690e6),
+      autoBackup(midnight(3) + (19 * 60 + 12) * 60e3, 671e6),
+      autoBackup(midnight(4) + (17 * 60 + 30) * 60e3, 298e6, 'New World'), // not played since: „Przywróć wersję z <dnia>”
+    ) && backups.sort((a, b) => b.createdAt - a.createdAt);
+  /** „Przywróć wczorajszą wersję”: the newest automatic backup of a world from before today (like autobackup.previousVersion). */
+  const previousVersion = (folder) => {
+    const b = backups.filter((x) => x.auto && x.world === folder && x.createdAt < midnight(0)).sort((x, y) => y.createdAt - x.createdAt)[0];
+    return b ? { file: b.file, createdAt: b.createdAt, size: b.size, yesterday: b.createdAt >= midnight(1) } : null;
+  };
 
   // Skórka: the account's skin and capes, and the library of skins used before.
   const hex = (ch) => ch.repeat(40);
@@ -593,7 +615,7 @@ function mock() {
       move: async (id, from, to) => (servers.splice(to, 0, ...servers.splice(from, 1)), serverList()),
     },
     worlds: {
-      list: async (id) => (await wait(), id === 'hammershop' ? worlds.map((w) => ({ ...w })) : []),
+      list: async (id) => (await wait(), id === 'hammershop' ? worlds.map((w) => ({ ...w, previous: previousVersion(w.folder) })) : []),
       rename: async (id, folder, name) => Object.assign(worlds.find((w) => w.folder === folder), { name }),
       remove: async (id, folder) => (worlds.splice(worlds.findIndex((w) => w.folder === folder), 1), true),
       open: async () => '',
@@ -601,6 +623,19 @@ function mock() {
       backups: async (id) => (id === 'hammershop' ? backups.map((b) => ({ ...b })) : []),
       restore: async (id, file) => ({ folder: `${backups.find((b) => b.file === file).world} (2)` }),
       removeBackup: async (id, file) => (backups.splice(backups.findIndex((b) => b.file === file), 1), true),
+      // Kopia zapasowa światów: the backup goes in place of the world; the state before becomes a backup („Cofnij”).
+      restoreInPlace: async (id, folder, file) => {
+        const from = backups.find((b) => b.file === file);
+        if (!from.safety && !plus.active) throw new Error('Przywracanie wcześniejszej wersji świata to funkcja Hammer+. Włączysz go kodem ze sklepu – kliknij „Hammer+” na górnym pasku.');
+        const label = `Przywracanie świata: ${folder}`;
+        window.__emit('task:progress', { label, done: 0.4, total: 1 });
+        await wait(400);
+        window.__emit('task:progress', { label, done: 1, total: 1 });
+        const at = Date.now();
+        const safety = { file: `${folder}-${fileStamp(at)}-przed-przywroceniem${backups.some((b) => b.file === `${folder}-${fileStamp(at)}-przed-przywroceniem.zip`) ? ' (2)' : ''}.zip`, size: 706e6, createdAt: at, world: folder, auto: false, safety: true };
+        backups.unshift(safety);
+        return { folder, safety: { file: safety.file, size: safety.size, createdAt: at }, from: { file, createdAt: from.createdAt } };
+      },
     },
     official: {
       info: async () => ({ available: true, servers: true, worlds: true, options: true }),
@@ -948,7 +983,7 @@ async function main() {
   await page.locator('.world-row button', { hasText: 'Kopia zapasowa' }).first().click();
   await page.waitForTimeout(500);
   await count('.card .installed-row', 3);
-  await page.locator('button', { hasText: 'Przywróć' }).first().click();
+  await page.locator('.backup-row button', { hasText: 'Jako nowy świat' }).first().click();
   await page.locator('button[title="Usuń kopię"]').last().click();
   await confirm();
   await count('.card .installed-row', 2);
@@ -1195,6 +1230,16 @@ async function main() {
   await viewTop('h2', 'Wygląd');
   await page.locator('.swatch.custom.locked').click();
   await count('.plus-page', 1);
+  // Motywy launchera without Hammer+: „Domyślny” is on, the other themes are locked and lead to the Hammer+ page.
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await count('.theme-tile', 6);
+  await count('.theme-tile.locked', 5);
+  await count('.theme-tile.locked .theme-lock', 5);
+  await count('.theme-tile.on[data-theme="default"]', 1);
+  await page.locator('.theme-tile[data-theme="nether"]').click();
+  await count('.plus-page', 1);
+  await count('html[data-theme]', 0);
   await nav('Światy');
   await page.waitForTimeout(300);
   await viewTop('h2', 'Kopie zapasowe');
@@ -1339,9 +1384,80 @@ async function main() {
   await page.locator('.swatch[title="Pomarańczowy"]').click();
   await count('.swatch.on[title="Pomarańczowy"]', 1);
 
+  /* ── Motywy launchera (Hammer+): the picker, and the whole window in each theme ── */
+  const pickTheme = async (id) => {
+    await nav('Ustawienia');
+    await viewTop('h2', 'Wygląd');
+    await page.locator(`.theme-tile[data-theme="${id}"]`).click();
+    await count(`.theme-tile.on[data-theme="${id}"]`, 1);
+    await count(id === 'default' ? 'html[data-theme]' : `html[data-theme="${id}"]`, id === 'default' ? 0 : 1);
+  };
+  const stillBackground = (expected) => count('#theme-bg.still', expected ? 1 : 0);
+  const motionSwitch = () => page.locator('.set-row', { has: page.locator('.txt > b', { hasText: 'Ruchome tło' }) }).locator('.switch');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // the window is in front: nothing holds the background
+  await nav('Ustawienia');
+  await viewTop('h2', 'Wygląd');
+  await count('.theme-tile.locked', 0);
+  await count('.theme-pic canvas', 6);
+  await shot('58m-wyglad-motywy');
+  await pickTheme('nether');
+  await count('#theme-bg canvas', 1);
+  await count('.swatches.theme-off', 1);
+  await count('.fx-pick.theme-off', 1);
+  await stillBackground(false);
+  await viewTop('h2', 'Wygląd');
+  await shot('58n-wyglad-motyw-nether');
+  await nav('Graj');
+  await page.waitForTimeout(1200);
+  await shot('58o-graj-nether');
+  await pickTheme('end');
+  await count('#theme-bg', 1);
+  await nav('Graj');
+  await page.waitForTimeout(1200);
+  await shot('58p-graj-end');
+  await small('58p2-graj-end-male-okno', () => nav('Graj'));
+  await nav('Mody');
+  await page.waitForTimeout(500);
+  await shot('58q-mody-end');
+  for (const id of ['ocean', 'cherry', 'deepdark']) {
+    await pickTheme(id);
+    await nav('Graj');
+    await page.waitForTimeout(1200);
+    await shot(`58r-graj-${id}`);
+  }
+  // The background stands still while the game runs, with „Ruchome tło” off and when the system limits animations.
+  await pickTheme('nether');
+  await page.evaluate(() => (HS.state.running.set('hammershop', 'running'), HS.bus.emit('game')));
+  await stillBackground(true);
+  await page.evaluate(() => (HS.state.running.clear(), HS.bus.emit('game')));
+  await stillBackground(false);
+  await viewTop('h2', 'Wygląd');
+  await motionSwitch().click();
+  await stillBackground(true);
+  await motionSwitch().click();
+  await stillBackground(false);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await stillBackground(true);
+  await nav('Graj');
+  await shot('58s-graj-nether-bez-ruchu');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await stillBackground(false);
+  // Hammer+ ends: the default look comes back at once (the theme stays stored for when Hammer+ is back).
+  await page.evaluate(() => window.__plus(false, 'expired'));
+  await page.waitForTimeout(400);
+  await count('html[data-theme]', 0);
+  await count('#theme-bg', 0);
+  await page.evaluate(() => window.__plus(true));
+  await page.waitForTimeout(400);
+  await count('html[data-theme="nether"]', 1);
+  await pickTheme('default');
+  await count('#theme-bg', 0);
+  await noToasts();
+
   // Automatic world backups and the cloud in Ustawienia and Światy.
   await viewTop('h2', 'Kopie światów i chmura');
-  await page.locator('.set-row', { hasText: 'Automatyczne kopie światów' }).locator('.switch').click();
+  // (automatic backups are on by default – with Hammer+ the switch is simply on)
+  await count('.set-row:has-text("Automatyczne kopie światów") input:checked', 1);
   await page.locator('.set-row', { hasText: 'Automatyczne kopie światów' }).locator('select').selectOption('8');
   await page.waitForTimeout(300);
   await viewTop('h2', 'Kopie światów i chmura');
@@ -1463,6 +1579,61 @@ async function main() {
   };
   await noToasts();
   await page.evaluate(() => HS.state.selectInstance('hammershop'));
+
+  /* ── Kopia zapasowa światów: „Przywróć wczorajszą wersję”, the confirmation, „Cofnij”, „Inna wersja…” ── */
+  // (the automatic backups of the Hammer+ steps above are still there: today, yesterday evening, three days ago)
+  await page.evaluate(() => window.__plus(true));
+  await nav('Światy');
+  await page.waitForTimeout(400);
+  await top();
+  await page.locator('.world-row .restore-prev').first().waitFor();
+  await count('.world-row .restore-prev', 2);
+  await count('.world-row .other-version', 2);
+  await shot('63-swiaty-wczorajsza-wersja');
+  await fits('Światy – wczorajsza wersja');
+  await small('63b-swiaty-wczorajsza-wersja-male-okno', () => fits('Światy – wczorajsza wersja, małe okno'));
+  await page.locator('.world-row .restore-prev').first().click();
+  await count('.modal', 1);
+  await shot('64-swiat-przywroc-potwierdzenie');
+  await modalFits('Przywróć wczorajszą wersję – potwierdzenie');
+  await small('64b-swiat-przywroc-potwierdzenie-male-okno', () => modalFits('Przywróć wczorajszą wersję – potwierdzenie, małe okno'));
+  await confirm();
+  await page.locator('.toast button', { hasText: 'Cofnij' }).waitFor();
+  await page.waitForTimeout(400);
+  await shot('65-swiat-przywrocony-cofnij');
+  await count('.backup-row .undo-restore', 1);
+  await page.locator('.toast button', { hasText: 'Cofnij' }).click();
+  await page.waitForTimeout(700);
+  await count('.backup-row .undo-restore', 2);
+  await noToasts();
+  await page.locator('.world-row .other-version').first().click();
+  await count('.modal .ver-row', 9); // five automatic, two made by hand, the two from before the restore and its undo
+  await shot('66-swiat-inna-wersja');
+  await modalFits('Inna wersja świata');
+  await small('66b-swiat-inna-wersja-male-okno', () => modalFits('Inna wersja świata, małe okno'));
+  // Picking a version asks the same question first; „Anuluj” leaves the world alone.
+  await page.locator('.modal .ver-row button').nth(3).click();
+  await count('.modal', 1);
+  await page.locator('.modal-foot .btn', { hasText: 'Anuluj' }).click();
+  await count('.modal', 0);
+  // A backup from before a restore: „Cofnij” in the list asks too.
+  await viewTop('h2', 'Kopie zapasowe');
+  await shot('67-swiaty-kopie-cofnij');
+  await page.locator('.backup-row .undo-restore').first().click();
+  await count('.modal', 1);
+  await closeModal();
+  await noToasts();
+  // Without Hammer+: the one-click restore is dimmed with the padlock – „Cofnij” and „Jako nowy świat” stay.
+  await page.evaluate(() => window.__plus(false));
+  await page.waitForTimeout(500);
+  await top();
+  await count('.world-row .world-versions .plus-locked', 3);
+  await count('.world-row .restore-prev', 0);
+  await shot('68-swiaty-bez-hammerplus');
+  await fits('Światy bez Hammer+');
+  await viewTop('h2', 'Kopie zapasowe');
+  await count('.backup-row .undo-restore', 2);
+  await noToasts();
 
   // Serwery: „Mam zaproszenie”, „Zaproś” on each server, and the card of featured servers under the list.
   await nav('Serwery');
@@ -2293,6 +2464,24 @@ async function main() {
   await shot('172-hammerplus-kup');
   await fits('Hammer+ – Kup Hammer+');
   await small('172b-hammerplus-kup-male-okno', () => fits('Hammer+ – Kup Hammer+, małe okno'));
+  // „Zaproś znajomego”: a card for everybody (with Hammer+ or without) – its button opens the referral card of the website.
+  await count('.refer-card', 1);
+  await viewTop('h2', 'Zaproś znajomego');
+  await page.evaluate(() => (window.__opened = []));
+  await page.locator('.refer-card button', { hasText: 'Mój link polecający' }).click();
+  if ((await page.evaluate(() => window.__opened.join())) !== 'https://hammerclient.com/launcher#polecaj') errors.push(`Zaproś znajomego: przycisk otwiera ${await page.evaluate(() => window.__opened.join())}`);
+  await shot('180-hammerplus-zapros-znajomego');
+  await fits('Hammer+ – Zaproś znajomego');
+  await small('180b-hammerplus-zapros-znajomego-male-okno', async () => {
+    await viewTop('h2', 'Zaproś znajomego');
+    await fits('Hammer+ – Zaproś znajomego, małe okno');
+  });
+  await page.evaluate(() => window.__plus(true));
+  await count('.plus-hero.on', 1);
+  await count('.refer-card', 1);
+  await viewTop('h2', 'Zaproś znajomego');
+  await shot('181-hammerplus-aktywny-zapros-znajomego');
+  await page.evaluate(() => window.__plus(false));
 
   /* ── Ustawienia → Język / Language: the other language applies at once; back again, every text is as it was ── */
   await nav('Ustawienia');

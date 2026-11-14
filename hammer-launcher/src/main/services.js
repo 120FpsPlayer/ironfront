@@ -42,6 +42,7 @@ const { createShopApi } = require('./shopapi');
 const cloudSync = require('./cloud');
 const { createBackgrounds, createMenuBackground, EXTENSIONS, pngSize } = require('./background');
 const { loadCapes, CUSTOM: CUSTOM_CAPE } = require('./capes');
+const { loadCosmetics, cleanLook, wearsAny, SLOTS: COSMETIC_SLOTS, KEYS: COSMETIC_KEYS } = require('./cosmetics');
 const autoBackup = require('./autobackup');
 const officialGame = require('./official');
 const recipes = require('./recipe');
@@ -290,6 +291,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     if (busy.has(instance.id)) throw new Error('Gra jest już przygotowywana.');
     if (worldTasks.has(instance.id)) throw new Error('Poczekaj, aż launcher skończy kopię zapasową świata – potem uruchom grę.');
     if (contentTasks.has(instance.id)) throw new Error('Poczekaj, aż launcher skończy aktualizację modów – potem uruchom grę.');
+    recoverWorlds(instance); // a world swap a crash cut off is finished before the game sees the saves folder
     const joinAddress = server ? serverList.cleanAddress(server) : undefined;
     const openWorld = world && !joinAddress ? path.basename(worldSaves.worldDir(instance, world)) : undefined;
     busy.add(instance.id);
@@ -383,7 +385,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     const invite = await community.invite().catch(() => null);
     const st = plus.status();
     const cape = wornCape();
-    const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand }, plus: { active: st.active, until: st.until }, cape, api: shop.base() });
+    const res = await syncHammerClient({ instance, client: hammerClient(), content, links: { discordUrl: invite ? `https://discord.gg/${invite}` : '', shopUrl: config.shopUrl, brand: config.brand }, plus: { active: st.active, until: st.until }, cape, api: shop.base(), cosmetics: wornCosmetics() });
     try {
       deliverCustomCape(instance, cape === CUSTOM_CAPE && res.active);
     } catch (err) {
@@ -747,6 +749,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       const result = await autoBackup.run(instance, {
         since,
         keep: s.autoBackupKeep,
+        now,
         stop: () => inGame(instance),
         backup: (world) => withProgress(`Automatyczna kopia: ${world}`, (onProgress) => worldSaves.backup(instance, world, { auto: true, onProgress })),
       });
@@ -758,6 +761,42 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     } finally {
       worldTasks.delete(instance.id);
     }
+  }
+
+  /* ── Kopia zapasowa światów: a world back to an earlier version, in place (Hammer+) ── */
+
+  /** A swap that a crash cut off is finished first (never under a running game or a world task of this instance). */
+  function recoverWorlds(instance) {
+    if (inGame(instance) || worldTasks.has(instance.id)) return [];
+    return worldSaves.recoverSwaps(instance);
+  }
+
+  /** The worlds of an instance, each with `previous`: the backup „Przywróć wczorajszą wersję” puts back (or null). */
+  async function worldList(id) {
+    const instance = need(id);
+    recoverWorlds(instance);
+    const [list, backups] = await Promise.all([worldSaves.list(instance), worldSaves.listBackups(instance)]);
+    return list.map((w) => ({ ...w, previous: autoBackup.previousVersion(backups, w.folder, now()) }));
+  }
+
+  /**
+   * Puts a backup of a world in its place (worlds.restoreInPlace): refused while the instance's game runs or is
+   * being prepared, and during another backup or restore. Hammer+ – except a backup made before a restore
+   * („Cofnij”), so the way back never depends on Hammer+. Returns { folder, safety, from }.
+   */
+  async function restoreWorldInPlace(id, folder, file) {
+    const instance = idle(id, 'gra nadpisałaby przywrócony świat');
+    return worldTask(instance, `Przywracanie świata: ${folder}`, async (onProgress) => {
+      const backup = (await worldSaves.listBackups(instance)).find((b) => b.file === file);
+      if (!backup) throw new Error('Nie ma już takiej kopii zapasowej – odśwież listę.');
+      if (backup.world !== folder) throw new Error('Ta kopia zapasowa jest z innego świata.');
+      if (!backup.safety) plus.need('Przywracanie wcześniejszej wersji świata');
+      worldSaves.recoverSwaps(instance); // what an earlier swap left behind goes first (the game is not running – see idle)
+      const result = await worldSaves.restoreInPlace(instance, folder, file, { onProgress, now: new Date(now()) });
+      // Backups from before a restore stay a week; older ones go with the automatic clean-up.
+      if (plus.status().active) await autoBackup.prune(instance, folder, settings.get().autoBackupKeep, { now: now() }).catch(() => null);
+      return result;
+    });
   }
 
   /** The account the cloud copy belongs to – its code and Minecraft UUID. Throws without Hammer+. */
@@ -867,8 +906,9 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
 
   /**
    * Best effort: tells the shop which cape the player wears, so the games of other players can show it. With
-   * Hammer+ the code proves the account; a free cape without Hammer+ is proven with the account's own Minecraft
-   * sign-in. One's own picture is never sent (only the player sees it). { shared, note } – never throws.
+   * Hammer+ the code proves the account – and the cosmetics (Dodatki) go along; a free cape without Hammer+ is proven
+   * with the account's own Minecraft sign-in. One's own picture is never sent (only the player sees it).
+   * { shared, note } – never throws.
    */
   async function shareCape() {
     const cape = wornCape();
@@ -879,9 +919,14 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     try {
       if (code) {
         const mc = cleanUuid(st.account.id);
-        if (cloud.state(mc).capeSent !== sent) {
-          await shop.putCape(code, sent || null);
-          cloud.remember(mc, { capeSent: sent });
+        // The cosmetics go along once any are worn (null takes them off again) – sent again when they change and with
+        // a new code, so a renewed Hammer+ shows them to others again. Without any the request is the same as before.
+        const look = wornCosmetics();
+        const lookSent = wearsAny(look) ? JSON.stringify([look, st.until ?? 0]) : '';
+        const before = cloud.state(mc);
+        if (before.capeSent !== sent || (before.lookSent ?? '') !== lookSent) {
+          await shop.putCape(code, sent || null, lookSent ? look : before.lookSent ? null : undefined);
+          cloud.remember(mc, { capeSent: sent, lookSent });
         }
         return { shared: true, note: ownNote };
       }
@@ -941,6 +986,34 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     fs.rmSync(CUSTOM_FILE, { force: true });
     if (settings.get().hammerCape === CUSTOM_CAPE) settings.set({ hammerCape: '' });
     return { ...capeState(), ...(await shareCape()) };
+  }
+
+  /* ── Dodatki na postać: wings, a halo and a hat Hammer Client draws on the player (Hammer+), next to the capes ── */
+  const cosmeticList = loadCosmetics();
+  const NO_LOOK = Object.freeze({ wings: '', halo: false, hat: '' });
+  /** What the player picked – kept while Hammer+ is off, so it comes back with Hammer+. */
+  function pickedCosmetics() {
+    const s = settings.get();
+    return cleanLook({ wings: s.cosmeticWings, halo: s.cosmeticHalo, hat: s.cosmeticHat }, cosmeticList);
+  }
+  /** What the game draws and other players see: the pick while Hammer+ is active, nothing without it. */
+  function wornCosmetics() {
+    return plus.status().active ? pickedCosmetics() : { ...NO_LOOK };
+  }
+  /** Everything the Dodatki card shows: { items: [{ id, slot, name }], wings, halo, hat, plus }. */
+  function cosmeticState() {
+    return { items: cosmeticList.map((c) => ({ ...c })), ...wornCosmetics(), plus: plus.status().active };
+  }
+  /** Puts one on or takes it off: slot 'wings' / 'hat' with an id ('' or null = none), or 'halo' with true / false. */
+  async function setCosmetic(slot, value) {
+    if (!COSMETIC_SLOTS.includes(slot)) throw new Error('Nie ma takiego miejsca na dodatek.');
+    let next = value === true;
+    if (slot !== 'halo') {
+      next = value == null ? '' : String(value);
+      if (next && !cosmeticList.some((c) => c.slot === slot && c.id === next)) throw new Error('Nie ma takiego dodatku – odśwież zakładkę.');
+    }
+    settings.set({ [COSMETIC_KEYS[slot]]: next }); // putting one on needs Hammer+ (PLUS_ONLY), taking it off never does
+    return { ...cosmeticState(), ...(await shareCape()) };
   }
 
   /**
@@ -1165,7 +1238,7 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       move: (id, from, to) => serverList.move(need(id), from, to),
     },
     worlds: {
-      list: async (id) => worldSaves.list(need(id)),
+      list: async (id) => worldList(id),
       dir: (id, folder) => worldSaves.worldDir(need(id), folder),
       rename: async (id, folder, name) => worldSaves.rename(idle(id, 'gra mogłaby nadpisać zmianę nazwy'), folder, name),
       remove: async (id, folder) => worldSaves.remove(idle(id, 'świat może być właśnie otwarty'), folder, { trash }),
@@ -1179,6 +1252,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
         return worldTask(instance, 'Przywracanie świata z kopii', (onProgress) => worldSaves.restoreBackup(instance, file, { onProgress }));
       },
       removeBackup: async (id, file) => worldSaves.removeBackup(need(id), file, { trash }),
+      /** Kopia zapasowa światów: a backup put IN PLACE of the world (Hammer+; „Cofnij” always) – see restoreWorldInPlace. */
+      restoreInPlace: async (id, folder, file) => restoreWorldInPlace(id, folder, file),
     },
     /** The player's "normal" Minecraft (the official launcher's folder): what it has, and bringing it over. */
     official: {
@@ -1305,6 +1380,9 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       setCapeOn: (on, lastMojang) => setCapeOn(on, lastMojang),
       pickCape: () => pickCustomCape(),
       removeCape: () => removeCustomCape(),
+      /** Dodatki na postać: { items: [{ id, slot, name }], wings, halo, hat, plus } – setCosmetic answers the same (+ shared, note). */
+      cosmetics: () => cosmeticState(),
+      setCosmetic: (slot, value) => setCosmetic(slot, value),
     },
     theme: {
       /** The player's own background picture as a file:// address – null without one (or without Hammer+). */

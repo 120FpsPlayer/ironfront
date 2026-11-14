@@ -220,12 +220,19 @@ test('launcher releases: only the owner publishes; latest.yml, the download and 
   const yml = (await call('GET', '/updates/latest.yml')).body;
   assert.equal(yml, `version: 2.6.0\nfiles:\n  - url: Hammer-Launcher-Setup-2.6.0.exe\n    sha512: ${sha512(v1)}\n    size: ${v1.length}\npath: Hammer-Launcher-Setup-2.6.0.exe\nsha512: ${sha512(v1)}\nreleaseDate: '${new Date(webStore.currentRelease().at).toISOString()}'\nreleaseNotes: |2-\n  Pierwsza beta.\n  Auto-aktualizacje.\n`, '„Co nowego” travels with the update');
   const info = (await feed()).release;
-  assert.deepEqual([info.version, info.notes, info.minVersion, info.size, info.url], ['2.6.0', 'Pierwsza beta.\nAuto-aktualizacje.', null, v1.length, `${base}/download`]);
+  // The launcher opens the installer itself when it cannot update – no website sign-in for somebody who has it already.
+  assert.deepEqual([info.version, info.notes, info.minVersion, info.size, info.url], ['2.6.0', 'Pierwsza beta.\nAuto-aktualizacje.', null, v1.length, `${base}/updates/Hammer-Launcher-Setup-2.6.0.exe`]);
 
-  // The download button → the file, counted.
-  const dl = await call('GET', '/download');
+  // The download button: Discord sign-in first (not counted yet) …
+  const out = await call('GET', '/download');
+  assert.equal(out.status, 302);
+  assert.match(out.headers.get('location'), /\/discord\/authorize\?/);
+  assert.equal(webStore.currentRelease().downloads, 0);
+  // … signed in → the file, counted (also for that account).
+  const dl = await call('GET', '/download', { who: 'buyer' });
   assert.deepEqual([dl.status, dl.headers.get('location')], [302, '/updates/Hammer-Launcher-Setup-2.6.0.exe']);
   assert.equal(webStore.currentRelease().downloads, 1);
+  assert.equal(webStore.referralOf(BUYER.id).downloads, 1);
   const whole = await call('GET', '/updates/Hammer-Launcher-Setup-2.6.0.exe');
   assert.equal(whole.status, 200);
   assert.ok(whole.bytes.equals(v1));

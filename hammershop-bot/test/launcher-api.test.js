@@ -378,18 +378,82 @@ test('the two free capes need no Hammer+: the account proves itself with its Min
   }
 });
 
+test('moving capes and cosmetics (Hammer+): others see them next to the cape – older Hammer Clients still get a still cape', async () => {
+  reset();
+  const mc = account();
+  const plain = account();
+  const code = plus.issue({ mc, days: 30 });
+  assert.deepEqual(launcher.MOVING_CAPES, { flame: 'ember', sparks: 'royal', waves: 'frost' });
+  assert.deepEqual(launcher.COSMETICS, { wings: ['angel', 'dragon'], hat: ['crown', 'tophat', 'santa'] });
+  const lookup = async (...who) => (await call('GET', `/api/launcher/capes?uuids=${who.join(',')}`)).body;
+
+  // A moving cape and all three cosmetics at once.
+  const set = await call('PUT', '/api/launcher/cape', { code, body: { cape: 'flame', cosmetics: { wings: 'angel', halo: true, hat: 'crown' } } });
+  assert.equal(set.status, 200);
+  assert.deepEqual(set.body, { cape: 'flame', cosmetics: { wings: 'angel', halo: true, hat: 'crown' } });
+  await call('PUT', '/api/launcher/cape', { code: plus.issue({ mc: plain, days: 0 }), body: { cape: 'gold' } });
+  assert.deepEqual(await lookup(mc, plain), { capes: { [mc]: 'ember', [plain]: 'gold' }, looks: { [mc]: { cape: 'flame', wings: 'angel', halo: true, hat: 'crown' } } }, 'older clients read capes: the still look-alike');
+  assert.deepEqual(await lookup(plain), { capes: { [plain]: 'gold' } }, 'no looks when nobody in the answer needs them');
+  for (const cape of Object.keys(launcher.MOVING_CAPES)) {
+    assert.deepEqual((await call('PUT', '/api/launcher/cape', { code, body: { cape } })).body, { cape }, 'a launcher that sends no cosmetics changes none');
+    assert.deepEqual(await lookup(mc), { capes: { [mc]: launcher.MOVING_CAPES[cape] }, looks: { [mc]: { cape, wings: 'angel', halo: true, hat: 'crown' } } });
+  }
+
+  // Only what the slots may hold – anything else is a 400 and nothing changes (not even the cape).
+  for (const cosmetics of [{ wings: 'bat' }, { hat: 'angel' }, { wings: ['angel'] }, { halo: 'yes' }, { halo: 1 }, 'angel', [1], 5, true]) {
+    isError(await call('PUT', '/api/launcher/cape', { code, body: { cape: 'gold', cosmetics } }), 400, /dodat|Pole „halo”|cosmetics/i);
+  }
+  isError(await call('PUT', '/api/launcher/cape', { code, body: { cape: 'smok', cosmetics: { wings: 'angel' } } }), 400, /Nieznana peleryna\. Do wyboru: hammer, gold, ember, royal, frost, crimson, flame, sparks, waves/);
+  assert.equal(webStore.capeOf(mc), 'waves');
+  // Part of them, then none: an empty slot is null (or left out), halo false.
+  assert.deepEqual((await call('PUT', '/api/launcher/cape', { code, body: { cape: null, cosmetics: { wings: null, hat: 'santa' } } })).body, { cape: null, cosmetics: { wings: null, halo: false, hat: 'santa' } });
+  assert.deepEqual(await lookup(mc), { capes: {}, looks: { [mc]: { hat: 'santa' } } }, 'cosmetics without a cape');
+  assert.deepEqual((await call('PUT', '/api/launcher/cape', { code, body: { cape: 'hammer', cosmetics: null } })).body, { cape: 'hammer', cosmetics: { wings: null, halo: false, hat: null } });
+  assert.deepEqual(await lookup(mc), { capes: { [mc]: 'hammer' } });
+
+  // Like a Hammer+ cape they end with the code – and come back with a renewed one.
+  await call('PUT', '/api/launcher/cape', { code, body: { cape: 'sparks', cosmetics: { wings: 'dragon', halo: false, hat: 'tophat' } } });
+  const clock = Date.now;
+  try {
+    Date.now = () => clock() + 31 * DAY;
+    assert.deepEqual(await lookup(mc, plain), { capes: { [plain]: 'gold' } });
+    const renewed = plus.issue({ mc, days: 30 });
+    assert.equal((await call('GET', '/api/launcher/cloud', { code: renewed })).status, 404);
+    assert.deepEqual(await lookup(mc), { capes: { [mc]: 'royal' }, looks: { [mc]: { cape: 'sparks', wings: 'dragon', hat: 'tophat' } } });
+  } finally {
+    Date.now = clock;
+  }
+});
+
+test('without Hammer+ (the Minecraft sign-in) moving capes and cosmetics are refused – taking cosmetics off works', async () => {
+  reset();
+  const mc = account();
+  launcher.setProfileFetch(async () => new Response(JSON.stringify({ id: mc, name: 'Darmowy' }), { status: 200, headers: { 'content-type': 'application/json' } }));
+  try {
+    const put = (body) => call('PUT', '/api/launcher/cape', { body, headers: { 'x-minecraft-token': `token-${mc}` } }); // a token of its own: known tokens are remembered
+    isError(await put({ cape: 'flame' }), 403, /częścią Hammer\+/);
+    isError(await put({ cape: 'ember', cosmetics: { halo: true } }), 403, /Dodatki .* częścią Hammer\+/);
+    isError(await put({ cape: 'ember', cosmetics: { wings: 'smok' } }), 400, /Nieznany dodatek/);
+    assert.deepEqual((await put({ cape: 'ember', cosmetics: null })).body, { cape: 'ember', cosmetics: { wings: null, halo: false, hat: null } });
+    assert.deepEqual((await put({ cape: 'hammer' })).body, { cape: 'hammer' });
+    assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body, { capes: { [mc]: 'hammer' } });
+  } finally {
+    launcher.setProfileFetch(null);
+  }
+});
+
 test('cloud data and capes survive a restart (data/web.json)', async () => {
   reset();
   const mc = account();
   const code = plus.issue({ mc, days: 30 });
   const saved = await call('PUT', '/api/launcher/cloud', { code, body: { data: { keep: ['me'] } } });
-  await call('PUT', '/api/launcher/cape', { code, body: { cape: 'hammer' } });
+  await call('PUT', '/api/launcher/cape', { code, body: { cape: 'hammer', cosmetics: { halo: true } } });
   webStore.flush();
   webStore.load();
   assert.deepEqual((await call('GET', '/api/launcher/cloud', { code })).body, { updatedAt: saved.body.updatedAt, data: { keep: ['me'] } });
-  assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body, { capes: { [mc]: 'hammer' } });
+  assert.deepEqual((await call('GET', `/api/launcher/capes?uuids=${mc}`)).body, { capes: { [mc]: 'hammer' }, looks: { [mc]: { cape: 'hammer', halo: true } } });
   const file = JSON.parse(require('node:fs').readFileSync(require('node:path').join(db.dataDir, 'web.json'), 'utf8'));
-  assert.deepEqual(Object.keys(file).sort(), ['alert', 'capes', 'cloud', 'news', 'orders', 'plusPlans', 'releases', 'sessions', 'stats', 'users'], 'next to the website\'s accounts, orders and what the admin panel published');
+  assert.deepEqual(Object.keys(file).sort(), ['alert', 'capes', 'cloud', 'cosmetics', 'news', 'orders', 'plusPlans', 'releases', 'sessions', 'stats', 'users'], 'next to the website\'s accounts, orders and what the admin panel published');
   assert.ok(!JSON.stringify(file).includes(code), 'the code itself is never stored');
 });
 

@@ -3,17 +3,21 @@
 
     python3 tools/gen_capes.py
 
-Writes the textures and the list (id, Polish and English name) for the mod and for the launcher's cape picker:
+Writes the textures and the list (id, Polish and English name, free = for everybody) for the mod and for the
+launcher's cape picker:
     common/src/main/resources/assets/hammerclient/textures/capes/<id>.png + assets/hammerclient/capes.json
     ../hammer-launcher/src/renderer/assets/capes/<id>.png + capes.json
+The lists also name the moving capes of gen_cosmetics.py (frames, fps: their textures are strips of frames).
 """
 import json
 import os
 import random
+import sys
 
 from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 MOD = os.path.join(ROOT, 'common/src/main/resources/assets/hammerclient')
 LAUNCHER = os.path.join(ROOT, '..', 'hammer-launcher', 'src', 'renderer', 'assets', 'capes')
 LOGO = os.path.join(MOD, 'textures', 'logo.png')
@@ -28,6 +32,8 @@ CAPES = {
     'frost': ('Mróz', 'Frost', (10, 26, 60), (60, 190, 235), (240, 250, 255), (190, 240, 255)),
     'crimson': ('Karmazyn', 'Crimson', (120, 10, 18), (16, 6, 8), None, (255, 196, 0)),
 }
+# The capes everybody may wear – no Hammer+ needed (the shop's server and the mod say the same).
+FREE = {'hammer', 'ember'}
 
 
 def lerp(a, b, t):
@@ -99,15 +105,23 @@ def cape(cid):
     return im
 
 
-def main():
-    listing = [{'id': cid, 'name': CAPES[cid][0], 'nameEn': CAPES[cid][1]} for cid in CAPES]
-    for out, index in ((os.path.join(MOD, 'textures', 'capes'), os.path.join(MOD, 'capes.json')), (LAUNCHER, os.path.join(LAUNCHER, 'capes.json'))):
-        os.makedirs(out, exist_ok=True)
-        for cid in CAPES:
-            cape(cid).save(os.path.join(out, cid + '.png'), optimize=True)
+def write_lists():
+    """capes.json for the mod and the launcher: the still capes, then the moving ones (gen_cosmetics.py)."""
+    import gen_cosmetics  # the same folder
+    listing = [{'id': cid, 'name': CAPES[cid][0], 'nameEn': CAPES[cid][1], **({'free': True} if cid in FREE else {})} for cid in CAPES]
+    listing += [{'id': cid, 'name': pl, 'nameEn': en, 'frames': gen_cosmetics.FRAMES, 'fps': gen_cosmetics.FPS} for cid, (pl, en, _) in gen_cosmetics.ANIMATED.items()]
+    for index in (os.path.join(MOD, 'capes.json'), os.path.join(LAUNCHER, 'capes.json')):
         with open(index, 'w', encoding='utf-8') as f:
             json.dump(listing, f, ensure_ascii=False, indent=2)
             f.write('\n')
+
+
+def main():
+    for out in (os.path.join(MOD, 'textures', 'capes'), LAUNCHER):
+        os.makedirs(out, exist_ok=True)
+        for cid in CAPES:
+            cape(cid).save(os.path.join(out, cid + '.png'), optimize=True)
+    write_lists()
     print(f'{len(CAPES)} capes → mod and launcher')
 
 

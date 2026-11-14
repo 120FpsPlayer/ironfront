@@ -5,7 +5,7 @@
  *
  *   GET  <base>/cloud                      → { updatedAt, data }        404 = nothing stored yet
  *   PUT  <base>/cloud  { data, baseUpdatedAt? }  → { updatedAt }        409 → { error, updatedAt, data } (a newer copy)
- *   PUT  <base>/cape   { cape: "<id>" | null }   → { cape }
+ *   PUT  <base>/cape   { cape: "<id>" | null, cosmetics?: { wings, halo, hat } }   → { cape, cosmetics? }
  *
  * and for everybody, without a code:
  *
@@ -107,9 +107,13 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     return { updatedAt: body.updatedAt };
   }
 
-  /** Tells the shop which Hammer+ cape the player wears (null = none), so other players' games can show it. */
-  async function putCape(code, cape) {
-    const { status, body } = await call('PUT', '/cape', code, { cape: cape || null });
+  /**
+   * Tells the shop which Hammer+ cape the player wears (null = none), so other players' games can show it – and,
+   * when given, the cosmetics (Dodatki na postać: { wings, halo, hat }, ids or null; null = none).
+   */
+  async function putCape(code, cape, cosmetics) {
+    const look = cosmetics === undefined ? {} : { cosmetics: cosmetics ? { wings: cosmetics.wings || null, halo: cosmetics.halo === true, hat: cosmetics.hat || null } : null };
+    const { status, body } = await call('PUT', '/cape', code, { cape: cape || null, ...look });
     if (status !== 200 && status !== 201) throw refusal(status, body, 'Nie udało się zapisać peleryny w sklepie');
     return { cape: typeof body.cape === 'string' ? body.cape : null };
   }

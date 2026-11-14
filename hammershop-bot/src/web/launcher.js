@@ -14,11 +14,16 @@
  *   GET cloud             Bearer → { updatedAt, data }; 404 when nothing is stored for the account
  *   PUT cloud             Bearer, { data: {…}, baseUpdatedAt? }, at most 256 KB → { updatedAt };
  *                         409 { error, updatedAt, data } (the stored copy) when baseUpdatedAt is older than what is stored
- *   GET capes?uuids=a,b   { capes: { "<uuid>": "<capeId>" } } – public, at most 100 accounts; only accounts whose
- *                         Hammer+ was running when they picked the cape and still is
- *   PUT cape              Bearer, { cape: "<capeId>" | null } → { cape }
- *                         – or, for the capes everybody may wear (FREE_CAPES), without Hammer+: header
- *                         X-Minecraft-Token = the account's own Minecraft sign-in, checked with Mojang (never stored)
+ *   GET capes?uuids=a,b   { capes: { "<uuid>": "<capeId>" }, looks?: { "<uuid>": { cape?, wings?, halo?, hat? } } } – public,
+ *                         at most 100 accounts; only accounts whose Hammer+ was running when they picked the cape (and
+ *                         the cosmetics) and still is. `capes` is what older Hammer Clients read: only still capes – a
+ *                         moving one is answered with its still look-alike (MOVING_CAPES). `looks` – sent only when an
+ *                         account in the answer has a moving cape or cosmetics – tells newer clients everything
+ *   PUT cape              Bearer, { cape: "<capeId>" | null, cosmetics?: { wings, halo, hat } | null } → { cape, cosmetics? }
+ *                         – cosmetics (Hammer+): wings / hat ids (COSMETICS) or null, halo true / false; left out
+ *                         (older launchers) = no change, null = none. Or, for the capes everybody may wear (FREE_CAPES),
+ *                         without Hammer+: header X-Minecraft-Token = the account's own Minecraft sign-in, checked with
+ *                         Mojang (never stored) – cosmetics can only be taken off that way
  *   PUT presence          { me: "<uuid>" | null, uuids: ["<uuid>", …] } → { players: { "<uuid>": "h" | "p" } } – public,
  *                         at most 100 accounts. `me` says "this account is playing on Hammer Client right now" (kept in
  *                         memory for five minutes, never written down); the answer names those of `uuids` who play on
@@ -44,6 +49,12 @@ const releases = require('./releases');
 const PREFIX = '/api/launcher/';
 const CAPES = ['hammer', 'gold', 'ember', 'royal', 'frost', 'crimson'];
 const FREE_CAPES = ['hammer', 'ember']; // for everybody – the launcher's capes.json says the same
+// ── Ruchome peleryny i dodatki (Hammer+) – the launcher's capes.json / cosmetics.json and the mod's cosmetics.json say the same ──
+/** The moving capes and the still cape Hammer Clients older than 2.4 are told instead (they know only the still ones). */
+const MOVING_CAPES = Object.freeze({ flame: 'ember', sparks: 'royal', waves: 'frost' });
+const ALL_CAPES = [...CAPES, ...Object.keys(MOVING_CAPES)];
+/** What each slot of the cosmetics may hold (and halo: true / false). */
+const COSMETICS = Object.freeze({ wings: ['angel', 'dragon'], hat: ['crown', 'tophat', 'santa'] });
 const MOJANG_PROFILE = 'https://api.minecraftservices.com/minecraft/profile';
 const CLOUD_LIMIT = 256 * 1024;
 const CAPE_LIMIT = 4 * 1024;
@@ -58,6 +69,29 @@ const SLOW_DOWN = 'Zwolnij trochę i spróbuj ponownie.';
 
 const problem = (status, message) => Object.assign(new Error(message), { status });
 const isObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** body.cape: one of ALL_CAPES or null – anything else is a 400. */
+function capeBody(cape) {
+  if (cape !== null && !ALL_CAPES.includes(cape)) throw problem(400, `Nieznana peleryna. Do wyboru: ${ALL_CAPES.join(', ')} – albo null, żeby ją zdjąć.`);
+  return cape;
+}
+
+/** body.cosmetics → { wings, halo, hat } (null / false = none); undefined when it was not sent (older launchers). */
+function cosmeticsBody(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return { wings: null, halo: false, hat: null };
+  if (!isObject(value)) throw problem(400, 'Pole „cosmetics” musi być obiektem { wings, halo, hat } – albo null, żeby zdjąć dodatki.');
+  const slot = (name) => {
+    const id = value[name] ?? null;
+    if (id === null || id === '') return null;
+    if (!COSMETICS[name].includes(id)) throw problem(400, `Nieznany dodatek (${name}). Do wyboru: ${COSMETICS[name].join(', ')} – albo null.`);
+    return id;
+  };
+  const halo = value.halo ?? false;
+  if (typeof halo !== 'boolean') throw problem(400, 'Pole „halo” to true albo false.');
+  return { wings: slot('wings'), halo, hat: slot('hat') };
+}
+const wearsCosmetics = (look) => Boolean(look && (look.wings || look.halo || look.hat));
 
 /** Nested deeper than the database can write back (a 256 KB body of "[[[[…" parses, but can't be saved). */
 function tooDeep(value, max = MAX_DEPTH) {
@@ -236,13 +270,18 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
     const asked = String(url.searchParams.get('uuids') ?? '').split(',').map((u) => u.trim()).filter(Boolean);
     if (asked.length > MAX_UUIDS) return fail(res, 400, `Najwyżej ${MAX_UUIDS} kont w jednym zapytaniu.`);
     const capes = {};
+    const looks = {};
     for (const uuid of asked) {
       // Answered under the spelling that was asked for (with or without dashes); anything that isn't a UUID has no cape.
       const mc = plus.normalizeUuid(uuid);
-      const cape = mc && store.capeOf(mc);
-      if (cape) capes[uuid] = cape;
+      if (!mc) continue;
+      const cape = store.capeOf(mc);
+      const look = store.cosmeticsOf(mc);
+      const moving = Boolean(cape) && Object.hasOwn(MOVING_CAPES, cape);
+      if (cape) capes[uuid] = moving ? MOVING_CAPES[cape] : cape; // older Hammer Clients only know the still capes
+      if (moving || look) looks[uuid] = { ...(cape && { cape }), ...look };
     }
-    return send(res, 200, { capes });
+    return send(res, 200, Object.keys(looks).length ? { capes, looks } : { capes });
   }
 
   if (route === 'presence') {
@@ -266,10 +305,12 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
     if (limited(req, 'launcher-write', 30)) return fail(res, 429, SLOW_DOWN);
     if (minecraftToken.length > 4096) return fail(res, 400, 'Nieprawidłowe logowanie Minecraft.');
     const body = await jsonBody(req, CAPE_LIMIT);
-    if (body.cape !== null && !CAPES.includes(body.cape)) return fail(res, 400, `Nieznana peleryna. Do wyboru: ${CAPES.join(', ')} – albo null, żeby ją zdjąć.`);
-    if (body.cape !== null && !FREE_CAPES.includes(body.cape)) return fail(res, 403, 'Ta peleryna jest częścią Hammer+ – wpisz swój kod w Hammer Launcherze: Hammer+ → „Mam kod”.');
+    const cape = capeBody(body.cape);
+    const look = cosmeticsBody(body.cosmetics);
+    if (cape !== null && !FREE_CAPES.includes(cape)) return fail(res, 403, 'Ta peleryna jest częścią Hammer+ – wpisz swój kod w Hammer Launcherze: Hammer+ → „Mam kod”.');
+    if (wearsCosmetics(look)) return fail(res, 403, 'Dodatki (skrzydła, aureola, czapki) są częścią Hammer+ – wpisz swój kod w Hammer Launcherze: Hammer+ → „Mam kod”.');
     const mc = await minecraftAccount(minecraftToken);
-    return send(res, 200, { cape: store.setCape(mc, body.cape, 0, { free: true }) });
+    return send(res, 200, { cape: store.setCape(mc, cape, 0, { free: true }), ...(look && { cosmetics: store.setCosmetics(mc, null, 0) }) });
   }
 
   // Everything below belongs to one Hammer+ account.
@@ -285,8 +326,9 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
 
   if (route === 'cape') {
     const body = await jsonBody(req, CAPE_LIMIT);
-    if (body.cape !== null && !CAPES.includes(body.cape)) return fail(res, 400, `Nieznana peleryna. Do wyboru: ${CAPES.join(', ')} – albo null, żeby ją zdjąć.`);
-    return send(res, 200, { cape: store.setCape(who.mc, body.cape, who.exp, { free: FREE_CAPES.includes(body.cape) }) });
+    const cape = capeBody(body.cape);
+    const look = cosmeticsBody(body.cosmetics); // checked before anything is stored
+    return send(res, 200, { cape: store.setCape(who.mc, cape, who.exp, { free: FREE_CAPES.includes(cape) }), ...(look && { cosmetics: store.setCosmetics(who.mc, look, who.exp) }) });
   }
 
   const body = await jsonBody(req, CLOUD_LIMIT);
@@ -380,4 +422,4 @@ function join(req, res, url, { send }) {
   return send(res, 200, joinHtml(url), { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': JOIN_CSP });
 }
 
-module.exports = { api, join, joinHtml, feed, launcherVersion, onlineNow, setProfileFetch, CAPES, FREE_CAPES, CLOUD_LIMIT, MAX_UUIDS, PRESENCE_MS, PREFIX };
+module.exports = { api, join, joinHtml, feed, launcherVersion, onlineNow, setProfileFetch, CAPES, FREE_CAPES, MOVING_CAPES, COSMETICS, CLOUD_LIMIT, MAX_UUIDS, PRESENCE_MS, PREFIX };

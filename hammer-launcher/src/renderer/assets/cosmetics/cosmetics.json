@@ -1,0 +1,112 @@
+[
+  {
+    "id": "angel",
+    "slot": "wings",
+    "name": "Anielskie",
+    "nameEn": "Angel",
+    "back": {
+      "x": -1,
+      "y": 2.55,
+      "w": 18,
+      "h": 13.25
+    },
+    "front": {
+      "x": -1,
+      "y": 2.55,
+      "w": 18,
+      "h": 13.25,
+      "under": true
+    }
+  },
+  {
+    "id": "dragon",
+    "slot": "wings",
+    "name": "Smocze",
+    "nameEn": "Dragon",
+    "back": {
+      "x": -1,
+      "y": 2.55,
+      "w": 18,
+      "h": 13.25
+    },
+    "front": {
+      "x": -1,
+      "y": 2.55,
+      "w": 18,
+      "h": 13.25,
+      "under": true
+    }
+  },
+  {
+    "id": "halo",
+    "slot": "halo",
+    "name": "Aureola",
+    "nameEn": "Halo",
+    "front": {
+      "x": 2.5,
+      "y": -6.5,
+      "w": 11,
+      "h": 4
+    },
+    "back": {
+      "x": 2.5,
+      "y": -6.5,
+      "w": 11,
+      "h": 4
+    }
+  },
+  {
+    "id": "crown",
+    "slot": "hat",
+    "name": "Korona",
+    "nameEn": "Crown",
+    "front": {
+      "x": 3.28,
+      "y": -5.72,
+      "w": 9.44,
+      "h": 6.84
+    },
+    "back": {
+      "x": 3.28,
+      "y": -5.72,
+      "w": 9.44,
+      "h": 6.84
+    }
+  },
+  {
+    "id": "tophat",
+    "slot": "hat",
+    "name": "Cylinder",
+    "nameEn": "Top hat",
+    "front": {
+      "x": 2.0,
+      "y": -7.6,
+      "w": 12.0,
+      "h": 7.0
+    },
+    "back": {
+      "x": 2.0,
+      "y": -7.6,
+      "w": 12.0,
+      "h": 7.0
+    }
+  },
+  {
+    "id": "santa",
+    "slot": "hat",
+    "name": "Czapka Mikołaja",
+    "nameEn": "Santa hat",
+    "front": {
+      "x": 3.3,
+      "y": -8.0,
+      "w": 9.4,
+      "h": 8.2
+    },
+    "back": {
+      "x": 3.3,
+      "y": -8.0,
+      "w": 9.4,
+      "h": 8.2
+    }
+  }
+]

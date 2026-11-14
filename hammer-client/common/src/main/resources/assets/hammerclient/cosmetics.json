@@ -1,0 +1,1067 @@
+{
+ "version": 1,
+ "capes": [
+  {
+   "id": "flame",
+   "frames": 16,
+   "fps": 10,
+   "fallback": "ember"
+  },
+  {
+   "id": "sparks",
+   "frames": 16,
+   "fps": 10,
+   "fallback": "royal"
+  },
+  {
+   "id": "waves",
+   "frames": 16,
+   "fps": 10,
+   "fallback": "frost"
+  }
+ ],
+ "items": [
+  {
+   "id": "angel",
+   "slot": "wings",
+   "texture": [
+    64,
+    64
+   ],
+   "density": 2,
+   "glow": false,
+   "parts": [
+    {
+     "bone": "body",
+     "pivot": [
+      1.0,
+      2.5,
+      3.2
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "flapL",
+     "boxes": [
+      {
+       "origin": [
+        0,
+        -5,
+        0
+       ],
+       "size": [
+        16,
+        20,
+        0
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "body",
+     "pivot": [
+      -1.0,
+      2.5,
+      3.2
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "flapR",
+     "boxes": [
+      {
+       "origin": [
+        -16,
+        -5,
+        0
+       ],
+       "size": [
+        16,
+        20,
+        0
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.0,
+       "mirror": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "dragon",
+   "slot": "wings",
+   "texture": [
+    64,
+    64
+   ],
+   "density": 2,
+   "glow": false,
+   "parts": [
+    {
+     "bone": "body",
+     "pivot": [
+      1.0,
+      2.5,
+      3.2
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "flapL",
+     "boxes": [
+      {
+       "origin": [
+        0,
+        -6,
+        0
+       ],
+       "size": [
+        16,
+        20,
+        0
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "body",
+     "pivot": [
+      -1.0,
+      2.5,
+      3.2
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "flapR",
+     "boxes": [
+      {
+       "origin": [
+        -16,
+        -6,
+        0
+       ],
+       "size": [
+        16,
+        20,
+        0
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.0,
+       "mirror": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "halo",
+   "slot": "halo",
+   "texture": [
+    64,
+    32
+   ],
+   "density": 1,
+   "glow": true,
+   "parts": [
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      0.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      30.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      60.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      90.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      120.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      150.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      180.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      210.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      240.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      270.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      300.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      330.0,
+      0
+     ],
+     "scale": 0.5,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -2.4991,
+        -1,
+        7.4
+       ],
+       "size": [
+        5,
+        2,
+        2
+       ],
+       "uv": [
+        0,
+        17
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    },
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      -12.5,
+      0
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 0.8,
+     "anim": "bob",
+     "boxes": [
+      {
+       "origin": [
+        -8,
+        0.25,
+        -8
+       ],
+       "size": [
+        16,
+        0,
+        16
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "crown",
+   "slot": "hat",
+   "texture": [
+    64,
+    32
+   ],
+   "density": 1,
+   "glow": false,
+   "parts": [
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "",
+     "boxes": [
+      {
+       "origin": [
+        -4,
+        -10.5,
+        -4
+       ],
+       "size": [
+        8,
+        3,
+        8
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.62,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -4.6,
+        -13.6,
+        -4.6
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -0.5,
+        -13.6,
+        -4.6
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        3.6,
+        -13.6,
+        -4.6
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        3.6,
+        -13.6,
+        -0.5
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        3.6,
+        -13.6,
+        3.6
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -0.5,
+        -13.6,
+        3.6
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -4.6,
+        -13.6,
+        3.6
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -4.6,
+        -13.6,
+        -0.5
+       ],
+       "size": [
+        1,
+        3,
+        1
+       ],
+       "uv": [
+        33,
+        0
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tophat",
+   "slot": "hat",
+   "texture": [
+    64,
+    32
+   ],
+   "density": 1,
+   "glow": false,
+   "parts": [
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "",
+     "boxes": [
+      {
+       "origin": [
+        -6,
+        -9.6,
+        -6
+       ],
+       "size": [
+        12,
+        1,
+        12
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -3.5,
+        -15.6,
+        -3.5
+       ],
+       "size": [
+        7,
+        6,
+        7
+       ],
+       "uv": [
+        0,
+        14
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -3.5,
+        -11.6,
+        -3.5
+       ],
+       "size": [
+        7,
+        2,
+        7
+       ],
+       "uv": [
+        29,
+        14
+       ],
+       "inflate": 0.12,
+       "mirror": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "santa",
+   "slot": "hat",
+   "texture": [
+    64,
+    32
+   ],
+   "density": 1,
+   "glow": false,
+   "parts": [
+    {
+     "bone": "head",
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ],
+     "scale": 1,
+     "anim": "",
+     "boxes": [
+      {
+       "origin": [
+        -4.5,
+        -10,
+        -4.5
+       ],
+       "size": [
+        9,
+        2,
+        9
+       ],
+       "uv": [
+        0,
+        0
+       ],
+       "inflate": 0.2,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -4,
+        -13,
+        -4
+       ],
+       "size": [
+        8,
+        3,
+        8
+       ],
+       "uv": [
+        0,
+        12
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -3,
+        -15,
+        -2.5
+       ],
+       "size": [
+        6,
+        2,
+        6
+       ],
+       "uv": [
+        33,
+        12
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -2,
+        -16,
+        -0.5
+       ],
+       "size": [
+        4,
+        2,
+        4
+       ],
+       "uv": [
+        0,
+        24
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -1.5,
+        -15.5,
+        3
+       ],
+       "size": [
+        3,
+        2,
+        3
+       ],
+       "uv": [
+        30,
+        24
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      },
+      {
+       "origin": [
+        -1.5,
+        -14.5,
+        5
+       ],
+       "size": [
+        3,
+        3,
+        3
+       ],
+       "uv": [
+        17,
+        24
+       ],
+       "inflate": 0.0,
+       "mirror": false
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
