@@ -71,7 +71,7 @@ function scheduleEdit(guild, gw) {
   editTimers.set(gw.id, timer);
 }
 
-async function start(guild, host, { prize, durationMs, winners, description, channel, requiredRole, buyersOnly = false, minInvites = null, ping }) {
+async function start(guild, host, { prize, durationMs, winners, description, channel, requiredRole, buyersOnly = false, minInvites = null, ping, plusDays = null }) {
   if (durationMs < 60_000) throw new UserError('Giveaway musi trwać co najmniej 1 minutę.');
   if (durationMs > 60 * 86_400_000) throw new UserError('Giveaway może trwać najwyżej 60 dni.');
   if (minInvites && config.invites.enabled === false) {
@@ -93,6 +93,8 @@ async function start(guild, host, { prize, durationMs, winners, description, cha
     requiredRoleId: requiredRole?.id ?? null,
     buyersOnly: Boolean(buyersOnly),
     minInvites: minInvites ? Math.max(1, Math.min(100, Math.trunc(minInvites))) : null,
+    // A Hammer+ prize and its length (0 = forever) – the AI assistant issues the code itself (src/features/ai/prizes.js).
+    plusDays: Number.isInteger(plusDays) && plusDays >= 0 && plusDays <= 3650 ? plusDays : null,
     entries: [],
     winners: [],
     ended: false,
@@ -182,6 +184,8 @@ async function draw(guild, gw, { reroll = false, count = null } = {}) {
   const winners = await drawWinners(guild, gw.entries, count ?? gw.winnersCount, reroll ? gw.winners : [], gw);
   // A reroll adds the new winners (so they're excluded from the next reroll too).
   gw.winners = reroll ? [...new Set([...gw.winners, ...winners])] : winners;
+  // When each winner was drawn – the 48 hours to claim the prize count from here (a reroll from the reroll).
+  gw.wonAt = { ...(gw.wonAt ?? {}), ...Object.fromEntries(winners.map((id) => [id, Date.now()])) };
   gw.ended = true;
   if (!reroll) gw.endsAt = Math.min(gw.endsAt, Date.now());
   db.save();

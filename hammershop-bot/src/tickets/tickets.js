@@ -280,6 +280,7 @@ async function openTicket(member, type, answers = [], extra = {}, { force = fals
       ],
     });
 
+    await hooks.emit('ticketOpened', { guild, channel, ticket: db.getTicket(channel.id), member, type }); // e.g. the AI assistant (features/aiassistant.js)
     return channel;
   } finally {
     creating.delete(key);

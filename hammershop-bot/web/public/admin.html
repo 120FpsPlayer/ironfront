@@ -35,6 +35,7 @@
     <nav class="tabs" role="tablist" aria-label="Sekcje panelu">
       <button role="tab" data-tab="pulpit" aria-selected="true">Pulpit</button>
       <button role="tab" data-tab="aktualnosci">Aktualności</button>
+      <button role="tab" data-tab="ogloszenia">Ogłoszenia</button>
       <button role="tab" data-tab="komunikat">Komunikat</button>
       <button role="tab" data-tab="wersje">Wersje launchera</button>
       <button role="tab" data-tab="plus">Hammer+</button>
@@ -71,6 +72,68 @@
         </form>
         <div class="card"><h2>Opublikowane</h2><div class="list" id="news-list"></div></div>
       </div>
+    </section>
+
+    <!-- Ogłoszenia: a card on Discord (#📢 ogłoszenia) -->
+    <section class="tab" id="tab-ogloszenia" role="tabpanel" hidden>
+      <div class="notice warn" id="ann-setup" hidden></div>
+      <div class="grid-2">
+        <form class="card fields" id="ann-form" novalidate>
+          <div><h2>Nowe ogłoszenie na Discordzie</h2><p class="muted small">Bot wyśle je na kanał <b id="ann-channel">#📢 ogłoszenia</b> jako ładną kartę – taką samą jak z komendy <span class="mono">/ogloszenie</span>. Podgląd pokazuje, jak będzie wyglądać.</p></div>
+          <fieldset class="ann-kinds"><legend>Rodzaj</legend><div class="ann-chips" id="ann-kinds"></div></fieldset>
+          <label>Tytuł<input type="text" id="ann-title" maxlength="120" placeholder="np. Nowy sezon startuje w piątek!" autocomplete="off"><span class="hint"><span id="ann-title-count">0</span>/120</span></label>
+          <div class="ann-field">
+            <div class="ann-head"><label for="ann-text">Treść</label>
+              <div class="ann-tools" role="toolbar" aria-label="Formatowanie treści">
+                <button class="btn" type="button" data-md="bold" title="Pogrubienie" aria-label="Pogrubienie"><b>B</b></button>
+                <button class="btn" type="button" data-md="italic" title="Kursywa" aria-label="Kursywa"><i>I</i></button>
+                <button class="btn" type="button" data-md="underline" title="Podkreślenie" aria-label="Podkreślenie"><u>U</u></button>
+                <button class="btn" type="button" data-md="strike" title="Przekreślenie" aria-label="Przekreślenie"><s>S</s></button>
+                <button class="btn" type="button" data-md="heading" title="Nagłówek">H</button>
+                <button class="btn" type="button" data-md="list" title="Lista">• Lista</button>
+                <button class="btn" type="button" data-md="link" title="Link">Link</button>
+              </div>
+            </div>
+            <textarea id="ann-text" maxlength="3500" rows="9" placeholder="Co chcesz ogłosić? Możesz pisać w kilku akapitach."></textarea>
+            <div class="ann-foot hint"><span>Działa Markdown z Discorda: <code>**pogrubienie**</code> <code>*kursywa*</code> <code>__podkreślenie__</code> <code>~~przekreślenie~~</code> <code>- lista</code> <code>&gt; cytat</code> <code>## nagłówek</code> <code>[tekst](https://…)</code> i emoji.</span><span class="nowrap"><span id="ann-text-count">0</span>/3500</span></div>
+          </div>
+          <label>Obrazek pod treścią (opcjonalnie)<input type="url" id="ann-image" maxlength="500" placeholder="https://… (.png, .jpg, .gif)" autocomplete="off"><span class="hint">Link do obrazka w internecie – musi zaczynać się od https://.</span></label>
+          <label class="check"><input type="checkbox" id="ann-banner" checked> Baner nad ogłoszeniem (zależy od rodzaju)</label>
+          <div class="fields two">
+            <label>Przycisk – napis (opcjonalnie)<input type="text" id="ann-btn-label" maxlength="80" placeholder="np. Pobierz launcher" autocomplete="off"></label>
+            <label>Przycisk – link<input type="url" id="ann-btn-url" maxlength="500" placeholder="https://…" autocomplete="off"></label>
+          </div>
+          <fieldset class="ann-ping"><legend>Kogo powiadomić</legend>
+            <label class="check"><input type="radio" name="ann-ping" value="none" checked> Nikogo – bez pingu</label>
+            <label class="check" id="ann-ping-role"><input type="radio" name="ann-ping" value="role"> <span>Rolę <b>📢 Ogłoszenia</b> – osoby, które chcą dostawać powiadomienia</span></label>
+            <label class="check" id="ann-ping-everyone"><input type="radio" name="ann-ping" value="everyone"> <span><b>@everyone</b> – wszystkich na serwerze <span class="pill gold">tylko właściciel</span></span></label>
+          </fieldset>
+          <p class="notice bad small" id="ann-error" role="alert" hidden></p>
+          <div class="row"><button class="btn primary" type="submit" id="ann-send">Wyślij na Discorda</button><button class="btn" type="button" id="ann-clear">Wyczyść</button></div>
+          <div id="ann-result" hidden></div>
+        </form>
+        <div class="card ann-side">
+          <div class="row"><h2>Podgląd</h2><span class="muted small right">tak to zobaczą na Discordzie</span></div>
+          <div class="dc" id="ann-preview">
+            <div class="dc-msg" id="ann-msg">
+              <!--shop--><img class="dc-avatar" id="ann-avatar" src="/assets/hammershop-icon.png" alt=""><!--/shop--><!--launcher--><img class="dc-avatar" id="ann-avatar" src="/assets/launcher-icon.png" alt=""><!--/launcher-->
+              <div class="dc-main">
+                <div class="dc-head"><b id="ann-bot"><!--shop-->HammerShop<!--/shop--><!--launcher-->Hammer Launcher<!--/launcher--></b><span class="dc-app">Aplikacja</span><span class="dc-time" id="ann-time"></span></div>
+                <div class="dc-card" id="ann-card">
+                  <img class="dc-banner" id="ann-banner-img" alt="Baner" hidden>
+                  <div class="dc-md" id="ann-md"></div>
+                  <img class="dc-image" id="ann-image-img" alt="Obrazek z ogłoszenia" hidden>
+                  <p class="dc-image-bad" id="ann-image-bad" hidden>Nie da się wczytać obrazka – sprawdź link.</p>
+                  <hr class="dc-sep">
+                  <div class="dc-sub" id="ann-footer"></div>
+                  <div class="dc-buttons" id="ann-buttons" hidden><span class="dc-btn"><span aria-hidden="true">🔗</span><span id="ann-btn-text"></span><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M15 2a1 1 0 1 0 0 2h3.6l-7.3 7.3a1 1 0 1 0 1.4 1.4L20 5.4V9a1 1 0 1 0 2 0V3a1 1 0 0 0-1-1h-6ZM5 4a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-5a1 1 0 1 0-2 0v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5a1 1 0 1 0 0-2H5Z"/></svg></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card"><h2>Wysłane z panelu</h2><p class="muted small">Ostatnie 20 ogłoszeń wysłanych z tej zakładki – kto, kiedy i link do wiadomości.</p><div class="list" id="ann-history"></div></div>
     </section>
 
     <!-- Komunikat -->

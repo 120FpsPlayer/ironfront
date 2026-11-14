@@ -37,3 +37,82 @@ td .pill { margin-left: 6px; }
   .grid-2, .grid-2.wide-left { grid-template-columns: 1fr; }
   .plan-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* „Ogłoszenia”: the form, and a preview that looks like a message on Discord (its dark theme) */
+fieldset { border: 0; min-width: 0; }
+legend { font-size: 13px; color: var(--soft); font-weight: 500; margin-bottom: 8px; padding: 0; }
+.ann-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ann-kind { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border: 1px solid var(--line-2); border-radius: 999px; background: #0f0b0866; color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
+.ann-kind input { position: absolute; opacity: 0; pointer-events: none; }
+.ann-kind:hover { background: #ffffff0a; }
+.ann-kind:has(input:checked) { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); box-shadow: 0 0 0 1px var(--c) inset; }
+.ann-kind:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ann-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--accent)); flex: none; }
+.ann-field { display: grid; gap: 6px; }
+.ann-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ann-tools { display: flex; gap: 4px; flex-wrap: wrap; }
+.ann-tools .btn { min-height: 30px; padding: 3px 10px; font-size: 13px; }
+.ann-foot { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.ann-foot code { font: 11.5px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #ffffff0d; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--soft); white-space: nowrap; }
+.ann-ping { display: grid; gap: 8px; }
+.ann-ping label.check { align-items: flex-start; }
+.ann-ping label.check input { margin-top: 3px; flex: none; }
+.ann-ping label.check.off { opacity: .5; cursor: not-allowed; }
+.ann-ping .pill { margin-left: 4px; vertical-align: 1px; }
+.ann-side { position: sticky; top: 80px; display: grid; gap: 12px; }
+.ann-pill { gap: 6px; }
+.ann-item { gap: 8px; padding: 10px 14px; }
+.ann-item .title { min-width: 12ch; }
+.item.ann-gone .title { color: var(--muted); text-decoration: line-through; }
+
+.dc { background: #313338; border: 1px solid #1e1f22; border-radius: 10px; padding: 14px 0 16px; color: #dbdee1; font: 15px/1.375 "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif; overflow: hidden; }
+.dc-msg { position: relative; display: grid; grid-template-columns: 56px minmax(0, 1fr); padding: 2px 14px 2px 0; }
+.dc-msg.dc-ping { background: #f0b1320f; }
+.dc-msg.dc-ping::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 2px; background: #f0b132; }
+.dc-avatar { width: 40px; height: 40px; border-radius: 50%; margin: 2px 0 0 12px; object-fit: cover; background: #1e1f22; }
+.dc-main { min-width: 0; }
+.dc-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.dc-head b { color: #f2f3f5; font-weight: 600; }
+.dc-app { background: #5865f2; color: #fff; font-size: 10px; font-weight: 700; line-height: 15px; padding: 0 5px; border-radius: 4px; text-transform: uppercase; }
+.dc-time { color: #949ba4; font-size: 12px; }
+.dc-card { max-width: 560px; display: grid; gap: 8px; background: #2b2d31; border: 1px solid #3f4147; border-left: 4px solid var(--accent-c, #ff9f43); border-radius: 8px; padding: 14px 14px 12px; }
+.dc-banner, .dc-image { width: 100%; border-radius: 6px; }
+.dc-image-bad { border: 1px dashed #4e5058; border-radius: 6px; padding: 16px; text-align: center; color: #949ba4; font-size: 13px; }
+.dc-md { min-width: 0; overflow-wrap: anywhere; }
+.dc-md h1, .dc-md h2, .dc-md h3 { color: #f2f3f5; font-weight: 700; letter-spacing: 0; line-height: 1.25; text-wrap: wrap; }
+.dc-md h1 { font-size: 24px; margin: 2px 0 8px; }
+.dc-md h2 { font-size: 20px; margin: 8px 0 4px; }
+.dc-md h3 { font-size: 16px; margin: 10px 0 4px; }
+.dc-md .dc-blank { height: 1.375em; }
+.dc-md ul, .dc-md ol { margin: 2px 0 2px 22px; }
+.dc-md li { margin: 1px 0; }
+.dc-md li.dc-li2 { margin-left: 22px; list-style-type: circle; }
+.dc-md li::marker { color: #b5bac1; }
+.dc-md blockquote { border-left: 4px solid #4e5058; border-radius: 2px; padding: 0 8px 0 12px; margin: 2px 0; }
+.dc-md strong { color: #f2f3f5; }
+.dc-sub { color: #949ba4; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.dc-code { font: 0.85em/1.1 Consolas, "Andale Mono WT", Monaco, monospace; background: #1e1f22; border-radius: 4px; padding: 1px 4px; }
+.dc-pre { background: #1e1f22; border: 1px solid #1a1b1e; border-radius: 4px; padding: 7px 9px; margin: 4px 0; font: 13px/1.3 Consolas, "Andale Mono WT", Monaco, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dc a { color: #00a8fc; text-decoration: none; }
+.dc a:hover { text-decoration: underline; }
+.dc-spoiler { background: #1e1f22; border-radius: 3px; padding: 0 2px; }
+.dc-mention { background: #5865f24d; color: #c9cdfb; border-radius: 3px; padding: 0 2px; font-weight: 500; }
+.dc-sep { border: 0; border-top: 1px solid #3f4147; margin: 2px 0; }
+.dc-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.dc-btn { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 32px; padding: 2px 14px; border-radius: 8px; background: #4e5058; color: #fff; font-size: 14px; font-weight: 500; }
+.dc-btn > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-btn svg { flex: none; opacity: .85; }
+.dc-ghost { color: #6d6f78 !important; font-style: italic; font-weight: 500 !important; }
+@media (max-width: 900px) {
+  .ann-side { position: static; }
+}
+@media (max-width: 560px) {
+  .ann-foot { flex-direction: column; gap: 4px; }
+  .ann-side { padding: 16px 12px; }
+  .ann-item .btn { flex: 1 1 auto; }
+  .dc { padding: 12px 0 14px; font-size: 14px; }
+  .dc-msg { grid-template-columns: 46px minmax(0, 1fr); padding-right: 10px; }
+  .dc-avatar { width: 34px; height: 34px; margin-left: 8px; }
+  .dc-card { padding: 12px 11px 10px; }
+  .dc-md h1 { font-size: 21px; }
+}

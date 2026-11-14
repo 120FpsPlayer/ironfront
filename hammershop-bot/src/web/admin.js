@@ -388,7 +388,7 @@ async function api(req, res, url, h) {
   if (head === 'announcements') {
     if (method === 'POST' && !arg) {
       if (h.limited(req, 'announce', 6)) return h.fail(res, 429, 'Za dużo ogłoszeń naraz – odczekaj minutę.');
-      const fields = announcementFields(body, owner);
+      const fields = announcementFields(Object(body), owner); // (a JSON null is an empty form, not a crash)
       const posted = await h.announcements.post({ ...fields, by: user.id });
       const item = store.addAnnouncement({ title: fields.title, kind: fields.kind, ping: fields.ping, by: user.id, url: posted.url, channelId: posted.channelId, messageId: posted.messageId, crossposted: Boolean(posted.crossposted) });
       const kind = h.announcements.info().kinds.find((k) => k.id === fields.kind);

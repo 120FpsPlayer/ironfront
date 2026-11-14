@@ -1,4 +1,4 @@
-/* The admin panel: news, the alert bar, launcher releases, Hammer+, featured servers, orders – over /api/admin/. */
+/* The admin panel: news, Discord announcements, the alert bar, launcher releases, Hammer+, featured servers, orders – over /api/admin/. */
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
@@ -526,6 +526,306 @@
       if (!r.orders.length) list.appendChild(el('tr', {}, [el('td', { colspan: '7', class: 'empty', text: 'Nie ma jeszcze zamówień ze strony.' })]));
     });
   };
+
+  // ── Ogłoszenia: a card on #📢 ogłoszenia, with a preview that looks like Discord ──
+  var ann = { info: null, limits: { title: 120, text: 3500, label: 80, url: 500 }, imageTimer: null, brand: $('ann-bot').textContent };
+  var annKind = function (id) { return ((ann.info && ann.info.kinds) || []).filter(function (k) { return k.id === id; })[0] || null; };
+  var annPing = function () { var c = document.querySelector('input[name="ann-ping"]:checked'); return c ? c.value : 'none'; };
+  var annChosenKind = function () { var c = document.querySelector('input[name="ann-kind"]:checked'); return c ? c.value : 'ogloszenie'; };
+  var isHttps = function (v) { return /^https:\/\/[^\s/]+\.[^\s]+$/i.test(v); };
+  function people(n) { var last = n % 10, tens = n % 100; return n + ' ' + (n === 1 ? 'osoba' : last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? 'osoby' : 'osób'); }
+
+  // Discord's markdown, as much as an announcement uses – built as elements, the text never becomes HTML.
+  // (_kursywa_ needs no letter right before it – matched as a group, not a lookbehind, which older Safari can't parse)
+  var INLINE = /(`+)([^`][\s\S]*?)\1|\|\|([\s\S]+?)\|\||\*\*([\s\S]+?)\*\*(?!\*)|__([\s\S]+?)__(?!_)|\*(?=\S)([\s\S]*?\S)\*(?!\*)|(^|[^A-Za-z0-9_])_(?=[^\s_])([\s\S]*?\S)_(?![A-Za-z0-9_])|~~([\s\S]+?)~~|\[([^\]\n]+)\]\(<?(https?:\/\/[^\s<>()]+)>?\)|(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])/;
+  function inline(text, parent) {
+    while (text) {
+      var m = INLINE.exec(text);
+      if (!m) { parent.appendChild(document.createTextNode(text)); return; }
+      var before = text.slice(0, m.index) + (m[8] != null ? m[7] : '');
+      if (before) parent.appendChild(document.createTextNode(before));
+      var node;
+      var link = function (href) { return el('a', { href: href, target: '_blank', rel: 'noopener noreferrer' }); };
+      if (m[1]) node = el('code', { class: 'dc-code', text: m[2] });
+      else if (m[3] != null) { node = el('span', { class: 'dc-spoiler' }); inline(m[3], node); }
+      else if (m[4] != null) { node = el('strong'); inline(m[4], node); }
+      else if (m[5] != null) { node = el('u'); inline(m[5], node); }
+      else if (m[6] != null || m[8] != null) { node = el('em'); inline(m[6] != null ? m[6] : m[8], node); }
+      else if (m[9] != null) { node = el('s'); inline(m[9], node); }
+      else if (m[10] != null) { node = link(m[11]); inline(m[10], node); }
+      else { node = link(m[12]); node.textContent = m[12]; }
+      parent.appendChild(node);
+      text = text.slice(m.index + m[0].length);
+    }
+  }
+  /** One line: a heading, small text, a list item or plain text – into box (lists continue across lines). */
+  function mdLine(line, box, state) {
+    var h = /^(#{1,3}) +(\S.*)$/.exec(line);
+    var item = /^( *)(?:[-*]|(\d{1,3})\.) +(\S.*)$/.exec(line);
+    if (!item) state.list = null;
+    if (h) { var head = el('h' + h[1].length); inline(h[2], head); box.appendChild(head); return; }
+    if (/^-# +\S/.test(line)) { var sub = el('div', { class: 'dc-sub' }); inline(line.replace(/^-# +/, ''), sub); box.appendChild(sub); return; }
+    if (item) {
+      var tag = item[2] ? 'ol' : 'ul';
+      if (!state.list || state.list.tagName.toLowerCase() !== tag || state.list.parentNode !== box) {
+        state.list = el(tag, item[2] && item[2] !== '1' ? { start: item[2] } : {});
+        box.appendChild(state.list);
+      }
+      var li = el('li', { class: item[1].length >= 2 ? 'dc-li2' : '' });
+      inline(item[3], li);
+      state.list.appendChild(li);
+      return;
+    }
+    if (!line.trim()) { box.appendChild(el('div', { class: 'dc-blank' })); return; }
+    var p = el('div', { class: 'dc-line' });
+    inline(line, p);
+    box.appendChild(p);
+  }
+  function markdown(text, box) {
+    var lines = text.split('\n');
+    var state = { list: null };
+    var quote = null;
+    for (var i = 0; i < lines.length; i += 1) {
+      var line = lines[i];
+      if (/^```/.test(line)) {
+        var code = [];
+        for (i += 1; i < lines.length && !/^```/.test(lines[i]); i += 1) code.push(lines[i]);
+        box.appendChild(el('pre', { class: 'dc-pre' }, [el('code', { text: code.join('\n') })]));
+        state.list = null; quote = null;
+        continue;
+      }
+      if (/^>>> /.test(line)) { // the rest of the message is quoted
+        quote = el('blockquote');
+        box.appendChild(quote);
+        var rest = [line.slice(4)].concat(lines.slice(i + 1));
+        rest.forEach(function (l) { mdLine(l, quote, state); });
+        return;
+      }
+      var q = /^> (.*)$/.exec(line) || (line === '>' ? [line, ''] : null);
+      if (q) {
+        if (!quote) { quote = el('blockquote'); box.appendChild(quote); state.list = null; }
+        mdLine(q[1], quote, state);
+        continue;
+      }
+      quote = null;
+      mdLine(line, box, state);
+    }
+  }
+  function mention(text) { return el('span', { class: 'dc-mention', text: text }); }
+
+  function annPreview() {
+    var kind = annKind(annChosenKind());
+    var title = $('ann-title').value.trim();
+    var text = $('ann-text').value.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    var ping = annPing();
+    $('ann-title-count').textContent = String($('ann-title').value.length);
+    $('ann-text-count').textContent = String($('ann-text').value.length);
+    $('ann-card').style.setProperty('--accent-c', kind ? kind.color : '#ff9f43');
+    // Banner on top, then the title and the text.
+    var banner = $('ann-banner-img');
+    var bannerSrc = $('ann-banner').checked && kind && kind.banner ? '/api/admin/announcements/banner/' + kind.id : '';
+    if (!bannerSrc) banner.hidden = true;
+    else if (banner.getAttribute('src') !== bannerSrc) { banner.hidden = false; banner.src = bannerSrc; }
+    else banner.hidden = banner.dataset.bad === bannerSrc;
+    var md = $('ann-md');
+    md.textContent = '';
+    var h1 = el('h1', { class: title ? '' : 'dc-ghost' });
+    inline(title || 'Tytuł ogłoszenia', h1);
+    md.appendChild(h1);
+    if (text) markdown(text, md);
+    else md.appendChild(el('div', { class: 'dc-line dc-ghost', text: 'Tu pojawi się treść ogłoszenia…' }));
+    // The picture under the text – loaded a moment after typing stops.
+    var image = $('ann-image').value.trim();
+    clearTimeout(ann.imageTimer);
+    if (!isHttps(image)) {
+      $('ann-image-img').hidden = true;
+      $('ann-image-bad').textContent = 'Link do obrazka musi zaczynać się od https://';
+      $('ann-image-bad').hidden = !image || 'https://'.indexOf(image.toLowerCase()) === 0 || /^https:\/\/\S*$/i.test(image); // empty, or still being typed
+    } else ann.imageTimer = setTimeout(function () {
+      var img = $('ann-image-img');
+      $('ann-image-bad').hidden = true;
+      if (img.getAttribute('src') !== image) { img.hidden = true; img.src = image; } else img.hidden = false;
+    }, 350);
+    // The footer: the kind, who sent it, the brand – and the ping.
+    var footer = $('ann-footer');
+    footer.textContent = '';
+    footer.appendChild(document.createTextNode((kind ? kind.emoji + ' ' + kind.label : '📢 Ogłoszenie') + ' · '));
+    footer.appendChild(mention('@' + ((me.user && me.user.name) || 'Ty')));
+    footer.appendChild(document.createTextNode(' · ' + ((ann.info && ann.info.brand) || ann.brand)));
+    if (ping !== 'none') {
+      footer.appendChild(document.createTextNode(' · '));
+      footer.appendChild(mention(ping === 'everyone' ? '@everyone' : '@' + (ann.info && ann.info.role ? ann.info.role.name : '📢 Ogłoszenia')));
+    }
+    $('ann-msg').classList.toggle('dc-ping', ping !== 'none');
+    var label = $('ann-btn-label').value.trim();
+    $('ann-buttons').hidden = !label;
+    $('ann-btn-text').textContent = label;
+    $('ann-time').textContent = 'Dzisiaj o ' + new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+  }
+  $('ann-banner-img').addEventListener('error', function () { this.dataset.bad = this.getAttribute('src'); this.hidden = true; });
+  $('ann-image-img').addEventListener('load', function () { this.hidden = false; $('ann-image-bad').hidden = true; });
+  $('ann-image-img').addEventListener('error', function () { this.hidden = true; $('ann-image-bad').textContent = 'Nie da się wczytać obrazka – sprawdź link.'; $('ann-image-bad').hidden = false; });
+  $('ann-avatar').addEventListener('error', function () { if (this.dataset.fallback) { this.src = this.dataset.fallback; delete this.dataset.fallback; } });
+  $('ann-form').addEventListener('input', function () { annError(''); annPreview(); }); // what was wrong is being fixed
+  $('ann-form').addEventListener('change', annPreview);
+
+  // Formatting buttons: around the selected text, or at the start of the selected lines.
+  function annWrap(before, after, sample) {
+    var t = $('ann-text');
+    var s = t.selectionStart, e = t.selectionEnd, v = t.value;
+    var chosen = v.slice(s, e) || sample;
+    t.value = v.slice(0, s) + before + chosen + after + v.slice(e);
+    t.focus();
+    t.setSelectionRange(s + before.length, s + before.length + chosen.length);
+    annPreview();
+  }
+  function annPrefix(prefix, sample) {
+    var t = $('ann-text');
+    var v = t.value;
+    var s = v.lastIndexOf('\n', t.selectionStart - 1) + 1;
+    var e = v.indexOf('\n', t.selectionEnd);
+    if (e < 0) e = v.length;
+    var out = (v.slice(s, e) || sample).split('\n').map(function (l) { return prefix + l; }).join('\n');
+    t.value = v.slice(0, s) + out + v.slice(e);
+    t.focus();
+    t.setSelectionRange(s, s + out.length);
+    annPreview();
+  }
+  var TOOLS = { bold: ['**', '**', 'pogrubienie'], italic: ['*', '*', 'kursywa'], underline: ['__', '__', 'podkreślenie'], strike: ['~~', '~~', 'przekreślenie'], link: ['[', '](https://)', 'tekst linku'] };
+  document.querySelectorAll('[data-md]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var k = b.dataset.md;
+      if (TOOLS[k]) annWrap(TOOLS[k][0], TOOLS[k][1], TOOLS[k][2]);
+      else if (k === 'list') annPrefix('- ', 'punkt listy');
+      else if (k === 'heading') annPrefix('## ', 'Nagłówek');
+    });
+  });
+
+  function annError(text) { $('ann-error').textContent = text; $('ann-error').hidden = !text; }
+  function annFields() {
+    return {
+      kind: annChosenKind(), title: $('ann-title').value.trim(), text: $('ann-text').value, image: $('ann-image').value.trim(),
+      buttonLabel: $('ann-btn-label').value.trim(), buttonUrl: $('ann-btn-url').value.trim(), ping: annPing(), banner: $('ann-banner').checked,
+    };
+  }
+  /** The same checks as the server, said before anything is sent → [message, field] or null. */
+  function annCheck(f) {
+    var L = ann.limits;
+    if (!f.title) return ['Wpisz tytuł ogłoszenia.', 'ann-title'];
+    if (f.title.length > L.title) return ['Tytuł może mieć najwyżej ' + L.title + ' znaków.', 'ann-title'];
+    if (!f.text.trim()) return ['Wpisz treść ogłoszenia.', 'ann-text'];
+    if (f.text.trim().length > L.text) return ['Treść może mieć najwyżej ' + L.text + ' znaków.', 'ann-text'];
+    if (f.image && !isHttps(f.image)) return ['Obrazek: adres musi zaczynać się od https://', 'ann-image'];
+    if (f.buttonLabel && !f.buttonUrl) return ['Przycisk: wpisz też link (https://…) – albo usuń napis.', 'ann-btn-url'];
+    if (f.buttonUrl && !f.buttonLabel) return ['Przycisk: wpisz też napis na przycisku – albo usuń link.', 'ann-btn-label'];
+    if (f.buttonUrl && !isHttps(f.buttonUrl)) return ['Link w przycisku: adres musi zaczynać się od https://', 'ann-btn-url'];
+    return null;
+  }
+  function annReset(all) {
+    ['ann-title', 'ann-text', 'ann-image', 'ann-btn-label', 'ann-btn-url'].forEach(function (id) { $(id).value = ''; });
+    document.querySelector('input[name="ann-ping"][value="none"]').checked = true;
+    if (all) $('ann-result').hidden = true;
+    annError('');
+    annPreview();
+  }
+  $('ann-clear').addEventListener('click', function () { annReset(true); $('ann-title').focus(); });
+
+  function annHistory(list) {
+    var box = $('ann-history');
+    box.textContent = '';
+    list.slice(0, 20).forEach(function (a) {
+      var kind = annKind(a.kind);
+      var dot = el('i', { class: 'ann-dot' });
+      dot.style.setProperty('--c', kind ? kind.color : '#ffa94d');
+      // Two lines: the kind and the title – then who, when, and what can be done with it.
+      box.appendChild(el('div', { class: 'item ann-item' + (a.deletedAt ? ' ann-gone' : '') }, [
+        el('div', { class: 'row' }, [
+          el('span', { class: 'pill ann-pill' }, [dot, kind ? kind.label : a.kind]),
+          a.ping === 'everyone' ? el('span', { class: 'pill warn', text: '@everyone' }) : a.ping === 'role' ? el('span', { class: 'pill', text: 'ping roli' }) : null,
+          a.deletedAt ? el('span', { class: 'pill bad', text: 'usunięte' }) : null,
+          el('span', { class: 'title grow', text: a.title }),
+        ]),
+        el('div', { class: 'row' }, [
+          el('span', { class: 'muted small grow', text: 'Autor: ' + ((a.by && a.by.name) || (a.by && a.by.id) || '—') + ' · ' + when(a.at) + (a.deletedAt ? ' · usunięte z Discorda ' + when(a.deletedAt) + (a.deletedBy && a.deletedBy.name ? ' (' + a.deletedBy.name + ')' : '') : '') }),
+          a.deletedAt ? null : el('a', { class: 'btn small', href: a.url, target: '_blank', rel: 'noopener', text: 'Zobacz na Discordzie' }),
+          a.deletedAt ? null : el('button', { class: 'btn small danger', type: 'button', text: 'Usuń z Discorda', onclick: function () {
+            confirmBox('Usunąć ogłoszenie z Discorda?', '„' + a.title + '” zniknie z kanału ogłoszeń. Tego nie da się cofnąć (u serwerów, które obserwują kanał, kopia może zostać).').then(function (yes) {
+              if (yes) api('DELETE', 'announcements/' + encodeURIComponent(a.id)).then(function (r) { toast(r.gone ? 'Tej wiadomości już nie było na Discordzie.' : 'Usunięto z Discorda.'); return loaders.ogloszenia(); }).catch(oops);
+            });
+          } }),
+        ]),
+      ]));
+    });
+    if (!list.length) box.appendChild(el('p', { class: 'empty', text: 'Nie wysłano jeszcze żadnego ogłoszenia z panelu.' }));
+  }
+
+  loaders.ogloszenia = function () {
+    return api('GET', 'announcements').then(function (r) {
+      ann.info = r;
+      if (r.limits) ann.limits = r.limits;
+      // The kinds: a colored chip each (the card's accent on Discord).
+      var chosen = annChosenKind();
+      var chips = $('ann-kinds');
+      chips.textContent = '';
+      r.kinds.forEach(function (k) {
+        var input = el('input', { type: 'radio', name: 'ann-kind', value: k.id });
+        input.checked = k.id === chosen;
+        var chip = el('label', { class: 'ann-kind' }, [input, el('i', { class: 'ann-dot' }), k.emoji + ' ' + k.label]);
+        chip.style.setProperty('--c', k.color);
+        chips.appendChild(chip);
+      });
+      if (r.kinds.length && !document.querySelector('input[name="ann-kind"]:checked')) chips.querySelector('input').checked = true;
+      $('ann-channel').textContent = r.channel ? '#' + r.channel.name : '#📢 ogłoszenia';
+      var problem = !r.kinds.length ? 'Bot nie jest teraz połączony z Discordem – ogłoszenie wyślesz, gdy wróci.'
+        : !r.channel ? 'Na serwerze nie ma kanału #📢 ogłoszenia – dodaj go na Discordzie komendą /zbuduj tylko:update.' : '';
+      $('ann-setup').textContent = problem;
+      $('ann-setup').hidden = !problem;
+      // Pings: the role only where the server has it, @everyone only for the owner.
+      var roleInput = document.querySelector('input[name="ann-ping"][value="role"]');
+      var everyoneInput = document.querySelector('input[name="ann-ping"][value="everyone"]');
+      roleInput.disabled = !r.role;
+      everyoneInput.disabled = !r.canEveryone;
+      $('ann-ping-role').classList.toggle('off', !r.role);
+      $('ann-ping-role').title = r.role ? '' : 'Na serwerze nie ma roli 📢 Ogłoszenia.';
+      $('ann-ping-everyone').classList.toggle('off', !r.canEveryone);
+      $('ann-ping-everyone').title = r.canEveryone ? '' : 'Ping @everyone może wysłać tylko właściciel serwera.';
+      if ((roleInput.checked && roleInput.disabled) || (everyoneInput.checked && everyoneInput.disabled)) document.querySelector('input[name="ann-ping"][value="none"]').checked = true;
+      if (r.bot) {
+        $('ann-bot').textContent = r.bot.name;
+        if (r.bot.avatar && $('ann-avatar').getAttribute('src') !== r.bot.avatar) { $('ann-avatar').dataset.fallback = $('ann-avatar').getAttribute('src'); $('ann-avatar').src = r.bot.avatar; }
+      }
+      annHistory(r.history);
+      annPreview();
+    });
+  };
+  $('ann-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var f = annFields();
+    var wrong = annCheck(f);
+    if (wrong) { annError(wrong[0]); $(wrong[1]).focus(); return; }
+    annError('');
+    var where = ann.info && ann.info.channel ? '#' + ann.info.channel.name : '#📢 ogłoszenia';
+    var everyone = f.ping === 'everyone';
+    var members = ann.info && ann.info.members;
+    confirmBox(
+      everyone ? 'Wysłać z pingiem @everyone?' : 'Wysłać ogłoszenie?',
+      everyone ? 'Powiadomienie dostanie każdy na serwerze' + (members ? ' (' + people(members) + ')' : '') + '. Używaj tego tylko do naprawdę ważnych ogłoszeń.'
+        : '„' + f.title + '” pojawi się na ' + where + (f.ping === 'role' ? ' z pingiem roli 📢 Ogłoszenia.' : ' bez pingu.'),
+      everyone ? 'Tak, powiadom wszystkich' : 'Wyślij'
+    ).then(function (yes) {
+      if (!yes) return null;
+      if (everyone) f.confirmEveryone = true;
+      return busy(event.target, api('POST', 'announcements', f)).then(function (r) {
+        toast('Ogłoszenie jest na Discordzie.');
+        var box = $('ann-result');
+        box.textContent = '';
+        box.appendChild(el('p', { class: 'notice ok' }, ['Wysłane na ' + where + ' – „' + r.item.title + '”. ', el('a', { href: r.url, target: '_blank', rel: 'noopener', text: 'Zobacz na Discordzie' })]));
+        annReset(false);
+        box.hidden = false;
+        return loaders.ogloszenia();
+      });
+    }).catch(function (err) { annError(err.message); oops(err); });
+  });
 
   // ── Start: who is this? ──
   api('GET', 'me').then(function (r) {

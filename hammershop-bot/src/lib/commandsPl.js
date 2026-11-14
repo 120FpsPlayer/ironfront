@@ -49,6 +49,15 @@ const MAP = {
       leaderboard: '🏆 Ranking', discord: '💬 Discord',
     }),
   }),
+  // The AI assistant in tickets – src/commands/assistant.js
+  assistant: C('asystent', 'Asystent AI w ticketach – włącz, wyłącz, sprawdź status', {
+    on: C('wlacz', 'Włącz asystenta AI na całym serwerze (admini)'),
+    off: C('wylacz', 'Wyłącz asystenta AI na całym serwerze (admini)'),
+    status: C('status', 'Czy asystent działa, jaki model, w ilu ticketach odpowiada'),
+    ticket: C('ticket', 'Włącz albo wyłącz asystenta w tym tickecie (zespół)', {
+      state: C('stan', 'Włączyć czy wyłączyć?', {}, { on: '🟢 Włącz', off: '🔕 Wyłącz' }),
+    }),
+  }),
   backup: C('kopia', 'Zrób teraz kopię zapasową danych bota – trafia na kanał z kopiami (admini)'),
   balance: C('saldo', 'Saldo sklepu – Twoje albo zarządzanie saldem członka (admini i sprzedawcy)', {
     view: C('pokaz', 'Twoje saldo i ostatnie zmiany (zespół: wybierz członka, żeby zobaczyć jego saldo)', { user: user('Członek (tylko zespół – zostaw puste, żeby zobaczyć swoje)') }),
@@ -106,6 +115,7 @@ const MAP = {
       buyers_only: C('tylko-klienci', 'Tylko klienci (co najmniej jedno zrealizowane zamówienie)'),
       min_invites: C('min-zaproszen', 'Tylko osoby, które zaprosiły co najmniej tylu członków (wciąż na serwerze)'),
       ping: C('ping', 'Pingnąć rolę Giveawaye? (domyślnie: tak)'),
+      plus_days: C('hammerplus-dni', 'Nagrodą jest Hammer+? Na ile dni (0 = na zawsze) – asystent AI wyda kod sam'),
     }),
     end: C('zakoncz', 'Zakończ giveaway teraz', { giveaway: C('giveaway', 'Który giveaway') }),
     reroll: C('losuj-ponownie', 'Wylosuj nowych zwycięzców zakończonego giveawayu', { giveaway: C('giveaway', 'Który giveaway'), winners: C('zwyciezcy', 'Ilu nowych zwycięzców (domyślnie 1)') }),

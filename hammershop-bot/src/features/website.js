@@ -596,6 +596,7 @@ const panelAnnouncements = {
       channel: channel ? { id: channel.id, name: channel.name, url: channel.url, announcement: channel.type === ChannelType.GuildAnnouncement } : null,
       role: role ? { id: role.id, name: role.name } : null,
       members: guild?.memberCount ?? null,
+      brand: config.brand.name, // the card's footer
       bot: me ? { name: guild.members?.me?.displayName ?? me.username ?? config.brand.name, avatar: me.displayAvatarURL?.({ extension: 'png', size: 64 }) ?? null } : null,
       kinds: require('./announce').panelKinds(),
     };

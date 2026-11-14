@@ -28,7 +28,9 @@ module.exports = {
         .addIntegerOption((o) =>
           o.setName('min_invites').setDescription('Only members who invited at least this many members (still on the server)').setMinValue(1).setMaxValue(100),
         )
-        .addBooleanOption((o) => o.setName('ping').setDescription('Ping the Giveaways role? (default: yes)')),
+        .addBooleanOption((o) => o.setName('ping').setDescription('Ping the Giveaways role? (default: yes)'))
+        // The AI assistant hands out a Hammer+ prize by itself when it knows how long it is (src/features/ai/prizes.js).
+        .addIntegerOption((o) => o.setName('plus_days').setDescription('The prize is Hammer+? For how many days (0 = forever)').setMinValue(0).setMaxValue(3650)),
     )
     .addSubcommand((s) =>
       s
@@ -70,6 +72,7 @@ module.exports = {
         buyersOnly: o.getBoolean('buyers_only') ?? false,
         minInvites: o.getInteger('min_invites'),
         ping: o.getBoolean('ping') ?? true,
+        plusDays: o.getInteger('plus_days'),
       });
       // Without Manage Server new joins have no inviter – min_invites would only count the invites from before.
       const blind = gw.minInvites && !invites.isReadable(guild.id) ? '\n⚠️ Nie widzę zaproszeń tego serwera (potrzebuję uprawnienia **Zarządzanie serwerem**) – do czasu naprawy nowe zaproszenia nie są liczone.' : '';

@@ -11,6 +11,7 @@
  *
  * Bot events:
  *   verified(member)                               someone passed verification
+ *   ticketOpened({ guild, channel, ticket, member, type })   a ticket was opened (its card and form answers are posted)
  *   orderPlaced({ guild, channel, ticket, member })   an order ticket was opened from the shop (after the buyer got the answer)
  *   orderCompleted({ guild, ticket, member, staff, sale })   a purchase was marked as completed
  *   orderStatus({ guild, ticket, status, staff })  an order's status changed (staff: null when the customer sent a payment)

@@ -81,7 +81,7 @@ let hooks = {
   featuredAdmin: { list: () => [], add: notConnected, remove: notConnected },
   referrals: { claim: notConnected }, // (user, nick) → { code, nick, until, days } – the referral balance as a code
   // The panel's „Ogłoszenia” tab: cards on #📢 ogłoszenia (src/features/website.js panelAnnouncements).
-  announcements: { info: () => ({ channel: null, role: null, members: null, bot: null, kinds: [] }), bannerFile: () => null, post: notConnected, remove: notConnected },
+  announcements: { info: () => ({ channel: null, role: null, members: null, brand: null, bot: null, kinds: [] }), bannerFile: () => null, post: notConnected, remove: notConnected },
 };
 const products = () => hooks.catalog();
 const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, eta: p.eta ?? null, instant: Boolean(p.instant), published: true });
