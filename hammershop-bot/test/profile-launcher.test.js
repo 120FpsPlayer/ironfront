@@ -175,7 +175,7 @@ test('tickets: a bug report opens like any ticket; the shop\'s commands are gone
   assert.match(opened.name, /^🐛.*0001$/u);
   assert.match(opened.messageList.map((m) => textOf(m.body)).join('\n'), /Edytor HUD nie zapisuje pozycji/);
 
-  assert.deepEqual([...commands.keys()].sort(), ['announce', 'backup', 'blacklist', 'build', 'featured', 'giveaway', 'hammerplus', 'help', 'invites', 'launcher', 'lockdown', 'panel', 'reply', 'setup', 'stats', 'ticket', 'ticket-types', 'unlock']);
+  assert.deepEqual([...commands.keys()].sort(), ['announce', 'assistant', 'backup', 'blacklist', 'build', 'featured', 'giveaway', 'hammerplus', 'help', 'invites', 'launcher', 'lockdown', 'panel', 'reply', 'setup', 'stats', 'ticket', 'ticket-types', 'unlock']);
   for (const shopCommand of loadCommands.SHOP_ONLY) assert.equal(commands.has(shopCommand), false, shopCommand);
 
   const help = createInteraction({ guild, member: guild.members.cache.get(OWNER.id), kind: 'command', commandName: 'help' });

@@ -155,7 +155,7 @@ const stripFooter = (text) => String(text ?? '').split('\n').filter((line) => !l
 const clean = (text) =>
   String(text ?? '')
     .replace(/<@[!&]?\d+>/g, '')
-    .replace(/@(everyone|here)/gi, '@​$1')
+    .replace(/@(everyone|here)/gi, '@\u200b$1')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
@@ -481,11 +481,14 @@ async function deliverCode(channel, ticket, { code, record, days, gw }) {
   const guild = channel.guild;
   const howTo = 'Wpisz go w Hammer Launcherze: **Hammer+ → „Mam kod”** → wklej → **Aktywuj**.';
   const where = `-# Kod działa tylko na koncie Minecraft \`${record.nick}\` · ważny ${hammerplus.validity(record.exp)}`;
-  await channel.send(
-    notice(COLORS.success, `## 🎁 Twoja nagroda: Hammer+ ${prizes.plusLength(days)}\n<@${ticket.ownerId}>, gratulacje wygranej w giveawayu **${gw.prize}**! Oto Twój kod:\n\`\`\`\n${code}\n\`\`\`\n${howTo}\n${where} · wysłaliśmy go też w wiadomości prywatnej.`, {
-      mentions: { users: [ticket.ownerId] },
-    }),
-  );
+  // The prize is already written down as claimed – a failed post must not look like "nothing happened" to the model.
+  await channel
+    .send(
+      notice(COLORS.success, `## 🎁 Twoja nagroda: Hammer+ ${prizes.plusLength(days)}\n<@${ticket.ownerId}>, gratulacje wygranej w giveawayu **${gw.prize}**! Oto Twój kod:\n\`\`\`\n${code}\n\`\`\`\n${howTo}\n${where} · wysłaliśmy go też w wiadomości prywatnej.`, {
+        mentions: { users: [ticket.ownerId] },
+      }),
+    )
+    .catch((err) => console.warn('[asystent] nie udało się wysłać kodu Hammer+ w tickecie:', err.message));
   const owner = await guild.client.users.fetch(ticket.ownerId).catch(() => null);
   await owner
     ?.send?.(notice(COLORS.success, `## 🎁 Hammer+ z giveawayu na ${guild.name}\nGratulacje! Nagroda z giveawayu **${gw.prize}** – Twój kod:\n\`\`\`\n${code}\n\`\`\`\n${howTo}\n${where}`))

@@ -383,6 +383,49 @@ Na Discordzie `/zbuduj` tworzy kanał **#launcher** z kartą launchera i przycis
 
 **Uruchomienie na własnym serwerze** (VPS, domena, HTTPS, Stripe, kopie zapasowe) – krok po kroku w [`DEPLOY.md`](DEPLOY.md).
 
+## 🤖 Asystent AI w ticketach (Hammer Launcher)
+
+Na serwerze **Hammer Launcher** (`BOT_PROFILE=launcher`) bot może odpowiadać w ticketach, zanim odpisze ktoś z zespołu –
+przez **Claude API** (model Claude Opus 5.5). Bez klucza asystent jest po prostu wyłączony, a tickety działają jak dotąd.
+
+**Co robi:**
+- Gdy ktoś otworzy ticket, czyta odpowiedzi z formularza i pisze pierwszy; potem odpowiada na każdą wiadomość autora
+  (czeka chwilę, aż ktoś skończy pisać, i pokazuje „pisze…”). Przedstawia się jako asystent AI bota.
+- Pomaga z launcherem, Hammer Client i Hammer+ (instalacja, SmartScreen, logi, FPS, kody…), podaje aktualną wersję
+  launchera i cennik Hammer+ z panelu admina.
+- **Nagrody z giveawayów:** sprawdza, czy autor ticketu naprawdę wygrał. **Hammer+** wydaje od razu (kod na nick
+  Minecraft – w tickecie i w DM, razem z rangą 💎 Hammer+); każdą inną nagrodę (Nitro, pieniądze…) oznacza jako zgłoszoną
+  i woła zespół z opisem: kto, który giveaway, jaka nagroda. Każdą nagrodę można odebrać tylko raz, tylko w ciągu 48 h od
+  losowania i tylko dla siebie – bez względu na to, co ktoś napisze. Żeby asystent wiedział, na ile dni jest Hammer+,
+  ustaw w `/giveaway start` opcję `hammerplus-dni` (`0` = na zawsze); przy starszych giveawayach czyta to z nazwy nagrody
+  („Hammer+ 30 dni”, „Hammer+ na zawsze”), a gdy nie jest pewny – przekazuje sprawę zespołowi.
+- **„Człowiek”, „admin”, „ktoś z zespołu”…** – na prośbę o człowieka bot sam pinguje zespół (👑 CEO, 🔱 Co-CEO, 🎧 Support)
+  i pisze, że pomoc jest w drodze. To samo robi przy płatnościach, zwrotach, zgłoszeniach użytkowników, odwołaniach od kar
+  i podaniach (tam tylko zbiera szczegóły – niczego nie ocenia).
+- **Milknie**, gdy w tickecie odpisze ktoś z zespołu, po zawołaniu zespołu i po 25 odpowiedziach w jednym tickecie.
+  Włączysz go z powrotem przyciskiem albo `/asystent ticket stan:Włącz`; `/asystent wylacz` wyłącza go na całym serwerze.
+- W logach ticketów (#📁 logi-ticketów) zapisuje, co zrobił (wydana nagroda, zawołany zespół, błędy) – nigdy treści rozmowy.
+  Nie prosi o hasła ani dane karty i nie obiecuje zwrotów.
+
+**Jak go włączyć:**
+1. Załóż konto na **console.anthropic.com**, doładuj środki (*Billing* – płacisz z góry, np. 5–10 $) i utwórz klucz w
+   **API Keys**.
+2. Wklej go do `.env`: `ANTHROPIC_API_KEY=sk-ant-…` (nikomu go nie pokazuj) i uruchom bota ponownie – po aktualizacji
+   najpierw `npm install`. W konsoli pojawi się „🤖 Asystent AI w ticketach: włączony”. `/asystent status` pokaże to samo.
+3. Opcjonalnie `AI_MODEL=` – inny model Claude (domyślnie `claude-opus-5-5`).
+
+**Koszt:** Claude Opus 5.5 kosztuje 4 $ za milion tokenów wejścia i 20 $ za milion tokenów wyjścia. Instrukcja asystenta
+(wiedza o launcherze i narzędzia, ok. 4–5 tys. tokenów) jest **zapamiętywana** (prompt caching): kolejne odpowiedzi w ciągu
+5 minut czytają ją ok. 20× taniej (0,20 $ za milion). Jedna typowa odpowiedź to ok. **1–2 centy** (ok. 5 tys. tokenów
+wejścia, prawie całe z pamięci, i kilkaset tokenów odpowiedzi razem z „myśleniem” modelu); pierwsza odpowiedź po dłuższej
+przerwie ok. 2 centy więcej. Ticket z 5 odpowiedziami to zwykle 5–10 centów. Limit 25 odpowiedzi na ticket i 20 na osobę
+na godzinę pilnuje, żeby nikt nie nabił rachunku. Ile wydajesz, widzisz na console.anthropic.com (*Usage*).
+
+**Odmowy:** gdy model odmówi odpowiedzi (filtry bezpieczeństwa), Claude API samo ponawia pytanie na modelu zapasowym
+(*refusal fallbacks* – włączone domyślnie). Jeśli i on odmówi, asystent woła zespół. Przy błędzie API (np. przeciążenie)
+autor dostaje krótką wiadomość, a przy kolejnym błędzie bot woła zespół; odrzucony klucz albo brak środków wstrzymuje
+asystenta na 15 minut (szczegóły w konsoli).
+
 ## 🗺️ Co tworzy /zbuduj
 
 ```
@@ -443,13 +486,14 @@ Trzymaj rolę integracji bota na samej górze w Ustawieniach serwera → Role �
 | `/sprzedaz` | Statystyki sprzedaży | Admini, sprzedawcy |
 | `/hammerplus nadaj / sprawdz / lista / klucz` | Kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft (`nadaj nick: dni:`, `dni:0` = na zawsze, opcjonalnie `osoba:` – dostanie rangę 💎 Hammer+) i klucz publiczny dla launchera | Admini, sprzedawcy |
 | `/polecane dodaj / usun / lista` | Polecane serwery w Hammer Launcherze | Admini, sprzedawcy |
+| `/asystent wlacz / wylacz` · `/asystent status` · `/asystent ticket stan:` | Asystent AI w ticketach (serwer Hammer Launcher): włączenie i wyłączenie na całym serwerze (admini), status, włączenie i wyłączenie w jednym tickecie (zespół) | Admini, zespół |
 | `/launcher` | Karta Hammer Launchera: co to jest, aktualna wersja z opisem zmian i przyciski *Pobierz launcher* / *Hammer+* | Wszyscy |
 | `/klient profil / notatka dodaj / notatka usun` | Profile klientów i prywatne notatki zespołu | Zespół |
 | `/zablokuj` · `/odblokuj` | Blokada serwera podczas raidu i jej zdjęcie | Moderatorzy+ |
 | `/kopia` | Kopia zapasowa danych bota od razu (robi się też automatycznie) | Admini |
 | `/zaproszenia statystyki / ranking` | Twoje zaproszenia, następna nagroda i ranking zapraszających | Wszyscy |
 | `/opinia` | Wystawienie opinii (z opcjonalnym zrzutem ekranu) | Wszyscy |
-| `/giveaway start / zakoncz / losuj-ponownie / lista` | Giveawaye (start: opcjonalnie `wymagana-rola`, `tylko-klienci`, `min-zaproszen`) | Moderatorzy+ |
+| `/giveaway start / zakoncz / losuj-ponownie / lista` | Giveawaye (start: opcjonalnie `wymagana-rola`, `tylko-klienci`, `min-zaproszen`, `hammerplus-dni` – nagroda Hammer+, którą asystent AI wyda sam) | Moderatorzy+ |
 | `/ogloszenie` | Ostylowane ogłoszenie z banerem, przyciskiem i pingiem | Moderatorzy+ |
 | `/ticket info / zamknij` | Twój ticket | Autor ticketu |
 | `/ticket przejmij / oddaj / dodaj / usun / priorytet / przenies / nazwa / prosba-zamkniecia / zrealizuj` | Obsługa ticketów (`zrealizuj kwota:` = ile zapłacił klient) | Zespół |

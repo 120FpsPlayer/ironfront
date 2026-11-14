@@ -13,7 +13,7 @@ const fold = (text) =>
   String(text ?? '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/ł/g, 'l')
     .replace(/[^a-z0-9\s?!.,+-]/g, ' ')
     .replace(/\s+/g, ' ')

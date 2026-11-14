@@ -30,7 +30,7 @@ const fold = (text) =>
   String(text ?? '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/ł/g, 'l');
 
 const PLUS = /hammer\s*\+|hammer\s*plus|hammerplus|(?:^|[^a-z0-9])h\+/;
