@@ -133,15 +133,35 @@ function recordClaim(gw, userId, claim) {
  *   'reported' – { gw, why: 'other' | 'unknown-length' | 'late' | 'no-key' } – the team has to hand it out
  * botId: who issued the code (the bot's own user ID – /hammerplus list shows it).
  */
-async function claim({ guildId, userId, giveawayId, nick, botId = null, channelId = null, now = Date.now() }) {
+/**
+ * The checks of claim() without handing anything out – for the claim buttons of the no-AI mode.
+ * → { result: 'ok', gw, needsNick } (needsNick: a Hammer+ the bot issues itself, so the nick is asked first)
+ *   | { result: 'not-found' | 'not-ended' | 'not-winner' | 'already' | 'busy', gw?, claim? }
+ */
+function precheck({ guildId, userId, giveawayId, now = Date.now() }) {
   const id = String(giveawayId ?? '').trim();
   const gw = id ? giveaways.find(guildId, id) : null;
   if (!gw) return { result: 'not-found' };
   if (!gw.ended) return { result: 'not-ended', gw };
   if (!gw.winners.includes(userId)) return { result: 'not-winner', gw };
   if (gw.claims?.[userId]) return { result: 'already', gw, claim: gw.claims[userId] };
+  if (claiming.has(`${gw.id}:${userId}`)) return { result: 'busy', gw };
+  const needsNick = now <= claimDeadline(gw, userId) && prizeOf(gw).kind === 'plus' && plus.ready();
+  return { result: 'ok', gw, needsNick };
+}
+
+/** The user's won, ended giveaways whose prize nobody claimed yet – newest first (the no-AI claim buttons). */
+const claimable = (guildId, userId) =>
+  giveaways
+    .all(guildId)
+    .filter((g) => g.ended && g.winners.includes(userId) && !g.claims?.[userId])
+    .sort((a, b) => b.endsAt - a.endsAt);
+
+async function claim({ guildId, userId, giveawayId, nick, botId = null, channelId = null, now = Date.now() }) {
+  const check = precheck({ guildId, userId, giveawayId, now });
+  if (check.result !== 'ok') return check;
+  const { gw } = check;
   const key = `${gw.id}:${userId}`;
-  if (claiming.has(key)) return { result: 'busy', gw };
   claiming.add(key);
   try {
     const report = (why) => {
@@ -170,4 +190,4 @@ async function claim({ guildId, userId, giveawayId, nick, botId = null, channelI
   }
 }
 
-module.exports = { parsePrize, prizeOf, plusLength, describePrize, claimDeadline, claimStatus, winsOverview, claim, CLAIM_WINDOW_MS };
+module.exports = { parsePrize, prizeOf, plusLength, describePrize, claimDeadline, claimStatus, winsOverview, precheck, claimable, claim, CLAIM_WINDOW_MS };

@@ -7,7 +7,7 @@ const assistant = require('../features/aiassistant');
 const config = require('../lib/config');
 const db = require('../lib/db');
 const { COLORS } = require('../lib/theme');
-const { embed, reply, replyError, isAdmin, isStaff, pad } = require('../lib/utils');
+const { embed, reply, replyError, isAdmin, isStaff, pad, ts } = require('../lib/utils');
 const { slash } = require('../lib/commandsPl');
 
 const STOPPED = { staff: 'odpisał ktoś z zespołu', escalated: 'zawołał zespół', manual: 'wyłączony przez zespół' };
@@ -15,6 +15,7 @@ const STOPPED = { staff: 'odpisał ktoś z zespołu', escalated: 'zawołał zesp
 function ticketLine(s) {
   if (!s.ticket) return null;
   if (!s.ticket.open) return 'Ten ticket jest zamknięty.';
+  if (s.ticket.mode === 'noai' && !s.ticket.stopped) return '⚪ bez AI – nagrody przyciskami, „człowiek” woła zespół';
   if (s.ticket.active) return `🟢 odpowiada · odpowiedzi: **${s.ticket.replies ?? 0}/${s.maxReplies}**`;
   if (s.ticket.stopped) return `⚪ nie odpowiada – ${STOPPED[s.ticket.stopped] ?? s.ticket.stopped} · \`${slash('assistant ticket')}\` włącza go ponownie`;
   return `⚪ nie działa w tym tickecie · \`${slash('assistant ticket')}\` go włącza`;
@@ -22,22 +23,30 @@ function ticketLine(s) {
 
 function statusEmbed(guild, channel) {
   const s = assistant.status(guild, db.getTicket(channel?.id) ? channel : null);
-  const ready = !s.problem;
-  const e = embed(ready && s.global ? COLORS.success : COLORS.muted)
+  const working = !s.problem && !s.pause && s.global;
+  const e = embed(working ? COLORS.success : s.pause ? COLORS.warning : COLORS.muted)
     .setTitle('🤖 Asystent AI w ticketach')
     .setDescription(
       s.problem ??
+        s.pauseText ??
         (s.global
           ? 'Odpowiada w nowych ticketach, zanim odpisze zespół: pomaga z launcherem, wydaje nagrody z giveawayów (Hammer+ od razu, resztę zgłasza zespołowi) i woła zespół, gdy trzeba.'
-          : `Wyłączony na całym serwerze – włączysz go przez \`${slash('assistant on')}\`.`),
+          : `Wyłączony na całym serwerze – włączysz go przez \`${slash('assistant on')}\`. Nagrody z giveawayów odbiera się wtedy przyciskami w tickecie.`),
     )
     .addFields(
-      { name: 'Klucz API', value: s.problem && /ANTHROPIC_API_KEY/.test(s.problem) ? '❌ brak' : '✅ ustawiony', inline: true },
-      { name: 'Model', value: `\`${s.model}\``, inline: true },
+      { name: 'Dostawca AI', value: s.providerLabel, inline: true },
+      { name: 'Model', value: s.model ? `\`${s.model}\`` : '—', inline: true },
+      { name: 'Klucz API', value: s.problem ? '❌ brak albo niepełna konfiguracja' : '✅ ustawiony', inline: true },
       { name: 'Na serwerze', value: s.global ? '🟢 włączony' : '⚪ wyłączony', inline: true },
+      { name: 'Przerwa', value: s.pause ? `⏸️ do ${ts(s.pause.until, 't')} (${ts(s.pause.until, 'R')})` : '—', inline: true },
       { name: 'Aktywny w ticketach', value: String(s.activeTickets), inline: true },
     )
-    .setFooter({ text: 'Odmowy modelu obsługuje model zapasowy · logi: kanał logów ticketów' });
+    .setFooter({
+      text:
+        s.provider === 'claude'
+          ? 'Odmowy modelu obsługuje model zapasowy · logi: kanał logów ticketów'
+          : 'Bez klucza albo w przerwie nagrody odbiera się przyciskami, a „człowiek” woła zespół · logi: kanał logów ticketów',
+    });
   const line = ticketLine(s);
   if (line) e.addFields({ name: 'Ten ticket', value: line });
   return e;
@@ -46,7 +55,7 @@ function statusEmbed(guild, channel) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('assistant')
-    .setDescription('The AI assistant in tickets (Claude) – on/off and status')
+    .setDescription('The AI assistant in tickets (Groq / Claude) – on/off and status')
     .setContexts(InteractionContextType.Guild)
     .addSubcommand((s) => s.setName('on').setDescription('Turn the AI assistant on for the whole server (admins)'))
     .addSubcommand((s) => s.setName('off').setDescription('Turn the AI assistant off for the whole server (admins)'))

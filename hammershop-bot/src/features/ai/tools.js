@@ -183,6 +183,9 @@ async function callTeam(ctx, input) {
 
 const RUN = { info_launchera: infoLauncher, moje_wygrane: myWins, odbierz_nagrode: claimPrize, wezwij_zespol: callTeam };
 
+/** The answer to a tool call whose arguments weren't valid JSON (free models do that sometimes) – the model tries again. */
+const brokenInput = () => fail('Argumenty narzędzia nie były poprawnym JSON-em. Wywołaj narzędzie jeszcze raz – argumenty muszą być jednym poprawnym obiektem JSON.');
+
 /** Runs one tool_use block → { content (text for the tool_result), isError }. Never throws. */
 async function runTool(name, input, ctx) {
   const tool = TOOLS.find((t) => t.name === name);
@@ -197,4 +200,4 @@ async function runTool(name, input, ctx) {
   }
 }
 
-module.exports = { TOOLS, runTool, invalid };
+module.exports = { TOOLS, runTool, invalid, brokenInput, REPORT_WHY };

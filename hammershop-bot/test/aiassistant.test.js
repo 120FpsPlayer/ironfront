@@ -364,19 +364,24 @@ test('the assistant goes quiet once a staff member writes – and staff can turn
   assert.deepEqual(blocks.slice(-2), ['dzięki, czekam', 'nadal nie działa'], 'in the order they were written – the newest last');
 });
 
-test('without ANTHROPIC_API_KEY the assistant is off and tickets work as before', async () => {
+test('without any key the assistant is off: a support ticket works as before, only „człowiek” still calls the team', async () => {
   await server();
   assistant.setClient(null);
   assert.equal(assistant.available(), false);
-  assert.match(assistant.unavailableText(), /ANTHROPIC_API_KEY/);
+  assert.match(assistant.unavailableText(), /nie ma klucza/);
+  assert.match(assistant.unavailableText(), /GROQ_API_KEY/);
   const { channel, author } = await open('support', [['Temat', 'x'], ['Wersja launchera i Minecrafta', 'y'], ['Opisz dokładnie, co się dzieje', 'z']]);
   assert.ok(db.getTicket(channel.id).controlMessageId, 'the ticket card is there as always');
-  assert.equal(db.getTicket(channel.id).ai, undefined);
+  assert.equal(aiOf(channel).mode, 'noai');
+  assert.equal(botTexts(channel).some((t) => /Asystent AI|Twoje wygrane/.test(t)), false, 'nothing extra in a support ticket');
+  await write(channel, author, 'gra się nie włącza');
+  assert.equal(botTexts(channel).some((t) => /Wołam zespół/.test(t)), false);
   await write(channel, author, 'człowiek');
-  assert.equal(botTexts(channel).some((t) => /Wołam zespół|Asystent AI/.test(t)), false);
+  assert.ok(botTexts(channel).some((t) => /Wołam zespół/.test(t)), 'asking for a person calls the team without AI too');
   const status = createInteraction({ guild, member: guild.members.cache.get(guild.ownerId), kind: 'command', commandName: 'assistant', subcommand: 'status', channel });
   await assistantCommand.execute(status);
-  assert.match(textOf(lastResponse(status)), /brakuje `ANTHROPIC_API_KEY`/);
+  assert.match(textOf(lastResponse(status)), /nie ma klucza/);
+  assert.match(textOf(lastResponse(status)), /Dostawca AI[\s\S]*brak/);
 });
 
 test('API errors: a short fallback message first, the team on the second failure; a refusal goes to the team', async () => {
@@ -429,7 +434,7 @@ test('/asystent wylacz turns it off on the whole server (admins only), /asystent
   assert.equal(assistant.globallyOn(guild.id), false);
   const { channel } = await open('support');
   assert.equal(client.calls.length, 0);
-  assert.equal(db.getTicket(channel.id).ai, undefined);
+  assert.equal(aiOf(channel).mode, 'noai', 'switched off: the no-AI mode');
   const on = createInteraction({ guild, member: admin, kind: 'command', commandName: 'assistant', subcommand: 'on' });
   await assistantCommand.execute(on);
   assert.equal(assistant.globallyOn(guild.id), true);

@@ -385,8 +385,9 @@ Na Discordzie `/zbuduj` tworzy kanał **#launcher** z kartą launchera i przycis
 
 ## 🤖 Asystent AI w ticketach (Hammer Launcher)
 
-Na serwerze **Hammer Launcher** (`BOT_PROFILE=launcher`) bot może odpowiadać w ticketach, zanim odpisze ktoś z zespołu –
-przez **Claude API** (model Claude Opus 5.5). Bez klucza asystent jest po prostu wyłączony, a tickety działają jak dotąd.
+Na serwerze **Hammer Launcher** (`BOT_PROFILE=launcher`) bot może odpowiadać w ticketach, zanim odpisze ktoś z zespołu.
+Domyślnie korzysta z **darmowego Groq** (model `openai/gpt-oss-120b`) – nie trzeba za nic płacić ani podawać karty.
+Do wyboru jest też płatny **Claude** albo inny darmowy dostawca zgodny z OpenAI, np. **Gemini**.
 
 **Co robi:**
 - Gdy ktoś otworzy ticket, czyta odpowiedzi z formularza i pisze pierwszy; potem odpowiada na każdą wiadomość autora
@@ -396,7 +397,7 @@ przez **Claude API** (model Claude Opus 5.5). Bez klucza asystent jest po prostu
 - **Nagrody z giveawayów:** sprawdza, czy autor ticketu naprawdę wygrał. **Hammer+** wydaje od razu (kod na nick
   Minecraft – w tickecie i w DM, razem z rangą 💎 Hammer+); każdą inną nagrodę (Nitro, pieniądze…) oznacza jako zgłoszoną
   i woła zespół z opisem: kto, który giveaway, jaka nagroda. Każdą nagrodę można odebrać tylko raz, tylko w ciągu 48 h od
-  losowania i tylko dla siebie – bez względu na to, co ktoś napisze. Żeby asystent wiedział, na ile dni jest Hammer+,
+  losowania i tylko dla siebie – bez względu na to, co ktoś napisze. Żeby bot wiedział, na ile dni jest Hammer+,
   ustaw w `/giveaway start` opcję `hammerplus-dni` (`0` = na zawsze); przy starszych giveawayach czyta to z nazwy nagrody
   („Hammer+ 30 dni”, „Hammer+ na zawsze”), a gdy nie jest pewny – przekazuje sprawę zespołowi.
 - **„Człowiek”, „admin”, „ktoś z zespołu”…** – na prośbę o człowieka bot sam pinguje zespół (👑 CEO, 🔱 Co-CEO, 🎧 Support)
@@ -404,27 +405,47 @@ przez **Claude API** (model Claude Opus 5.5). Bez klucza asystent jest po prostu
   i podaniach (tam tylko zbiera szczegóły – niczego nie ocenia).
 - **Milknie**, gdy w tickecie odpisze ktoś z zespołu, po zawołaniu zespołu i po 25 odpowiedziach w jednym tickecie.
   Włączysz go z powrotem przyciskiem albo `/asystent ticket stan:Włącz`; `/asystent wylacz` wyłącza go na całym serwerze.
-- W logach ticketów (#📁 logi-ticketów) zapisuje, co zrobił (wydana nagroda, zawołany zespół, błędy) – nigdy treści rozmowy.
-  Nie prosi o hasła ani dane karty i nie obiecuje zwrotów.
+- W logach ticketów (#📁 logi-ticketów) zapisuje, co zrobił (wydana nagroda, zawołany zespół, błędy, przerwa) – nigdy
+  treści rozmowy. Nie prosi o hasła ani dane karty i nie obiecuje zwrotów.
 
-**Jak go włączyć:**
-1. Załóż konto na **console.anthropic.com**, doładuj środki (*Billing* – płacisz z góry, np. 5–10 $) i utwórz klucz w
-   **API Keys**.
-2. Wklej go do `.env`: `ANTHROPIC_API_KEY=sk-ant-…` (nikomu go nie pokazuj) i uruchom bota ponownie – po aktualizacji
-   najpierw `npm install`. W konsoli pojawi się „🤖 Asystent AI w ticketach: włączony”. `/asystent status` pokaże to samo.
-3. Opcjonalnie `AI_MODEL=` – inny model Claude (domyślnie `claude-opus-5-5`).
+**Bez AI też działa najważniejsze.** Bez klucza (albo gdy asystent ma przerwę, np. po wyczerpaniu darmowego limitu) ticket
+**„Odbierz nagrodę”** pokazuje listę nieodebranych wygranych autora z przyciskiem **„Odbierz: …”** przy każdej. Hammer+
+wydaje się od razu – bot pyta tylko o nick Minecraft w okienku – a inne nagrody bot zgłasza zespołowi. Kto nic nie wygrał,
+dostaje krótką informację, że zespół to sprawdzi (bez pingu). Prośba o człowieka nadal woła zespół, a pozostałe tickety
+działają jak zawsze.
 
-**Koszt:** Claude Opus 5.5 kosztuje 4 $ za milion tokenów wejścia i 20 $ za milion tokenów wyjścia. Instrukcja asystenta
-(wiedza o launcherze i narzędzia, ok. 4–5 tys. tokenów) jest **zapamiętywana** (prompt caching): kolejne odpowiedzi w ciągu
-5 minut czytają ją ok. 20× taniej (0,20 $ za milion). Jedna typowa odpowiedź to ok. **1–2 centy** (ok. 5 tys. tokenów
-wejścia, prawie całe z pamięci, i kilkaset tokenów odpowiedzi razem z „myśleniem” modelu); pierwsza odpowiedź po dłuższej
-przerwie ok. 2 centy więcej. Ticket z 5 odpowiedziami to zwykle 5–10 centów. Limit 25 odpowiedzi na ticket i 20 na osobę
-na godzinę pilnuje, żeby nikt nie nabił rachunku. Ile wydajesz, widzisz na console.anthropic.com (*Usage*).
+**Jak go włączyć (Groq – za darmo):**
+1. Wejdź na **console.groq.com** i zaloguj się (np. kontem Google albo GitHub) – karta nie jest potrzebna.
+2. Otwórz **API Keys** → **Create API Key**, nazwij go np. „bot” i skopiuj klucz (`gsk_…`).
+3. Wklej go do `.env`: `GROQ_API_KEY=gsk_…` (nikomu go nie pokazuj).
+4. Uruchom bota ponownie (po aktualizacji najpierw `npm install`). W konsoli pojawi się
+   „🤖 Asystent AI w ticketach: Groq (darmowy) · model openai/gpt-oss-120b”, a `/asystent status` pokaże to samo.
 
-**Odmowy:** gdy model odmówi odpowiedzi (filtry bezpieczeństwa), Claude API samo ponawia pytanie na modelu zapasowym
-(*refusal fallbacks* – włączone domyślnie). Jeśli i on odmówi, asystent woła zespół. Przy błędzie API (np. przeciążenie)
-autor dostaje krótką wiadomość, a przy kolejnym błędzie bot woła zespół; odrzucony klucz albo brak środków wstrzymuje
-asystenta na 15 minut (szczegóły w konsoli).
+**Darmowe limity:** w chwili pisania darmowy plan Groq to mniej więcej **1000 zapytań dziennie i 30 na minutę**, do tego
+limit tokenów na minutę i na dzień – aktualne liczby dla Twojego konta są na console.groq.com (**Settings → Limits**).
+Jedna odpowiedź to zwykle 1 zapytanie, odbiór nagrody 2–3. Gdy limit się skończy, bot pisze w tickecie, że asystent ma
+przerwę, woła zespół i do odnowienia limitu (najwyżej godzina, potem próbuje znowu) działa bez AI – nagrody przyciskami.
+Krótkie limity minutowe bot po prostu odczekuje.
+
+**Uczciwie o prywatności:** na darmowych planach dostawca AI może wykorzystywać rozmowy do ulepszania swoich modeli.
+Dlatego w ticketach nikt nie prosi o hasła ani dane karty – zespół tego nie robi i asystent też nie.
+
+**Model:** Groq co jakiś czas zmienia listę modeli. Gdy model zniknie, bot napisze w konsoli, żeby wpisać aktualny z
+**console.groq.com/docs/models** jako `AI_MODEL=…` w `.env` (i uruchomić bota ponownie) – do tego czasu działa bez AI.
+
+**Inny dostawca (`AI_PROVIDER` w `.env`):**
+- `auto` (domyślnie) – Groq, gdy jest `GROQ_API_KEY`; inaczej Claude, gdy jest `ANTHROPIC_API_KEY`; inaczej bez AI.
+- **Gemini** (też ma darmowy plan): `AI_PROVIDER=openai`, `AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`,
+  `AI_API_KEY=` (klucz z aistudio.google.com → Get API key), `AI_MODEL=gemini-2.5-flash`. Tak samo działa każdy inny
+  dostawca zgodny z OpenAI – wystarczy jego adres, klucz i nazwa modelu.
+- **Claude** (płatny, najlepszy): `AI_PROVIDER=claude` (albo tylko `ANTHROPIC_API_KEY` bez klucza Groq) i klucz z
+  **console.anthropic.com** → *API Keys* (najpierw doładuj środki w *Billing*). Domyślny model `claude-opus-5-5`
+  (4 $ za milion tokenów wejścia, 20 $ za milion wyjścia; instrukcja asystenta jest zapamiętywana – *prompt caching* – więc
+  typowa odpowiedź to ok. 1–2 centy). Odmowy modelu Claude API samo ponawia na modelu zapasowym (*refusal fallbacks*).
+
+Przy chwilowym błędzie dostawcy autor dostaje krótką wiadomość, a przy kolejnym bot woła zespół. Odrzucony klucz albo
+nieznany model wstrzymuje asystenta na godzinę (dokładna wskazówka jest w konsoli); `/asystent status` pokazuje dostawcę,
+model i to, czy (i do kiedy) asystent ma przerwę.
 
 ## 🗺️ Co tworzy /zbuduj
 
@@ -486,7 +507,7 @@ Trzymaj rolę integracji bota na samej górze w Ustawieniach serwera → Role �
 | `/sprzedaz` | Statystyki sprzedaży | Admini, sprzedawcy |
 | `/hammerplus nadaj / sprawdz / lista / klucz` | Kody Hammer+ do Hammer Launchera, przypisane do konta Minecraft (`nadaj nick: dni:`, `dni:0` = na zawsze, opcjonalnie `osoba:` – dostanie rangę 💎 Hammer+) i klucz publiczny dla launchera | Admini, sprzedawcy |
 | `/polecane dodaj / usun / lista` | Polecane serwery w Hammer Launcherze | Admini, sprzedawcy |
-| `/asystent wlacz / wylacz` · `/asystent status` · `/asystent ticket stan:` | Asystent AI w ticketach (serwer Hammer Launcher): włączenie i wyłączenie na całym serwerze (admini), status, włączenie i wyłączenie w jednym tickecie (zespół) | Admini, zespół |
+| `/asystent wlacz / wylacz` · `/asystent status` · `/asystent ticket stan:` | Asystent AI w ticketach (serwer Hammer Launcher): włączenie i wyłączenie na całym serwerze (admini), status – dostawca, model, przerwa (zespół), włączenie i wyłączenie w jednym tickecie (zespół) | Admini, zespół |
 | `/launcher` | Karta Hammer Launchera: co to jest, aktualna wersja z opisem zmian i przyciski *Pobierz launcher* / *Hammer+* | Wszyscy |
 | `/klient profil / notatka dodaj / notatka usun` | Profile klientów i prywatne notatki zespołu | Zespół |
 | `/zablokuj` · `/odblokuj` | Blokada serwera podczas raidu i jej zdjęcie | Moderatorzy+ |
