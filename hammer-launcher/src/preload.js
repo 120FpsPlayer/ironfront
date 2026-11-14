@@ -147,6 +147,7 @@ const api = {
   },
   plus: {
     status: () => call('plus:status'),
+    renew: () => call('plus:renew'),
     activate: (code) => call('plus:activate', code),
     remove: () => call('plus:remove'),
     paste: () => call('plus:paste'),

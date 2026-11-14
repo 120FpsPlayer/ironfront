@@ -268,17 +268,20 @@
   let capeCount = null; // how many Hammer+ capes this launcher has – asked once
 
   const PERKS = () => [
-    { icon: 'palette', title: 'Własny kolor i animowane tła', text: 'Dowolny kolor launchera – nie tylko 6 gotowych – oraz 3 animowane tła: Zorza, Kuźnia i Gwiazdy.', go: ['settings', 'Wygląd'] },
+    { icon: 'palette', title: 'Motywy i własny kolor', text: '5 motywów z ruchomym tłem (Nether, End, Ocean, Wiśniowy gaj, Głęboki mrok), dowolny kolor launchera i 3 animowane banery: Zorza, Kuźnia i Gwiazdy.', go: ['settings', 'Wygląd'] },
     { icon: 'images', title: 'Własne obrazy w tle', text: 'Twoje zdjęcie za stronami launchera i osobne za menu Hammer Client w grze.', go: ['settings', 'Wygląd'] },
-    { icon: 'archive', title: 'Automatyczne kopie światów', text: 'Po każdej grze launcher sam pakuje światy, w których grałeś, i trzyma 5 najnowszych kopii każdego (ustawisz od 1 do 20).', go: ['worlds', 'Kopie zapasowe'] },
+    { icon: 'archive', title: 'Kopie światów i powrót do wczoraj', text: 'Po każdej grze launcher sam pakuje światy, a wczorajszą wersję świata przywracasz jednym kliknięciem – z możliwością cofnięcia.', go: ['worlds', 'Kopie zapasowe'] },
     { icon: 'shirt', title: 'Biblioteka na 200 skórek', text: 'Bez Hammer+ launcher pamięta 24 ostatnie skórki.', go: ['skin', 'Twoje skórki'] },
     { icon: 'outfit', title: 'Zestawy', text: 'Skórka, model postaci i peleryna pod jedną nazwą – zakładasz wszystko jednym kliknięciem.', go: ['skin', 'Zestawy'] },
-    { icon: 'crown', title: 'Peleryny Hammer+', text: `${capeCount ? `${fmt.count(capeCount, 'peleryna', 'peleryny', 'peleryn')} do wyboru` : 'Peleryny do wyboru'}. Widzą je gracze z Hammer Client – w zwykłym Minecrafcie ich nie widać.`, go: ['skin', 'Peleryny Hammer+'] },
+    { icon: 'crown', title: 'Peleryny Hammer+', text: `${capeCount ? `${fmt.count(capeCount, 'peleryna', 'peleryny', 'peleryn')} do wyboru` : 'Peleryny do wyboru'}. Widzą je gracze z Hammer Client – w zwykłym Minecrafcie ich nie widać.`, go: ['skin', 'Peleryny'] },
+    { icon: 'sparkles', title: 'Ruchome peleryny i dodatki', text: 'Ruchome peleryny Płomień, Iskry i Fale, a do tego skrzydła, aureola i czapki. Widzą je gracze z Hammer Client.', go: ['skin', 'Dodatki'] },
+    { icon: 'discord', title: 'Ranga na Discordzie', text: 'Ranga 💎 Hammer+ na naszym serwerze Discord – dopóki masz Hammer+.', go: null },
     { icon: 'star', title: 'Znaczek H+ w grze', text: 'Na liście graczy (Tab) przed Twoim nickiem widać H+ zamiast zwykłego H. Widzą go gracze z Hammer Client.', go: null },
     { icon: 'cloud', title: 'Chmura', text: 'Wygląd launchera, listy serwerów i układ HUD na każdym Twoim komputerze. Zacznie działać, gdy sklep HammerShop będzie online.', go: null },
   ];
 
   function render(root) {
+    HS.refreshPlus?.(); // a renewal or a referral reward bought since is picked up (at most every ten minutes)
     const st = state.plus ?? { active: false, reason: 'none', text: '', configured: true, hasCode: false };
     const on = Boolean(st.active);
     const shopUrl = state.info?.config?.shopUrl;

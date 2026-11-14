@@ -34,7 +34,7 @@ test.before(async () => {
   guild = new FakeGuild();
   website._setClient(guild.client);
   webStore.load();
-  site = createWebServer({ featured: website.featuredServers });
+  site = createWebServer({ featured: website.featuredServers, plus: website.panelPlus });
   await new Promise((r) => site.listen(0, '127.0.0.1', r));
   site.unref(); // the run ends when the tests are done, also where this hook's "after" only runs at exit (Node 18)
   base = `http://127.0.0.1:${site.address().port}`;
@@ -627,5 +627,35 @@ test('/join in a real browser: styled, its script runs under the page\'s own sec
     }
   } finally {
     await browser.close();
+  }
+});
+
+test('GET plus: the launcher picks up a longer code of its account by itself – the very code from the DM, also with an expired one', async () => {
+  reset();
+  const hammerplus = require('../src/features/hammerplus');
+  const mc = account();
+  const month = hammerplus.grantKnown(guild.id, { mc, nick: 'Polecajacy', days: 30 });
+  const ask = (code) => call('GET', '/api/launcher/plus', { code });
+  // Nothing newer yet.
+  assert.deepEqual((await ask(month.code)).body, { code: null, until: month.record.exp });
+  // A referral reward (or a renewal) is issued: 30 days + 7.
+  const reward = hammerplus.grantKnown(guild.id, { mc, nick: 'Polecajacy', days: 37, source: 'referral' });
+  assert.deepEqual((await ask(month.code)).body, { code: reward.code, until: reward.record.exp }, 'exactly the code the bot sent');
+  assert.equal((await ask(reward.code)).body.code, null, 'the launcher already holds the longest one');
+  // A code of another account never gets this account's code; no code / a broken one → 401.
+  assert.equal((await ask(plus.issue({ mc: account(), days: 30 }))).body.code, null);
+  assert.equal((await call('GET', '/api/launcher/plus')).status, 401);
+  assert.equal((await ask(`${reward.code.slice(0, -4)}AAAA`)).status, 401);
+  const clock = Date.now;
+  try {
+    // 31 days later the first code has run out – it still proves the account, and the reward code comes back.
+    Date.now = () => clock() + 31 * DAY;
+    assert.equal((await ask(month.code)).body.code, reward.code);
+    // Forever beats everything; holding it, there is nothing longer.
+    const forever = hammerplus.grantKnown(guild.id, { mc, nick: 'Polecajacy', days: 0 });
+    assert.deepEqual((await ask(month.code)).body, { code: forever.code, until: 0 });
+    assert.equal((await ask(forever.code)).body.code, null);
+  } finally {
+    Date.now = clock;
   }
 });

@@ -148,7 +148,18 @@ function createShopApi({ config = {}, fetchFn = (...a) => fetch(...a), timeoutMs
     return body;
   }
 
-  return { base, getCloud, putCloud, putCape, putFreeCape, getFeatured, getNews };
+  /**
+   * A longer Hammer+ code for the account of `code` – a renewal bought on the website or a referral reward, issued
+   * after the code the launcher holds. The shop answers with the very code from the bot's DM, or null when there is
+   * none. An expired code still counts: it proves which account it is. → { code, until } | null (refused).
+   */
+  async function freshPlus(code) {
+    const { status, body } = await call('GET', '/plus', code, null, { missing: true });
+    if (status !== 200) return null;
+    return { code: typeof body.code === 'string' ? body.code.slice(0, 1000) : null, until: Number.isInteger(body.until) ? body.until : null };
+  }
+
+  return { base, getCloud, putCloud, putCape, putFreeCape, getFeatured, getNews, freshPlus };
 }
 
 module.exports = { createShopApi, apiBase, ShopError, OFFLINE_NOTE, MAX_BODY };

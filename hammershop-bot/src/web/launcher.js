@@ -167,6 +167,31 @@ function account(req, res) {
   return payload;
 }
 
+/**
+ * GET plus – "is there a longer code for my account?" The launcher sends the code it holds (also an expired one: it still
+ * proves which account it is) and gets the code that runs longest for that Minecraft account – a renewal bought on the
+ * website or a referral reward, issued after the code in the launcher. The answer is the very code the bot sent in the
+ * DM (codes are rebuilt from what was written down, see hammerplus.freshCode), so nothing new is issued here.
+ * → { code: "HP1.…" | null, until (unix seconds, 0 = never, null = none running) }
+ */
+function plusRefresh(req, res, { send, fail, limited, freshCode }) {
+  if (limited(req, 'launcher-plus', 30)) return fail(res, 429, SLOW_DOWN);
+  if (!plus.ready()) return fail(res, 503, `Hammer+ nie jest jeszcze uruchomiony po stronie ${config.brand.name}. Spróbuj ponownie później.`);
+  const m = /^Bearer\s+(\S+)$/i.exec(String(req.headers.authorization ?? '').trim());
+  if (!m) return fail(res, 401, 'Brak kodu Hammer+.');
+  let payload;
+  try {
+    payload = plus.verify(m[1]);
+  } catch (err) {
+    if (!(err instanceof plus.PlusError)) throw err;
+    if (err.reason !== 'expired' || !err.payload) return fail(res, 401, err.message);
+    payload = err.payload; // expired, but genuine
+  }
+  const fresh = freshCode(payload.mc, payload.exp);
+  if (fresh?.code) store.seenPlus(payload.mc, fresh.exp); // the account's cape and cosmetics are shown again at once
+  return send(res, 200, { code: fresh?.code ?? null, until: fresh?.until ?? null }, { 'cache-control': 'no-store' });
+}
+
 // ── Free capes without Hammer+: whose Minecraft sign-in is it? Asked at Mojang; only a hash of the token is kept, for a while. ──
 const signedIn = new Map(); // sha256(token) → { mc, until }
 let profileFetch = (...a) => fetch(...a);
@@ -191,7 +216,7 @@ async function minecraftAccount(token) {
 }
 
 /** Which methods each path under /api/launcher/ takes. */
-const ROUTES = { health: ['GET'], featured: ['GET'], news: ['GET'], capes: ['GET'], presence: ['PUT'], cloud: ['GET', 'PUT'], cape: ['PUT'] };
+const ROUTES = { health: ['GET'], featured: ['GET'], news: ['GET'], capes: ['GET'], presence: ['PUT'], cloud: ['GET', 'PUT'], cape: ['PUT'], plus: ['GET'] };
 
 // ── Who plays on Hammer Client right now: account → until when. Only in memory – gone with a restart, back within a minute. ──
 const present = new Map();
@@ -246,7 +271,7 @@ function feed(publicUrl, now = Date.now()) {
  * /api/launcher/… – h: { send, fail, limited } (the website's own helpers: security headers, per-IP limits) and
  * featured() → the featured servers.
  */
-async function api(req, res, url, { send, fail, limited, featured, publicUrl = () => '', ip = () => null, plusOf = () => false }) {
+async function api(req, res, url, { send, fail, limited, featured, publicUrl = () => '', ip = () => null, plusOf = () => false, freshCode = () => null }) {
   const route = url.pathname.slice(PREFIX.length);
   const method = req.method === 'HEAD' ? 'GET' : req.method;
   // The launcher calls from its own window, not from a page of this site – and never with a cookie: the code is in a header.
@@ -312,6 +337,9 @@ async function api(req, res, url, { send, fail, limited, featured, publicUrl = (
     const mc = await minecraftAccount(minecraftToken);
     return send(res, 200, { cape: store.setCape(mc, cape, 0, { free: true }), ...(look && { cosmetics: store.setCosmetics(mc, null, 0) }) });
   }
+
+  // The launcher asks for a longer code of its account (a renewal or a referral reward was issued since) – see plusRefresh.
+  if (route === 'plus') return plusRefresh(req, res, { send, fail, limited, freshCode });
 
   // Everything below belongs to one Hammer+ account.
   const who = account(req, res);

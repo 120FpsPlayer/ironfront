@@ -135,6 +135,16 @@
   }
   HS.setPlus = setPlus;
   api.on('plus:status', setPlus);
+  /** A longer Hammer+ code (a renewal or a referral reward) is picked up from the shop by itself. */
+  async function refreshPlus() {
+    const res = await api.plus.renew?.().catch(() => null);
+    if (!res?.renewed || !res.status?.active) return;
+    await setPlus(res.status);
+    toast('ok', res.status.until ? `Hammer+ przedłużony – działa do ${HS.fmt.date(res.status.until * 1000)}.` : 'Hammer+ przedłużony – działa teraz bezterminowo.', 7000);
+  }
+  HS.refreshPlus = refreshPlus;
+  setTimeout(refreshPlus, 15_000);
+  setInterval(refreshPlus, 6 * 3600_000);
 
   /* ── login ── */
   let loggingIn = false;

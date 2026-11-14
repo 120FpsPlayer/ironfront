@@ -6,7 +6,8 @@
  *
  * Extra time on a Minecraft account reaches the launcher the way a second purchase does (src/features/website.js
  * deliverPlus): the launcher checks codes offline and each code is signed with its end date, so a NEW code is issued for
- * that account – the time it still has plus the reward – and sent by DM; the player pastes it in Hammer+ → „Mam kod”
+ * that account – the time it still has plus the reward – and sent by DM; the launcher picks it up by itself (GET
+ * /api/launcher/plus, see src/web/launcher.js) or the player pastes it in Hammer+ → „Mam kod”
  * and the launcher keeps the longer code. The website shows the same code again (signed anew from what was issued).
  *
  *   - you have Hammer+ running on an account tied to your Discord (a purchase on the website, or /hammerplus grant with
@@ -66,7 +67,7 @@ function codeDm(guild, { title, lead, code, record, replaces }) {
   c.addTextDisplayComponents(
     text(
       `**Konto Minecraft:** \`${record.nick}\` · **Ważny:** ${hp().validity(record.exp)}\n` +
-        `**Jak go użyć:** Hammer Launcher → **Hammer+** → **„Mam kod”** → wklej kod. ${replaces ? 'Zastąpi poprzedni kod na tym koncie.' : 'Działa tylko na tym koncie Minecraft.'}\n` +
+        `**Jak go użyć:** Hammer Launcher → **Hammer+** → **„Mam kod”** → wklej kod. ${replaces ? 'Zastąpi poprzedni kod na tym koncie – a jeśli masz już kod w launcherze, launcher sam pobierze nowy w ciągu kilku godzin.' : 'Działa tylko na tym koncie Minecraft.'}\n` +
         `-# Zaproś znajomego: +${REWARD_DAYS} dni Hammer+ za każdego znajomego, który kupi Hammer+ z Twojego linku.`,
     ),
   );

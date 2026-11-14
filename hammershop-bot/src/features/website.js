@@ -564,6 +564,11 @@ const panelPlus = {
     const guild = guildOf();
     return guild ? require('./hammerplus').runningUntil(guild.id, mc) : null;
   },
+  /** A code that runs longer than `exp` for the account (the launcher picks it up by itself) → { code, exp, until } | null. */
+  freshCode: (mc, exp) => {
+    const guild = guildOf();
+    return guild ? require('./hammerplus').freshCode(guild.id, mc, exp) : null;
+  },
 };
 
 /** „Zaproś znajomego” on the website: the days kept as a balance become a code (src/features/referrals.js). */

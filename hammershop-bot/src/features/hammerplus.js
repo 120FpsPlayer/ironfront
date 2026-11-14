@@ -140,6 +140,29 @@ function runningUntil(guildId, mc, now = Date.now()) {
   return live.some((c) => c.exp === 0) ? 0 : Math.max(...live.map((c) => c.exp));
 }
 
+/**
+ * The code that runs longest for the account, when it runs longer than `haveExp` (the code the launcher holds; 0 =
+ * never) → { code (null: nothing longer), exp, until (runningUntil) } | null (no key). Nothing new is issued: the code is rebuilt from what was written down when it
+ * was issued (same id, account, times and key give the very same code – the one from the DM), so the launcher can
+ * pick up a renewal or a referral reward by itself.
+ */
+function freshCode(guildId, mc, haveExp, now = Date.now()) {
+  if (!plus.ready() || typeof mc !== 'string' || !Number.isInteger(haveExp)) return null;
+  const live = codes(guildId).filter((c) => c.mc === mc && !expired(c.exp, now) && Number.isInteger(c.at));
+  const best = live.find((c) => c.exp === 0) ?? live.sort((a, b) => b.exp - a.exp)[0];
+  const none = { code: null, exp: null, until: runningUntil(guildId, mc, now) };
+  if (!best || haveExp === 0 || (best.exp !== 0 && best.exp <= haveExp)) return none;
+  const iat = Math.floor(best.at / 1000);
+  const days = best.exp === 0 ? 0 : Math.round((best.exp - iat) / 86_400);
+  try {
+    const code = plus.issue({ mc, days, now: best.at, id: best.id });
+    if (plus.verify(code, { now }).exp !== best.exp) return none; // written down differently than it was issued – never guess
+    return { ...none, code, exp: best.exp };
+  } catch {
+    return none;
+  }
+}
+
 /** How many Minecraft accounts have Hammer+ running right now. */
 const activeAccounts = (guildId, now = Date.now()) => new Set(codes(guildId).filter((c) => !expired(c.exp, now)).map((c) => c.mc)).size;
 
@@ -157,4 +180,4 @@ hooks.on('ready', () => {
   if (env.plusPrivateKey && !plus.ready()) console.warn('🔨 Hammer+: HAMMER_PLUS_PRIVATE_KEY w .env jest nieprawidłowy (potrzebny klucz Ed25519: base64 z PKCS#8 DER) – wygeneruj nowy: npm run plus-key');
 });
 
-module.exports = { lookup, grant, grantKnown, runningUntil, activeAccounts, inspect, codes, find, recent, line, validity, expired, setupHelp, requireKey, setFetch, MAX_DAYS };
+module.exports = { lookup, grant, grantKnown, runningUntil, freshCode, activeAccounts, inspect, codes, find, recent, line, validity, expired, setupHelp, requireKey, setFetch, MAX_DAYS };

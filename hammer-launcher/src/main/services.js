@@ -101,6 +101,22 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
     }
     return st;
   }
+  /**
+   * Hammer+ picks up a longer code by itself – a renewal bought on the website or a „Zaproś znajomego” reward: the shop
+   * is asked with the code the launcher holds (the window asks at start, every six hours and when the Hammer+ page
+   * opens; at most every ten minutes). → { renewed, status }
+   */
+  let plusAsked = -Infinity;
+  async function refreshPlus() {
+    if (!plus.configured || now() - plusAsked < 10 * 60_000) return { renewed: false, status: plus.status() };
+    plusAsked = now();
+    let renewed = false;
+    for (const code of plus.held().slice(0, 5)) {
+      const res = await shop.freshPlus(code).catch(() => null);
+      if (res?.code && plus.adopt(res.code)) renewed = true;
+    }
+    return { renewed, status: plusChanged() };
+  }
   /** The settings with the Hammer+ gate in front: a change that switches a paid feature on needs Hammer+. */
   const settings = {
     get: store.get,
@@ -1371,6 +1387,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       /** { active, until, account, reason, text, … } – see plus.js. */
       status: () => plus.status(),
       activate: (code) => (plus.activate(code), plusChanged()),
+      /** A longer code of the account picked up from the shop – see refreshPlus. */
+      renew: () => refreshPlus(),
       remove: () => (plus.remove(), plusChanged()),
       /** Looks again (an account was added or removed) and tells the window when something changed. */
       refresh: () => plusChanged(),

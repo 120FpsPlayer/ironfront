@@ -496,7 +496,7 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://local');
   const p = url.pathname;
   // Hammer Launcher: featured servers, Hammer+ cloud sync and capes (src/web/launcher.js).
-  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured(), publicUrl: () => web().publicUrl, ip: clientIp, plusOf: (mc) => Boolean(hooks.plus?.running?.(mc)) });
+  if (p.startsWith(launcher.PREFIX)) return launcher.api(req, res, url, { send, fail, limited, featured: () => hooks.featured(), publicUrl: () => web().publicUrl, ip: clientIp, plusOf: (mc) => Boolean(hooks.plus?.running?.(mc)), freshCode: (mc, exp) => hooks.plus?.freshCode?.(mc, exp) ?? null });
   // The admin panel (src/web/admin.js).
   if (p.startsWith(admin.PREFIX)) {
     return admin.api(req, res, url, {

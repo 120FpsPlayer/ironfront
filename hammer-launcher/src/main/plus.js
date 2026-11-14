@@ -202,7 +202,27 @@ function createPlus({ file, publicKey: keyText = '', selected = () => null, acco
     throw new Error(`${what} to funkcja Hammer+. ${why}`);
   }
 
-  return { status, activate, remove, token, need, configured: Boolean(key) };
+  /** The longest stored code of every account (also expired ones) – what the launcher asks the shop to renew. */
+  function held() {
+    const seen = new Set();
+    return stored().good.filter((c) => !seen.has(c.mc) && seen.add(c.mc)).map((c) => c.code);
+  }
+
+  /**
+   * Takes a code the shop handed out by itself (see services → refreshPlus): only for an account whose code is stored
+   * already, only when it is genuine, still running and lasts longer than the stored one. → true when it was stored.
+   */
+  function adopt(text) {
+    const code = parseCode(text);
+    if (!code || !signedBy(code, key) || expired(code, now())) return false;
+    const codes = load();
+    const mine = codes.map(parseCode).filter((c) => c?.mc === code.mc && signedBy(c, key)).sort(longestFirst);
+    if (!mine.length || longestFirst(code, mine[0]) >= 0) return false;
+    save([code.code, ...codes.filter((c) => parseCode(c)?.mc !== code.mc)]);
+    return true;
+  }
+
+  return { status, activate, remove, token, need, held, adopt, configured: Boolean(key) };
 }
 
 module.exports = { createPlus, parseCode, verifyCode, publicKey, cleanUuid, PREFIX };

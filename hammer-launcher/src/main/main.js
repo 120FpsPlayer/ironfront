@@ -605,6 +605,7 @@ if (!app.requestSingleInstanceLock()) {
 
     // Hammer+: the code is checked here, in the main process – and so is every feature it unlocks.
     handle('plus:status', () => s().plus.status());
+    handle('plus:renew', () => s().plus.renew());
     handle('plus:activate', (code) => s().plus.activate(code));
     handle('plus:remove', () => s().plus.remove());
     // (await: readText answers at once in older Electron and with a promise in newer ones)

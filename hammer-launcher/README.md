@@ -73,6 +73,7 @@ Na górnym pasku jest złoty przycisk **Hammer+** – prowadzi do strony z opise
 1. Gracz kupuje Hammer+ w sklepie HammerShop, a bot na Discordzie wysyła mu **kod przypisany do jego konta Minecraft**.
 2. Gracz wkleja kod na stronie Hammer+ (*Mam kod → Wklej → Aktywuj*).
 3. Launcher sprawdza kod **sam, bez internetu**: kod jest podpisany kluczem sklepu (Ed25519), a launcher ma klucz publiczny w `launcher.config.json` (`plusPublicKey`).
+4. Przedłużenie kupione na stronie albo nagroda „Zaproś znajomego” dochodzą **same**: przy starcie, co 6 godzin i po wejściu w Hammer+ launcher pyta stronę (`GET /api/launcher/plus` z kodem, który ma – także wygasłym) o dłuższy kod tego samego konta i podmienia go (`services.js` → `refreshPlus`, `plus.js` → `adopt`: tylko podpisany, ważny, dla konta z zapisanym kodem i dłuższy).
 
 Kod ma postać `HP1.<dane>.<podpis>`. `<dane>` to base64url z JSON-em `{"id":"…","mc":"<UUID konta Minecraft, 32 znaki>","exp":<koniec ważności, sekundy uniksowe; 0 = bez końca>,"iat":<data wydania>}`, a `<podpis>` to base64url podpisu Ed25519 tekstu `HP1.<dane>`.
 
