@@ -245,6 +245,12 @@ function mock() {
   };
   window.__cloud = (mode) => (plus.cloud = mode);
   const CAPES = [['hammer', 'Hammer', true], ['gold', 'Złota'], ['ember', 'Żar', true], ['royal', 'Królewska'], ['frost', 'Mróz'], ['crimson', 'Karmazyn']].map(([id, name, free]) => ({ id, name, free: Boolean(free) }));
+  // Ruchome peleryny (Hammer+): strips of 16 pictures, 10 per second – the real files from assets/capes.
+  CAPES.push(...[['flame', 'Płomień'], ['sparks', 'Iskry'], ['waves', 'Fale']].map(([id, name]) => ({ id, name, free: false, frames: 16, fps: 10 })));
+  // Dodatki na postać (Hammer+): the real list (cosmetics.json, put on the page by the preview script before this).
+  const NO_LOOK = { wings: '', halo: false, hat: '' };
+  plus.look = { ...NO_LOOK };
+  const cosmeticState = () => ({ items: (window.__cosmetics ?? []).map((c) => ({ id: c.id, slot: c.slot, name: c.name, front: c.front, back: c.back })), ...(plus.active ? plus.look : NO_LOOK), plus: plus.active });
   const capeOk = (id) => !id || CAPES.find((c) => c.id === id)?.free || (plus.active && (id !== 'custom' || Boolean(plus.customCape)));
   const capeState = () => ({ capes: CAPES.map((c) => ({ ...c })), selected: capeOk(plus.cape) ? plus.cape : '', on: plus.capeOn, lastMojang: plus.lastMojang, custom: plus.customCape, plus: plus.active });
   const NOTE = 'Chmura zadziała, gdy sklep HammerShop będzie online.';
@@ -770,6 +776,13 @@ function mock() {
       setCapeOn: async (on, last) => (await wait(120), (plus.capeOn = Boolean(on)), typeof last === 'string' && (plus.lastMojang = last), { ...capeState(), shared: true, note: null }),
       pickCape: async () => (await wait(150), (plus.customCape = capeArt('#1d4ed8', '#93c5fd')), (plus.cape = 'custom'), (plus.capeOn = true), { ...capeState(), shared: true, note: 'Własną pelerynę widzisz tylko Ty – inni gracze z Hammer Client nie widzą wtedy żadnej peleryny Hammer.' }),
       removeCape: async () => (await wait(120), (plus.customCape = null), plus.cape === 'custom' && (plus.cape = ''), { ...capeState(), shared: true, note: null }),
+      cosmetics: async () => cosmeticState(),
+      setCosmetic: async (slot, value) => {
+        await wait(120);
+        if (!plus.active && value) throw new Error('Dodatki na postać to funkcja Hammer+. Włączysz go kodem ze sklepu – kliknij „Hammer+” na górnym pasku.');
+        plus.look[slot] = slot === 'halo' ? value === true : value || '';
+        return { ...cosmeticState(), shared: true, note: null };
+      },
     },
     theme: {
       background: async () => ({ url: plus.active ? plus.bgUrl : null }),
@@ -826,6 +839,7 @@ async function main() {
   const language = createPreviewLanguage({ lang: LANG, collect: Boolean(SWITCH.collect), compare: typeof SWITCH.compare === 'string' ? path.resolve(SWITCH.compare) : null, out: OUT });
   const T = language.T;
   await page.addInitScript(language.init, language.initArg);
+  await page.addInitScript((list) => (window.__cosmetics = list), JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'assets', 'cosmetics', 'cosmetics.json'), 'utf8')));
   await page.addInitScript(mock);
   language.patch(page);
   whenStepFails = async () => {
@@ -1251,8 +1265,8 @@ async function main() {
   await viewTop('h2', 'Zestawy');
   await shot('47-skorka-zestawy-bez-hammerplus');
   await bottom();
-  // Without Hammer+: the two free Hammer capes can be worn, the other four and one's own are dark with a lock.
-  await count('.hcape.locked', 5);
+  // Without Hammer+: the two free Hammer capes can be worn, the other four, the three moving ones and one's own are dark with a lock.
+  await count('.hcape.locked', 8);
   await page.locator('.hcape[data-cape="ember"]').click();
   await page.waitForTimeout(400);
   await count('.hcape.on[data-cape="ember"]', 1);
@@ -1260,6 +1274,15 @@ async function main() {
   await viewTop('h2', 'Peleryny');
   await shot('48-skorka-peleryny-bez-hammerplus');
   await page.locator('.hcape.locked').first().click();
+  await count('.plus-page', 1);
+  // Dodatki without Hammer+: „Bez …” is on in every row, the wings, halo and hats are dark with a lock.
+  await nav('Skórka');
+  await page.waitForTimeout(600);
+  await count('.hcos.locked', 6);
+  await count('.hcos.on', 3);
+  await viewTop('h2', 'Dodatki');
+  await shot('48b-skorka-dodatki-bez-hammerplus');
+  await page.locator('.hcos.locked').first().click();
   await count('.plus-page', 1);
 
   // Paste + activate: everything unlocks, the pill turns gold, the account gets its "+".
@@ -1519,6 +1542,35 @@ async function main() {
   await noToasts();
   await viewTop('h2', 'Peleryny');
   await shot('68-peleryna-hammerplus-wybrana');
+  // A moving cape (Hammer+) and the Dodatki: wings, the halo and a hat – on the skin preview too.
+  await page.locator('.hcape[data-cape="flame"]').click();
+  await page.waitForTimeout(400);
+  await count('.hcape.on[data-cape="flame"]', 1);
+  await count('.hcos.locked', 0);
+  for (const id of ['angel', 'halo', 'crown']) {
+    await page.locator(`.hcos[data-cosmetic="${id}"]`).click();
+    await page.waitForTimeout(300);
+    await count(`.hcos.on[data-cosmetic="${id}"]`, 1);
+  }
+  await noToasts();
+  await viewTop('h2', 'Dodatki');
+  await shot('68c-skorka-dodatki-hammerplus');
+  await page.locator('.view').evaluate((v) => (v.scrollTop = 0));
+  await page.waitForTimeout(300);
+  await shot('68d-skorka-podglad-z-dodatkami');
+  await page.locator('.hcos[data-cosmetic="dragon"]').click();
+  await page.locator('.hcos[data-cosmetic="tophat"]').click();
+  await page.waitForTimeout(500);
+  await count('.hcos.on', 3);
+  await page.locator('.view').evaluate((v) => (v.scrollTop = 0));
+  await shot('68e-skorka-smocze-cylinder');
+  await small('68f-skorka-dodatki-male-okno', () => viewTop('h2', 'Dodatki'));
+  for (const slot of ['wings', 'halo', 'hat']) {
+    await page.locator(`.hcos[data-cosmetic="${slot}:none"]`).click();
+    await page.waitForTimeout(250);
+  }
+  await count('.hcos.on', 3);
+  await noToasts();
   await fits('Skórka z Hammer+');
   await small('68b-peleryny-hammerplus-male-okno', async () => {
     await viewTop('h2', 'Peleryny');

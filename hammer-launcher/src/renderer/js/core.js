@@ -173,9 +173,11 @@
    * Draws a player from a skin image: head, body, arms and legs, with the second layer (hat, jacket, sleeves)
    * slightly bigger on top. slim = the 3-pixel "Alex" arms; back = seen from behind. Old 64×32 skins have no left
    * arm and leg of their own – those mirror the right ones. cape: a loaded cape picture – seen from behind it hangs
-   * from the shoulders over the back (10×16 pixels of the cape's outer side), under the head.
+   * from the shoulders over the back (10×16 pixels of the cape's outer side), under the head; capeFrame: the picture
+   * of a moving cape's strip to show. look: Dodatki – [{ img, x, y, w, h, under }] in skin pixels of the figure (the
+   * head is x 4–12, y 0–8), drawn over it (under: behind it); top: skin pixels of room above the figure for them.
    */
-  function paintSkin(canvas, img, { slim = false, back = false, cape = null } = {}) {
+  function paintSkin(canvas, img, { slim = false, back = false, cape = null, capeFrame = 0, look = [], top = 0 } = {}) {
     const g = canvas.getContext('2d');
     const u = canvas.width / 18; // the figure is 16×32 skin pixels, plus one pixel of room around for the second layer
     const legacy = img.naturalHeight === 32;
@@ -196,7 +198,7 @@
       if (part.arm && back && arm === 3) sx -= 1;
       const grow = layer ? part.grow : 0;
       const x = (1 + place[name][0] - grow) * u;
-      const y = (1 + place[name][1] - grow) * u;
+      const y = (1 + top + place[name][1] - grow) * u;
       const dw = (w + grow * 2) * u;
       const dh = (part.size[1] + grow * 2) * u;
       g.save();
@@ -208,22 +210,61 @@
       g.restore();
     };
     const order = ['rightLeg', 'leftLeg', 'body', 'rightArm', 'leftArm', 'head'];
+    // Dodatki: wings peek out from behind the figure (front view), everything else is drawn over it.
+    const extras = (under) => {
+      for (const o of look) if (Boolean(o.under) === under && o.img) g.drawImage(o.img, (1 + o.x) * u, (1 + top + o.y) * u, o.w * u, o.h * u);
+    };
+    extras(true);
     if (back && cape) {
       const limbs = order.filter((n) => n !== 'head');
       for (const name of limbs) draw(name, false);
       if (!legacy) for (const name of limbs) draw(name, true);
-      const k = cape.naturalWidth / 64; // high-resolution capes keep the same layout
-      g.drawImage(cape, k, k, 10 * k, 16 * k, (1 + 3) * u, (1 + 8) * u, 10 * u, 16 * u);
+      const k = cape.naturalWidth / 64; // high-resolution capes keep the same layout; a moving one is a strip of them
+      g.drawImage(cape, k, k + capeFrame * 32 * k, 10 * k, 16 * k, (1 + 3) * u, (1 + top + 8) * u, 10 * u, 16 * u);
       draw('head', false);
       draw('head', true);
+      extras(false);
       return;
     }
     for (const name of order) draw(name, false);
     // The second layer: old skins only have the hat.
     for (const name of legacy ? ['head'] : order) draw(name, true);
+    extras(false);
+  }
+
+  /* ── Ruchome peleryny: one timer moves every animated picture on the screen (none while nothing moves) ── */
+  const movers = new Set();
+  let moverTimer = null;
+  const reducedMotion = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  /** Calls draw(n) with a frame counter fps times a second while the canvas is on the page (just once with less motion). */
+  function animate(canvas, fps, draw) {
+    draw(0);
+    if (reducedMotion()) return;
+    movers.add({ canvas, fps, draw, born: Date.now(), seen: false, last: 0 });
+    moverTimer ??= setInterval(() => {
+      const now = Date.now();
+      for (const m of movers) {
+        if (m.canvas.isConnected) m.seen = true;
+        else {
+          // gone from the page (or never shown within 10 s): forget it
+          if (m.seen || now - m.born > 10000) movers.delete(m);
+          continue;
+        }
+        const n = Math.floor((now * m.fps) / 1000);
+        if (n !== m.last) {
+          m.last = n;
+          m.draw(n);
+        }
+      }
+      if (!movers.size) {
+        clearInterval(moverTimer);
+        moverTimer = null;
+      }
+    }, 40);
   }
 
   const CAPE_SRC = /^(https:\/\/|data:image\/png|assets\/capes\/[a-z0-9_-]+\.png$)/;
+  const LOOK_SRC = /^assets\/cosmetics\/[a-z0-9_-]+-(front|back)\.png$/;
   const loadImg = (src) =>
     new Promise((resolve, reject) => {
       const img = new Image();
@@ -232,32 +273,52 @@
       img.src = src;
     });
 
-  /** A canvas with the player drawn from a skin (https or data URL). height = pixels on screen. cape: the cape worn (seen from behind). */
-  function skinView(src, { slim = false, back = false, height = 256, cape = null } = {}) {
+  /**
+   * A canvas with the player drawn from a skin (https or data URL). height = pixels on screen. cape: the cape worn
+   * (seen from behind); capeFrames / capeFps: a moving cape (a strip of pictures) – it moves on the preview too.
+   * look: Dodatki for this side – [{ src: assets/cosmetics/<id>-front|back.png, x, y, w, h, under }]; with any, the
+   * canvas gets room above the head for them (8 skin pixels, more for a tall hat with a halo over it) – it grows
+   * upwards, the figure keeps its size.
+   */
+  function skinView(src, { slim = false, back = false, height = 256, cape = null, capeFrames = 1, capeFps = 10, look = [] } = {}) {
     const unit = Math.max(1, Math.round(height / 34));
-    const canvas = h('canvas.skin-view', { width: 18 * unit, height: 34 * unit, role: 'img', 'aria-label': back ? (cape ? 'Skórka od tyłu, z peleryną' : 'Skórka od tyłu') : 'Skórka od przodu' });
+    const extras = (look ?? []).filter((o) => o && LOOK_SRC.test(o.src ?? ''));
+    const top = extras.length ? Math.min(14, Math.max(8, Math.ceil(-Math.min(...extras.map((o) => Number(o.y) || 0))))) : 0;
+    const label = back ? (cape ? 'Skórka od tyłu, z peleryną' : 'Skórka od tyłu') : 'Skórka od przodu';
+    const canvas = h('canvas.skin-view', { width: 18 * unit, height: (34 + top) * unit, role: 'img', 'aria-label': extras.length ? `${label} – z dodatkami` : label });
     if (!src || !/^(https:\/\/|data:image\/png)/.test(src)) return canvas;
     const withCape = back && cape && CAPE_SRC.test(cape);
-    Promise.all([loadImg(src), withCape ? loadImg(cape).catch(() => null) : null])
-      .then(([img, capeImg]) => paintSkin(canvas, img, { slim, back, cape: capeImg }))
+    Promise.all([loadImg(src), withCape ? loadImg(cape).catch(() => null) : null, Promise.all(extras.map((o) => loadImg(o.src).catch(() => null)))])
+      .then(([img, capeImg, imgs]) => {
+        const lookImgs = extras.map((o, i) => ({ ...o, img: imgs[i] }));
+        const paint = (n) => paintSkin(canvas, img, { slim, back, cape: capeImg, capeFrame: capeFrames > 1 ? n % capeFrames : 0, look: lookImgs, top });
+        if (capeImg && capeFrames > 1) animate(canvas, capeFps, paint);
+        else paint(0);
+      })
       .catch(() => canvas.classList.add('broken'));
     return canvas;
   }
 
   /**
    * A cape as the player sees it from behind (the 10×16 outer side of the cape texture). `src` is a cape of the
-   * account (https or data URL) or one of the launcher's own Hammer+ capes (assets/capes/<id>.png).
+   * account (https or data URL) or one of the launcher's own Hammer+ capes (assets/capes/<id>.png). frames / fps: a
+   * moving cape – its picture is a strip of `frames` cape pictures one under the other, played in a loop.
    */
-  function capeView(src, height = 64) {
+  function capeView(src, height = 64, { frames = 1, fps = 10 } = {}) {
     const unit = Math.max(1, Math.round(height / 16));
-    const canvas = h('canvas.cape-view', { width: 10 * unit, height: 16 * unit, role: 'img', 'aria-label': 'Peleryna' });
+    const canvas = h('canvas.cape-view', { width: 10 * unit, height: 16 * unit, role: 'img', 'aria-label': frames > 1 ? 'Ruchoma peleryna' : 'Peleryna' });
     if (!src || !CAPE_SRC.test(src)) return canvas;
     const img = new Image();
     img.onload = () => {
       const g = canvas.getContext('2d');
       const k = img.naturalWidth / 64; // high-resolution capes keep the same layout
       g.imageSmoothingEnabled = false;
-      g.drawImage(img, k, k, 10 * k, 16 * k, 0, 0, canvas.width, canvas.height);
+      const paint = (n) => {
+        g.clearRect(0, 0, canvas.width, canvas.height);
+        g.drawImage(img, k, k + (n % frames) * 32 * k, 10 * k, 16 * k, 0, 0, canvas.width, canvas.height);
+      };
+      if (frames > 1) animate(canvas, fps, paint);
+      else paint(0);
     };
     img.src = src;
     return canvas;

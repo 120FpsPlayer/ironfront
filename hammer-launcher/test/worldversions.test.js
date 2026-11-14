@@ -201,6 +201,26 @@ test('restore in place: a broken backup or a failed swap leaves the world exactl
   assert.equal(read(instance, 'W', 'region/r.0.0.mca'), 'po kopii');
   assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'saves')), ['W'], 'neither the unpacked copy nor the old one is left');
   assert.deepEqual(notes(instance), []);
+  assert.deepEqual(fs.readdirSync(backups).filter((f) => worlds.isSafetyBackup(f)), [], 'the world did not change – no backup of it is left over');
+
+  // Worse: the old world cannot even go back right away. The note and the safety backup stay, and the next
+  // recovery puts the old world back in its folder.
+  fsp.rename = async (from, to) => {
+    if (path.basename(from).startsWith('.przywracanie-') || path.basename(from).startsWith('.przed-przywroceniem-')) throw Object.assign(new Error('i/o error'), { code: 'EIO' });
+    return rename(from, to);
+  };
+  try {
+    await assert.rejects(worlds.restoreInPlace(instance, 'W', good.file), /i\/o error/);
+  } finally {
+    fsp.rename = rename;
+  }
+  assert.equal(fs.existsSync(path.join(instance.dir, 'saves', 'W')), false, 'the moment a crash would hit');
+  assert.equal(notes(instance).length, 1);
+  assert.equal(fs.readdirSync(backups).filter((f) => worlds.isSafetyBackup(f)).length, 1, 'the state before is kept');
+  assert.deepEqual(worlds.recoverSwaps(instance), ['W']);
+  assert.equal(read(instance, 'W', 'region/r.0.0.mca'), 'po kopii');
+  assert.deepEqual(fs.readdirSync(path.join(instance.dir, 'saves')), ['W']);
+  assert.deepEqual(notes(instance), []);
 });
 
 test('restore in place: a swap cut off by a crash is finished or undone – never a missing world', () => {
@@ -282,6 +302,7 @@ test('services: „Przywróć wczorajszą wersję” – Hammer+, never under a 
   // A backup from before a restore older than a week goes with the restore's clean-up; a newer one stays.
   const oldSafety = fakeBackup(instance, W, at(1, 10, 0), 'safety');
   const recentSafety = fakeBackup(instance, W, at(12, 10, 0), 'safety');
+  const oldAuto = fakeBackup(instance, W, at(20, 10, 0, 9)); // beyond the automatic ones kept – the restore leaves it to the next session
 
   // During the restore the game cannot be started.
   const running = s.worlds.restoreInPlace(instance.id, W, auto.file);
@@ -291,7 +312,7 @@ test('services: „Przywróć wczorajszą wersję” – Hammer+, never under a 
   assert.equal(read(instance, W, 'region/r.0.0.mca'), 'wczoraj');
   assert.match(res.safety.file, /^Nasz świat-2026-11-14_23-30-przed-przywroceniem\.zip$/);
   const names = backupNames(instance);
-  assert.ok(!names.includes(oldSafety) && names.includes(recentSafety) && names.includes(res.safety.file) && names.includes(today.file));
+  assert.ok(!names.includes(oldSafety) && names.includes(recentSafety) && names.includes(res.safety.file) && names.includes(today.file) && names.includes(oldAuto));
 
   // Hammer+ ends: the one-click restore is locked – the way back is not.
   s.plus.remove();

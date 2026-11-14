@@ -343,18 +343,24 @@ async function restoreInPlace(instance, folder, file, { onProgress, now = new Da
       const saves = savesDir(instance);
       const old = path.join(saves, `${OLD}${id}`);
       const note = path.join(journalDir(instance), `${id}.json`);
+      // The world stayed as it was: the note and the backup of its current state are not needed.
+      const unchanged = async () => {
+        await fsp.rm(note, { force: true }).catch(() => null);
+        if (safety) await fsp.rm(path.join(backupsDir(instance), safety.file), { force: true }).catch(() => null);
+      };
       writeJson(note, { v: 1, folder, file, safety: safety?.file ?? null, at: Date.now() });
       try {
         await move(dir, old);
       } catch (err) {
-        await fsp.rm(note, { force: true }).catch(() => null); // nothing moved – the world is as it was
+        await unchanged(); // nothing moved (on Windows: a file of the world is open in another program)
         throw err;
       }
       try {
         await move(staged, dir);
       } catch (err) {
-        await move(old, dir); // the old world goes straight back; if even that fails, recoverSwaps() finishes it
-        await fsp.rm(note, { force: true }).catch(() => null);
+        // The old world goes straight back. If even that fails, the note and the safety backup stay:
+        // recoverSwaps() puts the old world back later (the unpacked copy is deleted below).
+        if (await move(old, dir).then(() => true, () => false)) await unchanged();
         throw err;
       }
       staged = null;

@@ -190,8 +190,11 @@ test('services: every Hammer+ setting is refused in the main process until a cod
     [{ cloudAuto: true }, /Automatyczna synchronizacja z chmurą to funkcja Hammer\+/],
     [{ background: 'background-0a1b2c3d.png' }, /Własne tło launchera to funkcja Hammer\+/],
     [{ theme: 'nether' }, /Motywy launchera to funkcja Hammer\+/],
+    [{ cosmeticWings: 'angel' }, /Dodatki na postać to funkcja Hammer\+/],
+    [{ cosmeticHalo: true }, /Dodatki na postać to funkcja Hammer\+/],
+    [{ cosmeticHat: 'crown' }, /Dodatki na postać to funkcja Hammer\+/],
   ];
-  assert.deepEqual(Object.keys(PLUS_ONLY).sort(), ['accent', 'autoBackup', 'background', 'cloudAuto', 'hammerCape', 'heroStyle', 'theme'], 'a new paid setting needs a line in this test');
+  assert.deepEqual(Object.keys(PLUS_ONLY).sort(), ['accent', 'autoBackup', 'background', 'cloudAuto', 'cosmeticHalo', 'cosmeticHat', 'cosmeticWings', 'hammerCape', 'heroStyle', 'theme'], 'a new paid setting needs a line in this test');
   for (const [patch, error] of PAID) assert.throws(() => s.settings.set(patch), error);
   assert.throws(() => s.settings.set({ memoryMb: 4096, heroStyle: 'stars' }), /Animowane tło/, 'a paid key refuses the whole change');
   assert.equal(s.settings.get().memoryMb, null);

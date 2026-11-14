@@ -70,12 +70,13 @@ function retained(backups, keep, now) {
 /**
  * Removes one world's automatic backups that are no longer retained (see retained), and its backups from before
  * a restore that are older than a week – except the newest of those, the way back from the last restore.
+ * `auto: false` leaves the automatic ones alone (after a restore: the copy just put back may be an old one).
  * Returns the removed file names.
  */
-async function prune(instance, world, keep = DEFAULT_KEEP, { now = Date.now() } = {}) {
+async function prune(instance, world, keep = DEFAULT_KEEP, { now = Date.now(), auto: withAuto = true } = {}) {
   const limit = Math.min(20, Math.max(1, Math.round(Number(keep)) || DEFAULT_KEEP));
   const all = (await worlds.listBackups(instance)).filter((b) => b.world === world); // newest first
-  const auto = all.filter((b) => b.auto);
+  const auto = withAuto ? all.filter((b) => b.auto) : [];
   const stay = retained(auto, limit, now);
   const safety = all.filter((b) => b.safety);
   const old = [...auto.filter((b) => !stay.has(b.file)), ...safety.slice(1).filter((b) => b.createdAt < now - SAFETY_MS)];

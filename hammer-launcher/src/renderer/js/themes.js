@@ -24,7 +24,7 @@
     {
       id: 'default',
       label: 'Domyślny',
-      hint: 'ciepłe barwy Hammer',
+      hint: 'klasyczny wygląd',
       colors: { bg: '#0e0b09', bg2: '#130f0b', side: '#120d0a', panel: '#1a140f', panel2: '#211912', panel3: '#2a2017', line: '#ffc48c', text: '#f7efe7', muted: '#b9a797', dim: '#85725f', accent: '#ff9f43', accent2: '#ffbd78', accent3: '#f07a1c', accentHi: '#ffd4a3', ink: '#2a1405', glow: '#ff963a' },
       scene: {
         sky: ['#1d140d', '#120d09'],

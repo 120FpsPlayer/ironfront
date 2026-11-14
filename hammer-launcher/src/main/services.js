@@ -793,8 +793,8 @@ function createServices({ root, config, accounts, emit = () => {}, fetchFn = (..
       if (!backup.safety) plus.need('Przywracanie wcześniejszej wersji świata');
       worldSaves.recoverSwaps(instance); // what an earlier swap left behind goes first (the game is not running – see idle)
       const result = await worldSaves.restoreInPlace(instance, folder, file, { onProgress, now: new Date(now()) });
-      // Backups from before a restore stay a week; older ones go with the automatic clean-up.
-      if (plus.status().active) await autoBackup.prune(instance, folder, settings.get().autoBackupKeep, { now: now() }).catch(() => null);
+      // Backups from before a restore stay a week (the newest one always); older ones go now.
+      if (plus.status().active) await autoBackup.prune(instance, folder, settings.get().autoBackupKeep, { now: now(), auto: false }).catch(() => null);
       return result;
     });
   }

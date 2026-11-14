@@ -684,7 +684,7 @@ button.chip.plus-chip:hover{background:rgba(var(--gold-glow),.2);border-color:rg
 :where(:root[data-theme]) .play-btn.running{background:linear-gradient(180deg,var(--panel3),var(--panel2))}
 :where(:root[data-theme]) .product .img{background:linear-gradient(135deg,var(--panel3),var(--panel))}
 /* the picker in Ustawienia → Wygląd: tiles with a live preview, in the language of the cape grid */
-.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;padding:0 0 14px}
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;padding:0 0 14px}
 .theme-tile{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:6px 6px 8px;border-radius:var(--r2);background:var(--bg2);border:1px solid var(--line);text-align:center;min-width:0;transition:border-color .15s,background .15s}
 .theme-tile:hover{border-color:var(--line2)}
 .theme-tile.on{border-color:rgba(var(--gold-glow),.6);background:rgba(var(--gold-glow),.06)}
@@ -726,6 +726,27 @@ button.chip.plus-chip:hover{background:rgba(var(--gold-glow),.2);border-color:rg
 .hcape.off:not(.locked) .hcape-pic>:first-child{filter:saturate(.6) brightness(.8)}
 .cape-switch{display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12.5px;color:var(--dim);font-weight:600}
 .cape-own-acts{margin-top:10px;gap:8px}
+/* Dodatki (skin view): wings, halo and hat – tiles in the look of the cape grid, one row per slot */
+.hcos-row{margin-top:14px}
+.card-head + .hcos-row{margin-top:2px}
+.hcos-title{margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.hcos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:10px}
+.hcos{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 6px 10px;border-radius:var(--r2);background:var(--bg2);border:1px solid var(--line);text-align:center;min-width:0;transition:border-color .15s,background .15s}
+.hcos:hover{border-color:var(--line2)}
+.hcos.on{border-color:rgba(var(--gold-glow),.6);background:rgba(var(--gold-glow),.06)}
+.hcos b{font-size:12.5px;margin-top:3px;max-width:100%}
+.hcos small{color:var(--dim);font-size:11px;height:24px;line-height:24px}
+.hcos .chip{height:24px}
+.hcos-frame{position:relative;display:grid;place-items:center}
+.hcos.locked .hcos-frame>:first-child{filter:brightness(.38) saturate(.5)}
+.hcos.locked b{color:var(--dim)}
+.hcos-lock{position:absolute;inset:0;display:grid;place-items:center;color:#ffd166;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8))}
+.hcos-lock svg{width:22px;height:22px}
+.hcos-pic{width:64px;height:54px;display:grid;place-items:center}
+.hcos-pic img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45))}
+.hcos-pic.none{width:46px;border-radius:6px;border:1px dashed var(--line2);color:var(--dim)}
+.hcos-worn{font-size:12.5px;max-width:52%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cosmetics-card .card-head .chip{margin-left:10px}
 
 /* the long list of cards on the right scrolls past the skin, which stays in view */
 .skin-card{position:sticky;top:26px}

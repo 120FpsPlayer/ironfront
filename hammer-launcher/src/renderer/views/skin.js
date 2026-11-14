@@ -1,7 +1,8 @@
 'use strict';
 /* Skórka – the skin of the signed-in Microsoft account, a library of skins used before, Zestawy (Hammer+: a skin +
    model + cape under one name) and Peleryny: one grid with the account's Mojang capes, the Hammer capes (two for
-   everybody, the rest with Hammer+ – dark, with a lock) and one's own cape (Hammer+), plus the on/off switch. */
+   everybody, the rest – the moving ones too – with Hammer+: dark, with a lock) and one's own cape (Hammer+), plus the
+   on/off switch. Right under it Dodatki (Hammer+): wings, a halo and a hat Hammer Client draws on the player. */
 
 (() => {
   const { api, h, clear, icon, fmt, bus, state, attempt } = HS;
@@ -130,6 +131,8 @@
     let data = null;
     let hammer = { capes: [], selected: '', on: true, lastMojang: '', custom: null, plus: false }; // Peleryny (api.plus.capes)
     let capeNote = null; // why the picked cape is not visible to other players (yet)
+    let looks = { items: [], wings: '', halo: false, hat: '', plus: false }; // Dodatki (api.plus.cosmetics)
+    let lookNote = null; // why the cosmetics are not visible to other players (yet)
     let run = 0;
     let alive = true;
 
@@ -166,7 +169,7 @@
         'section.card.skin-card',
         h('div.card-head', icon('shirt'), h('h2.grow', 'Twoja skórka'), HS.chip(data.account.name, 'accent', 'user')),
         src
-          ? h('div.skin-stage', HS.skinView(src, { slim, height: 272 }), HS.skinView(src, { slim, back: true, height: 272, cape: worn()?.src ?? null }))
+          ? h('div.skin-stage', HS.skinView(src, { slim, height: 272, look: lookFor('front') }), HS.skinView(src, { slim, back: true, height: 272, cape: worn()?.src ?? null, capeFrames: worn()?.frames ?? 1, capeFps: worn()?.fps ?? 10, look: lookFor('back') }))
           : h('div.skin-stage.none', icon('user'), h('p', 'Masz domyślną skórkę Minecrafta.')),
         h('div.skin-meta', src ? HS.chip(modelName(skin.variant), null, 'user') : null, worn() ? HS.chip(worn().name, 'gold', 'crown') : null, h('span.dim', 'przód i tył')),
         h('div.skin-acts', upload, reset),
@@ -282,7 +285,7 @@
       if (!data || !hammer.on) return null;
       if (hammer.selected === 'custom' && hammer.custom) return { kind: 'custom', src: hammer.custom, name: 'Własna peleryna' };
       const own = hammer.selected && hammer.capes.find((c) => c.id === hammer.selected);
-      if (own) return { kind: 'hammer', id: own.id, src: `assets/capes/${own.id}.png`, name: own.name };
+      if (own) return { kind: 'hammer', id: own.id, src: `assets/capes/${own.id}.png`, name: own.name, frames: own.frames ?? 1, fps: own.fps ?? 10 };
       const mojang = data.capes.find((c) => c.active);
       return mojang ? { kind: 'mojang', id: mojang.id, src: mojang.url, name: mojang.name } : null;
     }
@@ -353,7 +356,7 @@
           const locked = !c.free && !plus;
           const active = now?.kind === 'hammer' && now.id === c.id;
           return tile({
-            key: c.id, pic: HS.capeView(`assets/capes/${c.id}.png`, 80), name: c.name, sub: c.free ? 'Za darmo' : 'Załóż', locked, active,
+            key: c.id, pic: HS.capeView(`assets/capes/${c.id}.png`, 80, { frames: c.frames ?? 1, fps: c.fps ?? 10 }), name: c.name, sub: c.free ? 'Za darmo' : c.frames ? 'Ruchoma' : 'Załóż', locked, active,
             title: locked ? `„${c.name}” – peleryna Hammer+` : active ? `Nosisz pelerynę „${c.name}”` : `Załóż pelerynę „${c.name}”`,
             onClick: (el) => (locked ? HS.go('plus') : !active && wearHammer(el, c.id, `Założono pelerynę „${c.name}”.`)),
           });
@@ -393,9 +396,79 @@
       );
     }
 
+    /* ── Dodatki (Hammer+): wings, a halo and a hat – tiles like the capes, one choice per row ── */
+    /** The flat pictures of what is worn, for one side of the skin preview: [{ src, x, y, w, h, under }]. */
+    function lookFor(view) {
+      const worn = [looks.wings, looks.halo ? 'halo' : '', looks.hat].filter(Boolean);
+      const out = looks.items.filter((c) => worn.includes(c.id) && c[view]).map((c) => ({ id: c.id, slot: c.slot, src: `assets/cosmetics/${c.id}-${view}.png`, ...c[view] }));
+      // Like in the game, the halo floats above the hat (its ring is the middle of its picture).
+      const hat = out.find((o) => o.slot === 'hat');
+      const halo = out.find((o) => o.slot === 'halo');
+      if (hat && halo) halo.y = Math.min(halo.y, hat.y - 0.5 - halo.h * 0.75);
+      return out;
+    }
+    /** What a cosmetic is called on its own: wings get their noun („Anielskie skrzydła”). */
+    const fullName = (c) => (c.slot === 'wings' ? `${c.name} skrzydła` : c.name);
+
+    function cosmeticsCard() {
+      const plus = looks.plus;
+      const after = (res, okText) => {
+        if (!res) return;
+        looks = { ...looks, ...res };
+        lookNote = res.note ?? null;
+        if (okText) HS.toast('ok', okText);
+        draw();
+      };
+      const PUT_ON = { wings: 'Założono skrzydła.', halo: 'Założono aureolę.', hat: 'Założono czapkę.' };
+      const TAKE_OFF = { wings: 'Zdjęto skrzydła.', halo: 'Zdjęto aureolę.', hat: 'Zdjęto czapkę.' };
+      const wear = (el, slot, value) => HS.busy(el, async () => after(await attempt(() => api.plus.setCosmetic(slot, value)), value ? PUT_ON[slot] : TAKE_OFF[slot]));
+      const tile = ({ key, pic, name, sub, active, locked = false, title, onClick }) => {
+        const el = h(
+          `button.hcos${active ? '.on' : ''}${locked ? '.locked' : ''}`,
+          { type: 'button', 'aria-pressed': String(active), title, 'data-cosmetic': key, onclick: () => onClick(el) },
+          h('div.hcos-frame', pic, locked ? h('span.hcos-lock', { 'aria-hidden': 'true' }, icon('lock')) : null),
+          h('b.ellipsis', name),
+          active ? HS.chip('Na sobie', 'gold', 'check') : h('small', locked ? 'Hammer+' : sub),
+        );
+        return el;
+      };
+      const row = (slot, title, noneLabel) => {
+        const current = slot === 'halo' ? (looks.halo ? 'halo' : '') : looks[slot];
+        const none = tile({ key: `${slot}:none`, pic: h('div.hcos-pic.none', icon('close')), name: noneLabel, sub: 'Zdejmij', active: !current, title: noneLabel, onClick: (el) => current && wear(el, slot, slot === 'halo' ? false : '') });
+        const items = looks.items
+          .filter((c) => c.slot === slot)
+          .map((c) => {
+            const active = current === c.id;
+            const locked = !plus;
+            return tile({
+              key: c.id, pic: h('div.hcos-pic', h('img', { src: `assets/cosmetics/${c.id}-${slot === 'wings' ? 'back' : 'front'}.png`, alt: '', draggable: 'false' })), name: c.name, sub: 'Załóż', active, locked,
+              title: locked ? 'Dodatek Hammer+ – kliknij, żeby zobaczyć Hammer+' : active ? 'Masz to na sobie' : 'Kliknij, żeby założyć',
+              onClick: (el) => (locked ? HS.go('plus') : !active && wear(el, slot, slot === 'halo' ? true : c.id)),
+            });
+          });
+        return h('div.hcos-row', h('h3.hcos-title', title), h('div.hcos-grid', none, items));
+      };
+      const wornNames = looks.items.filter((c) => [looks.wings, looks.halo ? 'halo' : '', looks.hat].includes(c.id)).map(fullName);
+      return h(
+        'section.card.cosmetics-card',
+        h(
+          'div.card-head',
+          icon('sparkles'),
+          h('h2.grow', 'Dodatki'),
+          h('span.dim.hcos-worn', ...(wornNames.length ? wornNames.flatMap((n, i) => [i ? ' · ' : null, h('span', n)]) : ['Bez dodatków'])),
+          plus ? null : HS.chip('Hammer+', 'gold', 'lock'),
+        ),
+        row('wings', 'Skrzydła', 'Bez skrzydeł'),
+        row('halo', 'Aureola', 'Bez aureoli'),
+        row('hat', 'Czapka', 'Bez czapki'),
+        lookNote ? h('p.cloud-note', icon('info'), lookNote) : null,
+        h('p.hint', { style: { marginTop: '12px' } }, plus ? 'Skrzydła, aureolę i czapkę rysuje Hammer Client – widzisz je Ty i gracze, którzy też mają Hammer Client. Skrzydła machają, a w locie biją szybciej.' : 'Skrzydła, aureolę i czapkę rysuje Hammer Client – widzisz je Ty i gracze, którzy też mają Hammer Client. Dodatki odblokujesz z Hammer+.'),
+      );
+    }
+
     function draw() {
       if (!data) return;
-      const wrap = h('div.skin-page', skinCard(), h('div.grid', capesCard(), libraryCard(), outfitsCard()));
+      const wrap = h('div.skin-page', skinCard(), h('div.grid', capesCard(), cosmeticsCard(), libraryCard(), outfitsCard()));
       // A skin file dropped anywhere on the page.
       let depth = 0;
       wrap.addEventListener('dragenter', (e) => (e.preventDefault(), depth++, wrap.classList.add('dragging')));
@@ -427,10 +500,11 @@
       if (account.needsLogin) return needLogin('Sesja wygasła', `Zaloguj się ponownie na konto ${account.name}, żeby zobaczyć i zmienić skórkę.`);
       clear(body, h('div.skin-page', h('div.skeleton', { style: { height: '470px' } }), h('div.grid', h('div.skeleton', { style: { height: '250px' } }), h('div.skeleton', { style: { height: '140px' } }))));
       try {
-        const [res, capes] = await Promise.all([api.skins.get(), api.plus.capes().catch(() => ({ capes: [], selected: '', on: true, lastMojang: '', custom: null, plus: false }))]);
+        const [res, capes, cosmetics] = await Promise.all([api.skins.get(), api.plus.capes().catch(() => ({ capes: [], selected: '', on: true, lastMojang: '', custom: null, plus: false })), api.plus.cosmetics().catch(() => null)]);
         if (my !== run || !alive) return undefined;
         data = { outfits: [], ...res };
         hammer = { ...hammer, ...capes };
+        if (cosmetics) looks = { ...looks, ...cosmetics };
         draw();
         // The head in the sidebar follows a skin changed somewhere else (minecraft.net, the official launcher).
         if ((account.skinUrl ?? null) !== (res.skin?.url ?? null)) state.refreshAccounts().catch(() => {});

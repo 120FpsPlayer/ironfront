@@ -16,7 +16,14 @@ const SLOTS = ['wings', 'halo', 'hat'];
 /** The settings key of each slot (settings.js). */
 const KEYS = { wings: 'cosmeticWings', halo: 'cosmeticHalo', hat: 'cosmeticHat' };
 
-/** [{ id, slot, name }] from cosmetics.json – an empty list when the file is missing or broken. */
+/** Where a flat picture goes on the skin preview: { x, y, w, h (skin pixels), under } – null when it is not usable. */
+function place(p) {
+  const ok = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+  if (!p || !ok(p.x, -4, 20) || !ok(p.y, -12, 34) || !ok(p.w, 0.5, 24) || !ok(p.h, 0.5, 34)) return null;
+  return { x: p.x, y: p.y, w: p.w, h: p.h, under: p.under === true };
+}
+
+/** [{ id, slot, name, front, back }] from cosmetics.json – an empty list when the file is missing or broken. */
 function loadCosmetics(file = FILE) {
   let raw;
   try {
@@ -31,7 +38,7 @@ function loadCosmetics(file = FILE) {
     const id = entry?.id;
     if (typeof id !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(id) || seen.has(id) || !SLOTS.includes(entry.slot)) continue;
     seen.add(id);
-    out.push({ id, slot: entry.slot, name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 40) : id });
+    out.push({ id, slot: entry.slot, name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 40) : id, front: place(entry.front), back: place(entry.back) });
   }
   return out;
 }
