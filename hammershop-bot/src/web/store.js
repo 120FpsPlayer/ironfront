@@ -59,6 +59,7 @@ function load() {
     };
     state.referrals = raw.referrals ?? null; // „Zaproś znajomego” – see its block below
     if (raw.cosmetics) state.cosmetics = raw.cosmetics; // Dodatki – see setCosmetics
+    if (Array.isArray(raw.announcements)) state.announcements = raw.announcements; // the panel's „Ogłoszenia” – see its block below
   }
   // Old sessions out.
   const now = Date.now();
@@ -513,3 +514,26 @@ module.exports = {
 };
 // „Zaproś znajomego” (its own block above).
 Object.assign(module.exports, { siteUserExists, referralCode, referrerOf, referralOf, addReferral, countUserDownload, referralStats, referralPurchase, addReferralDays, takeReferralBalance, addReferralReward, referralOverview });
+
+// ── The admin panel's „Ogłoszenia” tab: what it posted on Discord (#📢 ogłoszenia) ──
+/*
+ * announcements[] = { id, title, kind, ping ('none'|'role'|'everyone'), at, by (Discord user ID), url (the message),
+ *                     channelId, messageId, crossposted, deletedAt, deletedBy } – the newest MAX_ANNOUNCEMENTS, newest first
+ */
+const MAX_ANNOUNCEMENTS = 20;
+const announcementList = () => state.announcements ?? [];
+const getAnnouncement = (id) => announcementList().find((a) => a.id === id) ?? null;
+function addAnnouncement(fields) {
+  const item = { deletedAt: null, deletedBy: null, ...fields, id: newId('ann'), at: Date.now() };
+  state.announcements = [item, ...announcementList()].slice(0, MAX_ANNOUNCEMENTS);
+  save();
+  return item;
+}
+function updateAnnouncement(id, patch) {
+  const item = getAnnouncement(id);
+  if (!item) return null;
+  Object.assign(item, patch, { id: item.id });
+  save();
+  return item;
+}
+Object.assign(module.exports, { MAX_ANNOUNCEMENTS, announcementList, getAnnouncement, addAnnouncement, updateAnnouncement });

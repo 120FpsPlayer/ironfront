@@ -108,6 +108,7 @@
     },
     {
       "id": "apply",
+      "disabled": true,
       "label": "Rekrutacja",
       "emoji": "📝",
       "icon": "pencil",

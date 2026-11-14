@@ -20,7 +20,7 @@ const productBadges = require('./badges');
 const shopstatus = require('./shopstatus');
 const { splitEmoji } = require('../builder/style');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
-const { UserError, embed, truncate, sendToChannel, sendLog, logEmbed, parseAmount, money, ts, pad, count } = require('../lib/utils');
+const { UserError, embed, truncate, sendToChannel, sendTicketLog, logEmbed, parseAmount, money, ts, pad, count } = require('../lib/utils');
 const { slash } = require('../lib/commandsPl');
 const { SPACER, container, text, divider, btn, linkBtn, row, section, header, buttonSection, v2, channelUrl, subtext } = require('../lib/v2');
 const { isCart, linesOf } = require('../lib/orderItems');
@@ -669,7 +669,7 @@ async function countDownLine(guild, sale, line) {
   refreshShop(guild);
   if (left === 0 && before > 0) {
     const order = sale.ticketNumber ? ` w zamówieniu \`#${pad(sale.ticketNumber)}\`` : '';
-    await sendLog(guild, {
+    await sendTicketLog(guild, {
       embeds: [logEmbed(COLORS.danger, '🔴 Wyprzedany').setDescription(`**${p.name}** jest wyprzedany – ostatnia sztuka została sprzedana${order}. Uzupełnij stan przez \`${slash('product stock')} ilosc:\`.`)],
     });
   }

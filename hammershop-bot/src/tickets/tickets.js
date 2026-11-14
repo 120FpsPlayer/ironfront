@@ -37,7 +37,7 @@ const {
   duration,
   pad,
   ts,
-  sendLog,
+  sendTicketLog,
   money,
   count,
 } = require('../lib/utils');
@@ -179,6 +179,8 @@ async function openTicket(member, type, answers = [], extra = {}, { force = fals
 
   const error = checkCanOpen(member, { force });
   if (error) throw new UserError(error);
+  // A category switched off with /tickety (the team can still open one by hand with force).
+  if (!force && require('./typestate').isOff(guild.id, type)) throw new UserError(require('./typestate').closedText(type));
 
   creating.add(key);
   try {
@@ -262,7 +264,7 @@ async function openTicket(member, type, answers = [], extra = {}, { force = fals
         .catch(() => null);
     }
 
-    await sendLog(guild, {
+    await sendTicketLog(guild, {
       embeds: [
         logEmbed(COLORS.success, '📥 Ticket otwarty', member.user)
           .setThumbnail(member.user.displayAvatarURL?.() ?? null)
@@ -385,7 +387,7 @@ async function closeTicket(channel, actor, reason = null) {
   const links = [];
   if (transcript?.url) links.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(transcript.url).setLabel('Transkrypcja').setEmoji('📄'));
   links.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(channel.url).setLabel('Kanał').setEmoji('🎫'));
-  await sendLog(channel.guild, {
+  await sendTicketLog(channel.guild, {
     embeds: [
       logEmbed(COLORS.danger, '🔒 Ticket zamknięty', owner).addFields(
         { name: 'Ticket', value: `${channel}\n\`#${pad(ticket.number)}\``, inline: true },
@@ -445,7 +447,7 @@ async function reopenTicket(channel, actor) {
       (dropped.order.total != null ? `Do zapłaty teraz: **${money(dropped.order.total)}**` : 'Sprzedawca potwierdzi ostateczną cenę bez rabatu.');
   }
   await channel.send(ui.notice(dropped ? COLORS.warning : COLORS.success, text, { mentions: { users: [ticket.ownerId] } }));
-  await sendLog(channel.guild, {
+  await sendTicketLog(channel.guild, {
     embeds: [
       logEmbed(COLORS.success, '🔓 Ticket otwarty ponownie', actor.user ?? actor).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
@@ -470,7 +472,7 @@ async function deleteTicket(channel, actor) {
 
   const delay = D.deleteDelaySeconds ?? 5;
   await channel.send(ui.notice(COLORS.danger, `🗑️ **Ten ticket zostanie usunięty ${ts(Date.now() + delay * 1000, 'R')}**\n-# Transkrypcja została zapisana.`));
-  await sendLog(channel.guild, {
+  await sendTicketLog(channel.guild, {
     embeds: [
       logEmbed(COLORS.muted, '🗑️ Ticket usunięty', actor.user ?? actor).addFields(
         { name: 'Ticket', value: `#${channel.name} (\`#${pad(ticket.number)}\`)`, inline: true },
@@ -538,7 +540,7 @@ async function claimTicket(channel, member) {
       { thumbnail: member.displayAvatarURL?.({ size: 128 }) },
     ),
   );
-  await sendLog(channel.guild, {
+  await sendTicketLog(channel.guild, {
     embeds: [logEmbed(COLORS.brand, '🙋 Ticket przejęty', member.user).setDescription(`${member} przejmuje ${channel} (\`#${pad(ticket.number)}\`)`)],
   });
 }
@@ -794,7 +796,7 @@ async function completeOrder(channel, staff, { amount, respond } = {}) {
   }
   await refreshControlMessage(channel, ticket);
   await channel.send(ui.orderCompletedCard(guild, ticket, staff.id, { loyal, orders, sale }));
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     embeds: [
       logEmbed(COLORS.success, '✅ Zamówienie zrealizowane', staff.user ?? staff).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },
@@ -831,7 +833,7 @@ async function saveRating(client, channelId, userId, stars, comment) {
   const guild = client.guilds.cache.get(ticket.guildId);
   if (guild) {
     const user = await client.users.fetch(userId).catch(() => null);
-    await sendLog(guild, {
+    await sendTicketLog(guild, {
       embeds: [
         logEmbed(stars >= 4 ? COLORS.success : stars === 3 ? COLORS.warning : COLORS.danger, '⭐ Nowa ocena pomocy', user)
           .setDescription(`## ${'⭐'.repeat(stars)}${'☆'.repeat(5 - stars)}\n**${stars}/5**`)

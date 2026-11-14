@@ -22,7 +22,7 @@
  *                order on the website shows it too.
  *   - admin      the admin panel (/admin, src/web/admin.js) asks the bot who may use it (the server's owner and
  *                OWNER_IDS – everything; the bot's admins – the rest), posts news and new launcher versions on Discord
- *                and writes every change to the log channel.
+ *                and announcements on #📢 ogłoszenia („Ogłoszenia” tab), and writes every change to the log channel.
  *
  * Bot side: ticket.order.paidWith = 'website', order.web = { orderId, stripe }.
  * Website side (data/web.json): order.handedOver, ticketChannelId, ticketNumber, ticketUrl, waitingForMember, delivered,
@@ -574,6 +574,64 @@ const panelPlus = {
 /** „Zaproś znajomego” on the website: the days kept as a balance become a code (src/features/referrals.js). */
 const panelReferrals = { claim: (user, nick) => require('./referrals').claim(user, nick) };
 
+// ───────────── The panel's „Ogłoszenia” tab: announcements on #📢 ogłoszenia ─────────────
+const panelProblem = (status, message) => Object.assign(new Error(message), { status });
+/** #📢 ogłoszenia (the channel key /build gives it) – null when the server has none. */
+function announcementsChannel(guild) {
+  const channel = guild?.channels.cache.get(db.channelId(guild.id, 'announcements') ?? '');
+  return channel?.isTextBased?.() ? channel : null;
+}
+/** The 📢 Ogłoszenia role people pick to get pinged about announcements. */
+const announcementsRole = (guild) => (guild ? guild.roles.cache.get(db.roleId(guild.id, 'pingAnnouncements') ?? '') ?? null : null);
+
+/** The same card as /ogloszenie (src/features/announce.js buildPanelAnnouncement), posted and crossposted by the bot. */
+const panelAnnouncements = {
+  /** For the tab: where it goes, the ping role, how many people @everyone reaches, the bot (the preview) and the kinds. */
+  info: () => {
+    const guild = guildOf();
+    const channel = announcementsChannel(guild);
+    const role = announcementsRole(guild);
+    const me = guild?.client?.user;
+    return {
+      channel: channel ? { id: channel.id, name: channel.name, url: channel.url, announcement: channel.type === ChannelType.GuildAnnouncement } : null,
+      role: role ? { id: role.id, name: role.name } : null,
+      members: guild?.memberCount ?? null,
+      bot: me ? { name: guild.members?.me?.displayName ?? me.username ?? config.brand.name, avatar: me.displayAvatarURL?.({ extension: 'png', size: 64 }) ?? null } : null,
+      kinds: require('./announce').panelKinds(),
+    };
+  },
+  /** The banner picture of a kind – the panel's preview shows it. */
+  bannerFile: (kind) => {
+    const key = require('./announce').panelKind(kind) && require('./announce').kindBanner(kind);
+    return key ? require('../lib/theme').bannerPath(key) : null;
+  },
+  /** → { url, channelId, messageId, crossposted } */
+  post: async ({ title, text: message, kind, image, button, ping, banner: withBanner, by }) => {
+    const guild = needGuild();
+    const channel = announcementsChannel(guild);
+    if (!channel) throw panelProblem(409, 'Na serwerze nie ma kanału #📢 ogłoszenia – dodaj go na Discordzie komendą /zbuduj tylko:update.');
+    if (ping === 'role' && !announcementsRole(guild)) throw panelProblem(409, 'Na serwerze nie ma roli 📢 Ogłoszenia – wybierz inny ping albo dodaj ją komendą /zbuduj tylko:update.');
+    const payload = require('./announce').buildPanelAnnouncement(guild, `<@${by}>`, { title, text: message, kind, image, button, ping, banner: withBanner });
+    const sent = await channel.send(payload).catch((err) => {
+      throw panelProblem(502, `Discord nie przyjął ogłoszenia: ${truncate(err.message, 200)}`);
+    });
+    // An announcement channel: published to the servers that follow it too.
+    const crossposted = channel.type === ChannelType.GuildAnnouncement ? Boolean(await sent.crosspost().catch(() => null)) : false;
+    return { url: sent.url, channelId: channel.id, messageId: sent.id, crossposted };
+  },
+  /** Takes the message off Discord → false when it was gone already. */
+  remove: async ({ channelId, messageId }) => {
+    const guild = needGuild();
+    const channel = guild.channels.cache.get(channelId);
+    const message = channel?.messages ? await channel.messages.fetch(messageId).catch(() => null) : null;
+    if (!message) return false;
+    await message.delete().catch((err) => {
+      throw panelProblem(502, `Nie udało się usunąć wiadomości z Discorda: ${truncate(err.message, 200)}`);
+    });
+    return true;
+  },
+};
+
 /** The featured servers for the panel – the same list /featured edits. */
 const panelFeatured = {
   list: () => featuredServers(),
@@ -636,7 +694,7 @@ function start(c) {
     }
   });
   webAuth.setClientId(c.application?.id ?? c.user?.id);
-  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), invitesPaused: () => invitesPaused(), ownInviteFailing, onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured, referrals: panelReferrals });
+  server = createWebServer({ catalog, info: () => ({ invite: inviteOf() }), invitesPaused: () => invitesPaused(), ownInviteFailing, onPaid, onLogin, isMember, currency, featured: featuredServers, level: panelLevel, announce, log: panelLog, plus: panelPlus, featuredAdmin: panelFeatured, referrals: panelReferrals, announcements: panelAnnouncements });
   server.on('error', (err) => {
     console.warn(`🌐 Strona: nie można użyć portu ${env.web.port} (${err.code ?? err.message}) – bot działa dalej bez niej.`);
     server = null;
@@ -666,4 +724,5 @@ hooks.on('inviteDelete', (invite) => {
 module.exports = {
   catalog, featuredServers, plain, tabOf, artOf, guildOf, ticketOrder, handOver, onPaid, onLogin, isMember, start, stop: () => server?.close(), _setClient: (c) => (client = c),
   deliverPlus, plusDm, panelLevel, announce, panelLog, panelPlus, panelFeatured, panelReferrals, launcherChannel, checkInvite, inviteOf, invitesPaused, ownInviteFailing,
+  panelAnnouncements,
 };

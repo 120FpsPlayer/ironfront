@@ -25,6 +25,11 @@
  *   GET    featured              POST featured        DELETE featured/<id>
  *   GET    orders                → the newest website orders
  *   GET    referrals             → „Zaproś znajomego”: the totals and the accounts that brought the most people
+ *   GET    announcements         → „Ogłoszenia”: { channel, role, members, bot, kinds, history, canEveryone, limits }
+ *   GET    announcements/banner/<kind>  the kind's banner (the preview shows it)
+ *   POST   announcements         { title, text, kind, image?, buttonLabel?, buttonUrl?, ping, banner?, confirmEveryone? }
+ *                                → the card on #📢 ogłoszenia: { item, url } (ping 'everyone': owner only)
+ *   DELETE announcements/<id>    takes it off Discord (the history keeps it, marked as deleted)
  *
  * Every change must come from the panel itself (the Origin header is required and must be this site), and each one is
  * written to the bot's log channel with who did it.
@@ -94,6 +99,45 @@ function planFields(raw, used) {
   return { id, name, days, price };
 }
 
+// ── „Ogłoszenia”: the card the bot posts on #📢 ogłoszenia (src/features/announce.js buildPanelAnnouncement) ──
+const ANN_KINDS = ['ogloszenie', 'aktualizacja', 'wydarzenie', 'wazne'];
+const ANN_PINGS = ['none', 'role', 'everyone'];
+const ANN_LIMITS = { title: 120, text: 3500, label: 80, url: 500 }; // a card's text may have 4000 characters in all
+const ANN_PING_TEXT = { none: '', role: ' z pingiem roli 📢 Ogłoszenia', everyone: ' z pingiem `@everyone`' };
+
+function annUrl(value, what) {
+  if (String(value ?? '').trim().length > ANN_LIMITS.url) throw problem(400, `${what}: adres może mieć najwyżej ${ANN_LIMITS.url} znaków.`);
+  return httpsUrl(value, what);
+}
+
+/** The form, checked: every message in Polish, every length within what Discord takes. */
+function announcementFields(body, owner) {
+  const title = line(body.title, 1000);
+  if (!title) throw problem(400, 'Wpisz tytuł ogłoszenia.');
+  if (title.length > ANN_LIMITS.title) throw problem(400, `Tytuł może mieć najwyżej ${ANN_LIMITS.title} znaków (teraz ${title.length}).`);
+  const text = block(body.text, 20_000);
+  if (!text) throw problem(400, 'Wpisz treść ogłoszenia.');
+  if (text.length > ANN_LIMITS.text) throw problem(400, `Treść może mieć najwyżej ${ANN_LIMITS.text} znaków (teraz ${text.length}).`);
+  if (!ANN_KINDS.includes(body.kind)) throw problem(400, 'Wybierz rodzaj ogłoszenia.');
+  const image = annUrl(body.image, 'Obrazek');
+  const label = line(body.buttonLabel, 1000);
+  const url = annUrl(body.buttonUrl, 'Link w przycisku');
+  if (label && !url) throw problem(400, 'Przycisk: wpisz też link (https://…) – albo usuń napis.');
+  if (url && !label) throw problem(400, 'Przycisk: wpisz też napis na przycisku – albo usuń link.');
+  if (label.length > ANN_LIMITS.label) throw problem(400, `Napis na przycisku może mieć najwyżej ${ANN_LIMITS.label} znaków.`);
+  const ping = body.ping ?? 'none';
+  if (!ANN_PINGS.includes(ping)) throw problem(400, 'Wybierz, kogo powiadomić.');
+  if (ping === 'everyone' && !owner) throw problem(403, 'Ping @everyone może wysłać tylko właściciel serwera.');
+  if (ping === 'everyone' && body.confirmEveryone !== true) throw problem(400, 'Potwierdź, że chcesz powiadomić wszystkich (@everyone).');
+  return { title, text, kind: body.kind, image, button: url ? { label, url } : null, ping, banner: body.banner !== false };
+}
+
+/** A history row as the panel lists it. */
+function announcementRow(a) {
+  const user = (id) => (id ? { id, name: store._state().users[id]?.name ?? null } : null);
+  return { id: a.id, title: a.title, kind: a.kind, ping: a.ping, at: a.at, by: user(a.by), url: a.url, crossposted: Boolean(a.crossposted), deletedAt: a.deletedAt ?? null, deletedBy: user(a.deletedBy) };
+}
+
 /** Sums for the dashboard out of the day counters: the last `days` days, oldest first. */
 function series(map, days, pick = (v) => v ?? 0, now = Date.now()) {
   const out = [];
@@ -145,8 +189,8 @@ const uploadSaid = new Map();
 
 /**
  * /api/admin/… – h: the website's helpers { send, fail, jsonBody, userOf, limited, originOk } and the bot's side
- * { level, announce, log, plus { grant, recent, inspect, active }, featured { list, add, remove }, currency,
- *   publicUrl, authReady, paymentsReady, webhookReady }.
+ * { level, announce, log, plus { grant, recent, inspect, active }, featured { list, add, remove },
+ *   announcements { info, bannerFile, post, remove }, currency, publicUrl, authReady, paymentsReady, webhookReady }.
  */
 async function api(req, res, url, h) {
   const route = url.pathname.slice(PREFIX.length).replace(/\/+$/, '');
@@ -191,6 +235,13 @@ async function api(req, res, url, h) {
     if (route === 'featured') return h.send(res, 200, { servers: h.featured.list() });
     if (route === 'orders') return h.send(res, 200, { orders: store.allOrders().filter((o) => o.stripe_id || o.status === 'paid').slice(0, 100).map(orderRow) });
     if (route === 'referrals') return h.send(res, 200, store.referralOverview(10));
+    if (route === 'announcements') return h.send(res, 200, { ...h.announcements.info(), history: store.announcementList().map(announcementRow), canEveryone: owner, limits: ANN_LIMITS });
+    const bannerOf = /^announcements\/banner\/([a-z]{1,24})$/.exec(route);
+    if (bannerOf) {
+      const file = h.announcements.bannerFile(bannerOf[1]);
+      if (!file || !require('node:fs').existsSync(file)) return h.fail(res, 404, 'Nie znaleziono');
+      return h.send(res, 200, require('node:fs').readFileSync(file), { 'content-type': 'image/png', 'cache-control': 'private, max-age=3600' });
+    }
     return h.fail(res, 404, 'Nie znaleziono');
   }
 
@@ -330,6 +381,28 @@ async function api(req, res, url, h) {
       const plans = store.setPlusPlans(list.map((p) => planFields(p, used)));
       await log(`🔨 Cennik Hammer+ na stronie: ${plans.length ? plans.map((p) => `${p.name} – ${(p.price / 100).toFixed(2)}`).join(' · ') : 'sprzedaż wyłączona'}`);
       return h.send(res, 200, { plans });
+    }
+  }
+
+  // ── „Ogłoszenia”: announcements on #📢 ogłoszenia ──
+  if (head === 'announcements') {
+    if (method === 'POST' && !arg) {
+      if (h.limited(req, 'announce', 6)) return h.fail(res, 429, 'Za dużo ogłoszeń naraz – odczekaj minutę.');
+      const fields = announcementFields(body, owner);
+      const posted = await h.announcements.post({ ...fields, by: user.id });
+      const item = store.addAnnouncement({ title: fields.title, kind: fields.kind, ping: fields.ping, by: user.id, url: posted.url, channelId: posted.channelId, messageId: posted.messageId, crossposted: Boolean(posted.crossposted) });
+      const kind = h.announcements.info().kinds.find((k) => k.id === fields.kind);
+      await log(`📢 Ogłoszenie na Discordzie${kind ? ` (${kind.label})` : ''}: **${fields.title}**${ANN_PING_TEXT[fields.ping]} – ${posted.url}`);
+      return h.send(res, 200, { item: announcementRow(item), url: posted.url });
+    }
+    if (method === 'DELETE' && arg) {
+      const item = store.getAnnouncement(arg);
+      if (!item) return h.fail(res, 404, 'Nie ma takiego ogłoszenia.');
+      if (item.deletedAt) return h.fail(res, 409, 'To ogłoszenie zostało już usunięte z Discorda.');
+      const removed = await h.announcements.remove({ channelId: item.channelId, messageId: item.messageId });
+      store.updateAnnouncement(item.id, { deletedAt: Date.now(), deletedBy: user.id });
+      await log(`🗑️ Usunięto ogłoszenie z Discorda: **${item.title}**${removed ? '' : ' (wiadomości już tam nie było)'}`);
+      return h.send(res, 200, { item: announcementRow(store.getAnnouncement(item.id)), gone: !removed });
     }
   }
 

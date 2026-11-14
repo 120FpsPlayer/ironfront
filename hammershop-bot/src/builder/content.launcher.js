@@ -64,7 +64,7 @@ function information(x, build) {
         `### ${x.E('ticket')} Pomoc\n` +
         `> ${x.ch('tickets')} – otwórz ticket\n> ${x.ch('bugs')} – jak zgłosić błąd\n> ${x.ch('suggestions')} – Twoje pomysły na nowe funkcje\n` +
         `### ${x.E('chat')} Społeczność\n` +
-        `> ${x.ch('chat')} · ${x.ch('screenshots')} · ${x.ch('servers')} · ${x.ch('giveaways')} · ${x.ch('leaderboard')}`,
+        `> ${x.ch('chat')} · ${x.ch('servers')} · ${x.ch('giveaways')} · ${x.ch('leaderboard')}`,
     ),
   );
 
@@ -72,8 +72,8 @@ function information(x, build) {
   team.addTextDisplayComponents(
     text(
       `# ${x.E('shield')} Nasz zespół\nLudzie, dzięki którym **${x.brand}** działa.\n` +
-        `> ${x.role('founder')} · ${x.role('coowner')}\n> ${x.role('developer')} – tworzy launcher i Hammer Client\n> ${x.role('manager')} · ${x.role('admin')}\n` +
-        `> ${x.role('moderator')} · ${x.role('support')} · ${x.role('trialSupport')}\n> ${x.role('tester')} – testuje nowe wersje przed wydaniem`,
+        `> ${x.role('founder')} · ${x.role('coowner')}\n> ${x.role('developer')} – tworzy launcher i Hammer Client\n` +
+        `> ${x.role('support')} – odpowiada na tickety i pytania\n> ${x.role('tester')} – testuje nowe wersje przed wydaniem`,
     ),
   );
   team.addSeparatorComponents(divider());
@@ -92,15 +92,20 @@ function information(x, build) {
   );
   contact.addActionRowComponents(buttons(open(x, 'support', 'Napisz do pomocy', 'mail', ButtonStyle.Primary), x.link('tickets', 'Wszystkie rodzaje ticketów', 'ticket')));
 
-  const hiring = container(COLORS.brand);
+  // Rekrutacja switched off with /tickety: the card says so and its button is grey.
+  const hiringOff = require('../tickets/typestate').isOff(x.guild.id, config.getType('apply'));
+  const hiring = container(hiringOff ? COLORS.muted : COLORS.brand);
   hiring.addTextDisplayComponents(
     text(
-      `# ${x.E('person')} Dołącz do zespołu\nSzukamy osób, które chcą pomagać graczom i rozwijać launcher: support, moderacja, testy.\n` +
-        '> ✅ 16+ i dobry polski\n> ✅ Kilka godzin w tygodniu\n> ✅ Cierpliwość, uczciwość i chęć pomocy\n' +
-        '-# Złóż podanie przyciskiem poniżej – czytamy każde zgłoszenie.',
+      hiringOff
+        ? `# ${x.E('person')} Dołącz do zespołu\n⛔ **Rekrutacja jest teraz zamknięta** – nie przyjmujemy podań.\n-# Gdy ruszy, ogłosimy to na ${x.ch('announcements')}.`
+        : `# ${x.E('person')} Dołącz do zespołu\nSzukamy osób, które chcą pomagać graczom i rozwijać launcher: support, moderacja, testy.\n` +
+            '> ✅ 16+ i dobry polski\n> ✅ Kilka godzin w tygodniu\n> ✅ Cierpliwość, uczciwość i chęć pomocy\n' +
+            '-# Złóż podanie przyciskiem poniżej – czytamy każde zgłoszenie.',
     ),
   );
-  hiring.addActionRowComponents(buttons(open(x, 'apply', 'Złóż podanie', 'pencil', ButtonStyle.Success)));
+  const apply = open(x, 'apply', hiringOff ? 'Rekrutacja zamknięta' : 'Złóż podanie', 'pencil', hiringOff ? ButtonStyle.Secondary : ButtonStyle.Success);
+  hiring.addActionRowComponents(buttons(hiringOff ? apply?.setDisabled(true) : apply));
 
   return [{ banner: 'discord' }, card(about), { banner: 'channels' }, card(guide), { banner: 'staff' }, card(team), { banner: 'contact' }, card(contact), { banner: 'join-us' }, card(hiring)];
 }
@@ -223,31 +228,6 @@ function suggestions(x) {
   return card(c);
 }
 
-function screenshots(x) {
-  const c = container(COLORS.brand);
-  c.addTextDisplayComponents(
-    text(
-      `# ${x.E('camera')} Zrzuty ekranu\nPochwal się swoim HUD-em, buildem, shaderami albo ustawieniami launchera.\n` +
-        '> 📸 W launcherze: **Galeria** → wybierz zrzut → **Kopiuj** albo **Udostępnij link**\n' +
-        '-# Tylko własne zrzuty z gry i launchera. Bez spamu i treści niezgodnych z regulaminem.',
-    ),
-  );
-  return card(c);
-}
-
-function servers(x) {
-  const c = container(COLORS.brand);
-  c.addTextDisplayComponents(
-    text(
-      `# ${x.E('group')} Serwery i ekipa\nSzukasz ludzi do gry albo serwera? Napisz, w co grasz i kogo szukasz.\n` +
-        '> 🔗 Zaproś znajomych jednym linkiem: w launcherze **Serwery → Zaproś** – launcher sam przygotuje im wersję gry i mody\n' +
-        '> ⭐ Serwery polecane przez nas znajdziesz w launcherze w zakładce **Serwery**\n' +
-        `-# Reklamy serwerów Discord i sklepów są zabronione (${x.ch('rules')}).`,
-    ),
-  );
-  return card(c);
-}
-
 function giveaways(x) {
   const c = container(COLORS.brand);
   c.addTextDisplayComponents(
@@ -288,7 +268,7 @@ function staff(x) {
         `> Nowe wersje i aktualności z panelu pojawiają się same na ${x.ch('updates')} i ${x.ch('news')} · \`${slash('launcher')}\` pokazuje aktualną wersję · \`${slash('featured add')}\` – polecane serwery\n` +
         `### ${x.E('gift')} Społeczność\n> \`${slash('giveaway start')}\` · \`${slash('giveaway end')}\` · \`${slash('giveaway reroll')}\` · \`${slash('announce')}\` – ładne ogłoszenie z opcjonalnym banerem i pingiem\n` +
         `### ${x.E('refresh')} Zmiana tekstów\n> Edytuj \`config.launcher.json\` albo \`regulamin-launcher.md\`, uruchom bota ponownie i użyj \`${slash('build')} tylko:panels\` – każda karta zaktualizuje się na miejscu\n` +
-        `### ${x.E('warning')} Złote zasady\n> Nigdy nie proś o hasła ani dane karty · nie wysyłaj plików na DM · zachowuj kulturę · w razie wątpliwości zapytaj kogoś z rolą ${x.role('manager', 'Manager')}`,
+        `### ${x.E('warning')} Złote zasady\n> Nigdy nie proś o hasła ani dane karty · nie wysyłaj plików na DM · zachowuj kulturę · w razie wątpliwości zapytaj ${x.role('founder', 'CEO')} albo ${x.role('coowner', 'Co-CEO')}`,
     ),
   );
   return card(c);
@@ -320,10 +300,6 @@ function postsFor(key, x, build) {
       return [{ banner: 'bugs' }, bugs(x)];
     case 'suggestions':
       return [{ banner: 'suggestions' }, suggestions(x)];
-    case 'screenshots':
-      return [{ banner: 'media' }, screenshots(x)];
-    case 'servers':
-      return [{ banner: 'servers' }, servers(x)];
     case 'giveaways':
       return [{ banner: 'giveaways' }, giveaways(x)];
     case 'boosters':

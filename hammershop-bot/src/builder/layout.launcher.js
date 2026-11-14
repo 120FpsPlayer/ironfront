@@ -15,11 +15,8 @@ const ROLES = [
   { key: 'founder', name: '👑 CEO', color: 0xffe0b8, perms: 'owner', hoist: true, icon: '👑', staff: true },
   { key: 'coowner', name: '🔱 Co-CEO', color: 0xffcf96, perms: 'owner', hoist: true, icon: '🔱', staff: true },
   { key: 'developer', name: '💻 Developer', color: 0xffd166, perms: 'admin', hoist: true, icon: '💻', staff: true },
-  { key: 'manager', name: '🔥 Manager', color: 0xffbb70, perms: 'admin', hoist: true, icon: '🔥', staff: true },
-  { key: 'admin', name: '🛡️ Administrator', color: 0xffa94d, perms: 'admin', hoist: true, icon: '🛡️', staff: true },
-  { key: 'moderator', name: '⚔️ Moderator', color: 0xff9233, perms: 'mod', hoist: true, icon: '⚔️', staff: true },
+  // A small team: no Manager / Administrator / Moderator / Stażysta here (/build only:update removes the ones it made).
   { key: 'support', name: '🎧 Support', color: 0xf97d1f, perms: 'support', hoist: true, icon: '🎧', staff: true },
-  { key: 'trialSupport', name: '🌱 Stażysta', color: 0xe46a12, perms: 'trial', hoist: true, icon: '🌱', staff: true },
   SEPARATOR('sepSpecial', 'SPOŁECZNOŚĆ'),
   { key: 'tester', name: '🧪 Tester', color: 0xffad66, perms: 'none', hoist: true, icon: '🧪' },
   // Given and taken by the bot while someone's Hammer+ runs (src/features/plusrole.js) – nobody hands it out by hand.
@@ -45,7 +42,7 @@ const CATEGORIES = [
     channels: [
       voice('statMembers', '👥 Członkowie: 0', { profile: 'stats' }),
       voice('statVersion', '🚀 Wersja: beta', { profile: 'stats' }), // the newest published launcher – src/features/stats.js
-      voice('statDownloads', '⬇ Pobrania: 0', { profile: 'stats' }),
+      voice('statDownloads', '📥 Pobrania: 0', { profile: 'stats' }),
     ],
   },
   {
@@ -67,7 +64,7 @@ const CATEGORIES = [
     name: '🔨 LAUNCHER',
     profile: 'public',
     channels: [
-      text('launcher', '⬇ pobierz', { profile: 'readonly', topic: 'Pobierz Hammer Launcher – zawsze aktualna wersja.', post: 'launcher' }),
+      text('launcher', '📥 pobierz', { profile: 'readonly', topic: 'Pobierz Hammer Launcher – zawsze aktualna wersja.', post: 'launcher' }),
       // The admin panel of the website posts here: new versions (with the 🚀 Aktualizacje ping) and the launcher's news.
       news('updates', '🚀 aktualizacje', { topic: 'Nowe wersje launchera i lista zmian.', post: 'updates' }),
       news('news', '📰 aktualności', { topic: 'Wiadomości, które widać też na ekranie głównym launchera.', post: 'news' }),
@@ -91,8 +88,8 @@ const CATEGORIES = [
     profile: 'public',
     channels: [
       text('chat', '💬 czat', { topic: 'Ogólny czat – piszemy kulturalnie i po polsku.', slowmode: 3 }),
-      text('screenshots', '📸 zrzuty-ekranu', { topic: 'Pochwal się swoim HUD-em, buildem albo ustawieniami.', slowmode: 10, post: 'screenshots' }),
-      text('servers', '🎮 serwery', { topic: 'Szukasz ekipy albo serwera do gry? Napisz tutaj.', slowmode: 30, post: 'servers' }),
+      // Chat channels carry no bot cards – just the conversation (czat, serwery).
+      text('servers', '🎮 serwery', { topic: 'Szukasz ekipy albo serwera do gry? Napisz tutaj.', slowmode: 30 }),
       text('giveaways', '🎉 giveawaye', { profile: 'readonly', topic: 'Giveawaye – kliknij Dołącz, żeby wziąć udział!', post: 'giveaways' }),
       text('leaderboard', '🏆 ranking', { profile: 'readonly', topic: 'Najaktywniejsi członkowie.', post: 'leaderboard' }),
       text('boosters', '💎 boosterzy', { profile: 'readonly', topic: 'Dziękujemy za boosty!', post: 'boosters' }),

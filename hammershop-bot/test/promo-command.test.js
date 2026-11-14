@@ -49,7 +49,7 @@ test('/promo create: sellers and admins only, percent or amount, sensible defaul
   assert.equal(p.firstOrderOnly, false);
   assert.equal(p.createdBy, seller.id);
   assert.ok(Math.abs(p.expiresAt - (Date.now() + 7 * promos.DAY)) < 5000);
-  const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
+  const log = guild.channels.cache.get((db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId)).messageList.at(-1);
   assert.match(textOf(log.body), /Kod rabatowy utworzony[\s\S]*NOX10/, 'logged');
 
   const owner = guild.members.cache.get(guild.ownerId);

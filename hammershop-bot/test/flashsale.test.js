@@ -88,7 +88,7 @@ test('/sale start | stop | list: admins and sellers only, number prices only, du
   assert.equal(nitro.sale.percent, 20);
   assert.equal(nitro.sale.startedBy, seller.id);
   assert.ok(nitro.sale.endsAt >= before + 2 * HOUR && nitro.sale.endsAt <= Date.now() + 2 * HOUR);
-  const log = textOf(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1).body);
+  const log = textOf(guild.channels.cache.get((db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId)).messageList.at(-1).body);
   assert.match(log, /Promocja błyskawiczna uruchomiona[\s\S]*Promocja uruchomiona przez <@\d+>: \*\*Nitro\*\* \*\*−20%\*\*/);
 
   const list = await sale(guild, seller, 'list');

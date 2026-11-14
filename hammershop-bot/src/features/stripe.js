@@ -29,7 +29,7 @@ const { statusOf } = require('../lib/orderStatus');
 const { isStaff } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
 const { DECIMALS, currencyCode, toUnits, fromUnits } = require('../lib/currency');
-const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { UserError, logEmbed, money, pad, ts, truncate, sendTicketLog } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, notice, channelUrl } = require('../lib/v2');
 const { orderTitle } = require('../lib/orderItems');
 
@@ -306,7 +306,7 @@ async function warnRefused(client) {
     const guild = client.guilds.cache.get(id);
     if (!guild || refusedWarned.has(id)) continue;
     refusedWarned.add(id);
-    await sendLog(guild, {
+    await sendTicketLog(guild, {
       embeds: [
         logEmbed(COLORS.danger, '⚠️ Stripe odrzucił klucz', client.user).setDescription(
           'Płatności kartą **nie mogą być teraz potwierdzane automatycznie** – sprawdź otwarte zamówienia Stripe w panelu Stripe (Dashboard) i ręcznie ustaw im status Opłacone. Popraw `STRIPE_SECRET_KEY` w `.env` i uruchom bota ponownie.',

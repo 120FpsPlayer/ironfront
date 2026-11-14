@@ -61,7 +61,7 @@ test('/featured add: sellers and admins add a server – the launcher gets exact
     { id: 'hammer-smp', name: 'Hammer SMP', address: 'mc.hammershop.pl:25566', description: 'Survival z ekonomią i działkami.', tags: ['survival', 'pvp', 'ekonomia'], icon: 'https://cdn.hammershop.pl/icons/smp.png', mc: '1.21.4', loader: 'fabric', pack: 'hammer-smp-pack' },
   ]);
   assert.equal(featured.find(guild.id, 'hammer-smp').addedBy, seller.id);
-  const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
+  const log = guild.channels.cache.get((db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId)).messageList.at(-1);
   assert.match(textOf(log.body), /Polecany serwer dodany[\s\S]*\*\*Hammer SMP\*\* — `mc\.hammershop\.pl:25566`/);
 
   // Only what is required: the rest is null / empty, never missing. The same name gets its own ID.
@@ -133,7 +133,7 @@ test('/featured remove and its suggestions; an empty list says how to add the fi
   const gone = await run(guild, seller, 'remove', { server: 'skyblock' });
   assert.match(out(gone), /Usunięto \*\*SkyBlock\*\* \(`sky\.example\.pl`\) z polecanych serwerów/);
   assert.deepEqual(featured.list(guild.id).map((s) => s.id), ['hammer-smp']);
-  const log = guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1);
+  const log = guild.channels.cache.get((db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId)).messageList.at(-1);
   assert.match(textOf(log.body), /Polecany serwer usunięty[\s\S]*SkyBlock/);
   // Typed by hand instead of picked: the address works as well.
   assert.match(out(await run(guild, seller, 'remove', { server: 'MC.HammerShop.pl' })), /Usunięto \*\*Hammer SMP\*\*/);

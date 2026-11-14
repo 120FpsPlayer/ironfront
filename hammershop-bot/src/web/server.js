@@ -64,7 +64,7 @@ const webhookReady = () => Boolean(web().stripeWebhookSecret);
 const plusOnSale = () => plusLib.ready() && paymentsReady() && authReady() && store.plusPlans().length > 0;
 
 // ───────────── Products ─────────────
-/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency, featured, level, announce, log, plus, featuredAdmin }. */
+/** Set by createWebServer: { catalog, info, onPaid, onLogin, isMember, currency, featured, level, announce, log, plus, featuredAdmin, announcements }. */
 /** The bot's own "the user did something wrong" errors (lib/utils.js UserError) – their text is written for Discord. */
 const isUserError = (err) => err?.constructor?.name === 'UserError';
 const plainMessage = (err) => String(err.message).replace(/\*\*|__|`/g, '');
@@ -80,6 +80,8 @@ let hooks = {
   plus: { lookup: notConnected, grant: notConnected, recent: () => [], inspect: () => ({ valid: false, message: 'Bot nie jest połączony.' }), active: () => 0 },
   featuredAdmin: { list: () => [], add: notConnected, remove: notConnected },
   referrals: { claim: notConnected }, // (user, nick) → { code, nick, until, days } – the referral balance as a code
+  // The panel's „Ogłoszenia” tab: cards on #📢 ogłoszenia (src/features/website.js panelAnnouncements).
+  announcements: { info: () => ({ channel: null, role: null, members: null, bot: null, kinds: [] }), bannerFile: () => null, post: notConnected, remove: notConnected },
 };
 const products = () => hooks.catalog();
 const publicProduct = (p) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, art: p.art, image: p.image ?? null, eta: p.eta ?? null, instant: Boolean(p.instant), published: true });
@@ -502,7 +504,7 @@ async function handle(req, res) {
     return admin.api(req, res, url, {
       send, fail, jsonBody, userOf, limited, originOk,
       level: (id) => hooks.level(id), announce: (a) => hooks.announce(a), log: (t) => hooks.log(t),
-      plus: hooks.plus, featured: hooks.featuredAdmin, currency: () => hooks.currency(),
+      plus: hooks.plus, featured: hooks.featuredAdmin, currency: () => hooks.currency(), announcements: hooks.announcements,
       publicUrl: () => web().publicUrl, authReady, paymentsReady, webhookReady, playing: () => launcher.onlineNow(), invitesPaused: () => Boolean(hooks.invitesPaused?.()), ownInviteFailing: () => Boolean(hooks.ownInviteFailing?.()),
     });
   }

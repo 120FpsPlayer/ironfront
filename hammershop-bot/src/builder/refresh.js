@@ -15,6 +15,17 @@ const { slash } = require('../lib/commandsPl');
  * are never touched.
  */
 
+/** Deletes the tracked /build messages of a channel (only those – nothing a person wrote). → how many were deleted. */
+async function removePosts(channel, tracked) {
+  if (!channel?.messages) return 0;
+  let removed = 0;
+  for (const entry of tracked) {
+    const msg = await channel.messages.fetch(entry.id).catch(() => null);
+    if (msg && msg.author?.id === channel.client?.user?.id && (await msg.delete().then(() => true, () => false))) removed += 1;
+  }
+  return removed;
+}
+
 /** For servers built before message tracking existed: the oldest bot messages are the /build posts. */
 async function guessLegacyPosts(channel, count) {
   const me = channel.guild.members.me?.id;
@@ -96,7 +107,12 @@ async function refreshContent(guild) {
   const res = { channels: 0, edited: 0, sent: 0, removed: 0, errors: [] };
   for (const cat of CATEGORIES) {
     for (const ch of cat.channels) {
-      if (!ch.post) continue;
+      if (!ch.post) {
+        // A channel that no longer gets cards (e.g. #serwery – chat only now): the cards /build posted there go away.
+        if (posts[ch.key]?.length) res.removed += await removePosts(guild.channels.cache.get(build.channels?.[ch.key] ?? ''), posts[ch.key]);
+        delete posts[ch.key];
+        continue;
+      }
       const channel = guild.channels.cache.get(build.channels?.[ch.key] ?? '');
       if (!channel || ![ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(channel.type)) continue;
       try {

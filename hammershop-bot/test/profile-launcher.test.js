@@ -96,16 +96,25 @@ test('the profile: its own name, logo, rules and ticket types laid over the shop
 test('/build makes the Hammer Launcher server: its name, the H as the icon, its own channels and roles – no shop', () => {
   assert.equal(guild.name, 'Hammer Launcher');
   assert.equal(path.basename(guild.iconSet), 'logo-launcher.png');
-  for (const key of ['verify', 'rules', 'welcome', 'information', 'announcements', 'roles', 'launcher', 'updates', 'news', 'plus', 'faq', 'tickets', 'bugs', 'suggestions', 'chat', 'screenshots', 'servers', 'giveaways', 'leaderboard', 'boosters', 'statMembers', 'statVersion', 'statDownloads', 'ticketLogs', 'backups']) {
+  for (const key of ['verify', 'rules', 'welcome', 'information', 'announcements', 'roles', 'launcher', 'updates', 'news', 'plus', 'faq', 'tickets', 'bugs', 'suggestions', 'chat', 'servers', 'giveaways', 'leaderboard', 'boosters', 'statMembers', 'statVersion', 'statDownloads', 'ticketLogs', 'backups']) {
     assert.ok(channel(key), `#${key}`);
   }
   for (const key of ['shop', 'howToBuy', 'payments', 'restocks', 'vouches', 'proofs', 'sales', 'statShop', 'statVouches']) assert.equal(db.channelId(guild.id, key), null, `no #${key}`);
-  assert.equal(CATEGORIES.reduce((n, c) => n + c.channels.length, 0), 33);
+  assert.equal(CATEGORIES.reduce((n, c) => n + c.channels.length, 0), 32);
+  // No #zrzuty-ekranu; the download channel has the 📥 tray; #czat and #serwery are for talking – no bot cards there.
+  assert.equal(db.channelId(guild.id, 'screenshots'), null, 'no #zrzuty-ekranu');
+  assert.match(channel('launcher').name, /📥/);
+  assert.match(channel('statDownloads').name, /^📥/);
+  assert.equal(channel('chat').messageList.length, 0, 'no cards in #czat');
+  assert.equal(channel('servers').messageList.length, 0, 'no cards in #serwery');
   assert.deepEqual(CATEGORIES.map((c) => c.key), ['catStats', 'catWelcome', 'catLauncher', 'catSupport', 'catCommunity', 'catStaff', 'catLogs', 'catTickets', 'catClosed']);
 
   const names = guild.roles.cache.map((r) => r.name);
   for (const name of ['🔨 Hammer Launcher', '👑 CEO', '💻 Developer', '🧪 Tester', '✅ Członek', '🚀 Aktualizacje']) assert.ok(names.includes(name), name);
   for (const name of ['🔨 HammerShop', '💼 Sprzedawca', '🛍️ Klient', '🧡 Stały Klient', '📦 Dostawy']) assert.ok(!names.includes(name), `no ${name}`);
+  // A small team: the bot, CEO, Co-CEO, Developer and Support – then Tester, Hammer+, Boty, Członek and the three pings.
+  for (const name of ['🔥 Manager', '🛡️ Administrator', '⚔️ Moderator', '🌱 Stażysta']) assert.ok(!names.includes(name), `no ${name}`);
+  assert.deepEqual(ROLES.filter((r) => !r.separator).map((r) => r.name), ['🔨 Hammer Launcher', '👑 CEO', '🔱 Co-CEO', '💻 Developer', '🎧 Support', '🧪 Tester', '💎 Hammer+', '🤖 Boty', '✅ Członek', '📢 Ogłoszenia', '🚀 Aktualizacje', '🎉 Giveawaye']);
   assert.equal(ROLES[0].key, 'brand');
   // A developer is one of the bot's admins.
   const dev = guild.addMember('300000000000000001', [db.roleId(guild.id, 'developer')]);
@@ -166,7 +175,7 @@ test('tickets: a bug report opens like any ticket; the shop\'s commands are gone
   assert.match(opened.name, /^🐛.*0001$/u);
   assert.match(opened.messageList.map((m) => textOf(m.body)).join('\n'), /Edytor HUD nie zapisuje pozycji/);
 
-  assert.deepEqual([...commands.keys()].sort(), ['announce', 'backup', 'blacklist', 'build', 'featured', 'giveaway', 'hammerplus', 'help', 'invites', 'launcher', 'lockdown', 'panel', 'reply', 'setup', 'stats', 'ticket', 'unlock']);
+  assert.deepEqual([...commands.keys()].sort(), ['announce', 'backup', 'blacklist', 'build', 'featured', 'giveaway', 'hammerplus', 'help', 'invites', 'launcher', 'lockdown', 'panel', 'reply', 'setup', 'stats', 'ticket', 'ticket-types', 'unlock']);
   for (const shopCommand of loadCommands.SHOP_ONLY) assert.equal(commands.has(shopCommand), false, shopCommand);
 
   const help = createInteraction({ guild, member: guild.members.cache.get(OWNER.id), kind: 'command', commandName: 'help' });

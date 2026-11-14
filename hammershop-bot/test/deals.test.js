@@ -194,6 +194,6 @@ test('/sale deal: the week plan for staff; now:true starts one (only one at a ti
   assert.match(textOf(restocks(guild).at(-1).body), /🔥 Okazja tygodnia: /);
   assert.match(await sale(guild, seller), /🔥 \*\*Trwa teraz:\*\* \*\*(Nitro|Netflix)\*\* · \*\*−\d+%\*\*/);
   assert.match(await sale(guild, seller, { now: true }), /Okazja już trwa/);
-  const log = textOf(guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList.at(-1).body);
+  const log = textOf(guild.channels.cache.get((db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId)).messageList.at(-1).body);
   assert.match(log, /Okazja tygodnia uruchomiona/);
 });

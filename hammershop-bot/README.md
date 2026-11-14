@@ -22,15 +22,15 @@ Ten sam bot prowadzi dwa różne serwery – który, wybierasz jedną linią w `
 **Serwer Hammer Launcher** (`BOT_PROFILE=launcher`):
 
 ```
-〔 📊 STATYSTYKI 〕     👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: 123 · 🚀┃ᴡᴇʀꜱᴊᴀ: 2.6.0 · ⬇┃ᴘᴏʙʀᴀɴɪᴀ: 456      (wersja i pobrania biorą się ze strony)
+〔 📊 STATYSTYKI 〕     👥┃ᴄᴢᴌᴏɴᴋᴏᴡɪᴇ: 123 · 🚀┃ᴡᴇʀꜱᴊᴀ: 2.6.0 · 📥┃ᴘᴏʙʀᴀɴɪᴀ: 456      (wersja i pobrania biorą się ze strony)
 〔 👋 WITAMY 〕         ✅┃ᴡᴇʀʏꜰɪᴋᴀᴄᴊᴀ · 📜┃ʀᴇɢᴜʟᴀᴍɪɴ · 👋┃ᴘᴏᴡɪᴛᴀɴɪᴀ · 📌┃ɪɴꜰᴏʀᴍᴀᴄᴊᴇ · 📢┃ᴏɢᴌᴏꜱᴢᴇɴɪᴀ · 🎭┃ʀᴏʟᴇ
-〔 🔨 LAUNCHER 〕       ⬇┃ᴘᴏʙɪᴇʀᴢ · 🚀┃ᴀᴋᴛᴜᴀʟɪᴢᴀᴄᴊᴇ · 📰┃ᴀᴋᴛᴜᴀʟɴᴏꜱᴄɪ · ⭐┃ʜᴀᴍᴍᴇʀ-ᴘʟᴜꜱ · ❓┃ꜰᴀǫ
+〔 🔨 LAUNCHER 〕       📥┃ᴘᴏʙɪᴇʀᴢ · 🚀┃ᴀᴋᴛᴜᴀʟɪᴢᴀᴄᴊᴇ · 📰┃ᴀᴋᴛᴜᴀʟɴᴏꜱᴄɪ · ⭐┃ʜᴀᴍᴍᴇʀ-ᴘʟᴜꜱ · ❓┃ꜰᴀǫ
 〔 🎧 POMOC 〕          🎫┃ᴛɪᴄᴋᴇᴛʏ · 🐛┃ᴢɢᴌᴏꜱ-ʙᴌᴀᴅ · 💡┃ᴘʀᴏᴘᴏᴢʏᴄᴊᴇ
-〔 💬 SPOŁECZNOŚĆ 〕    💬┃ᴄᴢᴀᴛ · 📸┃ᴢʀᴢᴜᴛʏ-ᴇᴋʀᴀɴᴜ · 🎮┃ꜱᴇʀᴡᴇʀʏ · 🎉┃ɢɪᴠᴇᴀᴡᴀʏᴇ · 🏆┃ʀᴀɴᴋɪɴɢ · 💎┃ʙᴏᴏꜱᴛᴇʀᴢʏ
+〔 💬 SPOŁECZNOŚĆ 〕    💬┃ᴄᴢᴀᴛ · 🎮┃ꜱᴇʀᴡᴇʀʏ · 🎉┃ɢɪᴠᴇᴀᴡᴀʏᴇ · 🏆┃ʀᴀɴᴋɪɴɢ · 💎┃ʙᴏᴏꜱᴛᴇʀᴢʏ
 〔 🔒 ZESPÓŁ 〕 · 〔 📁 LOGI 〕 · 〔 🎫 TICKETY 〕 · 〔 🔐 ZAMKNIĘTE TICKETY 〕
 ```
 
-- **Role:** 🔨 Hammer Launcher (rola bota), CEO, Co-CEO, **Developer**, Manager, Administrator, Moderator, Support, Stażysta, **Tester**, Boty, Członek oraz powiadomienia: Ogłoszenia, **Aktualizacje** (ping przy nowej wersji) i Giveawaye.
+- **Role:** 🔨 Hammer Launcher (rola bota), CEO, Co-CEO, **Developer**, Support, potem **Tester**, **💎 Hammer+** (nadaje bot), Boty, Członek oraz powiadomienia: Ogłoszenia, **Aktualizacje** (ping przy nowej wersji) i Giveawaye. Role, kanały i karty usunięte z układu (Manager, Administrator, Moderator, Stażysta, #zrzuty-ekranu, karta na #serwery) znikają po `/zbuduj tylko:update` – tylko te, które utworzył bot. Na #czat i #serwery bot nie wysyła żadnych kart.
 - **Tickety:** *Pomoc z launcherem*, *Zgłoś błąd*, *Hammer+ i płatności*, *Odbierz nagrodę*, *Zgłoś użytkownika*, *Rekrutacja*, *Odwołanie od kary* – z pytaniami o wersję launchera, Minecrafta i log.
 - **Połączenie ze stroną i launcherem:** nowa wersja opublikowana w panelu admina pojawia się na **#aktualizacje** (z pingiem roli Aktualizacje), aktualność – na **#aktualności**, a kanały statystyk pokazują aktualną wersję i liczbę pobrań. `/launcher` pokazuje kartę launchera z aktualną wersją.
 - **Strona:** adres główny (`PUBLIC_URL`) to **strona launchera** z logo H i nazwą Hammer Launcher – pobieranie (po zalogowaniu przez Discorda), aktualności, Hammer+ przez Stripe, program poleceń *Zaproś znajomego*; panel admina jest pod `/admin`.
@@ -186,6 +186,14 @@ Ten sam bot prowadzi dwa różne serwery – który, wybierasz jedną linią w `
   przycisk **„Wezwij pomoc”**, czarna lista.
 - **Transkrypcje HTML**, które wyglądają jak Discord, **DM do autora** z transkrypcją i **oceną 1–5 ⭐**.
 - `/statystyki` – czasy odpowiedzi, oceny, ranking zespołu.
+- **`/tickety wylacz|wlacz|lista`** – kategorię (np. **Rekrutacja**) można wyłączyć na jakiś czas: w panelu ticketów zostaje
+  z szarym przyciskiem „Wyłączona”, karta rekrutacji w #informacje mówi „Rekrutacja jest teraz zamknięta”, a nikt nie otworzy
+  nowego ticketu tej kategorii (otwarte działają dalej). Na serwerze launchera **Rekrutacja startuje wyłączona**
+  (`"disabled": true` w `config.launcher.json`) – włączysz ją `/tickety wlacz kategoria:Rekrutacja`.
+- **Dwa kanały logów:** `#📁 logi-ticketów` – tylko to, co dzieje się w ticketach (otwarcie, zamknięcie, płatności i dostawy
+  zamówień w tickecie); `#📋 logi-serwera` – cała reszta: panel admina na stronie, Hammer Launcher (wersje, aktualności),
+  Hammer+, polecenia, komendy zespołu (`/polecane`, `/hammerplus`, `/promocja`…), blokady. Weryfikacja ma `#✅ logi-weryfikacji`,
+  automod `#🤖 logi-automod`, transkrypcje `#📄 transkrypcje`.
 
 ### ✅ Weryfikacja
 - Przycisk **Zweryfikuj się** + szybkie pytanie matematyczne przeciw botom + minimalny wiek konta (domyślnie 3 dni).

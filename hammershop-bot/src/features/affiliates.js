@@ -20,7 +20,7 @@ const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const promos = require('./promos');
 const { COLORS } = require('../lib/theme');
-const { UserError, embed, logEmbed, money, pad, sendLog, truncate, ts, count, plural } = require('../lib/utils');
+const { UserError, embed, logEmbed, money, pad, sendTicketLog, truncate, ts, count, plural } = require('../lib/utils');
 const { slash } = require('../lib/commandsPl');
 
 const MAX_LIST = 3800; // embed description budget (Discord allows 4096)
@@ -211,7 +211,7 @@ async function onOrderCompleted({ guild, ticket, sale }) {
           .then(() => true)
           .catch(() => false)
       : false;
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     embeds: [
       logEmbed(COLORS.brand, '🎥 Prowizja twórcy').addFields(
         { name: 'Twórca', value: `<@${entry.userId}>`, inline: true },

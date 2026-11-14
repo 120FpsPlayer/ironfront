@@ -38,7 +38,7 @@ const ui = require('../tickets/ui');
 const orderstatus = require('./orderstatus');
 const { statusOf, statusLabel } = require('../lib/orderStatus');
 const { COLORS } = require('../lib/theme');
-const { UserError, reply, logEmbed, money, pad, ts, truncate, sendLog, maskPin, maskPins, count } = require('../lib/utils');
+const { UserError, reply, logEmbed, money, pad, ts, truncate, sendTicketLog, maskPin, maskPins, count } = require('../lib/utils');
 const { alertRoleIds } = require('../lib/permissions');
 const { quantitySuffix } = require('../lib/orderItems');
 const { container, text, divider, gallery, linkBtn, btn, row, v2 } = require('../lib/v2');
@@ -338,7 +338,7 @@ async function submit(interaction) {
     });
     const updated = db.getTicket(channel.id);
     await tickets.refreshControlMessage(channel, updated);
-    await sendLog(guild, logPayload(channel, updated, interaction.member, { payment, files, again, message }));
+    await sendTicketLog(guild, logPayload(channel, updated, interaction.member, { payment, files, again, message }));
     if (accepted) await hooks.emit('orderStatus', { guild, ticket: updated, status: 'sent', staff: null });
   } finally {
     sending.delete(channel.id);
@@ -367,7 +367,7 @@ async function showPins(interaction, at) {
     ...(payment.pins ?? []).map((p) => `🔑 \`${formatPin(p)}\``),
     ...(payment.note && maskText(payment.note) !== payment.note ? [`**Notatka:**\n${quote(payment.note)}`] : []),
   ];
-  await sendLog(interaction.guild, {
+  await sendTicketLog(interaction.guild, {
     embeds: [logEmbed(COLORS.warning, '🔑 Wyświetlono PIN PaysafeCard', interaction.user).setDescription(`Zamówienie \`#${pad(ticket.number)}\` w <#${ticket.channelId}>`)],
   }).catch(() => null);
   return reply(interaction, `${old ? '-# To najnowsza płatność wysłana w tym tickecie.\n' : ''}${lines.join('\n') || 'W tej płatności nie ma PIN-u.'}`);

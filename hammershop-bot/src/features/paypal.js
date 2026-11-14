@@ -29,7 +29,7 @@ const { statusOf } = require('../lib/orderStatus');
 const { isStaff } = require('../lib/permissions');
 const { COLORS, ce } = require('../lib/theme');
 const { currencyCode, decimalString } = require('../lib/currency');
-const { UserError, logEmbed, money, pad, ts, truncate, sendLog } = require('../lib/utils');
+const { UserError, logEmbed, money, pad, ts, truncate, sendTicketLog } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, notice, channelUrl } = require('../lib/v2');
 const { orderTitle } = require('../lib/orderItems');
 
@@ -244,7 +244,7 @@ async function tell(guild, ticket, { customer = null, staff = null, color = COLO
   const pings = autopay.pingsFor(guild, ticket);
   const who = [...pings.users.map((id) => `<@${id}>`), ...pings.roles.map((id) => `<@&${id}>`)].join(' ');
   if (channel) await channel.send(notice(color, `${staff}${who ? `\n${who}` : ''}`, { mentions: pings })).catch(() => null);
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     ...(!channel && who && { content: who, allowedMentions: pings }),
     embeds: [
       logEmbed(color, '💳 PayPal', guild.client.user).setDescription(truncate(`${staff}\n**Ticket:** <#${ticket.channelId}> (\`#${pad(ticket.number)}\`) · <@${ticket.ownerId}>`, 4000)),
@@ -492,7 +492,7 @@ async function warnRefused(client) {
     const guild = client.guilds.cache.get(id);
     if (!guild || refusedWarned.has(id)) continue;
     refusedWarned.add(id);
-    await sendLog(guild, {
+    await sendTicketLog(guild, {
       embeds: [
         logEmbed(COLORS.danger, '⚠️ PayPal odrzucił klucze', client.user).setDescription(
           'Płatności PayPal **nie mogą być teraz potwierdzane automatycznie**. Zatwierdzone płatności zostaną pobrane, gdy klucze znów zadziałają (jeśli zamówienie nadal na nie czeka) – do tego czasu sprawdzaj otwarte zamówienia PayPal na swoim koncie PayPal. Popraw `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` w `.env` i uruchom bota ponownie.',
@@ -594,7 +594,7 @@ async function takeHeld(interaction) {
     const updated = savePaypal(ticket.channelId, { status: 'paid', paidAt: Date.now(), paidAmount, paidCurrency: String(cap.amount?.currency_code ?? p.currency).toLowerCase(), captureId: cap.id ?? null });
     await editCard(channel.guild, updated);
     await channel.send(notice(COLORS.success, `💰 Płatność PayPal na **${money(paidAmount)}** pobrana przez <@${interaction.user.id}>.`)).catch(() => null);
-    await sendLog(channel.guild, {
+    await sendTicketLog(channel.guild, {
       embeds: [
         logEmbed(COLORS.success, '💰 Pobrano wstrzymaną płatność PayPal', interaction.user).addFields(
           { name: 'Ticket', value: `<#${ticket.channelId}> (\`#${pad(ticket.number)}\`)`, inline: true },

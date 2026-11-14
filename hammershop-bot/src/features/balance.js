@@ -30,7 +30,7 @@ const config = require('../lib/config');
 const db = require('../lib/db');
 const hooks = require('../lib/hooks');
 const { e, ce, COLORS, FALLBACK } = require('../lib/theme');
-const { UserError, embed, logEmbed, money, pad, parseAmount, sendLog, truncate, ts } = require('../lib/utils');
+const { UserError, embed, logEmbed, money, pad, parseAmount, sendLog, sendTicketLog, truncate, ts } = require('../lib/utils');
 const { container, text, divider, btn, linkBtn, row, v2, notice } = require('../lib/v2');
 
 const HISTORY_MAX = 50; // changes kept per member
@@ -277,7 +277,7 @@ function topUpDoneCard(guild, ticket, sale) {
 async function logTopUp({ guild, ticket, staff, sale }) {
   const credited = ticket?.order?.topUp?.credited;
   if (credited == null || !sale) return;
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     embeds: [
       logEmbed(COLORS.success, '💰 Saldo doładowane', staff?.user ?? staff ?? null).addFields(
         { name: 'Klient', value: `<@${ticket.ownerId}>`, inline: true },
@@ -308,7 +308,7 @@ async function onOrderPlaced({ guild, channel, ticket }) {
   await channel
     .send(notice(COLORS.success, `💰 **Opłacono saldem sklepu – ${money(order.total)}** za zamówienie \`#${pad(ticket.number)}\`. Pozostałe saldo: **${money(get(guild.id, ticket.ownerId))}**.${ask}`, { mentions: pings }))
     .catch(() => null);
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     embeds: [
       logEmbed(COLORS.success, '💰 Opłacono saldem sklepu', guild.client.user).addFields(
         { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },

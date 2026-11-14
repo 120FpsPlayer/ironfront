@@ -163,8 +163,17 @@ async function sendToChannel(guild, channelId, payload) {
   });
 }
 
+/**
+ * Two log channels: #📋 logi-serwera gets everything that is not a ticket (the website's admin panel, Hammer Launcher
+ * releases, Hammer+, payments, commands…) – sendLog; #📁 logi-ticketów gets only what happens in tickets –
+ * sendTicketLog. A server without the built channels uses the one log channel from /setup (or LOG_CHANNEL_ID) for both.
+ */
 async function sendLog(guild, payload) {
-  return sendToChannel(guild, db.settings(guild.id).logChannelId, payload);
+  return sendToChannel(guild, db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId, payload);
+}
+
+async function sendTicketLog(guild, payload) {
+  return sendToChannel(guild, db.channelId(guild.id, 'ticketLogs') ?? db.settings(guild.id).logChannelId, payload);
 }
 
 /** "20", "19.99", "19,99", "1 299", "20€", "€20" → number; anything else ("from 5€", "") → null. */
@@ -216,6 +225,7 @@ const maskPins = (value) =>
   String(value ?? '').replace(/(?<!\d)(?:\d(?:[\s\-._/]*\d){15})+(?!\d)/g, (m) => m.replace(/\D/g, '').match(/\d{16}/g).map(maskPin).join(' '));
 
 module.exports = {
+  sendTicketLog,
   plural,
   count,
   maskPin,

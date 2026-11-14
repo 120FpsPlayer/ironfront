@@ -78,6 +78,7 @@ async function handleOpen(interaction, typeId, origin) {
   const type = config.getType(typeId);
   if (!type) return replyError(interaction, 'Ta kategoria już nie istnieje – poproś zespół o odświeżenie panelu.');
   if (type.shopOnly) return replyShopOnly(interaction);
+  if (require('../tickets/typestate').isOff(interaction.guild.id, type)) return replyError(interaction, require('../tickets/typestate').closedText(type));
   const error = t.checkCanOpen(interaction.member);
   if (error) return replyError(interaction, error);
   if (type.questions.length) return interaction.showModal(t.buildForm(type, origin));
@@ -88,6 +89,7 @@ async function handleForm(interaction, typeId) {
   const type = config.getType(typeId);
   if (!type) return replyError(interaction, 'Ta kategoria już nie istnieje.');
   if (type.shopOnly) return replyShopOnly(interaction);
+  if (require('../tickets/typestate').isOff(interaction.guild.id, type)) return replyError(interaction, require('../tickets/typestate').closedText(type));
   const answers = type.questions.map((q) => {
     let value = '';
     try {

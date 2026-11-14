@@ -23,7 +23,7 @@ const STAT_NAMES = {
   statVouches: (n) => channelName(`⭐ Opinie: ${n.toLocaleString('en-US')}`),
   // The Hammer Launcher server: the newest published launcher and how often its installer was downloaded.
   statVersion: (v) => channelName(`🚀 Wersja: ${v ?? 'beta'}`),
-  statDownloads: (n) => channelName(`⬇ Pobrania: ${n.toLocaleString('en-US')}`),
+  statDownloads: (n) => channelName(`📥 Pobrania: ${n.toLocaleString('en-US')}`),
 };
 
 function trackMessage(message) {

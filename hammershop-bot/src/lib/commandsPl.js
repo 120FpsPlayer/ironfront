@@ -242,6 +242,11 @@ const MAP = {
     staff: C('osoba', 'Statystyki konkretnej osoby z zespołu'),
     days: C('dni', 'Zakres w dniach (domyślnie: od początku)'),
   }),
+  'ticket-types': C('tickety', 'Wyłącz kategorię ticketów na jakiś czas (np. rekrutację) i włącz ją z powrotem (administracja)', {
+    off: C('wylacz', 'Wyłącz kategorię – w panelu będzie widać „Wyłączona”', { type: C('kategoria', 'Kategoria') }),
+    on: C('wlacz', 'Włącz kategorię z powrotem', { type: C('kategoria', 'Kategoria') }),
+    list: C('lista', 'Które kategorie są włączone, a które wyłączone'),
+  }),
   ticket: C('ticket', 'Zarządzaj ticketem na tym kanale', {
     add: C('dodaj', 'Dodaj kogoś do ticketu', { user: user('Kogo dodać') }),
     remove: C('usun', 'Usuń kogoś z ticketu', { user: user('Kogo usunąć') }),

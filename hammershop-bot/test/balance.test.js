@@ -35,7 +35,8 @@ const privateMsg = { flags: new MessageFlagsBitField(MessageFlags.Ephemeral) };
 const METHOD = (type) => String(config.shop.paymentMethods.findIndex((m) => m.type === type));
 const said = (i) => textOf(lastResponse(i));
 const texts = (channel) => channel.messageList.map((m) => textOf(m.body ?? m)).join('\n---\n');
-const logChannel = (guild) => guild.channels.cache.get(db.settings(guild.id).logChannelId);
+const logChannel = (guild) => guild.channels.cache.get(db.settings(guild.id).logChannelId); // in-ticket events (paid with balance)
+const serverLog = (guild) => guild.channels.cache.get(db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId); // staff changes (/balance)
 const NON_REFUNDABLE = /Salda nie można zwrócić ani wypłacić/;
 
 async function builtGuild() {
@@ -84,14 +85,14 @@ test('/balance: everyone sees their own; admins & sellers view, add and remove �
 
   const added = await command(guild, seller, 'add', { user: buyer.user, amount: 30, reason: 'Giveaway prize' });
   assert.match(said(added), /Dodano \*\*30€\*\* do salda sklepu <@\d+> – wynosi teraz \*\*30€\*\*/);
-  assert.match(textOf(logChannel(guild).messageList.at(-1).body), /Saldo dodane[\s\S]*30€[\s\S]*0€ → \*\*30€\*\*[\s\S]*Giveaway prize/);
+  assert.match(textOf(serverLog(guild).messageList.at(-1).body), /Saldo dodane[\s\S]*30€[\s\S]*0€ → \*\*30€\*\*[\s\S]*Giveaway prize/);
 
   const tooMuch = await command(guild, seller, 'remove', { user: buyer.user, amount: 50, reason: 'oops' });
   assert.match(said(tooMuch), /ma tylko \*\*30€\*\* – możesz odjąć najwyżej tyle/);
   assert.equal(balance.get(guild.id, buyer.id), 30);
   await command(guild, seller, 'remove', { user: buyer.user, amount: 10, reason: 'Chargeback' });
   assert.equal(balance.get(guild.id, buyer.id), 20);
-  assert.match(textOf(logChannel(guild).messageList.at(-1).body), /Saldo odjęte[\s\S]*30€ → \*\*20€\*\*[\s\S]*Chargeback/);
+  assert.match(textOf(serverLog(guild).messageList.at(-1).body), /Saldo odjęte[\s\S]*30€ → \*\*20€\*\*[\s\S]*Chargeback/);
   assert.throws(() => balance.change(guild.id, buyer.id, -21, { reason: 'test' }), /Za mało środków na saldzie/);
 
   const staffView = said(await command(guild, seller, 'view', { user: buyer.user }));

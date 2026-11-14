@@ -65,7 +65,7 @@ const run = async (who, subcommand, options = {}, g = guild) => {
 };
 const out = (i) => textOf(lastResponse(i));
 const codeIn = (i) => /```\n(HP1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\n```/.exec(lastResponse(i).content ?? '')?.[1] ?? null;
-const logs = () => guild.channels.cache.get(db.settings(guild.id).logChannelId).messageList;
+const logs = () => guild.channels.cache.get((db.channelId(guild.id, 'serverLogs') ?? db.settings(guild.id).logChannelId)).messageList;
 
 test('/hammerplus: admins and sellers only – nobody else issues, checks or lists codes', async () => {
   reset();

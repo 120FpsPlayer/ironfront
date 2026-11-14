@@ -27,7 +27,7 @@ const files = require('../lib/deliveryFiles');
 const { statusOf } = require('../lib/orderStatus');
 const { isStaff } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
-const { UserError, logEmbed, money, pad, ts, truncate, sendLog, plural } = require('../lib/utils');
+const { UserError, logEmbed, money, pad, ts, truncate, sendTicketLog, plural } = require('../lib/utils');
 const { slash } = require('../lib/commandsPl');
 const { isCart, lineText } = require('../lib/orderItems');
 const { container, text, divider, btn, v2, notice } = require('../lib/v2');
@@ -222,7 +222,7 @@ async function deliver(channel, ticket, { by, auto = false, again = false } = {}
     const order = tickets().orderDetails(db.getTicket(channel.id));
     db.updateTicket(channel.id, { order: { ...order, delivered: { at: Date.now(), by: by?.id ?? null, dm, auto, messageId: sent?.id ?? null, ...(giftTo && { giftTo }) } } });
     const missing = cards.flatMap((x) => x.card.missing);
-    await sendLog(guild, {
+    await sendTicketLog(guild, {
       embeds: [
         logEmbed(missing.length ? COLORS.warning : COLORS.success, auto ? '📦 Produkt dostarczony automatycznie' : '📦 Produkt dostarczony', by?.user ?? by ?? guild.client.user).addFields(
           { name: 'Ticket', value: `${channel} (\`#${pad(ticket.number)}\`)`, inline: true },

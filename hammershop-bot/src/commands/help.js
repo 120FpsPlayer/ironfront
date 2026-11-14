@@ -61,6 +61,7 @@ function launcherHelp(interaction, cmd) {
       name: '🛡️ Administracja',
       value: [
         `${cmd('build')} – zbuduj cały serwer · ${only('update')} – po aktualizacji bota`,
+        `${cmd('ticket-types off', 'ticket-types on', 'ticket-types list')} – wyłącz kategorię ticketów na jakiś czas (np. rekrutację) i włącz ją z powrotem`,
         [only('emojis'), only('panels'), only('names')].join(' · '),
         `${cmd('backup')} – kopia zapasowa danych bota · ${cmd('panel')} – wyślij panel ponownie`,
         cmd('setup show', 'setup set', 'setup role-add'),

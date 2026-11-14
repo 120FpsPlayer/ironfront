@@ -15,7 +15,7 @@ const tickets = require('../tickets/tickets');
 const orderstatus = require('./orderstatus');
 const { alertRoleIds } = require('../lib/permissions');
 const { COLORS } = require('../lib/theme');
-const { logEmbed, money, pad, truncate, sendLog } = require('../lib/utils');
+const { logEmbed, money, pad, truncate, sendTicketLog } = require('../lib/utils');
 const { notice } = require('../lib/v2');
 const { DECIMALS } = require('../lib/currency');
 
@@ -68,7 +68,7 @@ async function paymentReceived(guild, ticket, { gateway, paidAmount, paidCurrenc
     const ask = instant ? done : matches && !twice && who ? ` ${who}, czas dostarczyć zamówienie.` : who ? ` ${who}` : '';
     await channel.send(notice(warnings.length ? COLORS.warning : COLORS.success, `${head}${ask}${warnings.length ? `\n${warnings.join('\n')}` : ''}`, { mentions: pings })).catch(() => null);
   }
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     // Without a ticket channel the log is the only place the team hears about it – ping them there.
     ...(!channel && who && { content: who, allowedMentions: pings }),
     embeds: [

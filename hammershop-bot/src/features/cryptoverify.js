@@ -33,7 +33,7 @@ const hooks = require('../lib/hooks');
 const tickets = require('../tickets/tickets');
 const autopay = require('./autopay');
 const { COLORS } = require('../lib/theme');
-const { logEmbed, money, pad, ts, truncate, sendLog, count } = require('../lib/utils');
+const { logEmbed, money, pad, ts, truncate, sendTicketLog, count } = require('../lib/utils');
 const { container, text, divider, linkBtn, row, v2 } = require('../lib/v2');
 
 const CHECK_EVERY = 60_000;
@@ -510,7 +510,7 @@ async function logProblem(guild, ticket) {
   ];
   if (c.amount) fields.push({ name: 'Otrzymano', value: `${c.amount} ${c.coin}${c.required ? ` z ${c.required} ${c.coin}` : ''}`, inline: true });
   if (c.usedBy) fields.push({ name: 'Użyta w', value: `<#${c.usedBy}>${db.getTicket(c.usedBy) ? ` (\`#${pad(db.getTicket(c.usedBy).number)}\`)` : ''}`, inline: true });
-  await sendLog(guild, {
+  await sendTicketLog(guild, {
     embeds: [logEmbed(COLORS.warning, '🪙 Płatność krypto do sprawdzenia', guild.client.user).setDescription(truncate(describe(ticket, c)[1], 1000)).addFields(fields)],
   }).catch(() => null);
 }

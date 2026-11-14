@@ -45,9 +45,12 @@ function panelPayload(guild, style = 'buttons') {
   if (useSections) {
     const shopId = db.channelId(guild.id, 'shop');
     for (const t of types) {
+      // A category switched off with /tickety (e.g. Rekrutacja): still listed, with a grey „Wyłączona” button.
+      const off = require('./typestate').isOff(guild.id, t);
       // Shop-only types (Zakup) send people to #sklep – buying works through the Buy buttons there.
-      const button =
-        t.shopOnly && shopId
+      const button = off
+        ? new ButtonBuilder().setCustomId(`ticket:open:${t.id}`).setLabel('Wyłączona').setEmoji('⛔').setStyle(ButtonStyle.Secondary).setDisabled(true)
+        : t.shopOnly && shopId
           ? new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(channelUrl(guild.id, shopId)).setLabel('Przejdź do sklepu').setEmoji(typeEmoji(guild, t))
           : new ButtonBuilder()
               .setCustomId(`ticket:open:${t.id}`)
@@ -55,7 +58,7 @@ function panelPayload(guild, style = 'buttons') {
               .setEmoji(typeEmoji(guild, t))
               .setStyle(t.id === 'order' ? ButtonStyle.Primary : ButtonStyle.Secondary);
       c.addSectionComponents(
-        new SectionBuilder().addTextDisplayComponents(text(`### ${typeText(guild, t)} ${t.label}\n${subtext(t.description) || '-# ​'}`)).setButtonAccessory(button),
+        new SectionBuilder().addTextDisplayComponents(text(`### ${typeText(guild, t)} ${t.label}\n${off ? '-# ⛔ Tymczasowo wyłączona' : subtext(t.description) || '-# ​'}`)).setButtonAccessory(button),
       );
     }
   } else {
@@ -65,7 +68,13 @@ function panelPayload(guild, style = 'buttons') {
         new StringSelectMenuBuilder()
           .setCustomId('ticket:open')
           .setPlaceholder('Wybierz kategorię ticketu…')
-          .addOptions(types.map((t) => ({ label: t.label, value: t.id, description: t.description?.slice(0, 100), emoji: typeEmoji(guild, t) }))),
+          .addOptions(
+            types.map((t) =>
+              require('./typestate').isOff(guild.id, t)
+                ? { label: `${t.label} (wyłączona)`.slice(0, 100), value: t.id, description: 'Tymczasowo wyłączona', emoji: '⛔' }
+                : { label: t.label, value: t.id, description: t.description?.slice(0, 100), emoji: typeEmoji(guild, t) },
+            ),
+          ),
       ),
     );
   }
