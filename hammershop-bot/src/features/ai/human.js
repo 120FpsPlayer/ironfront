@@ -47,7 +47,8 @@ function asksForHuman(text) {
   if (!ROLE.test(t)) return false;
   if (ASK.test(t)) return true;
   const words = t.split(' ').filter((w) => /[a-z0-9]/.test(w));
-  return words.length <= 3; // „admin”, „ADMIN!!”, „administracja pls”
+  // „admin”, „ADMIN!!”, „administracja pls” – but not a question about the role („jak zostać adminem?”)
+  return words.length <= 3 && !/\b(jak|kto|kim|kiedy|ile|czemu|dlaczego|zostac|zostane|byc|bycia)\b/.test(t);
 }
 
 module.exports = { asksForHuman, fold };
