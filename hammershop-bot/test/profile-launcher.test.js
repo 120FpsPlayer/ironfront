@@ -84,7 +84,7 @@ test('the profile: its own name, logo, rules and ticket types laid over the shop
   assert.equal(config.brand.name, 'Hammer Launcher');
   assert.equal(config.server.logo, 'launcher');
   assert.equal(config.rules.file, 'regulamin-launcher.md');
-  assert.deepEqual(config.ticketTypes.map((t) => t.id), ['order', 'support', 'bug', 'plus', 'reward', 'apply']);
+  assert.deepEqual(config.ticketTypes.map((t) => t.id), ['order', 'support', 'bug', 'plus', 'reward', 'partner', 'apply']);
   assert.equal(config.getType('order').shopOnly, true);
   // What only a shop needs is off; the rest keeps the shop's well-tried settings.
   for (const key of ['shopStatus', 'salesReport', 'welcomeDiscount', 'promos', 'affiliates', 'balance', 'gifts', 'cart', 'deals', 'abandonedOrders']) assert.equal(Boolean(config[key].enabled), false, key);

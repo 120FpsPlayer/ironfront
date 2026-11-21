@@ -180,7 +180,7 @@ test('/build only:update replaces the logo emoji when its picture changed (the o
 
 test('the ticket panel: no „Zgłoś użytkownika” and no „Odwołanie od kary”; the rules send appeals elsewhere', async () => {
   const guild = await built();
-  assert.deepEqual(config.ticketTypes.map((t) => t.id), ['order', 'support', 'bug', 'plus', 'reward', 'apply']);
+  assert.deepEqual(config.ticketTypes.map((t) => t.id), ['order', 'support', 'bug', 'plus', 'reward', 'partner', 'apply']);
   const panel = `${text(guild, 'tickets')}\n${json(guild, 'tickets')}`;
   assert.doesNotMatch(panel, /Zgłoś użytkownika|Odwołanie od kary|ticket:open:(report|appeal)/);
   assert.match(panel, /Pomoc z launcherem/);

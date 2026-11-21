@@ -251,3 +251,20 @@ test('Poradnik zespołu: what the whole team does (tickets, timeouts, deleting m
   const guide = guild.channels.cache.get(db.channelId(guild.id, 'staffChat')).messageList.map((m) => textOf(m.body)).join('\n');
   assert.match(guide, /Cały zespół[\s\S]*Tickety[\s\S]*Przerwa[\s\S]*Usuń wiadomość[\s\S]*Admini[\s\S]*hammerplus nadaj[\s\S]*Panel admina/);
 });
+
+test('ticket „🤝 Partnerstwo”: on the ticket panel, a form Discord accepts (≤5 fields, short labels), the AI thanks and calls the team', async () => {
+  const guild = await built();
+  const type = config.getType('partner');
+  assert.ok(type && !type.disabled, 'the type exists and is on');
+  assert.equal(type.label, 'Partnerstwo');
+  assert.ok(type.questions.length <= 5, 'a Discord form holds at most 5 fields');
+  for (const q of type.questions) {
+    assert.ok(q.label.length <= 45, `label „${q.label}” fits Discord's 45 characters`);
+    assert.ok((q.placeholder ?? '').length <= 100, `placeholder of „${q.label}” fits Discord's 100 characters`);
+  }
+  const panel = guild.channels.cache.get(db.channelId(guild.id, 'tickets')).messageList.map((m) => JSON.stringify(m.body?.components ?? m.body)).join('\n');
+  assert.match(panel, /Partnerstwo/, 'the ticket panel offers it');
+  const { GREETINGS, SYSTEM_PROMPT } = require('../src/features/ai/prompt');
+  assert.match(GREETINGS.partner, /propozycję partnerstwa/);
+  assert.match(SYSTEM_PROMPT, /partner \(Partnerstwo\)[^\n]*wezwij zespół/);
+});

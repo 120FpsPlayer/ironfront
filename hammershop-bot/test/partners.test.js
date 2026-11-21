@@ -156,7 +156,7 @@ test('/build: 🤝 PARTNERSTWA right after 🛒 HAMMERSHOP and before 🎧 POMOC
   const info = channel('partnerships');
   assert.equal(info.parentId, cat.id);
   assert.match(info.name, /^📋┃/);
-  assert.match(text(info), new RegExp(`^# 🤝 Partnerstwa\\nWspółpracujemy z serwerami, które lubimy[\\s\\S]*Jak zostać partnerem\\?\\n> \\*\\*1\\.\\*\\* Napisz do nas – ticketem na <#${channel('tickets').id}>[\\s\\S]*ogłaszamy na <#${channel('announcements').id}>`));
+  assert.match(text(info), new RegExp(`^# 🤝 Partnerstwa\\nWspółpracujemy z serwerami, które lubimy[\\s\\S]*Jak zostać partnerem\\?\\n> \\*\\*1\\.\\*\\* Napisz do nas – ticketem \\*\\*🤝 Partnerstwo\\*\\* na <#${channel('tickets').id}>[\\s\\S]*ogłaszamy na <#${channel('announcements').id}>`));
   // With the website's address set: the contact form (topic „Współpraca”) and the „Partnerzy” page too.
   const { postsFor } = require('../src/builder/content.launcher');
   const x = { guild, ch: (k) => `<#${db.channelId(guild.id, k)}>`, link: () => null, url: () => null, E: () => '•', icon: null, brand: 'Hammer Launcher' };

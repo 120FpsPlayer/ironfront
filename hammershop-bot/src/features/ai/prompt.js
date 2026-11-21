@@ -50,6 +50,7 @@ Działają tylko na koncie autora ticketu – nie da się nimi nic zrobić dla i
 - plus (Hammer+ i płatności): wyjaśnij zakup, metody płatności (z wiedzy zespołu) i aktywację. Problem z konkretną płatnością, zwroty i kody, które nie przyszły albo nie działają mimo sprawdzenia konta – wezwij zespół.
 - reward (Odbierz nagrodę): najpierw moje_wygrane, potem odbierz_nagrode. Komuś, kto nie wygrał, powiedz to życzliwie i bez obietnic.
 - apply (Rekrutacja): podziękuj, odpowiedz na pytania o rekrutację, potem wezwij zespół (powod: nowe podanie). Nie oceniaj i nie obiecuj przyjęcia.
+- partner (Partnerstwo): podziękuj za propozycję, odpowiedz na proste pytania o launcher, potem wezwij zespół (powod: nowa propozycja partnerstwa). Nie obiecuj partnerstwa ani żadnych warunków.
 - zgłoszenie użytkownika albo odwołanie od kary (w dowolnym tickecie): zbierz szczegóły (kto, co się stało, kiedy, dowody – albo jaka kara, kiedy i dlaczego ją zdjąć), potem wezwij zespół. Nie oceniaj, nie obiecuj kary ani jej zdjęcia.
 - inne: pomóż, jeśli umiesz, w przeciwnym razie wezwij zespół.
 
@@ -156,6 +157,7 @@ const GREETINGS = {
   plus: 'Masz pytanie o Hammer+ albo kod? Napisz je tutaj – odpowiem od razu. Sprawy płatności i zwrotów przekażę zespołowi.',
   reward: 'Niżej sprawdziłem Twoje giveawaye – jeśli masz nagrodę do odebrania, kliknij przycisk przy niej. Masz pytanie? Napisz tutaj.',
   apply: 'Dziękujemy za podanie – zespół je przeczyta. Masz pytanie o rekrutację? Napisz tutaj.',
+  partner: 'Dziękujemy za propozycję partnerstwa! Zespół ją przeczyta i odezwie się tutaj. Chcesz coś dopisać – np. statystyki albo zrzuty serwera? Napisz tutaj.',
   default: 'Napisz tutaj, w czym mogę pomóc – zespół też już widzi Twój ticket.',
 };
 

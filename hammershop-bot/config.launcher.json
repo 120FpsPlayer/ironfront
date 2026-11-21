@@ -116,6 +116,22 @@
       ]
     },
     {
+      "id": "partner",
+      "label": "Partnerstwo",
+      "emoji": "🤝",
+      "icon": "group",
+      "description": "Masz serwer Discord albo Minecraft? Zaproponuj współpracę",
+      "channelPrefix": "partnerstwo",
+      "staffRoles": [],
+      "questions": [
+        { "id": "name", "label": "Nazwa Twojego serwera albo projektu", "style": "short", "placeholder": "Np. Kraina Craftu", "required": true, "maxLength": 100 },
+        { "id": "kind", "label": "Jaka współpraca?", "style": "short", "placeholder": "Discord, Minecraft albo oba", "required": true, "maxLength": 60 },
+        { "id": "links", "label": "Zaproszenie na Discorda i/lub adres serwera", "style": "short", "placeholder": "Np. discord.gg/… · play.twojserwer.pl", "required": true, "maxLength": 300 },
+        { "id": "size", "label": "Ile osób macie?", "style": "short", "placeholder": "Np. 500 na Discordzie, 30 graczy online", "required": false, "maxLength": 100 },
+        { "id": "details", "label": "Co proponujesz?", "style": "paragraph", "placeholder": "Napisz kilka zdań o swoim serwerze i o tym, jak chcesz współpracować.", "required": true, "maxLength": 1000 }
+      ]
+    },
+    {
       "id": "apply",
       "disabled": true,
       "label": "Rekrutacja",

@@ -317,7 +317,7 @@ function partnerships(x) {
   c.addTextDisplayComponents(
     text(
       `### ${x.E('pencil')} Jak zostać partnerem?\n` +
-        `> **1.** Napisz do nas – ${site() && config.contact?.email ? 'przez formularz kontaktowy na stronie (temat **Współpraca**) albo ' : ''}ticketem na ${x.ch('tickets')}\n` +
+        `> **1.** Napisz do nas – ${site() && config.contact?.email ? 'przez formularz kontaktowy na stronie (temat **Współpraca**) albo ' : ''}ticketem **🤝 Partnerstwo** na ${x.ch('tickets')}\n` +
         '> **2.** Opowiedz o swoim serwerze: link do Discorda albo adres serwera Minecraft i ilu macie graczy\n' +
         '> **3.** Odpiszemy – a gdy się dogadamy, Twój serwer pojawi się tutaj i w launcherze\n' +
         `-# Nowe partnerstwa ogłaszamy na ${x.ch('announcements')}.`,
